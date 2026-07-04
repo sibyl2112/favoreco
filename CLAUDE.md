@@ -120,13 +120,13 @@
 
 | プロジェクト | 技術スタック | 仕様書 |
 |------------|------------|--------|
-| APP_NAME | （例: SwiftUI / SwiftData / MapKit） | `APP_NAME/CLAUDE.md` |
+| favoreco（仮称・汎用「体験」記録アプリ） | SwiftUI / SwiftData / MapKit（Mystorium 準拠・`docs/04-Mystorium構造リファレンス.md` 参照） | `APP_NAME/CLAUDE.md`（アプリ名確定後にリネーム） |
 
 ---
 
 ## 7. 作業環境
 
-- **ユーザーの Mac 作業ディレクトリ**: `/Users/<ユーザー>/Documents/APP_NAME`
+- **ユーザーの Mac 作業ディレクトリ**: `/Users/doublefake/Documents/favoreco`
 - Claude は Linux 環境でコードを編集し、GitHub ブランチにプッシュする
 - ユーザーは Mac 側でプルしてビルドする
 
@@ -135,7 +135,7 @@
 変更をプッシュしたら、必ず以下のコマンドをそのまま提示する：
 
 ```bash
-cd /Users/<ユーザー>/Documents/APP_NAME
+cd /Users/doublefake/Documents/favoreco
 git pull origin <ブランチ名>
 ```
 
