@@ -120,7 +120,7 @@
 
 | プロジェクト | 技術スタック | 仕様書 |
 |------------|------------|--------|
-| favoreco（仮称・汎用「体験」記録アプリ） | SwiftUI / SwiftData / MapKit（Mystorium 準拠・`docs/04-Mystorium構造リファレンス.md` 参照） | `APP_NAME/CLAUDE.md`（アプリ名確定後にリネーム） |
+| favoreco（汎用「体験」記録アプリ） | SwiftUI / SwiftData / MapKit（Mystorium 準拠・`docs/04-Mystorium構造リファレンス.md` 参照） | `favoreco/CLAUDE.md` |
 
 ---
 
