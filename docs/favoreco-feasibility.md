@@ -20,8 +20,8 @@
 ## 2. データ保存方針
 
 - **ローカルファースト**（SwiftData正本・サーバーなし・運営コストゼロ）。Mystorium踏襲
-- 写真はファイルパス正本（`PhotoStorage` 流用・DBにblobを持たない）
-- v1はローカルのみ＋zipバックアップ（`DataExporter` 流用）。**CloudKit同期はv2のサブスク機能**（Mystorium Phase 2の実装を先行例にする）
+- 写真はファイルパス正本（`PhotoStorage` 流用・DBにblobを持たない）。**Mystoriumの「ストレージ移行後」の形式を最初から採用**
+- v1はローカルのみ＋zipバックアップ（`DataExporter` 流用）。**CloudKit同期はv2のサブスク機能**だが、**同期設計は `docs/07-CloudKit同期設計リファレンス.md` をデフォルト構造とし、v1スキーマをCloudKit互換制約（リレーション全optional・unique制約なし・デフォルト値）で設計する**（後付け不可のため）
 - スキーマバージョニングはMystoriumのVersionedSchema＋lightweight migration運用をV1から採用
 
 ## 3. 技術的な山場
