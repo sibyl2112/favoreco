@@ -59,9 +59,10 @@
 ## 7. favoreco への適用（v1でやること／やらないこと）
 
 **v1でやる（同期互換の下準備）**:
-- SwiftDataスキーマを**CloudKit互換制約**で設計する: リレーションは全てoptional／unique制約を使わない／全プロパティにデフォルト値 or optional／`.externalStorage`やinline blobに依存しない（写真はファイルパス正本を維持しつつ、同期時にCKAssetへ載せられるファイル構造にする）
-- 写真ストレージはMystoriumの**移行後の形式**を最初から採用（`images/{eventID}/visits/{visitID}/` 相対パス正本）
-- 動画はフォトライブラリ参照ID＋外部リンクの2系統とし、本体を同期対象にしない前提でモデル設計
+- SwiftDataスキーマを**CloudKit互換3条件**で設計する: ①全プロパティにデフォルト値 ②`@Attribute(.unique)`を使わない（fetch-first upsertで代替）③リレーションは全てoptional（持たないのが最安全）
+- **写真は `PhotoBlob` モデル（`@Attribute(.externalStorage)`）方式を最初から採用**——`docs/09-CloudKit写真ストレージ仕様.md`（Mystorium V10で実機検証済み: 4,808枚・1.2GB移行・失敗0件）が正本。CloudKit自動同期はSwiftDataストアの中身しか同期しないため、ファイル直置きでは同期に載らない。externalStorageならDB肥大化を回避しつつ同期対象になる。画面側はrelativePath文字列だけを扱い（PhotoStorage API凍結）、favorecoは移行コード不要で最初からこの形
+  - ※本書の旧記述「externalStorageに依存しない」は撤回（2026-07-05）。Mystorium実証により externalStorage 採用が確定
+- 動画は `video_` プレフィックスでファイル保存に振り分け（AVPlayer再生にfileURLが必要）。本体は同期対象外・リンク/サムネのみ同期
 
 **v1でやらない**:
 - 同期トグルの公開（v2サブスクで解禁。§課金3層は `favoreco-concept.md` §8）

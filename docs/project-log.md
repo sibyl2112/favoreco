@@ -5,6 +5,26 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-05: CloudKit写真ストレージ仕様（PhotoBlob方式）を正本として採用
+
+### 変更概要
+Mystorium V10で当日実装・実機検証された写真ストレージ仕様（PhotoBlob＋externalStorage）を `docs/09-CloudKit写真ストレージ仕様.md` として取り込み、favorecoのデフォルト構造に採用。07・feasibility・実装仕様正本の「写真はファイルパス正本」記述をPhotoBlob方式に更新。
+
+### 変更意図
+CloudKit自動同期はSwiftDataストアの中身しか同期せず、ファイル直置きの写真は同期に載らないことがMystorium実装で確定したため。externalStorageならDB肥大化を回避しつつ同期対象にできる（実績: 4,808枚・1,201.9MB移行・失敗0件）。favorecoは最初からblob方式で作れば移行コード自体が不要——「新規開発の利点を取り切る」方針の具体化。
+
+### 主な変更ファイル
+- docs/09-CloudKit写真ストレージ仕様.md（新規・Mystorium発の仕様書）
+- docs/07-CloudKit同期設計リファレンス.md（旧記述「externalStorageに依存しない」を撤回・修正）
+- docs/favoreco-feasibility.md（§2保存方針を更新）
+- favoreco/CLAUDE.md（§5実装ルールにPhotoBlob・Swift 6 nonisolated等を追加）
+
+### 確認結果（実機 / ビルド）
+ドキュメントのみ（仕様の実機検証はMystorium側で完了済み）。
+
+### 残課題
+- 残り6テンプレのヒアリング／カレンダー終日表示の描き分け方式のユーザー確認（モック提示中）
+
 ## 2026-07-05: カレンダー機能の範囲・時期確定、観劇テンプレ全項目確定
 
 ### 変更概要
