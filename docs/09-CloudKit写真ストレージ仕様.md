@@ -254,3 +254,18 @@ static var storeSupportDirectoryNames: [String] {
 - [ ] エクスポート/インポートは `_SUPPORT` ディレクトリ同梱＋再起動必須フロー（§7）
 - [ ] オーファン blob 掃除＋一時ファイル掃除（§8）
 - [ ] 移行コードは不要（最初から blob）。ただしバックフィル一般の教訓（§6）は他機能で適用
+
+---
+
+## 11. PhotoBlob の role / caption 拡張（2026-07-06・favoreco追加）
+
+写真とコレクションの区別（08 U11・spec-A3・spec-A6 §4）を成立させるため、PhotoBlob に2列を追加する。
+
+- `role: String = "photo"`：**photo / collection / label / eyecatch** の役割。
+  - photo＝土台の写真（"とりあえず入れる"・キャプション不要）
+  - collection＝U11コレクション（半券・印・カード・観た絵画など＋caption）
+  - label＝U16ラベル表裏（OCR対象）
+  - eyecatch＝代表アイキャッチ用途（Event/Visit.eyecatchPath と整合）
+- `caption: String = ""`：任意（主に collection。空でも可・例：観た絵画の作品名）。
+- **写真↔コレクションの移動＝`role` の変更のみ**（externalStorage の data 本体は触らない・再保存/再アップロードなし）。
+- CloudKit互換：どちらも既定値ありの非optional文字列（§2の3条件を満たす）。`byteCount` 等の既存メタと同じくメタ列でありフォールトを起こさない。
