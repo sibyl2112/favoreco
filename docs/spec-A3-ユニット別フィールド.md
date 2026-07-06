@@ -26,7 +26,7 @@
 | seriesName | Event | String="" | 個別（グルーピング） | 書籍シリーズ/ツアー名（A5スタック） |
 | dateStart / dateEnd（訪問日/回） | Visit | Date? | 個別（カレンダー） | 日跨ぎ対応 |
 | periodStart / periodEnd（会期/販売期間） | Event | Date? | 個別（カレンダー期間バー） | 美術展会期・チケット販売期間 |
-| photos | Visit | →PhotoBlob(多) | relativePath | 09準拠 |
+| photos（写真） | Visit | →PhotoBlob(多) role=photo | relativePath | "とりあえず入れる"データ・キャプション不要。**後からコレクションへ移動可**（roleをcollectionに変更・実体移動なし） |
 | eyecatchPath（代表） | Event | String? | relativePath | A1 §5 |
 | eyecatchPath（回別） | Visit | String? | relativePath | A1 §5・リピートは前回引き継ぎ |
 | urls | Event | [String] | 個別 | ＋で複数 |
@@ -72,7 +72,7 @@
 | U8 | ~~成果~~ **廃止（2026-07-06）** | — | — | 全ジャンルで廃止（総合評価で代替・A4 §1）。書籍のみ「読書状態」として存続（§5） |
 | U9 | スペック表 | ラベル＋値ペア配列 | Event（対象のスペック） | **unitFieldsRaw JSON**（A1 §8-2）。※定番数値は§5で個別列へ昇格 |
 | U10 | 官能メモ | 香→味→余韻の3欄 | Visit | unitFieldsRaw（表示専用） |
-| U11 | コレクション | 紙モノ写真＋一言メモのペア[ ] | Visit | 写真=PhotoBlob（相対パス所属=collection）、メモ=unitFieldsRaw |
+| U11 | コレクション | モノ写真＋**キャプション（任意・空可）**[ ] | Visit | PhotoBlob role=collection＋**caption**（絵画の作品名等・空でOK）。写真(role=photo)から移動して作れる |
 | U12 | 金額 | 金額・内訳（チケット/グッズ/遠征） | Visit | 個別（集計）。内訳の明細はunitFieldsRaw |
 | U13 | リピート | 通算回数・回ごと比較 | 派生（Event配下Visitの集計） | 保存せず算出（A5）。同一対象判定はA6 |
 | U14 | 形態 | ①鑑賞方法（劇場/配信/現地）②書籍種類（マンガ/技術書） | ①Visit ②Event | 個別（statistics）。選択肢はFormatMaster/種別別 |
@@ -85,6 +85,13 @@
 > - U9スペック表＝Event（対象の客観スペック）。ただし**検索/グラフする値は§5で個別列へ昇格**（自由ペアはunitFieldsRaw）。
 > - U14形態＝**2系統**：鑑賞方法(Visit)と書籍種類(Event)を別フィールドに分ける（混同しない）。
 > - U13リピート＝保存フィールドではなく**Event配下のVisit群の集計**（通算n回）。同一対象の判定はA6。
+>
+> **★PhotoBlob拡張（2026-07-06 ユーザー要望）**：PhotoBlobに `role`（photo / collection / label / eyecatch）＋ `caption: String=""`（任意）を追加。
+> - **写真(role=photo)**＝とりあえず入れるデータ・キャプション不要。
+> - **コレクション(role=collection)**＝モノの記録＋キャプション（空でも可・例：観た絵画の作品名）。
+> - **ラベル(role=label)**＝U16。**代表アイキャッチ**は Event.eyecatchPath（別）。
+> - **写真→コレクションへの移動＝roleをcollectionに変えるだけ**（実体の再保存なし・caption付与可）。逆も可。
+> - 09（写真ストレージ仕様）に role/caption を追記（要更新）。
 
 ---
 
