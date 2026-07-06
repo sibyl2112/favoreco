@@ -69,7 +69,7 @@
 | U5 | 同行者 | [String]＋Companion upsert | Visit | 個別[String] |
 | U6 | タグ | [String]＋Tag upsert | Visit | 個別[String]（横断検索） |
 | U7 | 評価軸レーダー | AxisScore（軸×値） | **Visit** | AxisScore別モデル（個別・統計）。軸定義は種別別プリセット |
-| U8 | 成果 | outcomeKey | Visit | 個別（統計）。選択肢はカテゴリ/種別別 |
+| U8 | ~~成果~~ **廃止（2026-07-06）** | — | — | 全ジャンルで廃止（総合評価で代替・A4 §1）。書籍のみ「読書状態」として存続（§5） |
 | U9 | スペック表 | ラベル＋値ペア配列 | Event（対象のスペック） | **unitFieldsRaw JSON**（A1 §8-2）。※定番数値は§5で個別列へ昇格 |
 | U10 | 官能メモ | 香→味→余韻の3欄 | Visit | unitFieldsRaw（表示専用） |
 | U11 | コレクション | 紙モノ写真＋一言メモのペア[ ] | Visit | 写真=PhotoBlob（相対パス所属=collection）、メモ=unitFieldsRaw |
@@ -96,7 +96,7 @@
 | 映画 | 監督・脚本・出演者 | Event↔Person credits | 参照（役割付き）＋名称スナップ。「この人の映画n本」統計 | TMDb |
 | 書籍 | 著者・出版社 | Event | 個別 | openBD/NDL |
 | 書籍 | volumeNumber（巻数） | Event | 個別（シリーズ順・A5スタック/巻スクロール） | |
-| 書籍 | 成果=読了/積読/中断/再読 | Visit | 個別（U8成果の書籍プリセット） | |
+| 書籍 | 読書状態=読了/積読/中断/再読 | Visit | 個別（statusKey・積読管理） | 成果廃止に伴い"状態"として存続（A4 §9・要確認） |
 | 御朱印 | 直書き/書き置き | Visit | 個別（U14形態の御朱印プリセット） | |
 | 御朱印 | 由緒書き・リーフレット写真 | Visit | PhotoBlob（U11コレクション所属） | |
 | 御朱印 | 初穂料/納経料 | Visit | 個別（U12金額） | |
