@@ -101,6 +101,7 @@
 |---|---|---|---|---|
 | 映画 | 原題・製作年・製作国・上映時間・あらすじ | Event | 年/尺=個別、あらすじ/国=unitFieldsRaw（あらすじは「続きを読む」で畳む・感想と別） | TMDb |
 | 映画 | 監督・脚本・出演者 | Event↔Person credits | 参照（役割付き）＋名称スナップ。「この人の映画n本」統計 | TMDb |
+| 映画 | 観たい状態（観たい/観た）・公開日 | Event | watchStatus（積読と同型・A5）／releaseDate（個別・Coming Up/カレンダーへ） | TMDb。観たいは未公開作の公開予定バッジ・私的watchlist |
 | 書籍 | 著者・出版社 | Event | 個別 | openBD/NDL |
 | 書籍 | volumeNumber（巻数） | Event | 個別（シリーズ順・A5スタック/巻スクロール） | |
 | 書籍 | 読書状態=読了/積読/中断/再読 | **Event**（本の現在状態） | 個別（readingStatus・積読管理） | 成果廃止に伴い"状態"として存続。**積読＝読んだ回(Visit)が無い状態なのでEvent側**（A5 §8で修正確定） |
