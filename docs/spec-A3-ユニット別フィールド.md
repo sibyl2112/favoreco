@@ -54,6 +54,7 @@
 | GenreOption（作品ジャンル） | 選択肢（複数選択） | **Event**.genres | U15。カテゴリ内管理の分類 |
 | Tag | 名称 | Visit.tags[String]＋master upsert | U6 |
 | Companion（同行者） | 名称 | Visit.companions[String]＋master upsert | U5 |
+| FCAccount（FC/名義） | FC名/会員番号/名義/有効期限/年会費/色 | Visit(Ticket).fcAccount 参照（optional/nullify） | **新規**。掛け持ち名義管理・有効期限アラート（spec-A8 §3.2） |
 
 ---
 
@@ -109,7 +110,7 @@
 | 御朱印 | 直書き/書き置き | Visit | 個別（U14形態の御朱印プリセット） | |
 | 御朱印 | 由緒書き・リーフレット写真 | Visit | PhotoBlob（U11コレクション所属） | |
 | 御朱印 | 初穂料/納経料 | Visit | 個別（U12金額） | |
-| 観劇/ライブ | チケット状態・各期限（発売/申込/当選/入金）・名義/枚数/手数料/購入URL | Visit | **状態＋期限=個別**（要対応ストリップ・アラームの源）／名義/枚数/手数料/URL=unitFieldsRaw | チケコレ級（08 §4-2）。状態=申込前/当落待ち/入金待ち/発券待ち/発券済 |
+| 観劇/ライブ | チケット状態pipeline・先行区分・各期限（発売/申込/当落発表/入金/発券）・名義（FCAccount参照）・座席・セトリ・枚数/手数料/購入URL | Visit | **状態/先行区分/各期限/販路/座席=個別**（要対応・通知・当選率の源）／名義=個別＋FCAccount参照／セトリ=unitFieldsRaw(U4順序配列・並び替え可)／枚数/手数料/URL=unitFieldsRaw | **spec-A8 が正本（v1徹底作り込み・通知含む）**。状態=気になる/申込前/当落待ち/当選/落選/入金待ち/発券待ち/参戦済/見送り |
 | 酒 | 精米歩合・日本酒度・酸度・アルコール分 | **Event** | **個別（数値列・検索/グラフ）** | ラベルOCR/さけのわ（A1 §8-1 昇格） |
 | 酒 | 銘柄・使用米・酵母・蔵元コメント | Event | unitFieldsRaw（U9自由ペア） | |
 | おでかけ施設 | 施設種別・年パス種別 | Event(種別)/Visit(パス=形態) | 個別 | A2/U14 |
@@ -122,7 +123,7 @@
 
 - 全プロパティに既定値（String=""/Int=0/Bool=false/Optional=nil）。
 - `@Attribute(.unique)` なし。マスター重複は fetch-first upsert（name正規化）。
-- リレーション（categoryRef/venue/brewery/facility/organizer/person credits/axisScore/photoBlob）は全て optional・多くは cascade or nullify（A1 §6）。
+- リレーション（categoryRef/venue/brewery/facility/organizer/person credits/axisScore/photoBlob/**fcAccount**）は全て optional・多くは cascade or nullify（A1 §6）。FCAccount は nullify（名義削除で記録は無傷・spec-A8 §3.2）。
 - `[String]`（tags/companions/urls）と unitFieldsRaw（String JSON）はCloudKitで安全。
 
 ---

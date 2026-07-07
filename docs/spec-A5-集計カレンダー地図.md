@@ -25,6 +25,10 @@
 | 期間・頻度 | Visit.date | 月別本数・年間タイムライン・皆勤 |
 | 形態別 | Visit.engagementFormat / Event.workType（U14） | 劇場 vs 配信の比率・マンガ/技術書比率 |
 | 種別別 | Event.subTypeKey（A2） | 酒種別内訳・施設種別内訳 |
+| 当選率（チケット） | Visit.status(won/lost)×entryRoute×ticketSite | 先行区分別・販路別の当選率（spec-A8 §5・落選を統計に含める設定時） |
+| セトリ演奏回数 | Visit.setlist（U4）横断・曲名正規化 | 「この曲を何回聴いた」（LiveSoul/Live Rock準拠・spec-A8 §5） |
+| 名義別（FCアカウント） | Visit.fcAccount 紐付け | 名義ごとの参戦数・年会費合計・当選率（掛け持ち可視化・spec-A8 §3.2） |
+| 座席傾向 | Visit.seat（U2）×会場 | 会場別の座席分布（3D表示はspec-A8 §6でv2） |
 
 - **カテゴリ横断「今年の全体験」**：全Visitを日付で束ね、`categoryRef`でグループ表示（Mystoriumはカテゴリ内のみ＝favorecoの新機能・feasibility §3）。
 - **ヒートマップ（体験頻度暦）★2026-07-06**：日/週ごとの体験件数を色の濃淡で（GitHub草グラフ的）。**年間まとめ（買い切り）の顔**・カテゴリ横断。「今年これだけ体験した」を一望（Letterboxd/Untappd等のwrap文化の私的版・spec-B1 §9）。
