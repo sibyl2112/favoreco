@@ -1,0 +1,220 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>favoreco DESIGN.md — preview</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  :root{
+    --canvas:#f5f6f9;--ink:#232833;--sub:#8b93a3;--line:rgba(180,190,210,.4);--app:#3a6df0;
+    --red:#e0533a;--amber:#e0a12a;--blue:#3a6df0;--green:#1f8a5a;
+    --card-sh:0 8px 20px -15px rgba(40,60,110,.35);--float:0 26px 56px -28px rgba(40,60,110,.45)}
+  body{background:#eef1f5;color:var(--ink);padding:28px 20px 60px}
+  .wrap{max-width:1180px;margin:0 auto}
+  h2.blk{font-size:15px;font-weight:800;color:#2b3240;margin:30px 4px 12px;letter-spacing:.02em;display:flex;align-items:center;gap:9px}
+  h2.blk::before{content:"";width:16px;height:16px;border-radius:5px;background:linear-gradient(135deg,#3a6df0,#7c2d43)}
+  .ttl{font-size:24px;font-weight:800;color:#20252e}.sub{font-size:12px;color:#6b7488;margin-top:3px}
+
+  /* palette */
+  .pal{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:760px){.pal{grid-template-columns:repeat(2,1fr)}}
+  .pcard{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--card-sh)}
+  .pswatch{height:66px;display:flex}
+  .pswatch .a{flex:2}.pswatch .b{flex:1}
+  .pmeta{padding:9px 11px}
+  .pname{font-size:13px;font-weight:800}.ptone{font-size:10.5px;color:var(--sub);margin-top:2px}
+  .phex{font-size:9.5px;color:var(--sub);margin-top:5px;font-family:ui-monospace,monospace;display:flex;gap:8px}
+
+  /* type + components board */
+  .board{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.board{grid-template-columns:1fr}}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--card-sh)}
+  .panel h3{font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px}
+  .t-h1{font-size:22px;font-weight:800}
+  .t-genre{font-size:24px;font-weight:800;font-family:Georgia,"Yu Mincho",serif;color:#7c2d43}
+  .t-sec{font-size:14px;font-weight:700}
+  .t-body{font-size:13px;color:#3c4351;line-height:1.5}
+  .t-cap{font-size:11px;color:var(--sub)}
+  .trow{padding:7px 0;border-bottom:1px solid var(--line)}
+  .trow:last-child{border-bottom:none}
+  .trow small{font-size:9.5px;color:var(--sub);font-family:ui-monospace,monospace}
+  .comprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+  .chip{font-size:11.5px;padding:6px 11px;border-radius:11px;border:1px solid var(--line);color:#5a6274}
+  .chip.on{background:#7c2d43;color:#fff;border-color:transparent;font-weight:700}
+  .badge{font-size:10px;font-weight:800;color:#fff;padding:3px 8px;border-radius:7px}
+  .card-demo{border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--card-sh);width:160px}
+  .card-demo .ph{height:92px;background:linear-gradient(135deg,#7c2d43,#3a1420)}
+  .card-demo .cc{padding:9px 11px}.card-demo .cc .n{font-size:12.5px;font-weight:700}.card-demo .cc .s{font-size:10px;color:var(--sub);margin-top:2px}
+
+  /* phones */
+  .phones{display:flex;gap:20px;flex-wrap:wrap}
+  .frame{width:300px}
+  .flabel{text-align:center;font-size:12px;font-weight:700;color:#3a4250;margin-bottom:6px}
+  .phone{border-radius:38px;padding:9px;background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.9);box-shadow:var(--float)}
+  .screen{height:600px;border-radius:30px;overflow:hidden;display:flex;flex-direction:column;background:var(--sc,#f5f6f9)}
+  .st{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:10px;font-weight:600;color:var(--pri);flex:none}
+  .lhd{padding:6px 15px 3px;display:flex;align-items:center;justify-content:space-between}
+  .lhd h1{font-size:22px;color:var(--pri);letter-spacing:.03em}
+  .lhd.serif h1{font-family:Georgia,"Yu Mincho",serif}
+  .lhd .tools{color:var(--acc);font-size:13px;display:flex;gap:9px;align-items:center}
+  .fl{display:flex;gap:6px;overflow:auto;padding:4px 15px 7px}
+  .fl .c{white-space:nowrap;font-size:10.5px;padding:5px 10px;border-radius:11px;border:1px solid var(--line);color:var(--pri);background:#fff}
+  .fl .c.on{background:var(--pri);color:#fff;border-color:transparent;font-weight:700}
+  .sh{display:flex;align-items:center;gap:7px;margin:9px 15px 8px}
+  .sh .t{font-size:12.5px;font-weight:700;color:var(--pri)}
+  .sh.serif .t{font-family:Georgia,"Yu Mincho",serif}
+  .sh .c{font-size:10px;color:var(--acc)}.sh .ln{flex:1;height:1px;background:var(--line)}
+  .content{flex:1;overflow:auto;padding:0 15px 12px}
+  .nav{height:52px;display:flex;justify-content:space-around;align-items:center;background:rgba(255,255,255,.85);backdrop-filter:blur(18px);border-top:1px solid var(--line);font-size:9px;color:#aab;flex:none}
+  .nav .n{display:flex;flex-direction:column;align-items:center;gap:2px}.nav .n .i{font-size:15px}.nav .on{color:var(--pri)}
+  /* grids */
+  .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .poster{aspect-ratio:.68;border-radius:8px;position:relative;display:flex;align-items:flex-end;color:#fff;overflow:hidden;box-shadow:0 6px 13px -8px rgba(20,20,30,.6);font-size:20px;justify-content:center;padding-bottom:6px}
+  .poster .row{position:absolute;bottom:4px;left:0;right:0;display:flex;justify-content:center;gap:6px;font-size:9px}
+  .tall{aspect-ratio:.62;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;box-shadow:0 6px 13px -8px rgba(30,20,25,.55);border:1px solid var(--acc)}
+  .bottle{border-radius:12px;overflow:hidden;background:#fff;border:1px solid var(--line);box-shadow:var(--card-sh)}
+  .bottle .bn{padding:6px 8px;font-size:11px;font-weight:800;font-family:Georgia,serif;color:#fff;background:linear-gradient(100deg,var(--pri),var(--acc));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bottle .bh{height:104px;display:flex;align-items:center;justify-content:center;font-size:40px;background:radial-gradient(120% 90% at 50% 20%,#f6ecd6,#e6d3ab)}
+  .bottle .bf{display:flex;justify-content:space-between;padding:5px 8px;font-size:9.5px;color:var(--sub)}
+  .artcard{border-radius:9px;overflow:hidden;background:#fff;border:1px solid var(--line);box-shadow:var(--card-sh)}
+  .artcard .ah{aspect-ratio:1.15;background:linear-gradient(135deg,#3b6ea5,#22405f);display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff}
+  .artcard .af{padding:7px 9px}.artcard .af .n{font-size:11px;font-weight:700}.artcard .af .s{font-size:9px;color:var(--sub);margin-top:1px}
+  .stat{display:flex;justify-content:space-between;padding:5px 1px 0;font-size:10px;color:#c8ccd4}
+  .stat .on{color:var(--acc);font-weight:700}
+</style>
+
+<div class="wrap">
+  <div class="ttl">favoreco — DESIGN.md preview</div>
+  <div class="sub">共通スケルトン（Liquid Glass・タイポ・余白）は不変。ジャンルは色世界＝アクセントとレイアウトだけ替える＝「共存の憲法」。※実装はSwiftUI・アイコンはSF Symbols（本プレビューの絵文字は仮）</div>
+
+  <!-- ===== palette ===== -->
+  <h2 class="blk">ジャンル・パレット（色世界）</h2>
+  <div class="pal">
+    <div class="pcard"><div class="pswatch"><span class="a" style="background:#7c2d43"></span><span class="b" style="background:#b8894b"></span></div><div class="pmeta"><div class="pname">観劇</div><div class="ptone">ワインレッド × ゴールド</div><div class="phex"><span>#7c2d43</span><span>#b8894b</span></div></div></div>
+    <div class="pcard"><div class="pswatch"><span class="a" style="background:#b07a2e"></span><span class="b" style="background:#e7c77a"></span></div><div class="pmeta"><div class="pname">酒</div><div class="ptone">琥珀 × 蜂蜜</div><div class="phex"><span>#b07a2e</span><span>#e7c77a</span></div></div></div>
+    <div class="pcard"><div class="pswatch"><span class="a" style="background:#2e3440"></span><span class="b" style="background:#c8a24a"></span></div><div class="pmeta"><div class="pname">映画</div><div class="ptone">シネマ・チャコール（白ベース）</div><div class="phex"><span>#2e3440</span><span>#c8a24a</span></div></div></div>
+    <div class="pcard"><div class="pswatch"><span class="a" style="background:#3b6ea5"></span><span class="b" style="background:#c8862e"></span></div><div class="pmeta"><div class="pname">美術展</div><div class="ptone">ミュージアム・ブルー</div><div class="phex"><span>#3b6ea5</span><span>#c8862e</span></div></div></div>
+    <div class="pcard"><div class="pswatch"><span class="a" style="background:#d6455d"></span><span class="b" style="background:#f0b24a"></span></div><div class="pmeta"><div class="pname">ライブ</div><div class="ptone">ステージ・コーラル</div><div class="phex"><span>#d6455d</span><span>#f0b24a</span></div></div></div>
+    <div class="pcard"><div class="pswatch"><span class="a" style="background:#c0392b"></span><span class="b" style="background:#2a2420"></span></div><div class="pmeta"><div class="pname">御朱印</div><div class="ptone">朱 × 墨 × 金</div><div class="phex"><span>#c0392b</span><span>#2a2420</span></div></div></div>
+    <div class="pcard"><div class="pswatch"><span class="a" style="background:#2e8b6f"></span><span class="b" style="background:#e0a12a"></span></div><div class="pmeta"><div class="pname">おでかけ</div><div class="ptone">パーク・グリーン</div><div class="phex"><span>#2e8b6f</span><span>#e0a12a</span></div></div></div>
+    <div class="pcard"><div class="pswatch"><span class="a" style="background:#8a6d3b"></span><span class="b" style="background:#c8a24a"></span></div><div class="pmeta"><div class="pname">書籍</div><div class="ptone">本棚・タン</div><div class="phex"><span>#8a6d3b</span><span>#c8a24a</span></div></div></div>
+  </div>
+
+  <!-- ===== type + components ===== -->
+  <h2 class="blk">タイポグラフィ & コンポーネント</h2>
+  <div class="board">
+    <div class="panel">
+      <h3>Type scale</h3>
+      <div class="trow"><span class="t-h1">おかえりなさい</span> <small>H1 · 22/800 sans</small></div>
+      <div class="trow"><span class="t-genre">観劇</span> <small>Genre title · 24/800 serif</small></div>
+      <div class="trow"><span class="t-sec">最近の記録</span> <small>Section · 14/700</small></div>
+      <div class="trow"><span class="t-body">静かで上質・写真が主役。装飾より余白で質を出す。</span> <small>Body · 13/1.5</small></div>
+      <div class="trow"><span class="t-cap">2026/7/7（月）・ ★4.5</span> <small>Caption · 11 sub</small></div>
+    </div>
+    <div class="panel">
+      <h3>Components</h3>
+      <div class="comprow"><span class="chip on">すべて 38</span><span class="chip">純米大吟醸</span><span class="chip">生酛</span></div>
+      <div class="comprow">
+        <span class="badge" style="background:var(--red)">入金待ち</span>
+        <span class="badge" style="background:var(--blue)">当落待ち</span>
+        <span class="badge" style="background:var(--amber)">発券待ち</span>
+        <span class="badge" style="background:var(--green)">参戦済</span>
+      </div>
+      <div class="comprow">
+        <div class="card-demo"><div class="ph"></div><div class="cc"><div class="n">エリザベート</div><div class="s">帝国劇場 ・ ★4.5</div></div></div>
+      </div>
+      <div class="t-cap">カード＝Liquid Glass面＋ヘアライン＋軽い影＋角丸16。写真上・テキスト下。</div>
+    </div>
+  </div>
+
+  <!-- ===== 4 genre libraries (same skeleton) ===== -->
+  <h2 class="blk">同じ骨格 × 別色世界（ライブラリ4例）</h2>
+  <div class="sub" style="margin:0 4px 14px">ステータス／ヘッダー/フィルタ/セクション見出し/ナビは同一構造。色・書体・中身のレイアウトだけがジャンルで替わる。</div>
+  <div class="phones">
+
+    <!-- 映画 -->
+    <div class="frame"><div class="flabel">映画（白ベース・ポスターウォール）</div>
+    <div class="phone"><div class="screen" style="--pri:#2e3440;--acc:#c8a24a;--sc:#ffffff">
+      <div class="st"><span>9:41</span><span>5G ᛫ 84</span></div>
+      <div class="lhd"><h1>映画</h1><span class="tools">🔍 ⇅</span></div>
+      <div class="fl"><span class="c on">すべて</span><span class="c">SF</span><span class="c">ミステリー</span><span class="c">劇場</span></div>
+      <div class="sh"><span class="t">見たい</span><span class="c">Interest · 8</span><span class="ln"></span></div>
+      <div class="content">
+        <div class="g3">
+          <div class="poster" style="background:linear-gradient(135deg,#3a4a63,#161b26)">🎬<div class="row">🔖</div></div>
+          <div class="poster" style="background:linear-gradient(135deg,#5a4a3a,#241b12)">🎬<div class="row">🔖</div></div>
+          <div class="poster" style="background:linear-gradient(135deg,#334b45,#101c18)">🎬<div class="row">🔖</div></div>
+        </div>
+        <div class="sh"><span class="t">見た</span><span class="c">Watched · 126</span><span class="ln"></span></div>
+        <div class="g3">
+          <div class="poster" style="background:linear-gradient(135deg,#42506b,#1a2130)">🎬<div class="row" style="color:var(--acc)">★4.5</div></div>
+          <div class="poster" style="background:linear-gradient(135deg,#6b4a4a,#2a1616)">🎬<div class="row" style="color:var(--acc)">★4.0</div></div>
+          <div class="poster" style="background:linear-gradient(135deg,#3a5560,#142228)">🎬<div class="row" style="color:var(--acc)">★5.0</div></div>
+          <div class="poster" style="background:linear-gradient(135deg,#4d4363,#1c1830)">🎬<div class="row" style="color:var(--acc)">★3.5</div></div>
+          <div class="poster" style="background:linear-gradient(135deg,#5a5340,#231f13)">🎬<div class="row" style="color:var(--acc)">★4.0</div></div>
+          <div class="poster" style="background:linear-gradient(135deg,#40506b,#181f30)">🎬<div class="row" style="color:var(--acc)">★4.5</div></div>
+        </div>
+      </div>
+      <div class="nav"><div class="n"><span class="i">🏠</span>ホーム</div><div class="n"><span class="i">🗓️</span>暦</div><div class="n on"><span class="i">▦</span>ライブラリ</div><div class="n"><span class="i">👤</span>マイ</div></div>
+    </div></div></div>
+
+    <!-- 観劇 -->
+    <div class="frame"><div class="flabel">観劇（ワインレッド・縦長3列）</div>
+    <div class="phone"><div class="screen" style="--pri:#7c2d43;--acc:#b8894b;--sc:#faf5f0">
+      <div class="st"><span>9:41</span><span>5G ᛫ 84</span></div>
+      <div class="lhd serif"><h1>観劇</h1><span class="tools">🔍 ⇅</span></div>
+      <div class="fl"><span class="c on">すべて</span><span class="c">ミュージカル</span><span class="c">2.5次元</span><span class="c">歌舞伎</span></div>
+      <div class="sh serif"><span class="t">観たい</span><span class="c">Interest · 6</span><span class="ln"></span></div>
+      <div class="content">
+        <div class="g3">
+          <div class="tall" style="background:linear-gradient(135deg,#7c2d43,#3a1420)">🎭</div>
+          <div class="tall" style="background:linear-gradient(135deg,#8a3550,#40182a)">🎭</div>
+          <div class="tall" style="background:linear-gradient(135deg,#6d2740,#341018)">🎭</div>
+        </div>
+        <div class="sh serif"><span class="t">観た</span><span class="c">Watched · 42</span><span class="ln"></span></div>
+        <div class="g3">
+          <div><div class="tall" style="background:linear-gradient(135deg,#912f4a,#3a1420)">🎭</div><div class="stat"><span>👁</span><span class="on">★4.5</span></div></div>
+          <div><div class="tall" style="background:linear-gradient(135deg,#7c2d43,#40182a)">🎭</div><div class="stat"><span>👁</span><span class="on">★4.0</span></div></div>
+          <div><div class="tall" style="background:linear-gradient(135deg,#5f2036,#2c0e18)">🎭</div><div class="stat"><span>👁</span><span class="on">★5.0</span></div></div>
+        </div>
+      </div>
+      <div class="nav"><div class="n"><span class="i">🏠</span>ホーム</div><div class="n"><span class="i">🗓️</span>暦</div><div class="n on"><span class="i">▦</span>ライブラリ</div><div class="n"><span class="i">👤</span>マイ</div></div>
+    </div></div></div>
+
+    <!-- 酒 -->
+    <div class="frame"><div class="flabel">酒（琥珀・2列ボトル）</div>
+    <div class="phone"><div class="screen" style="--pri:#b07a2e;--acc:#d9a94e;--sc:#fbf6ec">
+      <div class="st"><span>9:41</span><span>5G ᛫ 84</span></div>
+      <div class="lhd serif"><h1>酒</h1><span class="tools">🔍 ▥</span></div>
+      <div class="fl"><span class="c on">すべて 38</span><span class="c">純米大吟醸</span><span class="c">生酛</span></div>
+      <div class="sh serif"><span class="t">最近飲んだ</span><span class="c">12</span><span class="ln"></span></div>
+      <div class="content">
+        <div class="g2">
+          <div class="bottle"><div class="bn">而今</div><div class="bh">🍶</div><div class="bf"><span>三重</span><span style="color:var(--acc);font-weight:700">★4.5</span></div></div>
+          <div class="bottle"><div class="bn">新政 No.6</div><div class="bh" style="background:radial-gradient(120% 90% at 50% 20%,#eef1e0,#c8d3a8)">🍶</div><div class="bf"><span>秋田</span><span style="color:var(--acc);font-weight:700">★5.0</span></div></div>
+          <div class="bottle"><div class="bn">十四代</div><div class="bh">🍶</div><div class="bf"><span>山形</span><span style="color:var(--acc);font-weight:700">★4.0</span></div></div>
+          <div class="bottle"><div class="bn">田酒</div><div class="bh">🍶</div><div class="bf"><span>青森</span><span style="color:var(--acc);font-weight:700">★4.5</span></div></div>
+        </div>
+      </div>
+      <div class="nav"><div class="n"><span class="i">🏠</span>ホーム</div><div class="n"><span class="i">🗓️</span>暦</div><div class="n on"><span class="i">▦</span>ライブラリ</div><div class="n"><span class="i">👤</span>マイ</div></div>
+    </div></div></div>
+
+    <!-- 美術展 -->
+    <div class="frame"><div class="flabel">美術展（ブルー・縦長＋作品）</div>
+    <div class="phone"><div class="screen" style="--pri:#3b6ea5;--acc:#c8862e;--sc:#f4f7fb">
+      <div class="st"><span>9:41</span><span>5G ᛫ 84</span></div>
+      <div class="lhd serif"><h1>美術展</h1><span class="tools">🔍 ⇅</span></div>
+      <div class="fl"><span class="c on">すべて</span><span class="c">現代アート</span><span class="c">日本画</span><span class="c">写真</span></div>
+      <div class="sh serif"><span class="t">最近観た</span><span class="c">Recent · 18</span><span class="ln"></span></div>
+      <div class="content">
+        <div class="g2">
+          <div class="artcard"><div class="ah">🖼</div><div class="af"><div class="n">印象派 光の系譜</div><div class="s">国立新美術館 ・ ★4.5</div></div></div>
+          <div class="artcard"><div class="ah" style="background:linear-gradient(135deg,#4a6b8a,#233b52)">🖼</div><div class="af"><div class="n">モネ 睡蓮</div><div class="s">上野の森 ・ ★4.0</div></div></div>
+          <div class="artcard"><div class="ah" style="background:linear-gradient(135deg,#5a6b7a,#2b3b4a)">🖼</div><div class="af"><div class="n">現代美術2026</div><div class="s">森美術館 ・ ★5.0</div></div></div>
+          <div class="artcard"><div class="ah" style="background:linear-gradient(135deg,#3b7a95,#1f4555)">🖼</div><div class="af"><div class="n">写真の現在</div><div class="s">東京都写真 ・ ★4.0</div></div></div>
+        </div>
+      </div>
+      <div class="nav"><div class="n"><span class="i">🏠</span>ホーム</div><div class="n"><span class="i">🗓️</span>暦</div><div class="n on"><span class="i">▦</span>ライブラリ</div><div class="n"><span class="i">👤</span>マイ</div></div>
+    </div></div></div>
+
+  </div>
+</div>
