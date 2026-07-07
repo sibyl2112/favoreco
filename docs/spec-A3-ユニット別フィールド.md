@@ -44,6 +44,7 @@
 |---|---|---|---|
 | **PlaceMaster（場所・種別付き）** | 名称・種別（会場/店/施設[テーマパーク/水族館/動物園]/寺社/城/港）・地域・住所・座標・AppleMapリンク・GoogleMapリンク | **Event**（対象=場所の時：施設/寺社/城/港）／**Visit**（会場/店） | 参照DB(DL)＋Apple POI＋手動ピン（feasibility §4-2b）。地図集計元 |
 | **Brewery（酒蔵）** | 酒蔵名・所在県・URL・スナップ | Event（銘柄）／御酒印 | 共有マスター(A6)・所在県マップ・さけのわでエンリッチ |
+| **GoshuinBook（御朱印帳）★新規・御朱印カテゴリ専用** | 縦横比タイプ（通常16×11cm／大判18×12cm／**横長182×257mm**）・表紙写真・裏表紙写真・購入場所（PlaceMaster）・購入日・限定メモ | Visit(御朱印)が所属参照 | 「帳面を保存する体験」の入れ物。Visit(御朱印)は **GoshuinBook＋寺社(Event)** の両方を参照。1帳に複数寺社の御朱印が入る。最新帳を既定選択（spec-B1 §7） |
 | Organizer（主催） | 名称・スナップ | Event | |
 | **Person（人物）★新規** | 氏名・スナップ | Event↔Person credits（役割:監督/脚本/出演/作家 等） | 映画/観劇/美術展。「この人の作品n本」統計 |
 | SubType（種別） | key・displayName・category | Event.subTypeKey で解決 | A2（酒/施設/印。中身は種別別プリセット） |
