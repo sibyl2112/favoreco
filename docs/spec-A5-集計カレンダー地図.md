@@ -27,6 +27,7 @@
 | 種別別 | Event.subTypeKey（A2） | 酒種別内訳・施設種別内訳 |
 
 - **カテゴリ横断「今年の全体験」**：全Visitを日付で束ね、`categoryRef`でグループ表示（Mystoriumはカテゴリ内のみ＝favorecoの新機能・feasibility §3）。
+- **ヒートマップ（体験頻度暦）★2026-07-06**：日/週ごとの体験件数を色の濃淡で（GitHub草グラフ的）。**年間まとめ（買い切り）の顔**・カテゴリ横断。「今年これだけ体験した」を一望（Letterboxd/Untappd等のwrap文化の私的版・spec-B1 §9）。
 
 ---
 
