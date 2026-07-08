@@ -67,7 +67,7 @@
 | U1 | 場所 | PlaceMaster参照＋名称スナップ | Event(対象=場所) or Visit(会場/店) | 参照＋スナップ。座標は個別（地図） |
 | U2 | 座席 | 座席番号・階/列（自由1行） | Visit | 個別（軽量String） |
 | U3 | 公演情報 | 開演時刻・マチネ/ソワレ・上演時間・当日変更メモ | Visit | 開演/終演=個別（カレンダー）、メモ等=unitFieldsRaw |
-| U4 | リスト（セトリ/見たもの/アトラク） | 順序付き項目[ ] | Visit | unitFieldsRaw（JSON配列）。呼び名は種別で切替 |
+| U4 | リスト（セトリ/見たもの/アトラク） | 順序付き項目[ ] | Visit | unitFieldsRaw（JSON配列）。呼び名は種別で切替。おでかけ施設では時刻付きタイムライン項目としても使う |
 | U5 | 同行者 | [String]＋Companion upsert | Visit | 個別[String] |
 | U6 | タグ | [String]＋Tag upsert | Visit | 個別[String]（横断検索） |
 | U7 | 評価軸レーダー | AxisScore（軸×値） | **Visit** | AxisScore別モデル（個別・統計）。軸定義は種別別プリセット |
@@ -88,12 +88,14 @@
 > - U14形態＝**2系統**：鑑賞方法(Visit)と書籍種類(Event)を別フィールドに分ける（混同しない）。
 > - U13リピート＝保存フィールドではなく**Event配下のVisit群の集計**（通算n回）。同一対象の判定はA6。
 >
-> **★PhotoBlob拡張（2026-07-06 ユーザー要望）**：PhotoBlobに `role`（photo / collection / label / eyecatch）＋ `caption: String=""`（任意）を追加。
+> **★MediaAsset方針（2026-07-08更新）**：従来のPhotoBlob方針を拡張し、写真/動画を将来同じ「メディア」抽象で扱えるようにする。実装名は `MediaAsset` 推奨（既存文書の `PhotoBlob` は互換名として読み替え可）。
 > - **写真(role=photo)**＝とりあえず入れるデータ・キャプション不要。
 > - **コレクション(role=collection)**＝モノの記録＋キャプション（空でも可・例：観た絵画の作品名）。
 > - **ラベル(role=label)**＝U16。**代表アイキャッチ**は Event.eyecatchPath（別）。
+> - **動画(mediaType=video)**＝デフォルトはPhotos参照＋サムネ＋メタ情報。アプリ内コピー/Cloud同期はユーザー明示ON。
+> - **caption** は写真/動画どちらにも使う。おでかけ施設では生きもの名/動物名/植物名/展示名、書籍では写真メモ、映画では半券/特典名など。
 > - **写真→コレクションへの移動＝roleをcollectionに変えるだけ**（実体の再保存なし・caption付与可）。逆も可。
-> - 09（写真ストレージ仕様）に role/caption を追記（要更新）。
+> - 09（写真/メディアストレージ仕様）に role/caption/mediaType/同期方針を追記。
 
 ---
 
@@ -104,9 +106,12 @@
 | 映画 | 原題・製作年・製作国・上映時間・あらすじ | Event | 年/尺=個別、あらすじ/国=unitFieldsRaw（あらすじは「続きを読む」で畳む・感想と別） | TMDb |
 | 映画 | 監督・脚本・出演者 | Event↔Person credits | 参照（役割付き）＋名称スナップ。「この人の映画n本」統計 | TMDb |
 | 映画 | 観たい状態（観たい/観た）・公開日 | Event | watchStatus（積読と同型・A5）／releaseDate（個別・Coming Up/カレンダーへ） | TMDb。観たいは未公開作の公開予定バッジ・私的watchlist |
-| 書籍 | 著者・出版社 | Event | 個別 | openBD/NDL |
+| 書籍 | 著者・訳者・出版社・ISBN・発行日・remoteImageURL・coverImageCache/eyecatchPath | Event | 著者/出版社/ISBN等=個別、remoteImageURL=再取得用、保存済み書影=relativePath | openBD/NDL/URL。書影はアイキャッチ用にローカル保存/キャッシュし、写真欄へは自動追加しない |
 | 書籍 | volumeNumber（巻数） | Event | 個別（シリーズ順・A5スタック/巻スクロール） | |
-| 書籍 | 読書状態=読了/積読/中断/再読 | **Event**（本の現在状態） | 個別（readingStatus・積読管理） | 成果廃止に伴い"状態"として存続。**積読＝読んだ回(Visit)が無い状態なのでEvent側**（A5 §8で修正確定） |
+| 書籍 | 共通興味ステータス（気になる/欲しい） | Event | 個別（interestStatus・横断） | 映画の観たい、観劇/ライブの行きたいと同じレイヤー。ジャンル別ラベルで表示 |
+| 書籍 | 入手状態=未入手/購入済み | **Event** | 個別（acquisitionStatus） | 買ったか忘れる問題を解く中核。購入済み一覧・最近買った本・購入冊数集計の源 |
+| 書籍 | 読書状態=未読/読書中/読了/中断/再読中/再読了 | **Event** | 個別（readingStatus・任意） | 購入済み後だけUI表示。未選択可。読了日・再読履歴はVisit側で保持 |
+| 書籍 | 購入情報（所有形態/購入日/購入場所/金額/購入メモ） | Event中心（必要に応じVisitなし） | 所有形態/購入日/金額=個別、購入場所/メモ=unitFieldsRawまたはPlaceMaster任意参照 | 折りたたみ任意欄。購入場所は標準ONにしない |
 | 御朱印 | 直書き/書き置き | Visit | 個別（U14形態の御朱印プリセット） | |
 | 御朱印 | 由緒書き・リーフレット写真 | Visit | PhotoBlob（U11コレクション所属） | |
 | 御朱印 | 初穂料/納経料 | Visit | 個別（U12金額） | |
@@ -114,7 +119,8 @@
 | 酒 | 精米歩合・日本酒度・酸度・アルコール分 | **Event** | **個別（数値列・検索/グラフ）** | ラベルOCR/さけのわ（A1 §8-1 昇格） |
 | 酒 | 銘柄・使用米・酵母・蔵元コメント | Event | unitFieldsRaw（U9自由ペア） | |
 | おでかけ施設 | 施設種別・年パス種別 | Event(種別)/Visit(パス=形態) | 個別 | A2/U14 |
-| おでかけ施設 | 見たもの（生き物/動物/アトラク） | Visit | unitFieldsRaw（U4リスト・呼び名種別切替） | |
+| おでかけ施設 | 見たもの（生き物/動物/植物/アトラク） | Visit | unitFieldsRaw（U4リスト・呼び名種別切替） | `name/type/startTime/endTime/note/photoRefs/source` を持つタイムライン/ハイライト項目。Google/Appleカレンダー候補・写真時刻候補を取り込める |
+| おでかけ施設 | 写真/動画のcaption | Visit(MediaAsset) | MediaAsset.caption / note | 水族館・動物園・植物園では写真ごとの生きもの名/動物名/植物名が主役 |
 | 出かける系共通 | weatherSymbol・気温 | Visit | 個別（軽くキャッシュ・SF Symbol名） | WeatherKit（08 §4-9） |
 
 ---
