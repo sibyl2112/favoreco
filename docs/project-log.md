@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: 編集画面とカテゴリ別フォーム文言を実装
+
+### 変更概要
+- `CategoryRecordTemplate` を追加し、観劇 / 美術展 / ライブ / 映画 / 酒 / おでかけ施設 / 御朱印 / 書籍ごとにフォーム文言を切り替えられるようにした。
+- `AddExperienceView` のセクション名、プレースホルダー、日付/場所/評価/メモ文言をカテゴリ別にした。
+- `EditExperienceView` を追加し、保存済み `ExperienceEvent` + `Visit` のタイトル、シリーズ、日付、場所、評価、メモを編集保存できるようにした。
+- `ExperienceDetailView` に編集ボタンを追加し、詳細画面から編集シートへ遷移できるようにした。
+- `favoreco/CLAUDE.md` に現在の画面構成とフォーム文言ルールを反映した。
+
+### 変更意図
+1件保存して終わりではなく、あとから記録を直せる基本体験に進めるため。あわせて、同じ最小フォームでもカテゴリごとの言葉に置き換え、観劇・酒・読書などで入力の意味が自然に伝わる状態にする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/CategoryRecordTemplate.swift（カテゴリ別フォーム文言定義）
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（追加フォーム文言切替・編集フォーム追加）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（編集導線追加・詳細ラベル文言切替）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- テンプレ別の専用入力ユニット、チケット、写真、Map、OCRは未実装。
+- 編集対象の削除、アーカイブ、既存Eventへの再訪追加は未実装。
+
 ## 2026-07-09: 可変フォント基盤を実装
 
 ### 変更概要

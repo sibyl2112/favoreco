@@ -15,21 +15,25 @@ struct AddExperienceView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var draft = AddExperienceDraft()
 
+    private var template: CategoryRecordTemplate {
+        CategoryRecordTemplate.template(for: category)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("対象") {
-                    TextField("タイトル", text: $draft.title)
-                    TextField("シリーズ・ツアー名（任意）", text: $draft.seriesName)
+                Section(template.targetSectionTitle) {
+                    TextField(template.titlePlaceholder, text: $draft.title)
+                    TextField(template.seriesPlaceholder, text: $draft.seriesName)
                 }
 
-                Section("この回") {
-                    DatePicker("日付", selection: $draft.visitedAt, displayedComponents: .date)
-                    TextField("場所（任意）", text: $draft.venueName)
+                Section(template.visitSectionTitle) {
+                    DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
+                    TextField(template.venuePlaceholder, text: $draft.venueName)
 
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("評価")
+                            Text(template.ratingLabel)
                             Spacer()
                             Text(draft.ratingLabel)
                                 .foregroundStyle(.secondary)
@@ -38,9 +42,17 @@ struct AddExperienceView: View {
                     }
                 }
 
-                Section("メモ") {
-                    TextEditor(text: $draft.note)
-                        .frame(minHeight: 120)
+                Section(template.memoSectionTitle) {
+                    ZStack(alignment: .topLeading) {
+                        if draft.note.isEmpty {
+                            Text(template.memoPlaceholder)
+                                .foregroundStyle(.tertiary)
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                        }
+                        TextEditor(text: $draft.note)
+                            .frame(minHeight: 120)
+                    }
                 }
             }
             .navigationTitle("記録を追加")
@@ -93,6 +105,109 @@ struct AddExperienceView: View {
     }
 }
 
+struct EditExperienceView: View {
+    let visit: Visit
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @State private var draft: AddExperienceDraft
+
+    private var event: ExperienceEvent? {
+        visit.event
+    }
+
+    private var category: RecordCategory? {
+        event?.category
+    }
+
+    private var template: CategoryRecordTemplate {
+        CategoryRecordTemplate.template(for: category)
+    }
+
+    init(visit: Visit) {
+        self.visit = visit
+        _draft = State(initialValue: AddExperienceDraft(visit: visit))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(template.targetSectionTitle) {
+                    TextField(template.titlePlaceholder, text: $draft.title)
+                    TextField(template.seriesPlaceholder, text: $draft.seriesName)
+                }
+
+                Section(template.visitSectionTitle) {
+                    DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
+                    TextField(template.venuePlaceholder, text: $draft.venueName)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(template.ratingLabel)
+                            Spacer()
+                            Text(draft.ratingLabel)
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $draft.overallRating, in: 0...5, step: 0.5)
+                    }
+                }
+
+                Section(template.memoSectionTitle) {
+                    ZStack(alignment: .topLeading) {
+                        if draft.note.isEmpty {
+                            Text(template.memoPlaceholder)
+                                .foregroundStyle(.tertiary)
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                        }
+                        TextEditor(text: $draft.note)
+                            .frame(minHeight: 120)
+                    }
+                }
+            }
+            .navigationTitle("記録を編集")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        save()
+                    }
+                    .disabled(!draft.canSave)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let now = Date()
+
+        if let event {
+            event.title = draft.trimmedTitle
+            event.seriesName = draft.trimmedSeriesName
+            event.updatedAt = now
+        }
+
+        visit.visitedAt = draft.visitedAt
+        visit.endedAt = draft.visitedAt
+        visit.venueNameSnapshot = draft.trimmedVenueName
+        visit.overallRating = draft.overallRating
+        visit.note = draft.trimmedNote
+        visit.updatedAt = now
+
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            assertionFailure("Failed to update experience: \(error)")
+        }
+    }
+}
+
 private struct AddExperienceDraft {
     var title: String = ""
     var seriesName: String = ""
@@ -100,6 +215,17 @@ private struct AddExperienceDraft {
     var venueName: String = ""
     var overallRating: Double = 0
     var note: String = ""
+
+    init() {}
+
+    init(visit: Visit) {
+        title = visit.event?.title ?? ""
+        seriesName = visit.event?.seriesName ?? ""
+        visitedAt = visit.visitedAt
+        venueName = visit.venueNameSnapshot
+        overallRating = visit.overallRating
+        note = visit.note
+    }
 
     var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)

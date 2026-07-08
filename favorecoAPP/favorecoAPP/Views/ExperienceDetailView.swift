@@ -10,6 +10,7 @@ import SwiftData
 
 struct ExperienceDetailView: View {
     let visit: Visit
+    @State private var isShowingEdit = false
 
     private var event: ExperienceEvent? {
         visit.event
@@ -21,6 +22,10 @@ struct ExperienceDetailView: View {
 
     private var accentColor: Color {
         Color(hex: category?.colorHex ?? "#6F8F7A")
+    }
+
+    private var template: CategoryRecordTemplate {
+        CategoryRecordTemplate.template(for: category)
     }
 
     var body: some View {
@@ -36,6 +41,18 @@ struct ExperienceDetailView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle(eventTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingEdit = true
+                } label: {
+                    Label("編集", systemImage: "pencil")
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingEdit) {
+            EditExperienceView(visit: visit)
+        }
     }
 
     private var hero: some View {
@@ -70,14 +87,14 @@ struct ExperienceDetailView: View {
 
     private var basicInfo: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("この回")
-            DetailInfoRow(icon: "calendar", title: "日付", value: visit.visitedAt.formatted(date: .long, time: .omitted))
+            sectionTitle(template.visitSectionTitle)
+            DetailInfoRow(icon: "calendar", title: template.dateLabel, value: visit.visitedAt.formatted(date: .long, time: .omitted))
 
             if !visit.venueNameSnapshot.isEmpty {
                 DetailInfoRow(icon: "mappin.and.ellipse", title: "場所", value: visit.venueNameSnapshot)
             }
 
-            DetailInfoRow(icon: "star.fill", title: "評価", value: ratingText)
+            DetailInfoRow(icon: "star.fill", title: template.ratingLabel, value: ratingText)
         }
         .sectionCard()
     }
@@ -86,7 +103,7 @@ struct ExperienceDetailView: View {
     private var memoSection: some View {
         if !visit.note.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle("メモ")
+                sectionTitle(template.memoSectionTitle)
                 Text(visit.note)
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.primary)
