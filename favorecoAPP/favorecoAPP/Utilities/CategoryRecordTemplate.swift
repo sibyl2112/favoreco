@@ -19,6 +19,25 @@ struct CategoryRecordTemplate {
     let memoPlaceholder: String
 
     static func template(for category: RecordCategory?) -> CategoryRecordTemplate {
+        if let category,
+           category.isBuiltIn == false,
+           !category.targetNameLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !category.dateLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let targetName = category.targetNameLabel
+            let recordUnit = category.recordUnitName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "回" : category.recordUnitName
+            return CategoryRecordTemplate(
+                targetSectionTitle: targetName,
+                titlePlaceholder: "\(targetName)名",
+                seriesPlaceholder: "シリーズ・分類（任意）",
+                visitSectionTitle: "\(recordUnit)の記録",
+                dateLabel: category.dateLabel,
+                venuePlaceholder: "場所（任意）",
+                ratingLabel: "評価",
+                memoSectionTitle: "\(category.name)メモ",
+                memoPlaceholder: "残しておきたいこと"
+            )
+        }
+
         switch category?.templateKey {
         case "theater":
             return CategoryRecordTemplate(

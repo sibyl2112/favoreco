@@ -30,10 +30,18 @@ struct RecordUnitDefinition: Identifiable {
         RecordUnitDefinition(id: "U18", name: "通知/予定", description: "申込、当落、訪問予定、リマインダー", isRequired: false, isImplemented: false),
     ]
 
+    static var requiredIDs: Set<String> {
+        Set(all.filter(\.isRequired).map(\.id))
+    }
+
     static func definitions(for rawValue: String) -> [RecordUnitDefinition] {
         let keys = rawValue
             .split(separator: ",")
             .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
         return keys.compactMap { key in all.first { $0.id == key } }
+    }
+
+    static func orderedIDs(from ids: Set<String>) -> [String] {
+        all.map(\.id).filter { ids.contains($0) }
     }
 }

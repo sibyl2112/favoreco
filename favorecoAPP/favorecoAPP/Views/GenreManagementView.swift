@@ -12,6 +12,7 @@ struct GenreManagementView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var warningMessage = ""
+    @State private var isShowingAddGenre = false
 
     private var sortedCategories: [RecordCategory] {
         categories.sorted { $0.sortOrder < $1.sortOrder }
@@ -57,7 +58,20 @@ struct GenreManagementView: View {
         }
         .navigationTitle("ジャンル管理")
         .toolbar {
-            EditButton()
+            ToolbarItem(placement: .topBarLeading) {
+                EditButton()
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingAddGenre = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("自作ジャンルを追加")
+            }
+        }
+        .sheet(isPresented: $isShowingAddGenre) {
+            AddCustomGenreView()
         }
     }
 
@@ -112,6 +126,11 @@ private struct GenreManagementRow: View {
                 Text(category.isArchived ? "非表示" : "表示中")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
+                if !category.isBuiltIn {
+                    Text("自作")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
@@ -157,6 +176,16 @@ struct GenreDetailSettingsView: View {
                             .tag(preset.hex)
                     }
                 }
+
+                Picker("テンプレタイプ", selection: $draft.templateTypeKey) {
+                    ForEach(CustomGenreTemplateType.all) { type in
+                        Text(type.name).tag(type.id)
+                    }
+                }
+
+                TextField("対象名ラベル", text: $draft.targetNameLabel)
+                TextField("記録単位の呼び名", text: $draft.recordUnitName)
+                TextField("日付ラベル", text: $draft.dateLabel)
             }
 
             Section("SNS") {
@@ -173,8 +202,14 @@ struct GenreDetailSettingsView: View {
             }
 
             Section("有効ユニット") {
-                ForEach(enabledUnits) { unit in
-                    UnitRow(unit: unit)
+                ForEach(RecordUnitDefinition.all) { unit in
+                    UnitToggleRow(
+                        unit: unit,
+                        isSelected: draft.selectedUnitIDs.contains(unit.id)
+                    ) {
+                        draft.toggleUnit(unit.id)
+                    }
+                    .disabled(unit.isRequired)
                 }
             }
 
@@ -217,6 +252,11 @@ struct GenreDetailSettingsView: View {
         category.name = draft.trimmedName
         category.iconSymbol = draft.trimmedIconSymbol
         category.colorHex = draft.colorHex
+        category.templateTypeKey = draft.templateTypeKey
+        category.targetNameLabel = draft.trimmedTargetNameLabel
+        category.recordUnitName = draft.trimmedRecordUnitName
+        category.dateLabel = draft.trimmedDateLabel
+        category.enabledUnitsRaw = draft.enabledUnitsRaw
         category.isArchived = draft.isArchived
         category.updatedAt = Date()
 
@@ -269,16 +309,69 @@ private struct UnitRow: View {
     }
 }
 
+private struct UnitToggleRow: View {
+    let unit: RecordUnitDefinition
+    let isSelected: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        Button {
+            toggle()
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(unit.name)
+                            .font(FavorecoTypography.bodyStrong)
+                        if unit.isRequired {
+                            Text("必須")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text(unit.description)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+
+                    if !unit.isImplemented {
+                        Text("準備中")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct GenreDetailDraft {
     var name: String
     var iconSymbol: String
     var colorHex: String
+    var templateTypeKey: String
+    var targetNameLabel: String
+    var recordUnitName: String
+    var dateLabel: String
+    var selectedUnitIDs: Set<String>
     var isArchived: Bool
 
     init(category: RecordCategory) {
         name = category.name
         iconSymbol = category.iconSymbol
         colorHex = category.colorHex
+        templateTypeKey = category.templateTypeKey
+        targetNameLabel = category.targetNameLabel
+        recordUnitName = category.recordUnitName
+        dateLabel = category.dateLabel
+        selectedUnitIDs = Set(RecordUnitDefinition.definitions(for: category.enabledUnitsRaw).map(\.id))
+        selectedUnitIDs.formUnion(RecordUnitDefinition.requiredIDs)
         isArchived = category.isArchived
     }
 
@@ -288,6 +381,35 @@ private struct GenreDetailDraft {
 
     var trimmedIconSymbol: String {
         iconSymbol.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedTargetNameLabel: String {
+        let value = targetNameLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "対象" : value
+    }
+
+    var trimmedRecordUnitName: String {
+        let value = recordUnitName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "回" : value
+    }
+
+    var trimmedDateLabel: String {
+        let value = dateLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "日付" : value
+    }
+
+    var enabledUnitsRaw: String {
+        RecordUnitDefinition.orderedIDs(from: selectedUnitIDs).joined(separator: ",")
+    }
+
+    mutating func toggleUnit(_ unitID: String) {
+        guard !RecordUnitDefinition.requiredIDs.contains(unitID) else { return }
+        if selectedUnitIDs.contains(unitID) {
+            selectedUnitIDs.remove(unitID)
+        } else {
+            selectedUnitIDs.insert(unitID)
+        }
+        selectedUnitIDs.formUnion(RecordUnitDefinition.requiredIDs)
     }
 
     var canSave: Bool {
@@ -310,6 +432,196 @@ private struct GenreThemeColorPreset: Identifiable {
         GenreThemeColorPreset(id: "rose", name: "ローズ", hex: "#A24C55"),
         GenreThemeColorPreset(id: "blue", name: "ブルー", hex: "#536C95"),
     ]
+}
+
+struct AddCustomGenreView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @State private var draft = CustomGenreDraft()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("基本") {
+                    TextField("表示名", text: $draft.name)
+                    TextField("アイコン", text: $draft.iconSymbol)
+                        .textInputAutocapitalization(.never)
+
+                    Picker("テーマカラー", selection: $draft.colorHex) {
+                        ForEach(GenreThemeColorPreset.all) { preset in
+                            Label(preset.name, systemImage: "circle.fill")
+                                .foregroundStyle(Color(hex: preset.hex))
+                                .tag(preset.hex)
+                        }
+                    }
+                }
+
+                Section("テンプレタイプ") {
+                    Picker("タイプ", selection: $draft.templateTypeKey) {
+                        ForEach(CustomGenreTemplateType.all) { type in
+                            Text(type.name).tag(type.id)
+                        }
+                    }
+
+                    let selectedType = CustomGenreTemplateType.type(for: draft.templateTypeKey)
+                    Text(selectedType.description)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("呼び名") {
+                    TextField("対象名ラベル", text: $draft.targetNameLabel)
+                    TextField("記録単位の呼び名", text: $draft.recordUnitName)
+                    TextField("日付ラベル", text: $draft.dateLabel)
+                }
+
+                Section("使うユニット") {
+                    ForEach(RecordUnitDefinition.all) { unit in
+                        UnitToggleRow(
+                            unit: unit,
+                            isSelected: draft.selectedUnitIDs.contains(unit.id)
+                        ) {
+                            draft.toggleUnit(unit.id)
+                        }
+                        .disabled(unit.isRequired)
+                    }
+                }
+            }
+            .navigationTitle("自作ジャンル")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("追加") {
+                        save()
+                    }
+                    .disabled(!draft.canSave)
+                }
+            }
+            .onChange(of: draft.templateTypeKey) { _, newValue in
+                draft.applyTemplateType(newValue)
+            }
+        }
+    }
+
+    private func save() {
+        let now = Date()
+        let maxSortOrder = categories.map(\.sortOrder).max() ?? 0
+        let category = RecordCategory(
+            name: draft.trimmedName,
+            iconSymbol: draft.trimmedIconSymbol,
+            colorHex: draft.colorHex,
+            sortOrder: maxSortOrder + 10,
+            isBuiltIn: false,
+            templateKey: "custom_\(UUID().uuidString)",
+            enabledUnitsRaw: draft.enabledUnitsRaw,
+            templateTypeKey: draft.templateTypeKey,
+            targetNameLabel: draft.trimmedTargetNameLabel,
+            recordUnitName: draft.trimmedRecordUnitName,
+            dateLabel: draft.trimmedDateLabel,
+            isArchived: false,
+            createdAt: now,
+            updatedAt: now
+        )
+
+        modelContext.insert(category)
+
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            assertionFailure("Failed to save custom genre: \(error)")
+        }
+    }
+}
+
+private struct CustomGenreDraft {
+    var name = ""
+    var iconSymbol = "sparkles"
+    var colorHex = "#147C88"
+    var templateTypeKey = "free"
+    var targetNameLabel = "対象"
+    var recordUnitName = "回"
+    var dateLabel = "日付"
+    var selectedUnitIDs: Set<String> = ["U1", "U3", "U11", "U12", "U15"]
+
+    var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedIconSymbol: String {
+        let value = iconSymbol.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "sparkles" : value
+    }
+
+    var trimmedTargetNameLabel: String {
+        let value = targetNameLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "対象" : value
+    }
+
+    var trimmedRecordUnitName: String {
+        let value = recordUnitName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "回" : value
+    }
+
+    var trimmedDateLabel: String {
+        let value = dateLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "日付" : value
+    }
+
+    var enabledUnitsRaw: String {
+        RecordUnitDefinition.orderedIDs(from: selectedUnitIDs.union(RecordUnitDefinition.requiredIDs)).joined(separator: ",")
+    }
+
+    var canSave: Bool {
+        !trimmedName.isEmpty && !trimmedIconSymbol.isEmpty
+    }
+
+    mutating func toggleUnit(_ unitID: String) {
+        guard !RecordUnitDefinition.requiredIDs.contains(unitID) else { return }
+        if selectedUnitIDs.contains(unitID) {
+            selectedUnitIDs.remove(unitID)
+        } else {
+            selectedUnitIDs.insert(unitID)
+        }
+        selectedUnitIDs.formUnion(RecordUnitDefinition.requiredIDs)
+    }
+
+    mutating func applyTemplateType(_ typeID: String) {
+        let type = CustomGenreTemplateType.type(for: typeID)
+        targetNameLabel = type.targetNameLabel
+        recordUnitName = type.recordUnitName
+        dateLabel = type.dateLabel
+        selectedUnitIDs = Set(type.defaultUnitIDs).union(RecordUnitDefinition.requiredIDs)
+    }
+}
+
+private struct CustomGenreTemplateType: Identifiable {
+    let id: String
+    let name: String
+    let description: String
+    let targetNameLabel: String
+    let recordUnitName: String
+    let dateLabel: String
+    let defaultUnitIDs: [String]
+
+    static let all: [CustomGenreTemplateType] = [
+        CustomGenreTemplateType(id: "watching", name: "鑑賞系", description: "映画、配信、ゲーム実況、イベント視聴など。作品を見た/体験した記録向け。", targetNameLabel: "作品", recordUnitName: "鑑賞", dateLabel: "鑑賞日", defaultUnitIDs: ["U1", "U3", "U11", "U12", "U15"]),
+        CustomGenreTemplateType(id: "visiting", name: "訪問系", description: "カフェ、温泉、ショップ、施設など。場所に行った記録向け。", targetNameLabel: "場所", recordUnitName: "訪問", dateLabel: "訪問日", defaultUnitIDs: ["U1", "U3", "U11", "U12", "U14", "U15", "U16"]),
+        CustomGenreTemplateType(id: "reading", name: "読書系", description: "本、漫画、雑誌、同人誌など。読んだものを残す記録向け。", targetNameLabel: "本", recordUnitName: "読書", dateLabel: "読了日", defaultUnitIDs: ["U1", "U3", "U11", "U12", "U15", "U17"]),
+        CustomGenreTemplateType(id: "collection", name: "コレクション系", description: "グッズ、香水、文具、カードなど。所有物や使用感を残す記録向け。", targetNameLabel: "アイテム", recordUnitName: "入手", dateLabel: "入手日", defaultUnitIDs: ["U1", "U3", "U9", "U11", "U12", "U16", "U17"]),
+        CustomGenreTemplateType(id: "food", name: "飲食系", description: "カフェ、料理、菓子、ドリンクなど。味や店を残す記録向け。", targetNameLabel: "メニュー", recordUnitName: "飲食", dateLabel: "飲食日", defaultUnitIDs: ["U1", "U3", "U10", "U11", "U12", "U14", "U16"]),
+        CustomGenreTemplateType(id: "free", name: "自由", description: "決まった型を持たず、あとから育てるジャンル向け。", targetNameLabel: "対象", recordUnitName: "回", dateLabel: "日付", defaultUnitIDs: ["U1", "U3", "U11", "U12", "U15"]),
+    ]
+
+    static func type(for id: String) -> CustomGenreTemplateType {
+        all.first { $0.id == id } ?? all.last!
+    }
 }
 
 #Preview {

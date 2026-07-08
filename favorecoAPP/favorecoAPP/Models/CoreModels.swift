@@ -18,6 +18,10 @@ final class RecordCategory {
     var isBuiltIn: Bool = false
     var templateKey: String = ""
     var enabledUnitsRaw: String = ""
+    var templateTypeKey: String = "free"
+    var targetNameLabel: String = "対象"
+    var recordUnitName: String = "回"
+    var dateLabel: String = "日付"
     var isArchived: Bool = false
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
@@ -37,6 +41,10 @@ final class RecordCategory {
         isBuiltIn: Bool = false,
         templateKey: String = "",
         enabledUnitsRaw: String = "",
+        templateTypeKey: String = "free",
+        targetNameLabel: String = "対象",
+        recordUnitName: String = "回",
+        dateLabel: String = "日付",
         isArchived: Bool = false,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -49,6 +57,10 @@ final class RecordCategory {
         self.isBuiltIn = isBuiltIn
         self.templateKey = templateKey
         self.enabledUnitsRaw = enabledUnitsRaw
+        self.templateTypeKey = templateTypeKey
+        self.targetNameLabel = targetNameLabel
+        self.recordUnitName = recordUnitName
+        self.dateLabel = dateLabel
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt

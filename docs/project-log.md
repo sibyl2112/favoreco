@@ -5,6 +5,37 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: 自作ジャンル作成を実装
+
+### 変更概要
+- `RecordCategory` に自作ジャンル用の `templateTypeKey`、`targetNameLabel`、`recordUnitName`、`dateLabel` を追加した。
+- ジャンル管理の右上 `+` から `AddCustomGenreView` を開き、自作ジャンルを追加できるようにした。
+- 自作ジャンル作成時に、表示名、アイコン、テーマカラー、テンプレタイプ、呼び名、有効ユニットを設定できるようにした。
+- テンプレタイプは鑑賞系 / 訪問系 / 読書系 / コレクション系 / 飲食系 / 自由の6種類にした。
+- `GenreDetailSettingsView` でもテンプレタイプ、呼び名、有効ユニットを編集できるようにした。
+- `CategoryRecordTemplate` を更新し、自作ジャンルの入力フォーム文言を保存済みラベルから生成するようにした。
+- `CategoryPresetSeeder.ensureAtLeastOneActiveCategory` を標準ジャンル限定ではなく全ジャンル対象にし、自作ジャンルだけが有効な場合に標準ジャンルが勝手に復帰しないようにした。
+
+### 変更意図
+標準ジャンルだけでなく、ユーザーの趣味や生活に合わせた記録ジャンルを作れるようにするため。作成時は軽く始められ、あとから詳細設定で呼び名やユニットを育てられる構成にした。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Models/CoreModels.swift（RecordCategoryに自作ジャンル用フィールド追加）
+- favorecoAPP/favorecoAPP/Views/GenreManagementView.swift（自作ジャンル追加・詳細編集拡張）
+- favorecoAPP/favorecoAPP/Utilities/CategoryRecordTemplate.swift（自作ジャンル用フォーム文言生成）
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（必須ユニット/並び順ヘルパー）
+- favorecoAPP/favorecoAPP/Services/CategoryPresetSeeder.swift（標準プリセットの新フィールド設定・最低1ジャンル補正）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- アイコンはSF Symbol文字列入力のまま。将来ピッカー化する。
+- 自作ジャンルの削除/複製は未実装。現状は非表示で運用する。
+- ユニットON/OFFは入力フォームの出し分けまでは未接続。保存値と詳細表示/編集の土台まで。
+
 ## 2026-07-09: ジャンル管理v1を実装
 
 ### 変更概要
