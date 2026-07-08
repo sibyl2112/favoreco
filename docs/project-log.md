@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: ジャンル管理v1を実装
+
+### 変更概要
+- `GenreManagementView` を追加し、設定からジャンル一覧を管理できるようにした。
+- 表示/非表示を `RecordCategory.isArchived` で切り替え、最後の1件は非表示にできないようにした。
+- 並び替えを `sortOrder` に保存し、Home / 追加導線 / ジャンル切替に効く土台にした。
+- `GenreDetailSettingsView` で表示名、アイコン、テーマカラー、紐付けSNS一覧、有効ユニット一覧を確認/編集できるようにした。
+- `RecordUnitDefinition` を追加し、`enabledUnitsRaw` を人間が読めるユニット名/説明に変換した。
+
+### 変更意図
+初回選択だけでなく、運用中にジャンルを育てられるようにするため。非表示は削除ではなく、記録は残しつつ入口から外す。テーマカラーやSNS紐付け、有効ユニットをジャンル単位で見られるようにして、年間まとめや自作ジャンルの土台にする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/GenreManagementView.swift（ジャンル一覧・詳細設定）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（ジャンル管理導線追加）
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（有効ユニット定義）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- 自作ジャンル追加は未実装。
+- 有効ユニットは現時点では表示中心で、本格的なON/OFF制御は未実装。
+- アイコン入力はSF Symbol文字列の直接入力。将来ピッカー化する。
+
 ## 2026-07-09: プロフィールSNS管理を実装
 
 ### 変更概要

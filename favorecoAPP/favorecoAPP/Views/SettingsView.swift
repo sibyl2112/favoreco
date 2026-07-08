@@ -26,6 +26,12 @@ struct SettingsView: View {
                 }
 
                 Section("ジャンル") {
+                    NavigationLink {
+                        GenreManagementView()
+                    } label: {
+                        Label("ジャンル管理", systemImage: "square.grid.2x2")
+                    }
+
                     Button {
                         hasCompletedGenreOnboarding = false
                         dismiss()
