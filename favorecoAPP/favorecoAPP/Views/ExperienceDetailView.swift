@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ExperienceDetailView: View {
     let visit: Visit
@@ -48,17 +49,17 @@ struct ExperienceDetailView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(eventTitle)
-                        .font(.title2.weight(.bold))
+                        .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
                         .fixedSize(horizontal: false, vertical: true)
                     Text(category?.name ?? "未分類")
-                        .font(.subheadline.weight(.semibold))
+                        .font(FavorecoTypography.bodyStrong)
                         .foregroundStyle(accentColor)
                 }
             }
 
             if let seriesName = event?.seriesName, !seriesName.isEmpty {
                 Label(seriesName, systemImage: "rectangle.stack")
-                    .font(.subheadline)
+                    .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
             }
         }
@@ -87,7 +88,7 @@ struct ExperienceDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("メモ")
                 Text(visit.note)
-                    .font(.body)
+                    .font(FavorecoTypography.body)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -97,7 +98,7 @@ struct ExperienceDetailView: View {
 
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
-            .font(.headline)
+            .font(FavorecoTypography.sectionTitle)
     }
 
     private var eventTitle: String {
@@ -123,15 +124,15 @@ private struct DetailInfoRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: icon)
-                .font(.subheadline)
+                .font(FavorecoTypography.body)
                 .foregroundStyle(.secondary)
                 .frame(width: 22)
             Text(title)
-                .font(.subheadline)
+                .font(FavorecoTypography.body)
                 .foregroundStyle(.secondary)
                 .frame(width: 52, alignment: .leading)
             Text(value)
-                .font(.subheadline.weight(.semibold))
+                .font(FavorecoTypography.bodyStrong)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }

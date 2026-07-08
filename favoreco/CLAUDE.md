@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-09（記録詳細画面実装）
+> **最終更新**: 2026-07-09（可変フォント基盤実装）
 
 ---
 
@@ -42,6 +42,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 
 ## 5. 重要な実装ルール
 <!-- 壊すと怖い部分・触る前に必ず読むべき前提 -->
+- タイポグラフィは `FavorecoTypography` を通して指定する。日本語UI本文は `Noto Sans JP`、思い出感のある見出しは `Noto Serif JP`、英字表示は `Cormorant Garamond` を使う。いずれもGoogle Fontsの可変TTFを `Resources/Fonts` に同梱し、`FontRegistrar` で起動時登録する。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る
 - **Mystorium再発防止の性能・構造ルールを最初から守る**（詳細: `docs/14-実装アーキテクチャ・性能ルール.md`）。最重要4原則は **①入力中にDBを書かない ②一覧で原寸画像を使わない ③bodyで全件処理しない ④巨大Viewを作らない**。全登録/編集画面はDraftState→Save→Model、Home/GenreTop/Calendar/Statsは軽量Snapshot/DTO経由、画像はthumbnail/detail/originalの3段階、I/O/画像処理/import/export/migrationはMainActor禁止＋background＋batch save。
 - **ライフサイクル状態・予定・申込・記録を混ぜない**。クイック登録は `InboxItem`、対象は `Event`、予定/公演回は `Plan`/`Performance`、申込1件は `TicketAttempt`、実体験は `Visit`、記録下書きは `MemoryDraft`/`VisitDraft` として責務分離する。`Visit` にチケット状態を直持ちしない。複数先行・落選履歴・名義別当選率・通知更新のため `TicketAttempt` を独立モデルにする。
@@ -67,7 +68,10 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
       ├─ favorecoAPPApp.swift
       ├─ Models/CoreModels.swift
       ├─ Services/CategoryPresetSeeder.swift
+      ├─ Resources/Fonts/
       ├─ Utilities/Color+Hex.swift
+      ├─ Utilities/FavorecoTypography.swift
+      ├─ Utilities/FontRegistrar.swift
       └─ Views/
          ├─ AddExperienceView.swift
          ├─ CategoryTopView.swift

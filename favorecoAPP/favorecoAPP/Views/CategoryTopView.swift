@@ -66,9 +66,9 @@ struct CategoryTopView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(category.name)
-                        .font(.title2.weight(.bold))
+                        .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
                     Text(heroMessage)
-                        .font(.subheadline)
+                        .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -100,10 +100,10 @@ struct CategoryTopView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("最近の記録")
-                    .font(.headline)
+                    .font(FavorecoTypography.sectionTitle)
                 Spacer()
                 Text("\(visits.count)")
-                    .font(.caption.weight(.semibold))
+                    .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
             }
 
@@ -141,10 +141,10 @@ private struct StatTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.caption)
+                .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.title3.weight(.bold))
+                .font(FavorecoTypography.latinDisplay(24, weight: .bold, relativeTo: .title3))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
@@ -158,7 +158,7 @@ private struct CategoryVisitRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録")
-                .font(.headline)
+                .font(FavorecoTypography.cardTitle)
                 .lineLimit(2)
             HStack(spacing: 10) {
                 Label(visit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
@@ -170,7 +170,7 @@ private struct CategoryVisitRow: View {
                     Label(String(format: "%.1f", visit.overallRating), systemImage: "star.fill")
                 }
             }
-            .font(.caption)
+            .font(FavorecoTypography.caption)
             .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -190,9 +190,9 @@ private struct EmptyCategoryState: View {
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
                 Text("まだ記録がありません")
-                    .font(.subheadline.weight(.semibold))
+                    .font(FavorecoTypography.bodyStrong)
                 Text("タイトル、日付、場所、評価、メモだけの軽い記録から始められます。")
-                    .font(.caption)
+                    .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

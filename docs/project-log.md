@@ -5,6 +5,35 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: 可変フォント基盤を実装
+
+### 変更概要
+- Google Fontsの可変TTFとして `Noto Sans JP` / `Noto Serif JP` / `Cormorant Garamond` をアプリに同梱した。
+- `FontRegistrar` を追加し、起動時に同梱フォントをプロセス登録するようにした。
+- `FavorecoTypography` を追加し、日本語サンセリフ・日本語セリフ・英字ディスプレイを共通トークンとして使えるようにした。
+- ホーム、カテゴリトップ、記録詳細の主要テキストへタイポグラフィを適用した。
+
+### 変更意図
+favorecoの文字表現をシステムフォント依存から切り離し、画面ごとに太さや書体を調整できる下地を作るため。日本語は読みやすさと記憶感、英字はブランド感を分けて扱う。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Resources/Fonts/（可変TTFとOFLライセンス追加）
+- favorecoAPP/favorecoAPP/Utilities/FontRegistrar.swift（同梱フォント登録）
+- favorecoAPP/favorecoAPP/Utilities/FavorecoTypography.swift（タイポグラフィ定義）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（起動時フォント登録）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（ホームへ適用）
+- favorecoAPP/favorecoAPP/Views/CategoryTopView.swift（カテゴリトップへ適用）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（詳細画面へ適用）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- Cormorant SCは未同梱。ロゴ専用・小文字なし表現が必要になった時点で追加判断する。
+- 連続的なwght軸スライダーUIは未実装。現状はSwiftUIの `Font.Weight` トークンで太さを切り替える。
+
 ## 2026-07-09: 保存済み記録の詳細画面を実装
 
 ### 変更概要

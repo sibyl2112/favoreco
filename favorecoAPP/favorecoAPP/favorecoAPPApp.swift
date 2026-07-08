@@ -10,6 +10,10 @@ import SwiftData
 
 @main
 struct favorecoAPPApp: App {
+    init() {
+        FontRegistrar.registerBundledFonts()
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             RecordCategory.self,

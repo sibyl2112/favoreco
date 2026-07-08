@@ -36,12 +36,15 @@ struct HomeView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Text("favoreco")
+                .font(FavorecoTypography.appLogo)
+                .foregroundStyle(.primary)
             Text("観た・行った・体験したを、")
-                .font(.title2.weight(.semibold))
+                .font(FavorecoTypography.heroLead)
             Text("美しく一生残す。")
-                .font(.largeTitle.weight(.bold))
+                .font(FavorecoTypography.heroTitle)
             Text("まずは体験ジャンルを選んで、記録の器を育てていきます。")
-                .font(.subheadline)
+                .font(FavorecoTypography.body)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -121,10 +124,10 @@ struct HomeView: View {
     private func sectionHeader(_ title: String, count: Int) -> some View {
         HStack {
             Text(title)
-                .font(.headline)
+                .font(FavorecoTypography.sectionTitle)
             Spacer()
             Text("\(count)")
-                .font(.caption.weight(.semibold))
+                .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(.secondary)
         }
     }
@@ -142,7 +145,7 @@ private struct CategoryTile: View {
                 Spacer(minLength: 8)
                 if category.isBuiltIn {
                     Text("標準")
-                        .font(.caption2.weight(.semibold))
+                        .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption2))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -152,10 +155,10 @@ private struct CategoryTile: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(category.name.isEmpty ? "無題カテゴリ" : category.name)
-                    .font(.headline)
+                    .font(FavorecoTypography.cardTitle)
                     .lineLimit(2)
                 Text(category.enabledUnitsRaw.isEmpty ? "ユニット未設定" : unitSummary(category.enabledUnitsRaw))
-                    .font(.caption)
+                    .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -182,9 +185,9 @@ private struct VisitRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録")
-                .font(.headline)
+                .font(FavorecoTypography.cardTitle)
             Text(visit.visitedAt, format: Date.FormatStyle(date: .numeric, time: .omitted))
-                .font(.caption)
+                .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -206,9 +209,9 @@ private struct EmptyStateRow: View {
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(FavorecoTypography.bodyStrong)
                 Text(message)
-                    .font(.caption)
+                    .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
