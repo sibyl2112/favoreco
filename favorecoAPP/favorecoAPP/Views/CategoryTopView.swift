@@ -11,10 +11,15 @@ import SwiftData
 struct CategoryTopView: View {
     let category: RecordCategory
 
+    @Query(sort: \RecordCategory.sortOrder) private var allCategories: [RecordCategory]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var allVisits: [Visit]
     @State private var isShowingAddExperience = false
     @State private var isShowingAddVisit = false
     @State private var selectedEventForNewVisit: ExperienceEvent?
+
+    private var visibleCategories: [RecordCategory] {
+        allCategories.filter { !$0.isArchived }
+    }
 
     private var events: [ExperienceEvent] {
         (category.events ?? [])
@@ -73,8 +78,10 @@ struct CategoryTopView: View {
                     .background(Color(hex: category.colorHex).opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(category.name)
-                        .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
+                    GenreHeadingSwitcher(
+                        currentCategory: category,
+                        categories: visibleCategories
+                    )
                     Text(heroMessage)
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
@@ -172,6 +179,40 @@ struct CategoryTopView: View {
 
     private var unitCount: Int {
         category.enabledUnitsRaw.split(separator: ",").count
+    }
+}
+
+private struct GenreHeadingSwitcher: View {
+    let currentCategory: RecordCategory
+    let categories: [RecordCategory]
+
+    var body: some View {
+        Menu {
+            ForEach(categories) { category in
+                if category.id == currentCategory.id {
+                    Label(category.name, systemImage: "checkmark")
+                } else {
+                    NavigationLink {
+                        CategoryTopView(category: category)
+                    } label: {
+                        Label(category.name, systemImage: category.iconSymbol)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(currentCategory.name)
+                    .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+            .foregroundStyle(.primary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("ジャンルを切り替え")
     }
 }
 
