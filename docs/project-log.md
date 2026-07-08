@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: カテゴリトップと最小記録追加フローを実装
+
+### 変更概要
+- ホームのカテゴリカードをタップ可能にし、カテゴリ別トップ `CategoryTopView` へ遷移するようにした。
+- `CategoryTopView` でカテゴリ名、記録数、対象数、ユニット数、最近の記録を表示するようにした。
+- `AddExperienceView` を追加し、タイトル / シリーズ名 / 日付 / 場所 / 評価 / メモだけで `ExperienceEvent` + `Visit` を保存できる最小登録フローを実装した。
+- 入力中は `AddExperienceDraft` に保持し、保存ボタン押下時だけ SwiftData に書き込むようにした。
+- `Color(hex:)` を共通ユーティリティへ移動した。
+
+### 変更意図
+カテゴリプリセットが見えるだけの状態から、実際に1件目の記録を作れる状態へ進めるため。今後テンプレ別フォームを足す前に、Event/Visit分離とDraftState→Save→Modelの基本導線を確認できるようにする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（カテゴリカードを遷移化）
+- favorecoAPP/favorecoAPP/Views/CategoryTopView.swift（カテゴリトップ追加）
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（最小記録追加フォーム追加）
+- favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift（色変換ユーティリティ追加）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/favorecoDerived build` が成功。
+
+### 残課題
+- 次スライスで保存後の詳細表示、またはカテゴリ別テンプレに応じた入力項目の出し分けを実装する。
+- 既存Eventへの再訪/再飲としてVisitを追加する導線は未実装。
+
 ## 2026-07-08: 標準カテゴリプリセットの初回注入を実装
 
 ### 変更概要

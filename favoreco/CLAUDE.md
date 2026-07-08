@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-08（Xcodeプロジェクト作成・最小SwiftDataモデル実装）
+> **最終更新**: 2026-07-09（カテゴリトップ・最小記録追加フロー実装）
 
 ---
 
@@ -33,9 +33,11 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 初期実装は [HomeView.swift](../favorecoAPP/favorecoAPP/Views/HomeView.swift)。
 
 - `ContentView`: `HomeView` への入口。
-- `HomeView`: 空データでも成立する初期ホーム。カテゴリ、最近の記録、Inboxの3セクションを表示。
+- `HomeView`: カテゴリ、最近の記録、Inboxの3セクションを表示。カテゴリカードからカテゴリトップへ遷移。
+- `CategoryTopView`: カテゴリ単位の簡易トップ。対象数・記録数・最近の記録を表示。
+- `AddExperienceView`: 最小記録追加フォーム。入力中は `AddExperienceDraft` に保持し、保存時だけ `ExperienceEvent` + `Visit` を作成する。
 
-登録フロー、ジャンル別トップ、詳細画面は未実装。
+詳細画面、テンプレ別入力ユニット、チケット/写真/Map/OCRは未実装。
 
 ## 5. 重要な実装ルール
 <!-- 壊すと怖い部分・触る前に必ず読むべき前提 -->
@@ -64,7 +66,11 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
       ├─ favorecoAPPApp.swift
       ├─ Models/CoreModels.swift
       ├─ Services/CategoryPresetSeeder.swift
-      └─ Views/HomeView.swift
+      ├─ Utilities/Color+Hex.swift
+      └─ Views/
+         ├─ AddExperienceView.swift
+         ├─ CategoryTopView.swift
+         └─ HomeView.swift
 ```
 
 `favorecoAPP` はXcode作成時の一時的なプロジェクト/ターゲット名。Bundle Identifier と product name は `com.nori.favoreco` / `favoreco` に整える。
