@@ -13,6 +13,8 @@ struct CategoryTopView: View {
 
     @Query(sort: \Visit.visitedAt, order: .reverse) private var allVisits: [Visit]
     @State private var isShowingAddExperience = false
+    @State private var isShowingAddVisit = false
+    @State private var selectedEventForNewVisit: ExperienceEvent?
 
     private var events: [ExperienceEvent] {
         (category.events ?? [])
@@ -33,6 +35,7 @@ struct CategoryTopView: View {
             VStack(alignment: .leading, spacing: 24) {
                 hero
                 stats
+                eventSection
                 recentVisits
             }
             .padding(.horizontal, 20)
@@ -52,6 +55,11 @@ struct CategoryTopView: View {
         }
         .sheet(isPresented: $isShowingAddExperience) {
             AddExperienceView(category: category)
+        }
+        .sheet(isPresented: $isShowingAddVisit) {
+            if let selectedEventForNewVisit {
+                AddVisitView(event: selectedEventForNewVisit)
+            }
         }
     }
 
@@ -77,7 +85,7 @@ struct CategoryTopView: View {
             Button {
                 isShowingAddExperience = true
             } label: {
-                Label("最初の記録を追加", systemImage: "plus.circle.fill")
+                Label(events.isEmpty ? "最初の記録を追加" : "新しい対象を追加", systemImage: "plus.circle.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -96,6 +104,34 @@ struct CategoryTopView: View {
         }
     }
 
+    private var eventSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("対象")
+                    .font(FavorecoTypography.sectionTitle)
+                Spacer()
+                Text("\(events.count)")
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.secondary)
+            }
+
+            if events.isEmpty {
+                EmptyStateMessage(
+                    icon: "rectangle.stack.badge.plus",
+                    title: "対象はまだありません",
+                    message: "最初の記録を追加すると、ここから同じ対象に回を重ねられます。"
+                )
+            } else {
+                ForEach(events.prefix(10)) { event in
+                    EventRow(event: event) {
+                        selectedEventForNewVisit = event
+                        isShowingAddVisit = true
+                    }
+                }
+            }
+        }
+    }
+
     private var recentVisits: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -108,7 +144,12 @@ struct CategoryTopView: View {
             }
 
             if visits.isEmpty {
-                EmptyCategoryState(category: category)
+                EmptyStateMessage(
+                    icon: category.iconSymbol,
+                    title: "まだ記録がありません",
+                    message: "タイトル、日付、場所、評価、メモだけの軽い記録から始められます。",
+                    tint: Color(hex: category.colorHex)
+                )
             } else {
                 ForEach(visits.prefix(10)) { visit in
                     NavigationLink {
@@ -131,6 +172,51 @@ struct CategoryTopView: View {
 
     private var unitCount: Int {
         category.enabledUnitsRaw.split(separator: ",").count
+    }
+}
+
+private struct EventRow: View {
+    let event: ExperienceEvent
+    let onAddVisit: () -> Void
+
+    private var visits: [Visit] {
+        (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(event.title.isEmpty ? "記録" : event.title)
+                    .font(FavorecoTypography.cardTitle)
+                    .lineLimit(2)
+
+                HStack(spacing: 10) {
+                    if !event.seriesName.isEmpty {
+                        Label(event.seriesName, systemImage: "rectangle.stack")
+                            .lineLimit(1)
+                    }
+                    Label("\(visits.count)件", systemImage: "number")
+                    if let latestVisit = visits.first {
+                        Label(latestVisit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+                    }
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: onAddVisit) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("この対象に回を追加")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -179,19 +265,22 @@ private struct CategoryVisitRow: View {
     }
 }
 
-private struct EmptyCategoryState: View {
-    let category: RecordCategory
+private struct EmptyStateMessage: View {
+    let icon: String
+    let title: String
+    let message: String
+    var tint: Color = .secondary
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: category.iconSymbol)
+            Image(systemName: icon)
                 .font(.title3)
-                .foregroundStyle(Color(hex: category.colorHex))
+                .foregroundStyle(tint)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
-                Text("まだ記録がありません")
+                Text(title)
                     .font(FavorecoTypography.bodyStrong)
-                Text("タイトル、日付、場所、評価、メモだけの軽い記録から始められます。")
+                Text(message)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

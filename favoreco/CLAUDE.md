@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-09（編集画面・カテゴリ別フォーム実装）
+> **最終更新**: 2026-07-09（対象への回追加導線実装）
 
 ---
 
@@ -34,17 +34,19 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 
 - `ContentView`: `HomeView` への入口。
 - `HomeView`: カテゴリ、最近の記録、Inboxの3セクションを表示。カテゴリカードからカテゴリトップへ遷移。
-- `CategoryTopView`: カテゴリ単位の簡易トップ。対象数・記録数・最近の記録を表示。
+- `CategoryTopView`: カテゴリ単位の簡易トップ。対象数・記録数・対象一覧・最近の記録を表示。対象一覧から同じ対象に回を追加できる。
 - `AddExperienceView`: 最小記録追加フォーム。入力中は `AddExperienceDraft` に保持し、保存時だけ `ExperienceEvent` + `Visit` を作成する。カテゴリ別にフォーム文言を切り替える。
+- `AddVisitView`: 既存 `ExperienceEvent` に新しい `Visit` だけを追加するフォーム。
 - `EditExperienceView`: 保存済み記録の最小編集フォーム。既存 `ExperienceEvent` + `Visit` を更新する。
 - `ExperienceDetailView`: 保存済みVisitの詳細表示。カテゴリ、対象名、シリーズ、日付、場所、評価、メモを表示し、編集へ遷移できる。
 
-テンプレ別の専用入力ユニット、チケット/写真/Map/OCRは未実装。
+テンプレ別の専用入力ユニット、チケット/写真/Map/OCR、対象詳細画面は未実装。
 
 ## 5. 重要な実装ルール
 <!-- 壊すと怖い部分・触る前に必ず読むべき前提 -->
 - タイポグラフィは `FavorecoTypography` を通して指定する。日本語UI本文は `Noto Sans JP`、思い出感のある見出しは `Noto Serif JP`、英字表示は `Cormorant Garamond` を使う。いずれもGoogle Fontsの可変TTFを `Resources/Fonts` に同梱し、`FontRegistrar` で起動時登録する。
 - 記録追加/編集フォームのカテゴリ別文言は `CategoryRecordTemplate` を通す。フォーム内では入力中にSwiftDataを書かず、DraftState→Save→Modelを守る。
+- 既存対象への再訪/再鑑賞/再飲は `AddVisitView` で `Visit` のみ追加し、`ExperienceEvent` を重複作成しない。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る
 - **Mystorium再発防止の性能・構造ルールを最初から守る**（詳細: `docs/14-実装アーキテクチャ・性能ルール.md`）。最重要4原則は **①入力中にDBを書かない ②一覧で原寸画像を使わない ③bodyで全件処理しない ④巨大Viewを作らない**。全登録/編集画面はDraftState→Save→Model、Home/GenreTop/Calendar/Statsは軽量Snapshot/DTO経由、画像はthumbnail/detail/originalの3段階、I/O/画像処理/import/export/migrationはMainActor禁止＋background＋batch save。
 - **ライフサイクル状態・予定・申込・記録を混ぜない**。クイック登録は `InboxItem`、対象は `Event`、予定/公演回は `Plan`/`Performance`、申込1件は `TicketAttempt`、実体験は `Visit`、記録下書きは `MemoryDraft`/`VisitDraft` として責務分離する。`Visit` にチケット状態を直持ちしない。複数先行・落選履歴・名義別当選率・通知更新のため `TicketAttempt` を独立モデルにする。

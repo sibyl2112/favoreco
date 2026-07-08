@@ -208,6 +208,102 @@ struct EditExperienceView: View {
     }
 }
 
+struct AddVisitView: View {
+    let event: ExperienceEvent
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @State private var draft = VisitDraft()
+
+    private var template: CategoryRecordTemplate {
+        CategoryRecordTemplate.template(for: event.category)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(template.targetSectionTitle) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(event.title.isEmpty ? "記録" : event.title)
+                            .font(FavorecoTypography.bodyStrong)
+                        if !event.seriesName.isEmpty {
+                            Text(event.seriesName)
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Section(template.visitSectionTitle) {
+                    DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
+                    TextField(template.venuePlaceholder, text: $draft.venueName)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(template.ratingLabel)
+                            Spacer()
+                            Text(draft.ratingLabel)
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $draft.overallRating, in: 0...5, step: 0.5)
+                    }
+                }
+
+                Section(template.memoSectionTitle) {
+                    ZStack(alignment: .topLeading) {
+                        if draft.note.isEmpty {
+                            Text(template.memoPlaceholder)
+                                .foregroundStyle(.tertiary)
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                        }
+                        TextEditor(text: $draft.note)
+                            .frame(minHeight: 120)
+                    }
+                }
+            }
+            .navigationTitle("回を追加")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        save()
+                    }
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let now = Date()
+        let visit = Visit(
+            visitedAt: draft.visitedAt,
+            endedAt: draft.visitedAt,
+            venueNameSnapshot: draft.trimmedVenueName,
+            overallRating: draft.overallRating,
+            note: draft.trimmedNote,
+            createdAt: now,
+            updatedAt: now,
+            event: event
+        )
+
+        event.updatedAt = now
+        modelContext.insert(visit)
+
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            assertionFailure("Failed to save visit: \(error)")
+        }
+    }
+}
+
 private struct AddExperienceDraft {
     var title: String = ""
     var seriesName: String = ""
@@ -245,6 +341,28 @@ private struct AddExperienceDraft {
 
     var canSave: Bool {
         !trimmedTitle.isEmpty
+    }
+
+    var ratingLabel: String {
+        if overallRating == 0 {
+            return "未評価"
+        }
+        return String(format: "%.1f", overallRating)
+    }
+}
+
+private struct VisitDraft {
+    var visitedAt: Date = Date()
+    var venueName: String = ""
+    var overallRating: Double = 0
+    var note: String = ""
+
+    var trimmedVenueName: String {
+        venueName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedNote: String {
+        note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var ratingLabel: String {
