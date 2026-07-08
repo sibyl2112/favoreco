@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-09（カテゴリトップ・最小記録追加フロー実装）
+> **最終更新**: 2026-07-09（記録詳細画面実装）
 
 ---
 
@@ -36,8 +36,9 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `HomeView`: カテゴリ、最近の記録、Inboxの3セクションを表示。カテゴリカードからカテゴリトップへ遷移。
 - `CategoryTopView`: カテゴリ単位の簡易トップ。対象数・記録数・最近の記録を表示。
 - `AddExperienceView`: 最小記録追加フォーム。入力中は `AddExperienceDraft` に保持し、保存時だけ `ExperienceEvent` + `Visit` を作成する。
+- `ExperienceDetailView`: 保存済みVisitの詳細表示。カテゴリ、対象名、シリーズ、日付、場所、評価、メモを表示。
 
-詳細画面、テンプレ別入力ユニット、チケット/写真/Map/OCRは未実装。
+編集画面、テンプレ別入力ユニット、チケット/写真/Map/OCRは未実装。
 
 ## 5. 重要な実装ルール
 <!-- 壊すと怖い部分・触る前に必ず読むべき前提 -->
@@ -70,6 +71,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
       └─ Views/
          ├─ AddExperienceView.swift
          ├─ CategoryTopView.swift
+         ├─ ExperienceDetailView.swift
          └─ HomeView.swift
 ```
 

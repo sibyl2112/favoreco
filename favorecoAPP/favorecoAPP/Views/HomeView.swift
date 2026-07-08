@@ -86,7 +86,12 @@ struct HomeView: View {
                 )
             } else {
                 ForEach(visits.prefix(5)) { visit in
-                    VisitRow(visit: visit)
+                    NavigationLink {
+                        ExperienceDetailView(visit: visit)
+                    } label: {
+                        VisitRow(visit: visit)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

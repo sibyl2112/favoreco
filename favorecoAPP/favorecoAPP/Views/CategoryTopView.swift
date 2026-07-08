@@ -111,7 +111,12 @@ struct CategoryTopView: View {
                 EmptyCategoryState(category: category)
             } else {
                 ForEach(visits.prefix(10)) { visit in
-                    CategoryVisitRow(visit: visit)
+                    NavigationLink {
+                        ExperienceDetailView(visit: visit)
+                    } label: {
+                        CategoryVisitRow(visit: visit)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

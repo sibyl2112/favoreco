@@ -5,6 +5,31 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: 保存済み記録の詳細画面を実装
+
+### 変更概要
+- `ExperienceDetailView` を追加し、保存済みVisitのカテゴリ、対象名、シリーズ、日付、場所、評価、メモを表示できるようにした。
+- カテゴリトップの最近の記録行から詳細画面へ遷移できるようにした。
+- ホームの最近の記録行からも詳細画面へ遷移できるようにした。
+- `favoreco/CLAUDE.md` に現在の画面構成を反映した。
+
+### 変更意図
+最小登録フローで保存した記録を、保存後に確認できる状態にするため。編集や写真追加に進む前に、Event/Visitの表示解決（カテゴリ・対象・回）を確認できる導線を作る。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（記録詳細画面追加）
+- favorecoAPP/favorecoAPP/Views/CategoryTopView.swift（記録行から詳細へ遷移）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（最近の記録から詳細へ遷移）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- 詳細画面から編集する導線は未実装。
+- 写真、タグ、チケット、テンプレ別ユニットは未表示。
+
 ## 2026-07-09: カテゴリトップと最小記録追加フローを実装
 
 ### 変更概要
