@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		617A37F32FFE993200256074 /* favorecoAPP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = favorecoAPP.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		617A37F32FFE993200256074 /* favorecoAPP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = favorecoAPP.app; path = favoreco.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */

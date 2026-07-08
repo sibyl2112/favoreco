@@ -30,6 +30,9 @@ struct favorecoAPPApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .task {
+                    await CategoryPresetSeeder.seedIfNeeded(in: sharedModelContainer.mainContext)
+                }
         }
         .modelContainer(sharedModelContainer)
     }

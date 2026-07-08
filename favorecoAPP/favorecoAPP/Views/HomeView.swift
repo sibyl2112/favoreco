@@ -13,6 +13,10 @@ struct HomeView: View {
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var inboxItems: [InboxItem]
 
+    private var visibleCategories: [RecordCategory] {
+        categories.filter { !$0.isArchived }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -36,7 +40,7 @@ struct HomeView: View {
                 .font(.title2.weight(.semibold))
             Text("美しく一生残す。")
                 .font(.largeTitle.weight(.bold))
-            Text("まずはカテゴリと記録の土台だけを置いた初期ホームです。")
+            Text("まずは体験ジャンルを選んで、記録の器を育てていきます。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -47,17 +51,17 @@ struct HomeView: View {
 
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("カテゴリ", count: categories.count)
+            sectionHeader("カテゴリ", count: visibleCategories.count)
 
-            if categories.isEmpty {
+            if visibleCategories.isEmpty {
                 EmptyStateRow(
                     icon: "square.grid.2x2",
-                    title: "カテゴリはまだありません",
-                    message: "観劇・美術展・ライブ・映画・酒などのプリセットを次の実装で注入します。"
+                    title: "カテゴリを準備中です",
+                    message: "初回起動時に標準プリセットを注入します。"
                 )
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
-                    ForEach(categories) { category in
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 148), spacing: 12)], spacing: 12) {
+                    ForEach(visibleCategories) { category in
                         CategoryTile(category: category)
                     }
                 }
@@ -73,7 +77,7 @@ struct HomeView: View {
                 EmptyStateRow(
                     icon: "sparkles.rectangle.stack",
                     title: "記録はまだありません",
-                    message: "Event + Visit の最小モデルは接続済みです。登録フローは次のスライスで作ります。"
+                    message: "次の実装で、カテゴリから最初の記録を追加できるようにします。"
                 )
             } else {
                 ForEach(visits.prefix(5)) { visit in
@@ -121,15 +125,44 @@ private struct CategoryTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: category.iconSymbol)
-                .font(.title2)
-            Text(category.name.isEmpty ? "無題カテゴリ" : category.name)
-                .font(.headline)
-                .lineLimit(2)
+            HStack(alignment: .top) {
+                Image(systemName: category.iconSymbol)
+                    .font(.title2)
+                    .foregroundStyle(Color(hex: category.colorHex))
+                Spacer(minLength: 8)
+                if category.isBuiltIn {
+                    Text("標準")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(category.name.isEmpty ? "無題カテゴリ" : category.name)
+                    .font(.headline)
+                    .lineLimit(2)
+                Text(category.enabledUnitsRaw.isEmpty ? "ユニット未設定" : unitSummary(category.enabledUnitsRaw))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Color(hex: category.colorHex))
+                .frame(width: 4)
+                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+        }
+    }
+
+    private func unitSummary(_ rawValue: String) -> String {
+        "ユニット \(rawValue.split(separator: ",").count)件"
     }
 }
 
@@ -173,6 +206,29 @@ private struct EmptyStateRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private extension Color {
+    init(hex: String) {
+        let sanitizedHex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var value: UInt64 = 0
+        Scanner(string: sanitizedHex).scanHexInt64(&value)
+
+        let red: Double
+        let green: Double
+        let blue: Double
+        if sanitizedHex.count == 6 {
+            red = Double((value & 0xFF0000) >> 16) / 255
+            green = Double((value & 0x00FF00) >> 8) / 255
+            blue = Double(value & 0x0000FF) / 255
+        } else {
+            red = 0.44
+            green = 0.56
+            blue = 0.48
+        }
+
+        self.init(red: red, green: green, blue: blue)
     }
 }
 

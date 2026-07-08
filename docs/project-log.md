@@ -5,6 +5,31 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-08: 標準カテゴリプリセットの初回注入を実装
+
+### 変更概要
+- `CategoryPresetSeeder` を追加し、初回起動時に標準カテゴリ8種（観劇 / 美術展 / ライブ / 映画 / 酒 / おでかけ施設 / 御朱印 / 書籍）を `RecordCategory` として注入するようにした。
+- 注入は `templateKey` + `isBuiltIn` で既存カテゴリを探して更新し、重複作成しないfetch-first方式にした。
+- `HomeView` のカテゴリカードを、色バー・SF Symbol・標準チップ・ユニット数表示つきに更新した。
+- `favorecoAPPApp` で `ModelContainer.mainContext` へ起動時seedを接続した。
+
+### 変更意図
+最初のホームを空の器ではなく、favorecoの主要ジャンルが見える状態にするため。プリセットは固定enumではなく保存済み `RecordCategory` として扱い、将来ユーザー編集やテンプレ更新に耐える構造にする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/CategoryPresetSeeder.swift（標準カテゴリ注入）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（起動時seed接続）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（カテゴリカード表示更新）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/favorecoDerived build` が成功。
+
+### 残課題
+- 次スライスでカテゴリカードから登録フローまたはジャンル別トップへ遷移させる。
+- プリセットの `enabledUnitsRaw` は仕様キーの初期接続のみ。各ユニットの実UIは未実装。
+
 ## 2026-07-08: Xcodeプロジェクト作成と最小SwiftDataモデル実装
 
 ### 変更概要
