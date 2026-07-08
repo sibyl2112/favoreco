@@ -91,6 +91,7 @@ enum CategoryPresetSeeder {
             let descriptor = FetchDescriptor<RecordCategory>()
             let existingCategories = try context.fetch(descriptor)
             let now = Date()
+            let hasCompletedGenreOnboarding = UserDefaults.standard.bool(forKey: AppStorageKeys.hasCompletedGenreOnboarding)
 
             for preset in presets {
                 if let existing = existingCategories.first(where: { $0.isBuiltIn && $0.templateKey == preset.templateKey }) {
@@ -99,7 +100,9 @@ enum CategoryPresetSeeder {
                     existing.colorHex = preset.colorHex
                     existing.sortOrder = preset.sortOrder
                     existing.enabledUnitsRaw = preset.enabledUnitsRaw
-                    existing.isArchived = false
+                    if !hasCompletedGenreOnboarding {
+                        existing.isArchived = false
+                    }
                     existing.updatedAt = now
                 } else {
                     context.insert(RecordCategory(
@@ -110,11 +113,14 @@ enum CategoryPresetSeeder {
                         isBuiltIn: true,
                         templateKey: preset.templateKey,
                         enabledUnitsRaw: preset.enabledUnitsRaw,
+                        isArchived: hasCompletedGenreOnboarding,
                         createdAt: now,
                         updatedAt: now
                     ))
                 }
             }
+
+            try ensureAtLeastOneActiveCategory(in: context)
 
             if context.hasChanges {
                 try context.save()
@@ -122,5 +128,20 @@ enum CategoryPresetSeeder {
         } catch {
             assertionFailure("Failed to seed category presets: \(error)")
         }
+    }
+
+    @MainActor
+    static func ensureAtLeastOneActiveCategory(in context: ModelContext) throws {
+        let descriptor = FetchDescriptor<RecordCategory>(
+            sortBy: [SortDescriptor(\.sortOrder)]
+        )
+        let categories = try context.fetch(descriptor)
+        let builtInCategories = categories.filter(\.isBuiltIn)
+
+        guard !builtInCategories.isEmpty else { return }
+        guard builtInCategories.allSatisfy(\.isArchived) else { return }
+
+        builtInCategories[0].isArchived = false
+        builtInCategories[0].updatedAt = Date()
     }
 }

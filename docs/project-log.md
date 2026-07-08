@@ -5,6 +5,37 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: 初回ジャンル選択とデバッグデータ投入を実装
+
+### 変更概要
+- `GenreOnboardingView` を追加し、初回起動時に記録したい標準ジャンルをチェック選択できるようにした。
+- 選択完了前は `ContentView` からオンボーディングを表示し、完了後に `HomeView` を表示するようにした。
+- `CategoryPresetSeeder` を更新し、初回選択後にseedが全カテゴリを勝手に再表示しないようにした。
+- 全ジャンルが非表示になった場合でも、先頭の標準カテゴリを復帰させる保険を入れた。
+- `SettingsView` を追加し、初回ジャンル選択のやり直しと写真付き仮データ追加ボタンを置いた。
+- `DebugDataSeeder` を追加し、有効ジャンルに対して `ExperienceEvent` / `Visit` / `PhotoBlob` / `InboxItem` の仮データを投入できるようにした。
+
+### 変更意図
+ユーザーごとに記録したいジャンルを絞れる初期導線を作るため。あわせて、Mystoriumで発生した「全チェック解除で起動不能」系の事故を避けるため、UIとseedの両方で最低1ジャンルが有効になるようにした。開発確認を速くするため、設定から写真付きサンプルデータを投入できるようにした。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/GenreOnboardingView.swift（初回ジャンル選択）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（設定・デバッグ入口）
+- favorecoAPP/favorecoAPP/Services/DebugDataSeeder.swift（写真付き仮データ投入）
+- favorecoAPP/favorecoAPP/Services/CategoryPresetSeeder.swift（選択状態保持・最低1ジャンル復帰）
+- favorecoAPP/favorecoAPP/ContentView.swift（初回導線切替）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（設定ボタン・空ジャンル表示）
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift（AppStorageキー管理）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- 実機で初回インストール状態の画面遷移確認は未実施。
+- デバッグ投入した `PhotoBlob` の写真表示UIは未実装。現状はデータ投入確認用。
+
 ## 2026-07-09: Inboxから本記録への変換導線を実装
 
 ### 変更概要

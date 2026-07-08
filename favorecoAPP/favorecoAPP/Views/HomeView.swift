@@ -13,6 +13,7 @@ struct HomeView: View {
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var inboxItems: [InboxItem]
     @State private var isShowingAddInboxItem = false
+    @State private var isShowingSettings = false
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -37,6 +38,14 @@ struct HomeView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("favoreco")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        isShowingSettings = true
+                    } label: {
+                        Label("設定", systemImage: "gearshape")
+                    }
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         isShowingAddInboxItem = true
@@ -47,6 +56,9 @@ struct HomeView: View {
             }
             .sheet(isPresented: $isShowingAddInboxItem) {
                 AddInboxItemView()
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                SettingsView()
             }
         }
     }
@@ -76,8 +88,8 @@ struct HomeView: View {
             if visibleCategories.isEmpty {
                 EmptyStateRow(
                     icon: "square.grid.2x2",
-                    title: "カテゴリを準備中です",
-                    message: "初回起動時に標準プリセットを注入します。"
+                    title: "何もありません",
+                    message: "設定からジャンルを選び直すと、記録の入口が表示されます。"
                 )
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 148), spacing: 12)], spacing: 12) {

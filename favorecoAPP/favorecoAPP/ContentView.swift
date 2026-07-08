@@ -9,8 +9,14 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
+
     var body: some View {
-        HomeView()
+        if hasCompletedGenreOnboarding {
+            HomeView()
+        } else {
+            GenreOnboardingView()
+        }
     }
 }
 
