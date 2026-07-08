@@ -5,6 +5,34 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: Home表示設定と体験ギャラリーを実装
+
+### 変更概要
+- Homeの固定表示順を、アテンション / 体験ギャラリー / あとで記録 / 最近の記録 / ジャンル一覧 / 統計サマリ / お気に入り・ベストにした。
+- `SettingsView` に `Home表示` セクションを追加し、各HomeセクションをON/OFFできるようにした。
+- `AppStorageKeys` にHome表示用キーを追加した。
+- `HomeView` にアテンション枠を追加した。現状は未来日Visitと未整理Inboxを表示する。
+- `HomeView` に体験ギャラリー枠を追加した。現状は最近のVisitを横スクロールカードで表示する。
+- 統計サマリとお気に入り/ベストは初期OFFのプレースホルダーとして用意した。
+
+### 変更意図
+Homeを「やることが見える実用の入口」と「開いた瞬間に体験棚が見えてテンションが上がる入口」の両方にするため。並び替えは入れず、固定順とON/OFFだけにして設定を重くしすぎない。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（Homeセクション追加・固定順表示）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（Home表示ON/OFF追加）
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift（Home表示キー追加）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- アテンションの本命である申込締切、当落、入金、発券、会員期限、通知リマインダーの専用モデルは未実装。
+- 体験ギャラリーは写真データの実表示ではなく、現状は色付きカードとSF Symbol表示。
+- Homeセクションの並び替えは未実装。必要になるまで固定順で運用する。
+
 ## 2026-07-09: 自作ジャンル作成を実装
 
 ### 変更概要

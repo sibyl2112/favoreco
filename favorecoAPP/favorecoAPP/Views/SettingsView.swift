@@ -12,6 +12,13 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
+    @AppStorage(AppStorageKeys.showsHomeAttention) private var showsHomeAttention = true
+    @AppStorage(AppStorageKeys.showsHomeExperienceGallery) private var showsHomeExperienceGallery = true
+    @AppStorage(AppStorageKeys.showsHomeInbox) private var showsHomeInbox = true
+    @AppStorage(AppStorageKeys.showsHomeRecentRecords) private var showsHomeRecentRecords = true
+    @AppStorage(AppStorageKeys.showsHomeCategories) private var showsHomeCategories = true
+    @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsHomeStatsSummary = false
+    @AppStorage(AppStorageKeys.showsHomeFavorites) private var showsHomeFavorites = false
     @State private var debugMessage = ""
 
     var body: some View {
@@ -38,6 +45,16 @@ struct SettingsView: View {
                     } label: {
                         Label("初回ジャンル選択をやり直す", systemImage: "checklist")
                     }
+                }
+
+                Section("Home表示") {
+                    Toggle("アテンション", isOn: $showsHomeAttention)
+                    Toggle("体験ギャラリー", isOn: $showsHomeExperienceGallery)
+                    Toggle("あとで記録", isOn: $showsHomeInbox)
+                    Toggle("最近の記録", isOn: $showsHomeRecentRecords)
+                    Toggle("ジャンル一覧", isOn: $showsHomeCategories)
+                    Toggle("統計サマリ", isOn: $showsHomeStatsSummary)
+                    Toggle("お気に入り/ベスト", isOn: $showsHomeFavorites)
                 }
 
                 Section("デバッグ") {
