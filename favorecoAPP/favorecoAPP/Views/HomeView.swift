@@ -12,7 +12,6 @@ struct HomeView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var inboxItems: [InboxItem]
-    @State private var isShowingAddInboxItem = false
     @State private var isShowingSettings = false
 
     private var visibleCategories: [RecordCategory] {
@@ -38,24 +37,13 @@ struct HomeView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("favoreco")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         isShowingSettings = true
                     } label: {
-                        Label("設定", systemImage: "gearshape")
+                        Label("マイ", systemImage: "person.crop.circle")
                     }
                 }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingAddInboxItem = true
-                    } label: {
-                        Label("あとで記録", systemImage: "tray.and.arrow.down")
-                    }
-                }
-            }
-            .sheet(isPresented: $isShowingAddInboxItem) {
-                AddInboxItemView()
             }
             .sheet(isPresented: $isShowingSettings) {
                 SettingsView()

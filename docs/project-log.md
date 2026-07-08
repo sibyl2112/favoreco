@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: 4タブ＋中央追加ボタンのルートナビを実装
+
+### 変更概要
+- `MainTabView` を追加し、Home / 記録 / カレンダー / 統計 の4タブ構成にした。
+- 下部中央にタブではない大きな `+` ボタンを重ね、記録開始の常設導線にした。
+- 中央 `+` から、有効ジャンルへの記録追加と `AddInboxItemView` によるあとで記録を選べるようにした。
+- `ContentView` の初回完了後入口を `HomeView` から `MainTabView` に変更した。
+- Home右上の設定ギア/Inbox追加ボタンを整理し、右上プロフィールアイコンから `SettingsView` を開くようにした。
+- 記録 / カレンダー / 統計タブは、まず最小の一覧・プレースホルダーとして追加した。
+
+### 変更意図
+favorecoの主要導線を「横断Home」「横断記録一覧」「日付軸」「統計」に整理し、記録開始だけはMystorium同様に中央の `+` に集約するため。設定は下部タブに置かず、将来のマイ/プロフィール領域として右上プロフィールアイコンへ寄せる。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（4タブルート・中央追加ボタン・記録/カレンダー/統計タブ）
+- favorecoAPP/favorecoAPP/ContentView.swift（初回完了後入口をMainTabViewへ変更）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（右上プロフィール入口へ整理）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- 中央 `+` の見た目・タブバーとの重なりは実機でタップ領域を確認する。
+- カレンダー / 統計はプレースホルダー。実データ表示は未実装。
+
 ## 2026-07-09: ジャンルトップ見出しスイッチャーを実装
 
 ### 変更概要

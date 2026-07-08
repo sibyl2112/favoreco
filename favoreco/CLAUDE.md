@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-09（ジャンルトップ見出しスイッチャー実装）
+> **最終更新**: 2026-07-09（4タブ＋中央追加ボタン実装）
 
 ---
 
@@ -32,9 +32,13 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 
 初期実装は [HomeView.swift](../favorecoAPP/favorecoAPP/Views/HomeView.swift)。
 
-- `ContentView`: 初回ジャンル選択が未完了なら `GenreOnboardingView`、完了済みなら `HomeView` を表示する入口。
+- `ContentView`: 初回ジャンル選択が未完了なら `GenreOnboardingView`、完了済みなら `MainTabView` を表示する入口。
 - `GenreOnboardingView`: 初回起動時に、記録したい標準ジャンルをチェック選択する画面。開始ボタンは1件以上選択時のみ有効。
-- `HomeView`: カテゴリ、最近の記録、Inboxの3セクションを表示。カテゴリカードからカテゴリトップへ遷移し、ツールバーから設定とInbox手動追加へ遷移できる。
+- `MainTabView`: 下部4タブ（Home / 記録 / カレンダー / 統計）と中央の大きな `+` 記録開始ボタンを持つルート。中央 `+` はタブではなく、記録追加 / あとで記録のアクション入口。
+- `HomeView`: カテゴリ、最近の記録、Inboxの3セクションを表示。カテゴリカードからカテゴリトップへ遷移し、右上プロフィールアイコンから設定へ遷移できる。
+- `RecordsView`: 全ジャンル横断の記録一覧。保存済みVisitから詳細へ遷移する。
+- `CalendarView`: カレンダータブのプレースホルダー。予定/申込/訪問済み記録の日付軸を置く想定。
+- `StatsView`: 統計タブのプレースホルダー。ジャンル別回数、年間まとめ、支出、評価などを置く想定。
 - `SettingsView`: 設定画面。初回ジャンル選択のやり直しと、写真付き仮データ追加のデバッグボタンを持つ。
 - `CategoryTopView`: カテゴリ単位の簡易トップ。対象数・記録数・対象一覧・最近の記録を表示。見出しのジャンル名は `映画 ▼` 形式のスイッチャーで、他の有効ジャンルへ切り替えられる。対象一覧から対象詳細へ遷移でき、同じ対象に回を追加できる。
 - `AddInboxItemView`: 気になるもの・あとで記録したいものを、タイトル / URL / カテゴリ候補 / メモで `InboxItem` として保存する手動追加フォーム。
@@ -53,6 +57,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - タイポグラフィは `FavorecoTypography` を通して指定する。日本語UI本文は `Noto Sans JP`、思い出感のある見出しは `Noto Serif JP`、英字表示は `Cormorant Garamond` を使う。いずれもGoogle Fontsの可変TTFを `Resources/Fonts` に同梱し、`FontRegistrar` で起動時登録する。
 - 記録追加/編集フォームのカテゴリ別文言は `CategoryRecordTemplate` を通す。フォーム内では入力中にSwiftDataを書かず、DraftState→Save→Modelを守る。
 - 既存対象への再訪/再鑑賞/再飲は `AddVisitView` で `Visit` のみ追加し、`ExperienceEvent` を重複作成しない。
+- 主要ナビは4タブ + 中央 `+` + 右上プロフィール入口。下部タブに設定は置かず、設定/マイ領域はプロフィールアイコンから開く。
 - 初回ジャンル選択とカテゴリseedでは、表示ジャンルが0件にならないよう `CategoryPresetSeeder.ensureAtLeastOneActiveCategory` を必ず通す。すべて非表示になった場合は先頭の標準カテゴリを復帰させる。
 - デバッグ用の仮データ投入は `DebugDataSeeder` に閉じ込める。写真は `PhotoBlob` に1px PNGデータを入れ、通常の `ExperienceEvent` / `Visit` と同じSwiftData経路で保存する。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る
@@ -95,6 +100,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
          ├─ ExperienceDetailView.swift
          ├─ GenreOnboardingView.swift
          ├─ InboxDetailView.swift
+         ├─ MainTabView.swift
          ├─ SettingsView.swift
          └─ HomeView.swift
 ```
