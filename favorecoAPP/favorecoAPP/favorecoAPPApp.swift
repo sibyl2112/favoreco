@@ -21,6 +21,7 @@ struct favorecoAPPApp: App {
             Visit.self,
             InboxItem.self,
             PhotoBlob.self,
+            SocialAccount.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

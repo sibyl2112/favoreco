@@ -25,6 +25,9 @@ final class RecordCategory {
     @Relationship(deleteRule: .nullify, inverse: \ExperienceEvent.category)
     var events: [ExperienceEvent]? = []
 
+    @Relationship(deleteRule: .nullify, inverse: \SocialAccount.category)
+    var socialAccounts: [SocialAccount]? = []
+
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -49,6 +52,45 @@ final class RecordCategory {
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+}
+
+@Model
+final class SocialAccount {
+    var id: UUID = UUID()
+    var platformKey: String = "instagram"
+    var label: String = ""
+    var accountInput: String = ""
+    var memo: String = ""
+    var sortOrder: Int = 0
+    var isArchived: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var category: RecordCategory?
+
+    init(
+        id: UUID = UUID(),
+        platformKey: String = "instagram",
+        label: String = "",
+        accountInput: String = "",
+        memo: String = "",
+        sortOrder: Int = 0,
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        category: RecordCategory? = nil
+    ) {
+        self.id = id
+        self.platformKey = platformKey
+        self.label = label
+        self.accountInput = accountInput
+        self.memo = memo
+        self.sortOrder = sortOrder
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.category = category
     }
 }
 

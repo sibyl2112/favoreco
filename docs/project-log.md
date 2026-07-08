@@ -5,6 +5,35 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: プロフィールSNS管理を実装
+
+### 変更概要
+- `SocialAccount` モデルを追加し、SNSアカウントを複数保存できるようにした。
+- `SocialPlatform` を追加し、Instagram / X / Threads / Facebook の表示名、アイコン、ID/URL入力からのURL解決をまとめた。
+- `ProfileSettingsView` を追加し、プロフィール設定内でSNS一覧、追加、編集、外部リンクオープンができるようにした。
+- `EditSocialAccountView` を追加し、SNS種別、メモ/名前、IDまたはURL、ジャンル紐付け、用途メモを保存できるようにした。
+- `SettingsView` にプロフィール導線を追加した。
+- `ModelContainer` とプレビュー用modelContainerに `SocialAccount` を追加した。
+
+### 変更意図
+映画・観劇・本などジャンルごとに使い分けるSNSを、プロフィールの一部として登録できるようにするため。IDだけでもURLでも入力でき、タップで外部SNSへ飛べるようにして、記録アプリ内の自己紹介/公開導線の下地にする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Models/CoreModels.swift（SocialAccountモデル追加）
+- favorecoAPP/favorecoAPP/Utilities/SocialPlatform.swift（SNS種別とURL解決）
+- favorecoAPP/favorecoAPP/Views/ProfileSettingsView.swift（SNS一覧・追加・編集）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（プロフィール導線追加）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（ModelContainer更新）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- プロフィール表示名・アイコン編集は未実装。
+- SNSの並び替え、実機での外部アプリ遷移確認は未実施。
+
 ## 2026-07-09: 4タブ＋中央追加ボタンのルートナビを実装
 
 ### 変更概要
