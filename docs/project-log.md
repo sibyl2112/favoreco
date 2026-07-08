@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: Inboxから本記録への変換導線を実装
+
+### 変更概要
+- `InboxDetailView` を追加し、InboxItemの詳細確認、カテゴリ候補の選択、本記録への変換、削除ができるようにした。
+- HomeのInbox行を詳細画面へのNavigationLinkにし、未解決Inboxだけを表示するようにした。
+- `AddExperienceView` に初期Draftと保存時フックを追加し、InboxItemのタイトル / URL / メモを引き継げるようにした。
+- `AddExperienceView` / `EditExperienceView` で公式URLを保存・編集できるようにした。
+- `favoreco/CLAUDE.md` に現在の画面構成を反映した。
+
+### 変更意図
+Inboxを一時保存で終わらせず、記録作成の入口として使える状態にするため。既存の記録追加フォームを再利用し、保存時だけ `ExperienceEvent` / `Visit` とInboxItemの状態をまとめて更新する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/InboxDetailView.swift（Inbox詳細・変換導線）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（Inbox詳細遷移・未解決フィルタ）
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（初期Draft、保存フック、公式URL入力）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- InboxItemから既存対象への回追加、予定/申込への変換は未実装。
+- 変換完了後に詳細画面を自動的に閉じる/作成した記録へ遷移する導線は未実装。
+
 ## 2026-07-09: Inbox手動追加を実装
 
 ### 変更概要

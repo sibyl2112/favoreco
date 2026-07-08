@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-09（Inbox手動追加実装）
+> **最終更新**: 2026-07-09（Inbox本記録変換実装）
 
 ---
 
@@ -36,14 +36,15 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `HomeView`: カテゴリ、最近の記録、Inboxの3セクションを表示。カテゴリカードからカテゴリトップへ遷移し、ツールバーからInbox手動追加へ遷移できる。
 - `CategoryTopView`: カテゴリ単位の簡易トップ。対象数・記録数・対象一覧・最近の記録を表示。対象一覧から対象詳細へ遷移でき、同じ対象に回を追加できる。
 - `AddInboxItemView`: 気になるもの・あとで記録したいものを、タイトル / URL / カテゴリ候補 / メモで `InboxItem` として保存する手動追加フォーム。
-- `AddExperienceView`: 最小記録追加フォーム。入力中は `AddExperienceDraft` に保持し、保存時だけ `ExperienceEvent` + `Visit` を作成する。カテゴリ別にフォーム文言を切り替える。
+- `InboxDetailView`: InboxItemの詳細表示。カテゴリ候補を選び、InboxItemのタイトル / URL / メモを下書きにして本記録へ変換できる。変換済みのInboxItemは `resolved` にする。
+- `AddExperienceView`: 最小記録追加フォーム。入力中は `AddExperienceDraft` に保持し、保存時だけ `ExperienceEvent` + `Visit` を作成する。カテゴリ別にフォーム文言を切り替え、公式URLも保存できる。
 - `AddVisitView`: 既存 `ExperienceEvent` に新しい `Visit` だけを追加するフォーム。
 - `EventDetailView`: 対象詳細。対象のカテゴリ、シリーズ、対象メモ、公式URL、記録数、最新日、平均評価、履歴を表示し、対象編集・回追加・各Visit詳細へ遷移できる。
 - `EditEventView`: 対象自体のタイトル、シリーズ、公式URL、対象メモを編集するフォーム。
 - `EditExperienceView`: 保存済み記録の最小編集フォーム。既存 `ExperienceEvent` + `Visit` を更新する。
 - `ExperienceDetailView`: 保存済みVisitの詳細表示。カテゴリ、対象名、シリーズ、日付、場所、評価、メモを表示し、編集へ遷移できる。
 
-テンプレ別の専用入力ユニット、チケット/写真/Map/OCR、Inboxから本記録への変換、対象のアーカイブは未実装。
+テンプレ別の専用入力ユニット、チケット/写真/Map/OCR、Inboxから既存対象/予定への変換、対象のアーカイブは未実装。
 
 ## 5. 重要な実装ルール
 <!-- 壊すと怖い部分・触る前に必ず読むべき前提 -->
@@ -86,6 +87,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
          ├─ CategoryTopView.swift
          ├─ EventDetailView.swift
          ├─ ExperienceDetailView.swift
+         ├─ InboxDetailView.swift
          └─ HomeView.swift
 ```
 

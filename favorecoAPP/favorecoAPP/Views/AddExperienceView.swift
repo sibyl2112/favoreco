@@ -10,13 +10,24 @@ import SwiftData
 
 struct AddExperienceView: View {
     let category: RecordCategory
+    let onSave: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var draft = AddExperienceDraft()
+    @State private var draft: AddExperienceDraft
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: category)
+    }
+
+    init(
+        category: RecordCategory,
+        initialDraft: AddExperienceDraft = AddExperienceDraft(),
+        onSave: (() -> Void)? = nil
+    ) {
+        self.category = category
+        self.onSave = onSave
+        _draft = State(initialValue: initialDraft)
     }
 
     var body: some View {
@@ -25,6 +36,9 @@ struct AddExperienceView: View {
                 Section(template.targetSectionTitle) {
                     TextField(template.titlePlaceholder, text: $draft.title)
                     TextField(template.seriesPlaceholder, text: $draft.seriesName)
+                    TextField("公式URL（任意）", text: $draft.officialURL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
                 }
 
                 Section(template.visitSectionTitle) {
@@ -78,6 +92,7 @@ struct AddExperienceView: View {
         let event = ExperienceEvent(
             title: draft.trimmedTitle,
             seriesName: draft.trimmedSeriesName,
+            officialURL: draft.trimmedOfficialURL,
             createdAt: now,
             updatedAt: now,
             category: category
@@ -95,6 +110,7 @@ struct AddExperienceView: View {
 
         modelContext.insert(event)
         modelContext.insert(visit)
+        onSave?()
 
         do {
             try modelContext.save()
@@ -135,6 +151,9 @@ struct EditExperienceView: View {
                 Section(template.targetSectionTitle) {
                     TextField(template.titlePlaceholder, text: $draft.title)
                     TextField(template.seriesPlaceholder, text: $draft.seriesName)
+                    TextField("公式URL（任意）", text: $draft.officialURL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
                 }
 
                 Section(template.visitSectionTitle) {
@@ -189,6 +208,7 @@ struct EditExperienceView: View {
         if let event {
             event.title = draft.trimmedTitle
             event.seriesName = draft.trimmedSeriesName
+            event.officialURL = draft.trimmedOfficialURL
             event.updatedAt = now
         }
 
@@ -304,9 +324,10 @@ struct AddVisitView: View {
     }
 }
 
-private struct AddExperienceDraft {
+struct AddExperienceDraft {
     var title: String = ""
     var seriesName: String = ""
+    var officialURL: String = ""
     var visitedAt: Date = Date()
     var venueName: String = ""
     var overallRating: Double = 0
@@ -317,10 +338,17 @@ private struct AddExperienceDraft {
     init(visit: Visit) {
         title = visit.event?.title ?? ""
         seriesName = visit.event?.seriesName ?? ""
+        officialURL = visit.event?.officialURL ?? ""
         visitedAt = visit.visitedAt
         venueName = visit.venueNameSnapshot
         overallRating = visit.overallRating
         note = visit.note
+    }
+
+    init(inboxItem: InboxItem) {
+        title = inboxItem.title
+        officialURL = inboxItem.sourceURL
+        note = inboxItem.body
     }
 
     var trimmedTitle: String {
@@ -329,6 +357,10 @@ private struct AddExperienceDraft {
 
     var trimmedSeriesName: String {
         seriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedOfficialURL: String {
+        officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var trimmedVenueName: String {

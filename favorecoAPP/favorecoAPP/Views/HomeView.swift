@@ -18,6 +18,10 @@ struct HomeView: View {
         categories.filter { !$0.isArchived }
     }
 
+    private var unresolvedInboxItems: [InboxItem] {
+        inboxItems.filter { $0.state == "unresolved" }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -115,17 +119,22 @@ struct HomeView: View {
 
     private var inboxSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("あとで記録", count: inboxItems.count)
+            sectionHeader("あとで記録", count: unresolvedInboxItems.count)
 
-            if inboxItems.isEmpty {
+            if unresolvedInboxItems.isEmpty {
                 EmptyStateRow(
                     icon: "tray",
                     title: "Inboxは空です",
                     message: "気になる作品・行きたい場所・飲みたい酒を一時保存する場所になります。"
                 )
             } else {
-                ForEach(inboxItems.prefix(3)) { item in
-                    InboxItemRow(item: item, categories: visibleCategories)
+                ForEach(unresolvedInboxItems.prefix(3)) { item in
+                    NavigationLink {
+                        InboxDetailView(item: item)
+                    } label: {
+                        InboxItemRow(item: item, categories: visibleCategories)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
