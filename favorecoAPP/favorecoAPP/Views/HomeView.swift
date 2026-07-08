@@ -12,6 +12,7 @@ struct HomeView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var inboxItems: [InboxItem]
+    @State private var isShowingAddInboxItem = false
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -31,6 +32,18 @@ struct HomeView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("favoreco")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isShowingAddInboxItem = true
+                    } label: {
+                        Label("あとで記録", systemImage: "tray.and.arrow.down")
+                    }
+                }
+            }
+            .sheet(isPresented: $isShowingAddInboxItem) {
+                AddInboxItemView()
+            }
         }
     }
 
@@ -112,10 +125,7 @@ struct HomeView: View {
                 )
             } else {
                 ForEach(inboxItems.prefix(3)) { item in
-                    Text(item.title.isEmpty ? "無題" : item.title)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    InboxItemRow(item: item, categories: visibleCategories)
                 }
             }
         }
@@ -130,6 +140,46 @@ struct HomeView: View {
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct InboxItemRow: View {
+    let item: InboxItem
+    let categories: [RecordCategory]
+
+    private var categoryName: String? {
+        guard !item.targetTemplateKey.isEmpty else { return nil }
+        return categories.first(where: { $0.templateKey == item.targetTemplateKey })?.name
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(item.title.isEmpty ? "無題" : item.title)
+                .font(FavorecoTypography.cardTitle)
+                .lineLimit(2)
+
+            HStack(spacing: 10) {
+                if let categoryName {
+                    Label(categoryName, systemImage: "square.grid.2x2")
+                }
+                if !item.sourceURL.isEmpty {
+                    Label("URL", systemImage: "link")
+                }
+                Label(item.createdAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+            }
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(.secondary)
+
+            if !item.body.isEmpty {
+                Text(item.body)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

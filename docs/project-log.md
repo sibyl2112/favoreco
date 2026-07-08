@@ -5,6 +5,30 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: Inbox手動追加を実装
+
+### 変更概要
+- `AddInboxItemView` を追加し、あとで記録したい候補をタイトル / URL / カテゴリ候補 / メモで保存できるようにした。
+- `HomeView` のツールバーにInbox追加ボタンを追加した。
+- HomeのInbox行を、カテゴリ候補・URL有無・作成日・メモプレビューつきの表示にした。
+- `favoreco/CLAUDE.md` に現在の画面構成を反映した。
+
+### 変更意図
+気になる作品・行きたい場所・飲みたい酒などを、本記録にする前に逃さず保存する入口を作るため。最初から `ExperienceEvent` / `Visit` を作らず、`InboxItem` として軽く受け止める。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddInboxItemView.swift（Inbox手動追加フォーム）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（Inbox追加導線・Inbox行表示更新）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- InboxItemから本記録 / 既存対象 / 予定への変換導線は未実装。
+- URL正規化・OGP取得・OCR/共有シート取込は未実装。
+
 ## 2026-07-09: 対象編集画面を実装
 
 ### 変更概要
