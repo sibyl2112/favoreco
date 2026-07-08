@@ -5,6 +5,36 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-08: Xcodeプロジェクト作成と最小SwiftDataモデル実装
+
+### 変更概要
+- Xcodeで `favorecoAPP` プロジェクトを作成し、SwiftUI / SwiftData のアプリ本体を開始。
+- Xcodeテンプレートの `Item` モデルを削除し、`RecordCategory` / `ExperienceEvent` / `Visit` / `InboxItem` / `PhotoBlob` の最小モデルを追加。
+- `ContentView` を初期 `HomeView` へ差し替え、空データでもカテゴリ・最近の記録・Inboxが見えるホームを実装。
+- Bundle Identifier を `com.nori.favoreco` に調整し、共有schemeと `.gitignore` を追加。
+- Xcode個人状態ファイルと `.DS_Store` はGit管理対象から外す方針にした。
+
+### 変更意図
+実装フェーズの最初の安全な足場として、仕様正本の中核である Event/Visit 分離と RecordCategory 一般化を、ビルド可能なSwiftDataモデルとして置く。チケット・酒詳細・登録フローに進む前に、CloudKit互換ルールを満たす最小スキーマと起動可能なホームを確定する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP.xcodeproj（Xcodeプロジェクト）
+- favorecoAPP/favorecoAPP/Models/CoreModels.swift（最小SwiftDataモデル）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（初期ホーム）
+- favorecoAPP/favorecoAPP/ContentView.swift（HomeView入口へ変更）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（ModelContainer接続）
+- .gitignore（Xcode個人状態・.DS_Store・ビルド成果物除外）
+- favoreco/CLAUDE.md（実装状態・構成を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/favorecoDerived build` が成功。
+- 初回のサンドボックス内ビルドは SwiftData macro 実行権限で失敗したため、外側権限で再実行して成功を確認。
+
+### 残課題
+- アプリ/ターゲット/フォルダ名 `favorecoAPP` を後で `favoreco` 系に整理するか判断する。
+- 次スライスでカテゴリプリセット注入と、最初の登録導線を実装する。
+
 ## 2026-07-08: Designテーマをジャンル別選択式に更新
 
 ### 変更概要
