@@ -21,13 +21,13 @@
 | 総合評価の分布・平均 | Visit.overallRating（Double 0.5刻み） | カテゴリ別/全体の★平均・高評価一覧 |
 | ジャンル別 | Event.genres[String]（U15） | 「SF作品 n本」「今年ミステリー n」 |
 | 評価軸の自分平均 | AxisScore（U7・Visit） | 観劇の"脚本"軸の平均・レーダー重ね |
-| 金額集計 | Visit.money（U12） | 年間支出・カテゴリ別・遠征費 |
+| 金額集計 | Visit.money（U12）＋CollectionItem.amount（U11任意） | 年間支出・カテゴリ別・グッズ代・交通費・宿泊費・遠征費 |
 | 期間・頻度 | Visit.date | 月別本数・年間タイムライン・皆勤 |
 | 形態別 | Visit.engagementFormat / Event.workType（U14） | 劇場 vs 配信の比率・マンガ/技術書比率 |
 | 種別別 | Event.subTypeKey（A2） | 酒種別内訳・施設種別内訳 |
-| 当選率（チケット） | Visit.status(won/lost)×entryRoute×ticketSite | 先行区分別・販路別の当選率（spec-A8 §5・落選を統計に含める設定時） |
+| 当選率（チケット） | TicketAttempt.status(won/lost)×entryRoute×ticketSite/account | 先行区分別・販路別・名義別の当選率（spec-A8 §5・落選を統計に含める設定時） |
 | セトリ演奏回数 | Visit.setlist（U4）横断・曲名正規化 | 「この曲を何回聴いた」（LiveSoul/Live Rock準拠・spec-A8 §5） |
-| 名義別（FCアカウント） | Visit.fcAccount 紐付け | 名義ごとの参戦数・年会費合計・当選率（掛け持ち可視化・spec-A8 §3.2） |
+| 名義別（FC/チケットアカウント） | TicketAttempt.account / Visitにコピーされた観劇実績 | 名義ごとの申込数・当選率・参戦数・年会費合計（掛け持ち可視化・spec-A8 §3.2） |
 | 座席傾向 | Visit.seat（U2）×会場 | 会場別の座席分布（3D表示はspec-A8 §6でv2） |
 
 - **カテゴリ横断「今年の全体験」**：全Visitを日付で束ね、`categoryRef`でグループ表示（Mystoriumはカテゴリ内のみ＝favorecoの新機能・feasibility §3）。

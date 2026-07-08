@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>favoreco Theme Variants</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 20px 56px;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
+      background: #eceff3;
+      color: #232833;
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; }
+    header { margin-bottom: 24px; }
+    h1 { margin: 0; font-size: 28px; letter-spacing: .01em; }
+    .lead { margin-top: 8px; color: #687386; font-size: 13px; line-height: 1.7; }
+    .section-title {
+      margin: 30px 0 12px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #303746;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title::before {
+      content: "";
+      width: 14px;
+      height: 14px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, #3a6df0, #d85b73);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    @media (max-width: 920px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+    .theme {
+      --canvas: #f5f6f9;
+      --surface: #fff;
+      --primary: #3a6df0;
+      --accent: #8b93a3;
+      --ink: #232833;
+      --muted: #8b93a3;
+      --tint: #edf2ff;
+      min-height: 360px;
+      padding: 14px;
+      border-radius: 24px;
+      background: var(--canvas);
+      color: var(--ink);
+      box-shadow: 0 18px 44px -30px rgba(30, 45, 80, .55);
+      border: 1px solid rgba(255,255,255,.7);
+      overflow: hidden;
+    }
+    .theme.dark {
+      box-shadow: 0 18px 44px -30px rgba(0, 0, 0, .85);
+      border-color: rgba(255,255,255,.08);
+    }
+    .theme-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .theme-name { font-size: 18px; font-weight: 800; letter-spacing: .01em; }
+    .theme-meta { margin-top: 3px; font-size: 11px; color: var(--muted); }
+    .pill {
+      flex: none;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: var(--surface);
+      background: var(--primary);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 88px 1fr;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--surface) 82%, transparent);
+      border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
+      backdrop-filter: blur(18px) saturate(160%);
+    }
+    .photo {
+      border-radius: 14px;
+      min-height: 112px;
+      background:
+        radial-gradient(circle at 70% 24%, color-mix(in srgb, var(--accent) 75%, white), transparent 30%),
+        linear-gradient(145deg, color-mix(in srgb, var(--primary) 72%, black), color-mix(in srgb, var(--tint) 55%, black));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+    }
+    .eyebrow {
+      display: inline-flex;
+      width: fit-content;
+      padding: 3px 7px;
+      border-radius: 8px;
+      background: var(--tint);
+      color: var(--primary);
+      font-size: 10px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+    .title { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+    .line { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .button {
+      margin-top: 12px;
+      width: 100%;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--primary) 55%, transparent);
+      padding: 8px 10px;
+      color: var(--primary);
+      text-align: center;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .chips { display: flex; gap: 7px; margin: 12px 0; flex-wrap: wrap; }
+    .chip {
+      font-size: 10px;
+      color: var(--primary);
+      background: color-mix(in srgb, var(--surface) 82%, transparent);
+      border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+      padding: 6px 9px;
+      border-radius: 999px;
+    }
+    .chip.active { background: var(--primary); color: var(--surface); border-color: transparent; font-weight: 800; }
+    .rows {
+      display: grid;
+      gap: 8px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 9px;
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--surface) 78%, transparent);
+      border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+    }
+    .thumb {
+      width: 42px;
+      aspect-ratio: 1;
+      border-radius: 10px;
+      background: linear-gradient(145deg, var(--primary), var(--accent));
+    }
+    .row-title { font-size: 12px; font-weight: 800; }
+    .row-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .badge {
+      font-size: 9px;
+      font-weight: 800;
+      color: var(--primary);
+      border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+      border-radius: 999px;
+      padding: 4px 7px;
+    }
+    .swatches {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .swatch {
+      min-height: 34px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,.08);
+    }
+    .dark .swatch { border-color: rgba(255,255,255,.12); }
+    .hexes {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px 10px;
+      margin-top: 10px;
+      font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>favoreco Theme Variants</h1>
+    <p class="lead">ジャンル固定ではなく、各ジャンルに好きなテーマカラーを割り当てるためのプレビュー。無料は Free Light / Free Dark、有料で追加テーマを解放する。</p>
+  </header>
+
+  <div class="section-title">Free Themes</div>
+  <div class="grid">
+    <article class="theme" style="--canvas:#f5f6f9;--surface:#fff;--primary:#3a6df0;--accent:#8b93a3;--ink:#232833;--muted:#8b93a3;--tint:#edf2ff">
+      <div class="theme-head"><div><div class="theme-name">Free Light</div><div class="theme-meta">無料 / 標準ライト</div></div><span class="pill">FREE</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">記録済み</span><div class="title">Favoreco</div><div class="line">白基調の標準テーマ</div><div class="line">予定 / 記録 / 気になる</div><div class="button">記録を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">気になる</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">ライブラリ</div><div class="row-sub">ニュートラルに使える</div></div><span class="badge">標準</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#f5f6f9"></div><div class="swatch" style="background:#fff"></div><div class="swatch" style="background:#3a6df0"></div><div class="swatch" style="background:#8b93a3"></div><div class="swatch" style="background:#edf2ff"></div></div>
+      <div class="hexes"><span>#f5f6f9</span><span>#3a6df0</span><span>#ffffff</span><span>#8b93a3</span></div>
+    </article>
+
+    <article class="theme dark" style="--canvas:#14161b;--surface:#1e222a;--primary:#5b86f5;--accent:#9aa4b5;--ink:#eef1f6;--muted:#8b93a3;--tint:#27344f">
+      <div class="theme-head"><div><div class="theme-name">Free Dark</div><div class="theme-meta">無料 / 標準ダーク</div></div><span class="pill">FREE</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">予定あり</span><div class="title">Favoreco</div><div class="line">暗色の標準テーマ</div><div class="line">写真が締まる</div><div class="button">記録を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">気になる</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">ライブラリ</div><div class="row-sub">無料ダーク</div></div><span class="badge">標準</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#14161b"></div><div class="swatch" style="background:#1e222a"></div><div class="swatch" style="background:#5b86f5"></div><div class="swatch" style="background:#9aa4b5"></div><div class="swatch" style="background:#27344f"></div></div>
+      <div class="hexes"><span>#14161b</span><span>#5b86f5</span><span>#1e222a</span><span>#9aa4b5</span></div>
+    </article>
+  </div>
+
+  <div class="section-title">Paid Pale Themes</div>
+  <div class="grid">
+    <article class="theme" style="--canvas:#fff6f8;--surface:#fffdfc;--primary:#d9899c;--accent:#c7a46a;--ink:#34282d;--muted:#8a7078;--tint:#f8dfe6">
+      <div class="theme-head"><div><div class="theme-name">Sakura Mist</div><div class="theme-meta">桜色系 / Pale</div></div><span class="pill">PAID</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">春の記録</span><div class="title">静かな午後</div><div class="line">やわらかい桜色</div><div class="line">御朱印・書籍・美術展にも</div><div class="button">詳細を開く</div></div></div>
+      <div class="chips"><span class="chip active">すべて</span><span class="chip">お気に入り</span><span class="chip">メモ</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Sakura Card</div><div class="row-sub">淡いピンクの差し色</div></div><span class="badge">Pale</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#fff6f8"></div><div class="swatch" style="background:#fffdfc"></div><div class="swatch" style="background:#d9899c"></div><div class="swatch" style="background:#c7a46a"></div><div class="swatch" style="background:#f8dfe6"></div></div>
+      <div class="hexes"><span>#fff6f8</span><span>#d9899c</span><span>#fffdfc</span><span>#c7a46a</span></div>
+    </article>
+
+    <article class="theme" style="--canvas:#f3faf3;--surface:#fcfffb;--primary:#6ca36f;--accent:#d0a85a;--ink:#24362a;--muted:#6f8672;--tint:#dcefdc">
+      <div class="theme-head"><div><div class="theme-name">Moegi Glass</div><div class="theme-meta">萌葱色 / Pale</div></div><span class="pill">PAID</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">訪問済み</span><div class="title">Green Field</div><div class="line">若葉のような淡い緑</div><div class="line">おでかけ・植物園向け</div><div class="button">記録を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">写真</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Moegi Card</div><div class="row-sub">静かな自然感</div></div><span class="badge">Pale</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#f3faf3"></div><div class="swatch" style="background:#fcfffb"></div><div class="swatch" style="background:#6ca36f"></div><div class="swatch" style="background:#d0a85a"></div><div class="swatch" style="background:#dcefdc"></div></div>
+      <div class="hexes"><span>#f3faf3</span><span>#6ca36f</span><span>#fcfffb</span><span>#d0a85a</span></div>
+    </article>
+
+    <article class="theme" style="--canvas:#f4f9fd;--surface:#ffffff;--primary:#78a9d6;--accent:#b9cfe3;--ink:#243747;--muted:#758b9d;--tint:#e3f1fb">
+      <div class="theme-head"><div><div class="theme-name">Pale Blue Air</div><div class="theme-meta">ペールブルー / Pale</div></div><span class="pill">PAID</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">開催中</span><div class="title">Blue Memory</div><div class="line">澄んだ青白系</div><div class="line">美術展・水族館にも</div><div class="button">詳細を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">気になる</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Pale Blue Card</div><div class="row-sub">白に溶ける青</div></div><span class="badge">Pale</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#f4f9fd"></div><div class="swatch" style="background:#ffffff"></div><div class="swatch" style="background:#78a9d6"></div><div class="swatch" style="background:#b9cfe3"></div><div class="swatch" style="background:#e3f1fb"></div></div>
+      <div class="hexes"><span>#f4f9fd</span><span>#78a9d6</span><span>#ffffff</span><span>#b9cfe3</span></div>
+    </article>
+  </div>
+
+  <div class="section-title">Paid Monochrome Themes</div>
+  <div class="grid">
+    <article class="theme" style="--canvas:#f7f7f4;--surface:#ffffff;--primary:#1f1f1f;--accent:#ffd400;--ink:#171717;--muted:#737373;--tint:#fff3a6">
+      <div class="theme-head"><div><div class="theme-name">Mono Vivid Yellow</div><div class="theme-meta">モノクロ + ビビットイエロー</div></div><span class="pill">PAID</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">要対応</span><div class="title">Ticket Alert</div><div class="line">黒白に黄色を一点だけ</div><div class="line">締切・予定が読みやすい</div><div class="button">要対応を見る</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">通知</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Mono Yellow Card</div><div class="row-sub">視認性重視</div></div><span class="badge">Yellow</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#f7f7f4"></div><div class="swatch" style="background:#ffffff"></div><div class="swatch" style="background:#1f1f1f"></div><div class="swatch" style="background:#ffd400"></div><div class="swatch" style="background:#fff3a6"></div></div>
+      <div class="hexes"><span>#f7f7f4</span><span>#1f1f1f</span><span>#ffffff</span><span>#ffd400</span></div>
+    </article>
+
+    <article class="theme dark" style="--canvas:#0a0a0c;--surface:#18171b;--primary:#eeeeee;--accent:#d86aa4;--ink:#f4f1f4;--muted:#9b949c;--tint:#382232">
+      <div class="theme-head"><div><div class="theme-name">Mono Soft Magenta</div><div class="theme-meta">モノクロ + 薄めマゼンタ</div></div><span class="pill">PAID</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">当落待ち</span><div class="title">Stage Night</div><div class="line">暗色にやわらかいマゼンタ</div><div class="line">ライブ・映画にも</div><div class="button">ライブを開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">気になる</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Mono Magenta Card</div><div class="row-sub">強すぎない推し色</div></div><span class="badge">Magenta</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#0a0a0c"></div><div class="swatch" style="background:#18171b"></div><div class="swatch" style="background:#eeeeee"></div><div class="swatch" style="background:#d86aa4"></div><div class="swatch" style="background:#382232"></div></div>
+      <div class="hexes"><span>#0a0a0c</span><span>#eeeeee</span><span>#18171b</span><span>#d86aa4</span></div>
+    </article>
+
+    <article class="theme dark" style="--canvas:#0f0f0f;--surface:#1b1b1b;--primary:#f7f7f4;--accent:#ffd400;--ink:#f7f7f4;--muted:#a2a2a2;--tint:#29220a">
+      <div class="theme-head"><div><div class="theme-name">Mono Vivid Yellow Inverted</div><div class="theme-meta">白黒反転 + ビビットイエロー</div></div><span class="pill">PAID</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">通知</span><div class="title">Dark Alert</div><div class="line">黒ベースで黄色を強調</div><div class="line">夜間表示でも締切が立つ</div><div class="button">予定を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">要対応</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Inverted Yellow Card</div><div class="row-sub">黒地に高コントラスト</div></div><span class="badge">Invert</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#0f0f0f"></div><div class="swatch" style="background:#1b1b1b"></div><div class="swatch" style="background:#f7f7f4"></div><div class="swatch" style="background:#ffd400"></div><div class="swatch" style="background:#29220a"></div></div>
+      <div class="hexes"><span>#0f0f0f</span><span>#f7f7f4</span><span>#1b1b1b</span><span>#ffd400</span></div>
+    </article>
+
+    <article class="theme" style="--canvas:#faf8fa;--surface:#ffffff;--primary:#202020;--accent:#d86aa4;--ink:#181818;--muted:#747077;--tint:#f4d7e6">
+      <div class="theme-head"><div><div class="theme-name">Mono Soft Magenta Inverted</div><div class="theme-meta">白黒反転 + 薄めマゼンタ</div></div><span class="pill">PAID</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">記録済み</span><div class="title">Soft Memory</div><div class="line">白地に黒文字を主役に</div><div class="line">マゼンタはアクセントだけ</div><div class="button">記録を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">写真</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Inverted Magenta Card</div><div class="row-sub">軽い白系モノクロ</div></div><span class="badge">Invert</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#faf8fa"></div><div class="swatch" style="background:#ffffff"></div><div class="swatch" style="background:#202020"></div><div class="swatch" style="background:#d86aa4"></div><div class="swatch" style="background:#f4d7e6"></div></div>
+      <div class="hexes"><span>#faf8fa</span><span>#202020</span><span>#ffffff</span><span>#d86aa4</span></div>
+    </article>
+  </div>
+
+  <div class="section-title">Image-Derived Theme Samples</div>
+  <div class="grid">
+    <article class="theme dark" style="--canvas:#100b0e;--surface:#211016;--primary:#8b2438;--accent:#c49458;--ink:#f7eadb;--muted:#b79a86;--tint:#3a1720">
+      <div class="theme-head"><div><div class="theme-name">Velvet Curtain</div><div class="theme-meta">観劇モック由来</div></div><span class="pill">SAMPLE</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">当落待ち</span><div class="title">Stage Drama</div><div class="line">緞帳の赤と金</div><div class="line">チケット進捗向け</div><div class="button">公演を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">気になる</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Velvet Card</div><div class="row-sub">深い赤黒</div></div><span class="badge">Theater</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#100b0e"></div><div class="swatch" style="background:#211016"></div><div class="swatch" style="background:#8b2438"></div><div class="swatch" style="background:#c49458"></div><div class="swatch" style="background:#3a1720"></div></div>
+      <div class="hexes"><span>#100b0e</span><span>#8b2438</span><span>#211016</span><span>#c49458</span></div>
+    </article>
+
+    <article class="theme dark" style="--canvas:#090d12;--surface:#151820;--primary:#d85b73;--accent:#f0a36c;--ink:#f8edf2;--muted:#a995a2;--tint:#3a1e2b">
+      <div class="theme-head"><div><div class="theme-name">Stage Bloom</div><div class="theme-meta">ライブモック由来</div></div><span class="pill">SAMPLE</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">参戦予定</span><div class="title">Live Night</div><div class="line">暗いステージにピンク光</div><div class="line">ライブ/推し色向け</div><div class="button">ライブを開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">写真</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Bloom Card</div><div class="row-sub">熱量のある暗色</div></div><span class="badge">Live</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#090d12"></div><div class="swatch" style="background:#151820"></div><div class="swatch" style="background:#d85b73"></div><div class="swatch" style="background:#f0a36c"></div><div class="swatch" style="background:#3a1e2b"></div></div>
+      <div class="hexes"><span>#090d12</span><span>#d85b73</span><span>#151820</span><span>#f0a36c</span></div>
+    </article>
+
+    <article class="theme dark" style="--canvas:#061b20;--surface:#0b343a;--primary:#1f8a93;--accent:#d7a45d;--ink:#f3f7f6;--muted:#8eaab0;--tint:#123f47">
+      <div class="theme-head"><div><div class="theme-name">Aqua Nocturne</div><div class="theme-meta">水族館モック由来</div></div><span class="pill">SAMPLE</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">記録済み</span><div class="title">Aquarium</div><div class="line">深い水色と砂金色</div><div class="line">水族館/動物園向け</div><div class="button">記録を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">写真</span><span class="chip">生きもの</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Aqua Card</div><div class="row-sub">水中感のある暗色</div></div><span class="badge">Aqua</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#061b20"></div><div class="swatch" style="background:#0b343a"></div><div class="swatch" style="background:#1f8a93"></div><div class="swatch" style="background:#d7a45d"></div><div class="swatch" style="background:#123f47"></div></div>
+      <div class="hexes"><span>#061b20</span><span>#1f8a93</span><span>#0b343a</span><span>#d7a45d</span></div>
+    </article>
+
+    <article class="theme" style="--canvas:#f7fafd;--surface:#ffffff;--primary:#2b74b8;--accent:#d6a44a;--ink:#1c3451;--muted:#6d85a0;--tint:#eaf4ff">
+      <div class="theme-head"><div><div class="theme-name">Daydream Lake</div><div class="theme-meta">テーマパークモック由来</div></div><span class="pill">SAMPLE</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">思い出</span><div class="title">Dream Park</div><div class="line">白空と明るい青</div><div class="line">日中のおでかけ向け</div><div class="button">アルバムを開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">写真</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Lake Card</div><div class="row-sub">軽い青白系</div></div><span class="badge">Park</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#f7fafd"></div><div class="swatch" style="background:#ffffff"></div><div class="swatch" style="background:#2b74b8"></div><div class="swatch" style="background:#d6a44a"></div><div class="swatch" style="background:#eaf4ff"></div></div>
+      <div class="hexes"><span>#f7fafd</span><span>#2b74b8</span><span>#ffffff</span><span>#d6a44a</span></div>
+    </article>
+
+    <article class="theme dark" style="--canvas:#120c08;--surface:#24170d;--primary:#9b6426;--accent:#e0b261;--ink:#f6e8cf;--muted:#b58a5a;--tint:#3c2714">
+      <div class="theme-head"><div><div class="theme-name">Amber Cellar</div><div class="theme-meta">お酒モック由来</div></div><span class="pill">SAMPLE</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">テイスティング</span><div class="title">Amber Bottle</div><div class="line">琥珀と樽の暗色</div><div class="line">お酒/食体験向け</div><div class="button">ノートを書く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">購入</span><span class="chip">味覚</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Cellar Card</div><div class="row-sub">温かい茶金</div></div><span class="badge">Drink</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#120c08"></div><div class="swatch" style="background:#24170d"></div><div class="swatch" style="background:#9b6426"></div><div class="swatch" style="background:#e0b261"></div><div class="swatch" style="background:#3c2714"></div></div>
+      <div class="hexes"><span>#120c08</span><span>#9b6426</span><span>#24170d</span><span>#e0b261</span></div>
+    </article>
+
+    <article class="theme dark" style="--canvas:#081c30;--surface:#102b44;--primary:#416c99;--accent:#a7c6df;--ink:#eff5fa;--muted:#8aa8bf;--tint:#183d5b">
+      <div class="theme-head"><div><div class="theme-name">Museum Haze</div><div class="theme-meta">美術館モック由来</div></div><span class="pill">SAMPLE</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">開催中</span><div class="title">Silent Blue</div><div class="line">静かな青と白霞</div><div class="line">展覧会/博物館向け</div><div class="button">展示を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">作品</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Museum Card</div><div class="row-sub">低彩度の青</div></div><span class="badge">Museum</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#081c30"></div><div class="swatch" style="background:#102b44"></div><div class="swatch" style="background:#416c99"></div><div class="swatch" style="background:#a7c6df"></div><div class="swatch" style="background:#183d5b"></div></div>
+      <div class="hexes"><span>#081c30</span><span>#416c99</span><span>#102b44</span><span>#a7c6df</span></div>
+    </article>
+
+    <article class="theme dark" style="--canvas:#06191b;--surface:#10282b;--primary:#66cacc;--accent:#c9a15b;--ink:#edf7f7;--muted:#8ca6a8;--tint:#14393b">
+      <div class="theme-head"><div><div class="theme-name">Tour Teal</div><div class="theme-meta">ライブ旅モック由来</div></div><span class="pill">SAMPLE</span></div>
+      <div class="hero"><div class="photo"></div><div><span class="eyebrow">TOUR</span><div class="title">Tour Journey</div><div class="line">青緑の旅感</div><div class="line">ライブ/遠征向け</div><div class="button">旅程を開く</div></div></div>
+      <div class="chips"><span class="chip active">記録</span><span class="chip">予定</span><span class="chip">遠征</span></div>
+      <div class="rows"><div class="row"><div class="thumb"></div><div><div class="row-title">Tour Card</div><div class="row-sub">暗い青緑</div></div><span class="badge">Tour</span></div></div>
+      <div class="swatches"><div class="swatch" style="background:#06191b"></div><div class="swatch" style="background:#10282b"></div><div class="swatch" style="background:#66cacc"></div><div class="swatch" style="background:#c9a15b"></div><div class="swatch" style="background:#14393b"></div></div>
+      <div class="hexes"><span>#06191b</span><span>#66cacc</span><span>#10282b</span><span>#c9a15b</span></div>
+    </article>
+  </div>
+</div>
+</body>
+</html>

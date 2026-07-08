@@ -1,7 +1,7 @@
 # ②-A / spec-A8 チケット管理・通知・FCアカウント
 
-> ステータス: 清書（2026-07-07）
-> 位置づけ: ②-A のチケット/ライブ管理分冊。観劇・美術展・映画・ライブ・おでかけ施設の**チケット状態pipeline・通知/リマインダー・FCアカウント（名義）管理・セトリ**を1本に集約する正本。v1で徹底作り込み（通知含む）＝2026-07-07 ユーザー確定。
+> ステータス: 清書（2026-07-08更新）
+> 位置づけ: ②-A のチケット/ライブ管理分冊。観劇・美術展・映画・ライブ・おでかけ施設の**チケット状態pipeline・通知/リマインダー・FC/チケットアカウント管理・セトリ**を1本に集約する正本。v1で徹底作り込み（通知含む）＝2026-07-07 ユーザー確定。
 > 関連: 08 §4-2（観劇チケットユニット）／ spec-A3（フィールド所属・格納・マスター）／ spec-A5（集計＝当選率/名義別/座席傾向/セトリ演奏回数）／ spec-A7（OCR/URL取込フロー）／ spec-B1 §2（観劇ライブラリ・要対応ストリップ）／ 09（PhotoBlob）
 >
 > 競合基準（2026-07-07 リサーチ）: **チケコレは更新停止・レビュー無し＝基準にしない**。実質の王者は **LiveSoul**（抽選管理＝当選率追跡・締切リマインダー・座席・遠征マップ／★4.5・1273件）と **TheaterRecords**（チケットOCR自動認識・分析）と **Cherie Log**（複数名義・掛け持ち管理）。**Live Rock/relight/Tickemo** はセトリ・シェアカードのビジュアル派。
@@ -12,8 +12,8 @@
 ## 0. 原則
 
 - **「記録も管理も一番」**：シアティ(記録)＋チケコレ(管理)＋LiveSoul(抽選管理)を1テンプレに統合。任意フィールドは**全オンオフ可**（軽く使う人を圧迫しない）。
-- **状態・期限＝クエリ可能な個別プロパティ**（要対応の抽出・通知スケジュールの源）。名義以外の付帯（枚数/手数料/購入URL）＝表示専用 unitFieldsRaw（A1 §8）。
-- **チケット＝Visit（回）に属す**（1公演＝1 Visit＝1チケット状態）。リピート（同一Eventの複数Visit）は各回が独立したチケット状態を持つ。
+- **状態・期限＝TicketAttemptのクエリ可能な個別プロパティ**（要対応の抽出・通知スケジュールの源）。名義以外の付帯（枚数/手数料/購入URL）＝表示専用 unitFieldsRaw（A1 §8）。
+- **チケット申込＝TicketAttempt（申込1件）として独立**。Visitにチケット状態を直持ちしない。同じ公演にFC先行/カード枠/ぴあ先行/一般など複数申込があり、落選履歴・名義別当選率・通知更新に耐えるため。
 - **通知は最初から組み込む**（Mystoriumで後付けが面倒だった教訓・08 §4-2）。`TicketSaleNotificationManager` の型と教訓〔権限リクエスト→理由別 ScheduleResult〕を流用。
 - CloudKit互換3条件（全プロパティ既定値／`.unique`なし／リレーション optional）を全モデルに機械適用（§7）。
 
@@ -21,7 +21,7 @@
 
 ## 1. チケット状態 pipeline
 
-### 1.1 状態（TicketStatus・Visitの個別プロパティ）
+### 1.1 状態（TicketStatus・TicketAttemptの個別プロパティ）
 
 観劇/ライブの争奪〜参戦を1本の流れで表す。抽選ルートと先着ルートの両方を畳む。
 
@@ -66,7 +66,7 @@ LiveSoul/チケコレ準拠。当選率を区分別に出せる（A5）。
 | `resultDate`（当落発表日） | 結果確認 | ○当日 |
 | `paymentDeadline`（入金締切） | 入金 | ◎締切前 |
 | `issueStart`（発券開始日） | 発券 | ○開始日 |
-| （公演日時＝Visit.date/開演＝U3） | 参戦 | 前日・カウントダウン |
+| （公演日時＝Performance.date/Visit.date/開演＝U3） | 参戦 | 前日・カウントダウン |
 
 ---
 
@@ -92,7 +92,7 @@ LiveSoul/チケコレ準拠。当選率を区分別に出せる（A5）。
 ### 2.3 実装方針（Mystorium教訓の流用）
 
 - **権限フロー**：初回スケジュール時に `UNUserNotificationCenter` 権限リクエスト。理由別 **ScheduleResult**（`.scheduled` / `.permissionDenied` / `.pastDate`（過去日で不発） / `.noDate`（日付未設定））を返し、UIで**なぜ通知が付かなかったかを可視化**（サイレント失敗を作らない＝Mystoriumの反省）。
-- **識別子規約**：`ticket.<visitID>.<type>`（再スケジュール時に古い通知を確実に置換／状態遷移で不要な通知をキャンセル）。
+- **識別子規約**：`ticket.<ticketAttemptID>.<type>`（再スケジュール時に古い通知を確実に置換／状態遷移で不要な通知をキャンセル）。
 - **再スケジュール契機**：期限フィールド編集・状態遷移（例：`won`→入金締切通知を有効化、`attended`/`skipped`→全通知キャンセル）。
 - **カウントダウン**：通知とは別に、ライブラリ/ホームで次公演までの残り日数を表示（LiveSoul/relight/Tickemo 準拠）。表示は都度算出（保存しない）。
 - 過去日・未設定は**通知を作らず要対応にも出さない**（静かに握りつぶさず、編集画面で理由提示）。
@@ -101,61 +101,80 @@ LiveSoul/チケコレ準拠。当選率を区分別に出せる（A5）。
 
 ## 3. データモデル
 
-### 3.1 チケット項目の格納（Visit）
+### 3.1 TicketAttempt（申込1件・独立モデル）
+
+同じ公演に複数の申込がぶら下がる前提で、申込1件を `TicketAttempt` として持つ。
+
+```text
+Performance / Plan
+  TicketAttempt: FC先行 / 自分名義 / 当落待ち
+  TicketAttempt: カード枠 / 家族名義 / 申込前
+  TicketAttempt: ぴあ先行 / 自分名義 / 落選
+Visit
+  実際に観劇・参戦した回の記録
+```
 
 | フィールド | 格納 | 理由 |
 |---|---|---|
 | status（TicketStatus） | 個別（String key） | 要対応抽出・状態バッジ |
 | entryRoute（先行区分） | 個別（String key） | 当選率の区分別集計 |
 | saleStart/applyDeadline/resultDate/paymentDeadline/issueStart | 個別（Date?） | 通知・カレンダー期間バー |
-| ticketSite（購入先） | 個別（String） | フィルタ・当選率の販路別 |
-| holderName（名義） | 個別（String）＋任意で FCAccount 参照 | 名義別集計・掛け持ち |
+| ticketSite（購入先） | 個別（String）＋任意で Account 参照 | フィルタ・当選率の販路別 |
+| holderName（名義） | 個別（String）＋任意で Account 参照 | 名義別集計・掛け持ち |
 | price（チケット代） | 個別（U12金額に統合） | 費用集計 |
 | quantity（枚数）/ fee（手数料）/ purchaseURL | unitFieldsRaw（表示専用） | 集計不要 |
-| seat（座席：ブロック/列/番） | 個別（U2・軽量String） | 座席傾向・会場別 |
-| setlist（セトリ／演目） | unitFieldsRaw（U4・順序付き配列） | 曲順・**編集/並び替え可**＋**📷画像OCR取込**（セトリボード写真→曲順起こし・**A3 §5-2 の U4汎用OCR**）。§5で演奏回数集計 |
+| seat（座席：ブロック/列/番） | 当選後にTicketAttempt、観劇後にVisitへコピー可 | 座席傾向・会場別 |
 
-### 3.2 FCAccount（新規エンティティ・名義/会員管理）★2026-07-07
+`setlist` / 演目 / 感想 / 写真 / グッズは Visit 側。TicketAttemptはあくまで申込・支払い・発券・通知の状態を扱う。
 
-Cherie Log の「複数名義・掛け持ち管理」に対応。チケットの名義を**実体（FCアカウント）**に紐づけ、有効期限・年会費を一元管理する。
+### 3.2 FC・チケットアカウント（Account・名義/会員/ログイン管理）★2026-07-08
+
+Cherie Log の「複数名義・掛け持ち管理」に加え、チケットサイト/劇場会員/カード枠も同じ場所で管理する。チケットの名義を**実体（Account）**に紐づけ、有効期限・年会費・ログイン導線を一元管理する。
 
 | プロパティ | 型・既定 | 用途 |
 |---|---|---|
-| `fanclubName` | String="" | FC名（アーティスト/劇団/団体） |
+| `serviceName` | String="" | FC名/チケットサイト名/劇場会員名 |
+| `accountType` | String="" | FC / プレイガイド / 劇場会員 / カード枠 / その他 |
+| `siteURL` | String="" | 申込サイト・会員ページURL |
+| `loginID` | String="" | ログインID（保存可・コピー可） |
+| `email` | String="" | 登録メール |
 | `memberNumber` | String="" | 会員番号 |
 | `accountName` | String="" | 名義（登録者名。家族名義の掛け持ち等） |
 | `membershipRank` | String="" | 会員種別/ランク（例：プレミアム/通常） |
-| `loginHint` | String="" | ログインIDのヒント（**パスワードは保存しない**・§3.3） |
 | `expiryDate` | Date?（既定nil） | 有効期限 |
 | `annualFee` | Int=0 | 年会費 |
 | `renewalNotify` | Bool=false | 更新リマインド有効化 |
 | `note` | String="" | 備考 |
 | `colorHex` | String="" | 名義識別色（一覧のスッキリ表示） |
+| `keychainPasswordRef` | String="" | Keychain参照キー（SwiftData/CloudKitにはパスワード本体を保存しない） |
 
-- **関係**：`Ticket(Visit)` → `fcAccount: FCAccount?`（optional・nullify）。1名義に複数チケットが紐づく。
+- **関係**：`TicketAttempt` → `account: Account?`（optional・nullify）。1アカウントに複数申込が紐づく。
 - **有効期限アラート**：`expiryDate` −（既定30日/7日）に更新リマインド通知（`renewalNotify`＝ON時）。識別子 `fc.<accountID>.renewal`。**うっかり失効を防ぐ**（Cherie Log の主要価値）。
-- **掛け持ち一覧**：FCAccount 一覧を colorHex で色分け表示。各アカウントに紐づくチケット/参戦数・年会費合計を集計（A5）。
-- **CloudKit互換**：全既定値・`.unique`なし（fanclubName＋memberNumber の正規化で fetch-first upsert・重複防止／名寄せは A6 準拠）・関係 optional。
+- **掛け持ち一覧**：Account 一覧を colorHex で色分け表示。各アカウントに紐づく申込/当選率/参戦数・年会費合計を集計（A5）。
+- **CloudKit互換**：全既定値・`.unique`なし（serviceName＋memberNumber/loginID の正規化で fetch-first upsert・重複防止／名寄せは A6 準拠）・関係 optional。
 
 ### 3.3 認証情報の扱い（セキュリティ方針）
 
-- Cherie Log は「ログイン情報タップコピー」を持つが、**favoreco は v1 でパスワードを SwiftData に平文保存しない**。保存するのは `loginHint`（IDの手掛かり）のみ。
-- ログイン簡便化が要るなら iOS のパスワード/キーチェーン連携（`ASCredentialIdentityStore` 等）を将来検討。**平文の資格情報を CloudKit 同期に載せない**を原則とする（要検討・§8）。
+- パスワードを保存する場合、**SwiftData/CloudKitには絶対に保存しない**。iOS Keychainに保存し、SwiftData側は `keychainPasswordRef` のみ持つ。
+- パスワードの表示/コピー/編集は Face ID / Touch ID / 端末パスコード認証を必須にする。
+- バックアップ/エクスポートにパスワード本体を含めない。iCloud同期ONでもパスワード本体はCloudKit同期対象外。
+- v1は自動ログインではなく、`サイトを開く` / `IDコピー` / `パスワードコピー（生体認証）` まで。自動入力やブラウザ拡張的な機能は作らない。
+- 端末・OSの制約でKeychain保存が使えない場合は、パスワード未保存で運用できるようにする。
 
 ### 3.4 管理場所＝「マイ/設定 > 登録情報・連携」ハブ ★2026-07-07 ユーザー指摘
 
-- **FCアカウント/名義は個々のチケット記録に埋めず、ユーザーの登録情報として一元管理**する。「マイ/設定」内に**登録情報・連携ハブ**を置き、そこで登録・編集 → チケットは**選ぶだけ**（1回登録・全チケットから参照。Cherie Log の一元管理と同型）。
+- **FC/チケットアカウント/名義は個々のTicketAttemptに埋めず、ユーザーの登録情報として一元管理**する。「マイ/設定」内に**登録情報・連携ハブ**を置き、そこで登録・編集 → チケット申込は**選ぶだけ**（1回登録・全TicketAttemptから参照。Cherie Log の一元管理と同型）。
 - **同ハブに外部連携アカウントも同居**：ユーザーはどのみち iOS に Google/Apple アカウントを入れてカレンダー連携する。**外部カレンダー連携（EventKit＝Apple／iOS上のGoogleアカウント経由のGoogleカレンダー・feasibility §4-3 B / A5 §4）**を同じ「連携」画面に集約し、「アカウントを入れる場所」を1箇所にまとめる。
-- ハブの構成（v1）：①FCアカウント/名義 ②外部カレンダー連携（読み取り） ③（サブスク層）iCloud同期＝Apple ID。
-- データ的には FCAccount はトップレベルの SwiftData モデル（Visit の下にネストしない）。チケットからは `fcAccount` 参照（optional）。**名義削除で記録は無傷**（nullify・§3.2）。
-- セキュリティ：ハブでもパスワードは保存しない（loginHint のみ・§3.3）。外部カレンダーは**読み取りのみ**（favoreco から書き込まない・feasibility §4-3）。
+- ハブの構成（v1）：①FC・チケットアカウント/名義 ②外部カレンダー連携（読み取り） ③（サブスク層）iCloud同期＝Apple ID。
+- データ的には Account はトップレベルの SwiftData モデル（TicketAttempt/Visit の下にネストしない）。TicketAttemptからは `account` 参照（optional）。**アカウント削除で記録は無傷**（nullify・§3.2）。
+- セキュリティ：ハブのパスワード操作はKeychain＋生体認証（§3.3）。外部カレンダーは**読み取りのみ**（favoreco から書き込まない・feasibility §4-3）。
 
 ---
 
 ## 4. OCRスキャン取込（A7連携）
 
 - **主フック＝📷チケット画像スキャン**（TheaterRecords 準拠）：紙/電子チケット画像から **日付・会場・座席・金額** を Vision OCR＋撮影補正（feasibility §4-2）で自動認識。**複数枚一括**取込に対応。
-- 認識結果は**プレビュー確認→確定**（勝手に確定しない・A7 §3原則）。会場は PlaceMaster 名寄せ、名義は FCAccount 候補提示。
+- 認識結果は**プレビュー確認→確定**（勝手に確定しない・A7 §3原則）。会場は PlaceMaster 名寄せ、名義は Account 候補提示。
 - 副フック＝🔗チケサイト/公演URL（OGP：公演名・キービジュアル）＋📍会場（A7 §2 の観劇/ライブ行と一致）。
 - **登録ハードルが競合の最大の不満**（Live Rock レビュー：全手動入力が面倒／既存公演は外部連携で引きたい）。ここを OCR＋URL取込＋会場マスターで潰すのが favoreco の差別化の要。
 
@@ -172,7 +191,7 @@ Cherie Log の「複数名義・掛け持ち管理」に対応。チケットの
 | マチネ/ソワレ | 開演時刻（U3） | 時間帯比率 |
 | 遠征マップ | 会場所在県（PlaceMaster） | 都道府県塗り分け（A5 §5） |
 | **セトリ演奏回数** | setlist（U4）横断集計 | 「この曲を何回聴いた」（LiveSoul/Live Rock 準拠）。曲名は名寄せ正規化 |
-| **名義別** | fcAccount 紐付け | 名義ごとの参戦数・年会費合計・当選率（掛け持ち可視化） |
+| **名義別** | Account 紐付け | 名義ごとの参戦数・年会費合計・当選率（掛け持ち可視化） |
 
 ---
 
@@ -191,16 +210,16 @@ Cherie Log の「複数名義・掛け持ち管理」に対応。チケットの
 
 ## 7. CloudKit互換チェック
 
-- Visit のチケット個別プロパティ：全て既定値（status/entryRoute=""、各Date?=nil、price/fee/quantity=0 or ""）。
-- FCAccount：全既定値・`.unique`なし（fanclubName＋memberNumber 正規化 upsert）・`fcAccount` 関係 optional/nullify。
+- TicketAttempt のチケット個別プロパティ：全て既定値（status/entryRoute=""、各Date?=nil、price/fee/quantity=0 or ""）。
+- Account：全既定値・`.unique`なし（serviceName＋memberNumber/loginID 正規化 upsert）・`account` 関係 optional/nullify。パスワード本体はKeychainで、CloudKit/エクスポート対象外。
 - setlist/明細は unitFieldsRaw（String JSON）で安全。通知は SwiftData 外（UNUserNotificationCenter）＝同期対象外。
 
 ---
 
 ## 8. 持ち越し・要確定
 
-- 認証情報（パスワード）のキーチェーン/パスワード連携の要否と範囲（v1はloginHintのみ・平文非保存を確定）。
+- Keychain保存したパスワードの端末変更時・バックアップ復元時・アカウント削除時の詳細挙動。
 - セトリの外部DB連携（Livefans等）の可否・規約。
 - 3D座席の対応会場データ源（自前整備 or 外部）。
-- FCAccount の名寄せ（同一FCの重複統合）の詳細は A6 に準拠。
+- Account の名寄せ（同一FC/同一チケットサイトの重複統合）の詳細は A6 に準拠。
 - 通知の具体UI（設定画面のオフセット選択・タイプ別既定）はデザインフェーズで確定。

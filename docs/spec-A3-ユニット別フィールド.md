@@ -46,15 +46,15 @@
 | **Brewery（酒蔵）** | 酒蔵名・所在県・URL・スナップ | Event（銘柄）／御酒印 | 共有マスター(A6)・所在県マップ・さけのわでエンリッチ |
 | **GoshuinBook（御朱印帳）★新規・御朱印カテゴリ専用** | 縦横比タイプ（通常16×11cm／大判18×12cm／**横長182×257mm**）・表紙写真・裏表紙写真・購入場所（PlaceMaster）・購入日・限定メモ | Visit(御朱印)が所属参照 | 「帳面を保存する体験」の入れ物。Visit(御朱印)は **GoshuinBook＋寺社(Event)** の両方を参照。1帳に複数寺社の御朱印が入る。最新帳を既定選択（spec-B1 §7） |
 | Organizer（主催） | 名称・スナップ | Event | |
-| **Person（人物）★新規** | 氏名・スナップ | Event↔Person credits（役割:監督/脚本/出演/作家 等） | 映画/観劇/美術展。「この人の作品n本」統計 |
+| **Person（人物）★新規** | 氏名・スナップ・roles・isFavo・favoLabel・icon/color | Event↔Person credits（役割:監督/脚本/出演/作家/アーティスト/推し 等）／VisitCastCredit | 映画/観劇/美術展/ライブ。推しは独立ジャンルではなくFavo付きPerson/Artistとして横断ビュー・統計に出す |
 | SubType（種別） | key・displayName・category | Event.subTypeKey で解決 | A2（酒/施設/印。中身は種別別プリセット） |
 | AxisDefinition / AxisScore | 軸名・値 | AxisScore→**Visit** | U7。軸セットは種別別プリセット(A4) |
 | OutcomeOption（成果） | 選択肢 | Visit.outcomeKey | U8。選択肢は種別別(A4) |
 | FormatMaster（形態） | 選択肢 | 用途で2系統（§4 U14） | 鑑賞方法=Visit／書籍種類=Event |
 | GenreOption（作品ジャンル） | 選択肢（複数選択） | **Event**.genres | U15。カテゴリ内管理の分類 |
 | Tag | 名称 | Visit.tags[String]＋master upsert | U6 |
-| Companion（同行者） | 名称 | Visit.companions[String]＋master upsert | U5 |
-| FCAccount（FC/名義） | FC名/会員番号/名義/有効期限/年会費/色 | Visit(Ticket).fcAccount 参照（optional/nullify） | **新規**。掛け持ち名義管理・有効期限アラート（spec-A8 §3.2） |
+| Companion（同行者） | 名称・iconType・iconValue・color・memo・isFavo | Visit.companions[String]＋master upsert | U5。Notion風の絵文字/色/イニシャル/写真チップで表示。同行者別の思い出・場所・写真・統計へ接続 |
+| Account（FC/チケットアカウント） | サービス名・種別・URL・ログインID・会員番号・名義・有効期限・年会費・色・Keychain参照 | TicketAttempt.account 参照（optional/nullify） | **新規**。FC/プレイガイド/劇場会員/カード枠を一元管理。パスワードはKeychain＋生体認証で、SwiftData/CloudKitには保存しない（spec-A8 §3.2-3.3） |
 
 ---
 
@@ -74,8 +74,8 @@
 | U8 | ~~成果~~ **廃止（2026-07-06）** | — | — | 全ジャンルで廃止（総合評価で代替・A4 §1）。書籍のみ「読書状態」として存続（§5） |
 | U9 | スペック表 | ラベル＋値ペア配列 | Event（対象のスペック） | **unitFieldsRaw JSON**（A1 §8-2）。※定番数値は§5で個別列へ昇格 |
 | U10 | 官能メモ | 香→味→余韻の3欄 | Visit | unitFieldsRaw（表示専用） |
-| U11 | コレクション | モノ写真＋**キャプション（任意・空可）**[ ] | Visit | PhotoBlob role=collection＋**caption**（絵画の作品名等・空でOK）。写真(role=photo)から移動して作れる |
-| U12 | 金額 | 金額・内訳（チケット/グッズ/遠征） | Visit | 個別（集計）。内訳の明細はunitFieldsRaw |
+| U11 | コレクション | モノ写真＋**名前/コメント（任意・空可）＋タグ＋金額（任意）**[ ] | Visit | PhotoBlob role=collection＋caption/tags/amount（空でOK）。写真(role=photo)から移動して作れる。タグ例: アクスタ/チラシ/缶バッジ/銀テ/パンフ |
+| U12 | 金額 | 金額・内訳（チケット/グッズ/交通/宿泊/遠征） | Visit | 個別（集計）。チケット代はTicketAttempt/チケットユニット、グッズ/交通/宿泊/遠征の明細はunitFieldsRaw。U11コレクション明細のamountも集計対象 |
 | U13 | リピート | 通算回数・回ごと比較 | 派生（Event配下Visitの集計） | 保存せず算出（A5）。同一対象判定はA6 |
 | U14 | 形態 | ①鑑賞方法（劇場/配信/現地）②書籍種類（マンガ/技術書） | ①Visit ②Event | 個別（statistics）。選択肢はFormatMaster/種別別 |
 | U15 | 作品ジャンル | 分類（複数選択） | **Event** | 個別[String]（「SF作品n本」統計） |
@@ -90,7 +90,7 @@
 >
 > **★MediaAsset方針（2026-07-08更新）**：従来のPhotoBlob方針を拡張し、写真/動画を将来同じ「メディア」抽象で扱えるようにする。実装名は `MediaAsset` 推奨（既存文書の `PhotoBlob` は互換名として読み替え可）。
 > - **写真(role=photo)**＝とりあえず入れるデータ・キャプション不要。
-> - **コレクション(role=collection)**＝モノの記録＋キャプション（空でも可・例：観た絵画の作品名）。
+> - **コレクション(role=collection)**＝モノの記録＋名前/コメント（空でも可・例：観た絵画の作品名、買ったグッズ名）＋タグ＋任意金額。
 > - **ラベル(role=label)**＝U16。**代表アイキャッチ**は Event.eyecatchPath（別）。
 > - **動画(mediaType=video)**＝デフォルトはPhotos参照＋サムネ＋メタ情報。アプリ内コピー/Cloud同期はユーザー明示ON。
 > - **caption** は写真/動画どちらにも使う。おでかけ施設では生きもの名/動物名/植物名/展示名、書籍では写真メモ、映画では半券/特典名など。
@@ -115,9 +115,14 @@
 | 御朱印 | 直書き/書き置き | Visit | 個別（U14形態の御朱印プリセット） | |
 | 御朱印 | 由緒書き・リーフレット写真 | Visit | PhotoBlob（U11コレクション所属） | |
 | 御朱印 | 初穂料/納経料 | Visit | 個別（U12金額） | |
-| 観劇/ライブ | チケット状態pipeline・先行区分・各期限（発売/申込/当落発表/入金/発券）・名義（FCAccount参照）・座席・セトリ・枚数/手数料/購入URL | Visit | **状態/先行区分/各期限/販路/座席=個別**（要対応・通知・当選率の源）／名義=個別＋FCAccount参照／セトリ=unitFieldsRaw(U4順序配列・並び替え可)／枚数/手数料/URL=unitFieldsRaw | **spec-A8 が正本（v1徹底作り込み・通知含む）**。状態=気になる/申込前/当落待ち/当選/落選/入金待ち/発券待ち/参戦済/見送り |
-| 酒 | 精米歩合・日本酒度・酸度・アルコール分 | **Event** | **個別（数値列・検索/グラフ）** | ラベルOCR/さけのわ（A1 §8-1 昇格） |
-| 酒 | 銘柄・使用米・酵母・蔵元コメント | Event | unitFieldsRaw（U9自由ペア） | |
+| 観劇/ライブ | チケット状態pipeline・先行区分・各期限（申込開始/申込締切/当落発表/入金/発券）・名義（Account参照）・枚数/手数料/購入URL | **TicketAttempt** | **状態/先行区分/各期限/販路=個別**（要対応・通知・当選率の源）／名義=個別＋Account参照／枚数/手数料/URL=unitFieldsRaw | **spec-A8 が正本（v1徹底作り込み・通知含む）**。同一公演に複数申込可。Visitにチケット状態を直持ちしない |
+| 観劇/ライブ | 座席・セトリ・観劇/参戦後メモ | Visit | 座席=個別、セトリ=unitFieldsRaw(U4順序配列・並び替え可) | 当選後の座席はTicketAttemptからVisitへコピー可。記録本体はVisit |
+| 観劇 | 作品全体のキャスト候補 | Event | Event↔Person credits（roleName付き） | 作品に出る人の候補。Wキャスト/日替わり/代役の母集団 |
+| 観劇 | 自分が観た回の実キャスト | Visit | VisitCastCredit（roleName・person・source・snapshot）またはunitFieldsRaw v1暫定 | 公式情報が変わっても自分が観た回を保持。観劇回数はVisit数、マチソワはVisit 2件 |
+| 酒 | 名前・酒種別・度数・代表写真 | **Event** | 名前/酒種別/度数=個別、代表写真=relativePath | 日本酒/ビール/ウィスキー/ワイン/焼酎/その他を横断する共通土台。酒種別プリセットはこの上に乗せる |
+| 酒 | 飲んだ日・どこで飲んだ・評価・メモ・写真 | **Visit** | 日付/場所/評価=個別、メモ/unitFieldsRaw、写真=MediaAsset | 同じ銘柄を何度も飲める。Eventに直近Visitを集計してトップ表示 |
+| 酒 | 精米歩合・日本酒度・酸度・アルコール分 | **Event** | **個別（数値列・検索/グラフ）** | 日本酒プリセット。ラベルOCR/さけのわ（A1 §8-1 昇格） |
+| 酒 | 銘柄・使用米・酵母・蔵元コメント | Event | unitFieldsRaw（U9自由ペア） | 酒種別ごとの固有項目はプリセットキーで出し分ける |
 | おでかけ施設 | 施設種別・年パス種別 | Event(種別)/Visit(パス=形態) | 個別 | A2/U14 |
 | おでかけ施設 | 見たもの（生き物/動物/植物/アトラク） | Visit | unitFieldsRaw（U4リスト・呼び名種別切替） | `name/type/startTime/endTime/note/photoRefs/source` を持つタイムライン/ハイライト項目。Google/Appleカレンダー候補・写真時刻候補を取り込める |
 | おでかけ施設 | 写真/動画のcaption | Visit(MediaAsset) | MediaAsset.caption / note | 水族館・動物園・植物園では写真ごとの生きもの名/動物名/植物名が主役 |
@@ -140,7 +145,7 @@
 | 種別 | U4呼び名 | OCR元の例 |
 |---|---|---|
 | ライブ | セトリ（曲順） | セトリボード・スクリーン写真 |
-| 観劇 | 演目/幕構成 | プログラム |
+| 観劇 | 演目/幕構成・キャスト表 | プログラム、当日キャスト表、劇場掲示、公式画像 |
 | 美術展・博物展 | **出品目録／作品リスト** | 会場の出品目録・キャプションパネル |
 | おでかけ施設 | 見たもの（生き物/アトラク） | 種名板・園内マップ |
 
@@ -152,6 +157,11 @@
 ### 現実的な注意（実装メモ）
 - **複数列/2段組**：縦ソートだけだと列が混線 → x位置で**列グルーピング**してから列内で縦ソート。
 - **縦書き**（和書目録・番付）：Vision の縦書き認識を使用。
+- **観劇キャスト表の精度要件**：役名と人物名のペアを崩さないことを優先する。前処理（傾き補正・コントラスト補正・余白トリム）→列/ブロック検出→役名列/人物名列の推定→Person辞書・過去キャスト・同作品候補で補正→信頼度表示、の順で処理する。
+- **キャスト取り込み元**：画像OCRだけでなく、URL（公式サイト/公演ページ/プレイガイド/劇場ページ）とテキストペースト（公式コピー/SNS/メモ）からも候補化する。URLは完全自動確定ではなく、ページタイトル/OGP/本文テキストからキャスト候補を作る補助。
+- **勝手に確定しない**：取り込み結果は必ず精査画面で、役名/人物名ペアの編集、Person候補への紐づけ、新規Person追加、行の削除/入れ替え、Wキャスト候補の選択、代役メモ追加を行ってから保存する。
+- **保存先を選ぶ**：作品全体のキャスト候補(Event)、この回の実キャスト(Visit)、または両方に保存できる。
+- **写真品質ガイド**：斜め/暗い/反射/小さい文字は精度が落ちるため、撮影時に枠合わせ・再撮影提案・切り抜き補正を出す。精度を出すためのUIも実装要件に含める。
 - **番号なし**：改行＝1項目。誤結合は分割編集で救済。
 - **複雑レイアウトは行単位フォールバック＋手動編集**で必ず通す（失敗しない設計）。
 - スコープ＝v1（既存OCR基盤の流用）。精度は種別辞書（曲/作品の表記ゆれ）で段階改善。
@@ -162,7 +172,7 @@
 
 - 全プロパティに既定値（String=""/Int=0/Bool=false/Optional=nil）。
 - `@Attribute(.unique)` なし。マスター重複は fetch-first upsert（name正規化）。
-- リレーション（categoryRef/venue/brewery/facility/organizer/person credits/axisScore/photoBlob/**fcAccount**）は全て optional・多くは cascade or nullify（A1 §6）。FCAccount は nullify（名義削除で記録は無傷・spec-A8 §3.2）。
+- リレーション（categoryRef/venue/brewery/facility/organizer/person credits/axisScore/photoBlob/**account**）は全て optional・多くは cascade or nullify（A1 §6）。Account は nullify（アカウント削除で記録は無傷・spec-A8 §3.2）。
 - `[String]`（tags/companions/urls）と unitFieldsRaw（String JSON）はCloudKitで安全。
 
 ---
