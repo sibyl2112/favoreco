@@ -185,24 +185,29 @@ private struct EventRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(event.title.isEmpty ? "記録" : event.title)
-                    .font(FavorecoTypography.cardTitle)
-                    .lineLimit(2)
+            NavigationLink {
+                EventDetailView(event: event)
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(event.title.isEmpty ? "記録" : event.title)
+                        .font(FavorecoTypography.cardTitle)
+                        .lineLimit(2)
 
-                HStack(spacing: 10) {
-                    if !event.seriesName.isEmpty {
-                        Label(event.seriesName, systemImage: "rectangle.stack")
-                            .lineLimit(1)
+                    HStack(spacing: 10) {
+                        if !event.seriesName.isEmpty {
+                            Label(event.seriesName, systemImage: "rectangle.stack")
+                                .lineLimit(1)
+                        }
+                        Label("\(visits.count)件", systemImage: "number")
+                        if let latestVisit = visits.first {
+                            Label(latestVisit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+                        }
                     }
-                    Label("\(visits.count)件", systemImage: "number")
-                    if let latestVisit = visits.first {
-                        Label(latestVisit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
-                    }
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
                 }
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
             }
+            .buttonStyle(.plain)
 
             Spacer(minLength: 8)
 

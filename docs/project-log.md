@@ -5,6 +5,31 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: 対象詳細画面を実装
+
+### 変更概要
+- `EventDetailView` を追加し、対象単位のカテゴリ、シリーズ、記録数、最新日、平均評価、履歴を表示できるようにした。
+- 対象詳細から既存対象への回追加 `AddVisitView` を開けるようにした。
+- 対象詳細の履歴から各 `ExperienceDetailView` へ遷移できるようにした。
+- `CategoryTopView` の対象行を対象詳細へのNavigationLinkにした。
+- `favoreco/CLAUDE.md` に現在の画面構成を反映した。
+
+### 変更意図
+カテゴリトップだけでは対象ごとの記録履歴を追いづらいため。作品・銘柄・本・施設などの単位で回を重ねる体験を、一覧ではなく詳細画面でも確認・追加できるようにする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/EventDetailView.swift（対象詳細画面追加）
+- favorecoAPP/favorecoAPP/Views/CategoryTopView.swift（対象行から詳細へ遷移）
+- favoreco/CLAUDE.md（実装状態を更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- xcodebuild（iOS Simulator向け）が成功。
+
+### 残課題
+- 対象自体の編集、アーカイブ、代表アイキャッチ設定は未実装。
+- 対象詳細の統計は最小値のみ。ジャンル別の深い集計は未実装。
+
 ## 2026-07-09: 既存対象への回追加導線を実装
 
 ### 変更概要
