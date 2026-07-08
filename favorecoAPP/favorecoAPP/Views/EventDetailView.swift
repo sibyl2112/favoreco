@@ -11,6 +11,7 @@ import SwiftData
 struct EventDetailView: View {
     let event: ExperienceEvent
     @State private var isShowingAddVisit = false
+    @State private var isShowingEditEvent = false
 
     private var category: RecordCategory? {
         event.category
@@ -32,6 +33,7 @@ struct EventDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero
+                eventMemoSection
                 stats
                 visitHistory
             }
@@ -44,6 +46,13 @@ struct EventDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    isShowingEditEvent = true
+                } label: {
+                    Label("対象を編集", systemImage: "pencil")
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
                     isShowingAddVisit = true
                 } label: {
                     Label("回を追加", systemImage: "plus")
@@ -52,6 +61,9 @@ struct EventDetailView: View {
         }
         .sheet(isPresented: $isShowingAddVisit) {
             AddVisitView(event: event)
+        }
+        .sheet(isPresented: $isShowingEditEvent) {
+            EditEventView(event: event)
         }
     }
 
@@ -102,6 +114,33 @@ struct EventDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var eventMemoSection: some View {
+        if !event.memo.isEmpty || !event.officialURL.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(template.targetSectionTitle)
+                    .font(FavorecoTypography.sectionTitle)
+
+                if !event.memo.isEmpty {
+                    Text(event.memo)
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let url = URL(string: event.officialURL), !event.officialURL.isEmpty {
+                    Link(destination: url) {
+                        Label("公式リンク", systemImage: "link")
+                            .font(FavorecoTypography.bodyStrong)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
     private var visitHistory: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -147,6 +186,114 @@ struct EventDetailView: View {
 
         let total = ratedVisits.reduce(0) { $0 + $1.overallRating }
         return String(format: "%.1f", total / Double(ratedVisits.count))
+    }
+}
+
+struct EditEventView: View {
+    let event: ExperienceEvent
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @State private var draft: EventDraft
+
+    private var template: CategoryRecordTemplate {
+        CategoryRecordTemplate.template(for: event.category)
+    }
+
+    init(event: ExperienceEvent) {
+        self.event = event
+        _draft = State(initialValue: EventDraft(event: event))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(template.targetSectionTitle) {
+                    TextField(template.titlePlaceholder, text: $draft.title)
+                    TextField(template.seriesPlaceholder, text: $draft.seriesName)
+                    TextField("公式URL（任意）", text: $draft.officialURL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                }
+
+                Section("対象メモ") {
+                    ZStack(alignment: .topLeading) {
+                        if draft.memo.isEmpty {
+                            Text("対象そのものについて残しておきたいこと")
+                                .foregroundStyle(.tertiary)
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                        }
+                        TextEditor(text: $draft.memo)
+                            .frame(minHeight: 120)
+                    }
+                }
+            }
+            .navigationTitle("対象を編集")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        save()
+                    }
+                    .disabled(!draft.canSave)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        event.title = draft.trimmedTitle
+        event.seriesName = draft.trimmedSeriesName
+        event.officialURL = draft.trimmedOfficialURL
+        event.memo = draft.trimmedMemo
+        event.updatedAt = Date()
+
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            assertionFailure("Failed to update event: \(error)")
+        }
+    }
+}
+
+private struct EventDraft {
+    var title: String
+    var seriesName: String
+    var officialURL: String
+    var memo: String
+
+    init(event: ExperienceEvent) {
+        title = event.title
+        seriesName = event.seriesName
+        officialURL = event.officialURL
+        memo = event.memo
+    }
+
+    var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedSeriesName: String {
+        seriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedOfficialURL: String {
+        officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedMemo: String {
+        memo.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var canSave: Bool {
+        !trimmedTitle.isEmpty
     }
 }
 
