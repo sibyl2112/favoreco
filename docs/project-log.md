@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 課金・プラン画面に無料/有料境界を表示
+
+### 変更概要
+- `BillingPlanSettingsView` に、無料で使えること、Pro買い切り候補、同期サブスク候補、フル買い切り候補の表示を追加した。
+- 無料枠には、基本記録、写真10枚、カレンダー手動追加/追加先選択、手動バックアップを明記した。
+- Pro買い切り候補には、詳細統計/年間まとめ、OCR高度化、テーマ/フォント拡張を表示した。
+- 同期サブスク候補には、iCloud同期、自動バックアップ、継続更新される入力補助/参照データ候補を表示した。
+- フル買い切り候補には、ライト買い切り+同期永久の頭金方式を表示した。
+- StoreKitは未接続のまま、購入/復元は入口のみ維持した。
+
+### 変更意図
+課金実装前に、ユーザーにも開発側にも無料/有料の境界が見える状態にするため。購入処理を先に作ると後から文言やプラン構造を変えづらいため、まず設定画面に仕様を反映し、アプリ内の情報設計を固める。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（課金・プラン画面の境界表示追加）
+- favoreco/CLAUDE.md（課金・プラン画面の現仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/favorecoDerivedBillingPlan build` 成功。
+
+### 残課題
+- StoreKit商品ID、価格、購入復元、権利判定を実装する。
+- 実際の無料制限、Pro解放、同期サブスク解放を機能フラグに接続する。
+- DBパックの扱いは、参照データの権利/規約/更新コスト確認後に確定する。
+
 ## 2026-07-10: 新ユニットID採用と人物/場所リンクモデルを追加
 
 ### 変更概要

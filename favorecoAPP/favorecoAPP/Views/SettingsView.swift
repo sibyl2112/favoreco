@@ -365,8 +365,92 @@ struct BillingPlanSettingsView: View {
         Form {
             Section("現在のプラン") {
                 LabeledContent("プラン", value: "無料")
+                Text("購入処理は未接続です。同期実装後の4プラン構造を前提に、無料/有料の境界だけ先に整理しています。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("無料で使えること") {
+                PlanFeatureRow(
+                    title: "基本記録",
+                    detail: "記録の作成、編集、閲覧。URL/動画リンク保存も含む。",
+                    systemImage: "square.and.pencil"
+                )
+                PlanFeatureRow(
+                    title: "写真",
+                    detail: "1記録10枚まで。カバー写真とサムネイル表示も無料。",
+                    systemImage: "photo"
+                )
+                PlanFeatureRow(
+                    title: "カレンダー",
+                    detail: "手動でカレンダーに追加。追加先カレンダーの選択も無料。",
+                    systemImage: "calendar.badge.plus"
+                )
+                PlanFeatureRow(
+                    title: "バックアップ",
+                    detail: "JSON/CSVなどの手動エクスポートは無料の安全網として扱う。",
+                    systemImage: "square.and.arrow.up"
+                )
+            }
+
+            Section("Pro買い切り候補") {
+                PlanHeaderRow(
+                    title: "ライト買い切り",
+                    price: "¥1,500",
+                    detail: "ローカル全機能を永久解放。同期は含めない。"
+                )
+                PlanFeatureRow(
+                    title: "詳細統計・年間まとめ",
+                    detail: "月/年/通算の深い統計、年間ベスト画像化など。",
+                    systemImage: "chart.bar.xaxis"
+                )
+                PlanFeatureRow(
+                    title: "OCR高度化",
+                    detail: "複雑な半券、チケット、レシート、リスト画像の補助を強化。",
+                    systemImage: "text.viewfinder"
+                )
+                PlanFeatureRow(
+                    title: "テーマ・フォント拡張",
+                    detail: "追加テーマ、個別テーマ、高度なフォント変更候補。",
+                    systemImage: "paintpalette"
+                )
+            }
+
+            Section("同期プラン候補") {
+                PlanHeaderRow(
+                    title: "同期サブスク",
+                    price: "月¥250 / 年¥1,500",
+                    detail: "契約中はローカル全機能と同期を利用可能。"
+                )
+                PlanFeatureRow(
+                    title: "iCloud同期",
+                    detail: "端末間同期、自動バックアップ、復元を扱う。",
+                    systemImage: "icloud.and.arrow.up"
+                )
+                PlanFeatureRow(
+                    title: "継続更新される補助",
+                    detail: "外部候補、参照データ、入力補助など継続価値のある機能候補。",
+                    systemImage: "sparkles"
+                )
+            }
+
+            Section("フル買い切り候補") {
+                PlanHeaderRow(
+                    title: "フル買い切り",
+                    price: "¥6,000",
+                    detail: "ライト¥1,500 + 同期永久¥4,500。どの購入ルートでも合計が揃う頭金方式。"
+                )
+                PlanFeatureRow(
+                    title: "同期も永久",
+                    detail: "ローカル全機能と同期を永久解放する最上位候補。",
+                    systemImage: "checkmark.seal"
+                )
+            }
+
+            Section("購入") {
                 NavigationLink {
-                    SettingsDocumentView(title: "アップグレード", bodyText: "買い切り、サブスク、カテゴリDBパックの見せ方を整理してから実装します。")
+                    SettingsDocumentView(title: "アップグレード", bodyText: "StoreKit接続前のため購入はまだできません。無料、ライト買い切り、同期サブスク、フル買い切りの見せ方をこの画面で固めてから実装します。")
                 } label: {
                     Label("アップグレード", systemImage: "crown")
                 }
@@ -377,15 +461,15 @@ struct BillingPlanSettingsView: View {
                 .disabled(true)
             }
 
-            Section("プラン管理") {
+            Section("補足") {
                 NavigationLink {
-                    SettingsDocumentView(title: "Pro機能一覧", bodyText: "統計、年間まとめ、エクスポート、自作カテゴリ、同期、自動バックアップ、参照DBなどを整理して掲載予定です。")
+                    SettingsDocumentView(title: "創設メンバー特典", bodyText: "既存¥980ユーザーと発売締切までの新規購入者に同期永久無料を付与する案を保持しています。締切日は未定です。")
                 } label: {
-                    Label("Pro機能一覧", systemImage: "sparkles")
+                    Label("創設メンバー特典", systemImage: "person.2.badge.gearshape")
                 }
 
                 NavigationLink {
-                    SettingsDocumentView(title: "DBパック管理", bodyText: "御朱印、100名城、御船印などのカテゴリDBパックを管理する入口として準備予定です。")
+                    SettingsDocumentView(title: "DBパック管理", bodyText: "DBパックは商品として未確定です。寺社、会場、劇場、施設、辞書プリセットなど、権利と更新コストを確認できるものだけ検討します。")
                 } label: {
                     Label("DBパック管理", systemImage: "shippingbox")
                 }
@@ -393,6 +477,53 @@ struct BillingPlanSettingsView: View {
         }
         .navigationTitle("課金・プラン")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct PlanHeaderRow: View {
+    let title: String
+    let price: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(FavorecoTypography.bodyStrong)
+                Spacer()
+                Text(price)
+                    .font(FavorecoTypography.bodyStrong)
+            }
+            Text(detail)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct PlanFeatureRow: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.body)
+                .foregroundStyle(.blue)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(FavorecoTypography.bodyStrong)
+                Text(detail)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
