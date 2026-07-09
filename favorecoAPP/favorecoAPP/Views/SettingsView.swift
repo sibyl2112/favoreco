@@ -48,6 +48,14 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("記録・入力補助") {
+                    NavigationLink {
+                        RecordInputAssistSettingsView()
+                    } label: {
+                        Label("記録・入力補助", systemImage: "wand.and.sparkles")
+                    }
+                }
+
                 Section("通知") {
                     NavigationLink {
                         NotificationSettingsView()
@@ -122,6 +130,66 @@ struct SettingsView: View {
             debugMessage = "仮データの追加に失敗しました。"
             assertionFailure("Failed to insert debug data: \(error)")
         }
+    }
+}
+
+struct RecordInputAssistSettingsView: View {
+    @AppStorage(AppStorageKeys.defaultRecordDateMode) private var defaultRecordDateMode = "today"
+    @AppStorage(AppStorageKeys.defaultGenreMode) private var defaultGenreMode = "lastUsed"
+    @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
+    @AppStorage(AppStorageKeys.photoAddStartMode) private var photoAddStartMode = "camera"
+    @AppStorage(AppStorageKeys.photoCompressionQuality) private var photoCompressionQuality = 0.85
+    @AppStorage(AppStorageKeys.usesURLImportAssist) private var usesURLImportAssist = true
+    @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
+    @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
+    @AppStorage(AppStorageKeys.usesWeatherAutoFill) private var usesWeatherAutoFill = true
+    @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
+
+    var body: some View {
+        Form {
+            Section("記録の初期値") {
+                Picker("デフォルト記録日", selection: $defaultRecordDateMode) {
+                    Text("今日").tag("today")
+                }
+
+                Picker("デフォルトジャンル", selection: $defaultGenreMode) {
+                    Text("最後に使ったジャンル").tag("lastUsed")
+                    Text("Homeで選択中のジャンル").tag("homeSelected")
+                }
+
+                Picker("記録追加後", selection: $afterSaveRecordAction) {
+                    Text("詳細を開く").tag("openDetail")
+                }
+            }
+
+            Section("写真") {
+                Picker("写真追加", selection: $photoAddStartMode) {
+                    Text("カメラを開く").tag("camera")
+                    Text("写真ライブラリを開く").tag("library")
+                }
+
+                Picker("写真圧縮", selection: $photoCompressionQuality) {
+                    Text("85%").tag(0.85)
+                    Text("65%").tag(0.65)
+                }
+
+                LabeledContent("メタデータ削除", value: "ON")
+            }
+
+            Section("入力補助") {
+                Toggle("URL取込候補", isOn: $usesURLImportAssist)
+                Toggle("OCR取込", isOn: $usesOCRImportAssist)
+                Toggle("Map検索", isOn: $usesMapSearchAssist)
+                Toggle("天気自動付与", isOn: $usesWeatherAutoFill)
+                Toggle("入力補助辞書", isOn: $usesInputSuggestionDictionary)
+            }
+
+            Section("後日検討") {
+                LabeledContent("Apple Music連携", value: "V2以降で検討")
+            }
+        }
+        .navigationTitle("記録・入力補助")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
