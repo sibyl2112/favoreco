@@ -9,6 +9,8 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 import UIKit
+import ImageIO
+import Vision
 
 struct AddExperienceView: View {
     let category: RecordCategory
@@ -20,6 +22,7 @@ struct AddExperienceView: View {
     @State private var draft: AddExperienceDraft
     @State private var expandedUnitIDs: Set<String> = ["basic", "people", "ticketPlan", "photos", "officialInfo", "memo"]
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var pendingPeople: [PendingPersonLink] = []
 
@@ -94,6 +97,8 @@ struct AddExperienceView: View {
             return draft.hasTicketPlan ? .entered : .optional
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
+        case "importOCR":
+            return draft.trimmedOCRText.isEmpty ? .optional : .entered
         case "money":
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "memo":
@@ -128,6 +133,8 @@ struct AddExperienceView: View {
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems
             )
+        case "importOCR":
+            OCRUnitEditor(ocrText: $draft.ocrText, selectedItems: $selectedOCRItems)
         case "money":
             moneyFields(amountText: $draft.amountText)
         case "memo":
@@ -196,6 +203,7 @@ struct AddExperienceView: View {
             seatText: draft.trimmedSeatText,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
+            unitFieldsRaw: VisitUnitFields(ocrText: draft.trimmedOCRText).encodedRawValue,
             createdAt: now,
             updatedAt: now,
             event: event
@@ -258,6 +266,7 @@ struct EditExperienceView: View {
     @State private var draft: AddExperienceDraft
     @State private var expandedUnitIDs: Set<String> = ["basic", "people", "photos", "officialInfo", "memo"]
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var deletedPhotoIDs: Set<UUID> = []
     @State private var pendingPeople: [PendingPersonLink] = []
@@ -337,6 +346,8 @@ struct EditExperienceView: View {
             return draft.hasTicketPlan ? .entered : .optional
         case "photos":
             return visibleExistingPhotos.isEmpty && pendingPhotos.isEmpty ? .optional : .entered
+        case "importOCR":
+            return draft.trimmedOCRText.isEmpty ? .optional : .entered
         case "money":
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "memo":
@@ -371,6 +382,8 @@ struct EditExperienceView: View {
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems
             )
+        case "importOCR":
+            OCRUnitEditor(ocrText: $draft.ocrText, selectedItems: $selectedOCRItems)
         case "money":
             moneyFields(amountText: $draft.amountText)
         case "memo":
@@ -438,6 +451,7 @@ struct EditExperienceView: View {
         visit.seatText = draft.trimmedSeatText
         visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
+        visit.unitFieldsRaw = VisitUnitFields(ocrText: draft.trimmedOCRText).encodedRawValue
         visit.updatedAt = now
         deleteMarkedPersonLinks()
         insertPendingPeople(for: event, visit: nil)
@@ -524,6 +538,7 @@ struct AddVisitView: View {
     @State private var draft = VisitDraft()
     @State private var expandedUnitIDs: Set<String> = ["basic", "people", "ticketPlan", "photos", "memo"]
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var pendingPeople: [PendingPersonLink] = []
 
@@ -583,6 +598,8 @@ struct AddVisitView: View {
             return draft.trimmedNote.isEmpty ? .optional : .entered
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
+        case "importOCR":
+            return draft.trimmedOCRText.isEmpty ? .optional : .entered
         case "money":
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "people":
@@ -610,6 +627,8 @@ struct AddVisitView: View {
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems
             )
+        case "importOCR":
+            OCRUnitEditor(ocrText: $draft.ocrText, selectedItems: $selectedOCRItems)
         case "people":
             PeopleUnitEditor(
                 existingLinks: [],
@@ -677,6 +696,7 @@ struct AddVisitView: View {
             seatText: draft.trimmedSeatText,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
+            unitFieldsRaw: VisitUnitFields(ocrText: draft.trimmedOCRText).encodedRawValue,
             createdAt: now,
             updatedAt: now,
             event: event
@@ -737,6 +757,7 @@ struct AddExperienceDraft {
     var overallRating: Double = 0
     var outcomeKey: String = ""
     var seatText: String = ""
+    var ocrText: String = ""
     var amountText: String = ""
     var note: String = ""
 
@@ -751,6 +772,7 @@ struct AddExperienceDraft {
         overallRating = visit.overallRating
         outcomeKey = visit.outcomeKey
         seatText = visit.seatText
+        ocrText = VisitUnitFields(rawValue: visit.unitFieldsRaw).ocrText
         amountText = formattedCurrencyAmount(visit.amount)
         note = visit.note
     }
@@ -785,6 +807,10 @@ struct AddExperienceDraft {
         amountText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var trimmedOCRText: String {
+        ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var trimmedSeatText: String {
         seatText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -811,6 +837,7 @@ private struct VisitDraft {
     var overallRating: Double = 0
     var outcomeKey: String = ""
     var seatText: String = ""
+    var ocrText: String = ""
     var amountText: String = ""
     var note: String = ""
 
@@ -824,6 +851,10 @@ private struct VisitDraft {
 
     var trimmedAmountText: String {
         amountText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedOCRText: String {
+        ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var trimmedSeatText: String {
@@ -1003,6 +1034,102 @@ private func formattedCurrencyAmount(_ amount: Decimal) -> String {
     return NSDecimalNumber(decimal: amount).stringValue
 }
 
+private struct OCRUnitEditor: View {
+    @Binding var ocrText: String
+    @Binding var selectedItems: [PhotosPickerItem]
+    @State private var isRecognizing = false
+    @State private var statusText = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            PhotosPicker(selection: $selectedItems, maxSelectionCount: 1, matching: .images) {
+                Label(isRecognizing ? "読み取り中" : "画像から読み取る", systemImage: "text.viewfinder")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(isRecognizing)
+            .onChange(of: selectedItems) { _, newItems in
+                Task {
+                    await recognize(from: newItems)
+                    selectedItems.removeAll()
+                }
+            }
+
+            if !statusText.isEmpty {
+                Text(statusText)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ZStack(alignment: .topLeading) {
+                if ocrText.isEmpty {
+                    Text("読み取ったテキスト、または手入力の取込メモ")
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 8)
+                        .padding(.leading, 5)
+                }
+                TextEditor(text: $ocrText)
+                    .frame(minHeight: 140)
+            }
+
+            Text("半券、チケット、レシート、リスト画像の内容を一時テキストとして保存します。タイトルや日時への自動振り分けは後続で追加します。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @MainActor
+    private func recognize(from items: [PhotosPickerItem]) async {
+        guard let item = items.first else { return }
+        isRecognizing = true
+        statusText = ""
+        defer { isRecognizing = false }
+
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            statusText = "画像を読み込めませんでした。"
+            return
+        }
+
+        let recognizedText = await recognizedText(from: data)
+        guard !recognizedText.isEmpty else {
+            statusText = "文字を読み取れませんでした。必要なら手入力してください。"
+            return
+        }
+
+        if ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ocrText = recognizedText
+        } else {
+            ocrText += "\n\n" + recognizedText
+        }
+        statusText = "読み取り結果を追加しました。"
+    }
+
+    private func recognizedText(from data: Data) async -> String {
+        await Task.detached(priority: .userInitiated) {
+            guard let image = UIImage(data: data),
+                  let cgImage = image.cgImage else {
+                return ""
+            }
+
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            request.recognitionLanguages = ["ja-JP", "en-US"]
+
+            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: CGImagePropertyOrientation(image.imageOrientation), options: [:])
+            do {
+                try handler.perform([request])
+                return request.results?
+                    .compactMap { $0.topCandidates(1).first?.string }
+                    .joined(separator: "\n") ?? ""
+            } catch {
+                return ""
+            }
+        }.value
+    }
+}
+
 private struct TicketPlanOption: Identifiable {
     let key: String
     let name: String
@@ -1022,6 +1149,22 @@ private struct TicketPlanOption: Identifiable {
 
     static func name(for key: String) -> String {
         all.first(where: { $0.key == key })?.name ?? key
+    }
+}
+
+private extension CGImagePropertyOrientation {
+    nonisolated init(_ orientation: UIImage.Orientation) {
+        switch orientation {
+        case .up: self = .up
+        case .down: self = .down
+        case .left: self = .left
+        case .right: self = .right
+        case .upMirrored: self = .upMirrored
+        case .downMirrored: self = .downMirrored
+        case .leftMirrored: self = .leftMirrored
+        case .rightMirrored: self = .rightMirrored
+        @unknown default: self = .up
+        }
     }
 }
 

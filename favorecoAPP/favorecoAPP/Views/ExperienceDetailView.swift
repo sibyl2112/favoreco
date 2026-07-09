@@ -58,6 +58,7 @@ struct ExperienceDetailView: View {
                 hero
                 photoSection
                 peopleSection
+                ocrSection
                 basicInfo
                 memoSection
             }
@@ -170,6 +171,20 @@ struct ExperienceDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var ocrSection: some View {
+        if !unitFields.ocrText.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("OCR・取込")
+                Text(unitFields.ocrText)
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .sectionCard()
+        }
+    }
+
     private var basicInfo: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(template.visitSectionTitle)
@@ -227,6 +242,10 @@ struct ExperienceDetailView: View {
             return "未評価"
         }
         return String(format: "%.1f", visit.overallRating)
+    }
+
+    private var unitFields: VisitUnitFields {
+        VisitUnitFields(rawValue: visit.unitFieldsRaw)
     }
 
     private var ticketStatusText: String {

@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: OCR・取込ユニットの実入力を追加
+
+### 変更概要
+- `importOCR` ユニットを準備中表示から実入力に変更した。
+- 新規記録、既存対象への回追加、保存済み記録編集で、画像からVision OCRを実行し、読み取りテキストを保存できるようにした。
+- 読み取り結果は手入力で修正・追記できるテキスト欄として扱い、`Visit.unitFieldsRaw` にJSON保存するようにした。
+- 記録詳細画面に、保存済みOCRテキストを表示する `OCR・取込` セクションを追加した。
+- `VisitUnitFields` を追加し、ジャンル別の追加ユニット値を後続で拡張できる保存形式にした。
+
+### 変更意図
+半券、チケット、レシート、リスト画像から文字を拾えると入力負荷が下がるため、まずはタイトル/日時/会場への自動振り分けではなく、読み取り結果を安全に保存・編集・詳細確認できる受け皿を作った。後続でURL取込やOCR高度化、項目候補への振り分けを重ねられるよう、`unitFieldsRaw` のJSONに閉じ込めた。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（OCR画像選択、Vision OCR、読み取りテキスト入力/保存）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（OCRテキスト表示）
+- favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift（追加ユニット値のJSON保存形式）
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（importOCRユニットを実装済みに変更）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedOCRNoSign2 CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- OCR結果をタイトル、日時、会場、金額、人物などへ自動候補化する処理は未実装。
+- 複数画像OCR、OCR履歴、チケット写真との紐付け、Pro向け高度OCRは後続で行う。
+
 ## 2026-07-10: チケット・予定ユニットの実入力を追加
 
 ### 変更概要
