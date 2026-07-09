@@ -7,6 +7,8 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UIKit
 
 struct AddExperienceView: View {
     let category: RecordCategory
@@ -15,7 +17,9 @@ struct AddExperienceView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
-    @State private var expandedUnitIDs: Set<String> = ["basic", "officialInfo", "memo"]
+    @State private var expandedUnitIDs: Set<String> = ["basic", "photos", "officialInfo", "memo"]
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var pendingPhotos: [PendingPhoto] = []
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: category)
@@ -82,6 +86,8 @@ struct AddExperienceView: View {
             return draft.canSave ? .entered : .required
         case "officialInfo":
             return draft.trimmedOfficialURL.isEmpty ? .optional : .entered
+        case "photos":
+            return pendingPhotos.isEmpty ? .optional : .entered
         case "memo":
             return draft.trimmedNote.isEmpty ? .optional : .entered
         default:
@@ -98,6 +104,13 @@ struct AddExperienceView: View {
             visitFields
         case "officialInfo":
             officialInfoFields
+        case "photos":
+            PhotoUnitEditor(
+                existingPhotos: [],
+                deletedPhotoIDs: .constant([]),
+                pendingPhotos: $pendingPhotos,
+                selectedItems: $selectedPhotoItems
+            )
         case "memo":
             memoEditor
         default:
@@ -168,6 +181,7 @@ struct AddExperienceView: View {
 
         modelContext.insert(event)
         modelContext.insert(visit)
+        insertPendingPhotos(for: visit)
         onSave?()
 
         do {
@@ -175,6 +189,12 @@ struct AddExperienceView: View {
             dismiss()
         } catch {
             assertionFailure("Failed to save experience: \(error)")
+        }
+    }
+
+    private func insertPendingPhotos(for visit: Visit) {
+        for pendingPhoto in pendingPhotos {
+            modelContext.insert(pendingPhoto.makePhotoBlob(visit: visit))
         }
     }
 }
@@ -185,7 +205,10 @@ struct EditExperienceView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
-    @State private var expandedUnitIDs: Set<String> = ["basic", "officialInfo", "memo"]
+    @State private var expandedUnitIDs: Set<String> = ["basic", "photos", "officialInfo", "memo"]
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var pendingPhotos: [PendingPhoto] = []
+    @State private var deletedPhotoIDs: Set<UUID> = []
 
     private var event: ExperienceEvent? {
         visit.event
@@ -255,6 +278,8 @@ struct EditExperienceView: View {
             return draft.canSave ? .entered : .required
         case "officialInfo":
             return draft.trimmedOfficialURL.isEmpty ? .optional : .entered
+        case "photos":
+            return visibleExistingPhotos.isEmpty && pendingPhotos.isEmpty ? .optional : .entered
         case "memo":
             return draft.trimmedNote.isEmpty ? .optional : .entered
         default:
@@ -271,6 +296,13 @@ struct EditExperienceView: View {
             visitFields
         case "officialInfo":
             officialInfoFields
+        case "photos":
+            PhotoUnitEditor(
+                existingPhotos: visibleExistingPhotos,
+                deletedPhotoIDs: $deletedPhotoIDs,
+                pendingPhotos: $pendingPhotos,
+                selectedItems: $selectedPhotoItems
+            )
         case "memo":
             memoEditor
         default:
@@ -334,12 +366,33 @@ struct EditExperienceView: View {
         visit.overallRating = draft.overallRating
         visit.note = draft.trimmedNote
         visit.updatedAt = now
+        deleteMarkedPhotos()
+        insertPendingPhotos(for: visit)
 
         do {
             try modelContext.save()
             dismiss()
         } catch {
             assertionFailure("Failed to update experience: \(error)")
+        }
+    }
+
+    private var visibleExistingPhotos: [PhotoBlob] {
+        (visit.photos ?? [])
+            .filter { $0.mediaKind == "photo" && !deletedPhotoIDs.contains($0.id) }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private func deleteMarkedPhotos() {
+        guard let photos = visit.photos else { return }
+        for photo in photos where deletedPhotoIDs.contains(photo.id) {
+            modelContext.delete(photo)
+        }
+    }
+
+    private func insertPendingPhotos(for visit: Visit) {
+        for pendingPhoto in pendingPhotos {
+            modelContext.insert(pendingPhoto.makePhotoBlob(visit: visit))
         }
     }
 }
@@ -350,7 +403,9 @@ struct AddVisitView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft = VisitDraft()
-    @State private var expandedUnitIDs: Set<String> = ["basic", "memo"]
+    @State private var expandedUnitIDs: Set<String> = ["basic", "photos", "memo"]
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var pendingPhotos: [PendingPhoto] = []
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: event.category)
@@ -406,6 +461,8 @@ struct AddVisitView: View {
             return .entered
         case "memo":
             return draft.trimmedNote.isEmpty ? .optional : .entered
+        case "photos":
+            return pendingPhotos.isEmpty ? .optional : .entered
         default:
             return .planned
         }
@@ -420,6 +477,13 @@ struct AddVisitView: View {
             visitFields
         case "memo":
             memoEditor
+        case "photos":
+            PhotoUnitEditor(
+                existingPhotos: [],
+                deletedPhotoIDs: .constant([]),
+                pendingPhotos: $pendingPhotos,
+                selectedItems: $selectedPhotoItems
+            )
         case "officialInfo":
             Text("公式URLや参考リンクは対象詳細で編集します。")
                 .font(FavorecoTypography.caption)
@@ -480,12 +544,19 @@ struct AddVisitView: View {
 
         event.updatedAt = now
         modelContext.insert(visit)
+        insertPendingPhotos(for: visit)
 
         do {
             try modelContext.save()
             dismiss()
         } catch {
             assertionFailure("Failed to save visit: \(error)")
+        }
+    }
+
+    private func insertPendingPhotos(for visit: Visit) {
+        for pendingPhoto in pendingPhotos {
+            modelContext.insert(pendingPhoto.makePhotoBlob(visit: visit))
         }
     }
 }
@@ -571,6 +642,33 @@ private struct VisitDraft {
     }
 }
 
+private struct PendingPhoto: Identifiable {
+    let id = UUID()
+    var data: Data
+    var originalFilename: String
+    var width: Int
+    var height: Int
+
+    var image: UIImage? {
+        UIImage(data: data)
+    }
+
+    func makePhotoBlob(visit: Visit) -> PhotoBlob {
+        PhotoBlob(
+            relativePath: "local/\(id.uuidString).jpg",
+            originalFilename: originalFilename,
+            mediaKind: "photo",
+            purpose: "memory",
+            byteCount: data.count,
+            width: width,
+            height: height,
+            createdAt: Date(),
+            data: data,
+            visit: visit
+        )
+    }
+}
+
 private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnitDefinition] {
     let definitions = RecordUnitDefinition.definitions(for: category?.enabledUnitsRaw ?? "")
     let fallbackDefinitions = RecordUnitDefinition.definitions(for: "basic,officialInfo,memo")
@@ -594,6 +692,162 @@ private func ratingSlider(label: String, value: Binding<Double>, text: String) -
                 .foregroundStyle(.secondary)
         }
         Slider(value: value, in: 0...5, step: 0.5)
+    }
+}
+
+private struct PhotoUnitEditor: View {
+    let existingPhotos: [PhotoBlob]
+    @Binding var deletedPhotoIDs: Set<UUID>
+    @Binding var pendingPhotos: [PendingPhoto]
+    @Binding var selectedItems: [PhotosPickerItem]
+
+    private let maxPhotoCount = 10
+
+    private var currentPhotoCount: Int {
+        existingPhotos.count + pendingPhotos.count
+    }
+
+    private var remainingPhotoSlots: Int {
+        max(0, maxPhotoCount - currentPhotoCount)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("写真")
+                    .font(FavorecoTypography.bodyStrong)
+                Spacer()
+                Text("\(currentPhotoCount)/\(maxPhotoCount)")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if currentPhotoCount == 0 {
+                Text("思い出写真、半券写真、表紙画像などを追加できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                photoGrid
+            }
+
+            if remainingPhotoSlots > 0 {
+                PhotosPicker(
+                    selection: $selectedItems,
+                    maxSelectionCount: remainingPhotoSlots,
+                    matching: .images
+                ) {
+                    Label("写真を追加", systemImage: "photo.badge.plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .onChange(of: selectedItems) { _, newItems in
+                    Task {
+                        await appendPhotos(from: newItems)
+                        selectedItems.removeAll()
+                    }
+                }
+            } else {
+                Label("無料枠の10枚に達しています", systemImage: "checkmark.circle")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var photoGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+            ForEach(existingPhotos) { photo in
+                PhotoThumbnail(
+                    image: UIImage(data: photo.data),
+                    title: "保存済み",
+                    onDelete: {
+                        deletedPhotoIDs.insert(photo.id)
+                    }
+                )
+            }
+
+            ForEach(pendingPhotos) { photo in
+                PhotoThumbnail(
+                    image: photo.image,
+                    title: "追加予定",
+                    onDelete: {
+                        pendingPhotos.removeAll { $0.id == photo.id }
+                    }
+                )
+            }
+        }
+    }
+
+    @MainActor
+    private func appendPhotos(from items: [PhotosPickerItem]) async {
+        guard !items.isEmpty else { return }
+
+        for item in items.prefix(remainingPhotoSlots) {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let pendingPhoto = PendingPhoto.make(from: data, filename: item.itemIdentifier ?? "photo.jpg") else {
+                continue
+            }
+            pendingPhotos.append(pendingPhoto)
+        }
+    }
+}
+
+private struct PhotoThumbnail: View {
+    let image: UIImage?
+    let title: String
+    let onDelete: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(.secondarySystemGroupedBackground))
+                }
+            }
+            .frame(height: 96)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .black.opacity(0.55))
+                    .padding(5)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(title)の写真を削除")
+        }
+    }
+}
+
+private extension PendingPhoto {
+    static func make(from data: Data, filename: String) -> PendingPhoto? {
+        guard let image = UIImage(data: data) else { return nil }
+        let targetWidth: CGFloat = 1600
+        let scale = min(1, targetWidth / max(image.size.width, 1))
+        let targetSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: targetSize)
+        let redrawnImage = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+        let compressedData = redrawnImage.jpegData(compressionQuality: 0.85) ?? data
+
+        return PendingPhoto(
+            data: compressedData,
+            originalFilename: filename,
+            width: Int(targetSize.width),
+            height: Int(targetSize.height)
+        )
     }
 }
 

@@ -5,6 +5,35 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 写真ユニットの実入力を追加
+
+### 変更概要
+- `AddExperienceView` / `AddVisitView` / `EditExperienceView` の `photos` ユニットを準備中表示から実入力に変更した。
+- 写真ライブラリから画像を選択し、JPEG 85%・最大幅1600pxに再エンコードして `PhotoBlob.data` に保存するようにした。
+- 新規記録、既存対象への回追加、保存済み記録編集のすべてで写真追加を可能にした。
+- 編集画面では保存済み写真のサムネイル表示と削除予約、新規追加予定写真の削除ができるようにした。
+- 1記録あたり写真10枚までの上限表示を追加した。
+- 記録詳細画面で、写真が1枚なら大きく、複数枚ならグリッドで表示するようにした。
+- `RecordUnitDefinition` で `photos` と `officialInfo` を実装済みユニットとして扱うようにした。
+
+### 変更意図
+仮データだけでなく、実際の記録でも写真付きの体験を残せるようにするため。favorecoは写真が主役の体験記録アプリなので、入力アコーディオンの次に写真ユニットを接続し、Home/詳細で見返す流れを早期に確認できるようにした。写真メタデータ削除方針に合わせ、保存時は元データをそのまま持たず、再エンコードした画像データを保存する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（写真選択・サムネイル・削除・PhotoBlob保存）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（複数写真表示）
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（写真/公式情報ユニットを実装済みに変更）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/favorecoDerivedPhotoUnit build` 成功。
+
+### 残課題
+- カメラ直起動、カバー写真指定、写真の並び替え、動画サムネイル、バックグラウンド画像処理は未実装。
+- 写真メタデータ削除は再エンコードで落とす方針の初期実装。今後、ImageIOでの明示的なメタデータ除去確認を追加する。
+- 写真上限10枚はUI表示のみ。将来の課金/権利判定と厳密に接続する。
+
 ## 2026-07-10: 入力アコーディオン土台と仮データ削除/写真表示を追加
 
 ### 変更概要

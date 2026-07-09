@@ -30,11 +30,17 @@ struct ExperienceDetailView: View {
     }
 
     private var firstPhotoImage: UIImage? {
-        guard let photo = visit.photos?.first(where: { $0.mediaKind == "photo" }),
+        guard let photo = sortedPhotos.first,
               !photo.data.isEmpty else {
             return nil
         }
         return UIImage(data: photo.data)
+    }
+
+    private var sortedPhotos: [PhotoBlob] {
+        (visit.photos ?? [])
+            .filter { $0.mediaKind == "photo" && !$0.data.isEmpty }
+            .sorted { $0.createdAt < $1.createdAt }
     }
 
     var body: some View {
@@ -97,13 +103,33 @@ struct ExperienceDetailView: View {
 
     @ViewBuilder
     private var photoSection: some View {
-        if let firstPhotoImage {
-            Image(uiImage: firstPhotoImage)
-                .resizable()
-                .scaledToFill()
-                .frame(height: 220)
-                .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        if !sortedPhotos.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("写真")
+
+                if sortedPhotos.count == 1, let firstPhotoImage {
+                    Image(uiImage: firstPhotoImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 220)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                } else {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 10)], spacing: 10) {
+                        ForEach(sortedPhotos) { photo in
+                            if let image = UIImage(data: photo.data) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(height: 108)
+                                    .frame(maxWidth: .infinity)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            }
+                        }
+                    }
+                }
+            }
+            .sectionCard()
         }
     }
 
