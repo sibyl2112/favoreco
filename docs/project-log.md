@@ -2292,3 +2292,30 @@ MystoriumのiCloud同期設計（ON/OFF図解・Artifact PDF）を `docs/07-Clou
 - コード共有方式（共有コア or フォーク）の決定
 - MVPテンプレート数・カテゴリ横断統計の初期スコープ確定
 - 価格（買い切り主役は確定・具体額未定）・CloudKit 初期導入可否
+
+## 2026-07-10: FAVORECOアプリアイコン初版作成
+
+### 変更概要
+- 高級感あるSNS寄りのFAVORECOアプリアイコン初版を作成
+- Fモノグラム＋しおり/記録カードを主モチーフにし、淡いピンク、オフホワイト、薄いブルー差し色で構成
+- 比較用にシンボル案2種も保存
+
+### 変更意図
+App Store向けおよび既存アプリ組み込み前提の1024pxアイコンを用意するため。FAVORECOの「体験を美しく残す」方向性と、白ベース/リキッドグラス基調のデザイン方針に合わせた。
+
+### 主な変更ファイル
+- favoreco/assets/app-icon/favoreco-app-icon-1024.png（完成候補の1024pxアイコン）
+- favoreco/assets/app-icon/favoreco-app-icon-final-source.png（生成元サイズの完成候補）
+- favoreco/assets/app-icon/favoreco-app-icon-symbol-heart.png（比較用シンボル案）
+- favoreco/assets/app-icon/favoreco-app-icon-symbol-abstract.png（比較用抽象シンボル案）
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/favoreco-app-icon-1024.png（Xcode AppIcon用PNG）
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/Contents.json（AppIconのfilename設定）
+
+### 確認結果（実機 / ビルド）
+- 生成画像を目視確認済み
+- 完成候補が1024x1024pxであることを確認済み
+- ビルド/実機確認は未実施
+
+### 残課題
+- 実機ホーム画面とApp Store Connect表示で小サイズ視認性を確認する
+- 必要に応じてダーク/ティント用の別アイコンを作成する
