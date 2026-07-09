@@ -5,6 +5,54 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: AppIconをワインレッドしおり案へ差し替え
+
+### 変更概要
+- XcodeのAppIcon本体を `favoreco-app-icon-wine-bookmark-1024.png` へ差し替えた。
+- AppIcon.appiconset内の未参照PNGを削除し、asset catalog警告が出ない状態にした。
+
+### 変更意図
+ワインレッド系の高級感と、Fなししおりモチーフのわかりやすさを実機確認できる状態にするため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/Contents.json（AppIcon参照差し替え）
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/favoreco-app-icon-wine-bookmark-1024.png（Xcode AppIcon用PNG）
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/favoreco-app-icon-1024.png（未参照旧PNGを削除）
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/favoreco-app-icon-no-f-bookmark-1024.png（未参照旧PNGを削除）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `sips` で1024x1024pxであることを確認。
+- ビルド確認は下の人物サマリー実装とまとめて実施。
+
+### 残課題
+- 実機ホーム画面で小サイズ視認性を確認する。
+
+## 2026-07-10: 人物サマリーと対象履歴行を強化
+
+### 変更概要
+- `VisitSummaryRow` に `EventPersonLink` の簡易取得を追加し、人物・団体を最大2件までサマリー表示するようにした。
+- `EventDetailView` の履歴行を独自の `EventVisitRow` から `VisitSummaryRow` に差し替えた。
+- 未使用になった `EventVisitRow` を削除した。
+- AppIcon.appiconset内に残っていた未参照の旧アイコンPNGを削除し、asset catalog警告を解消した。
+
+### 変更意図
+人物・団体ユニットを入力できるようになったため、詳細画面を開かなくても一覧で「誰に紐づく記録か」が見えるようにするため。対象詳細の履歴もRecords/カテゴリ内最近の記録と同じ情報密度に揃えた。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/VisitSummaryRow.swift（人物・団体サマリー表示追加）
+- favorecoAPP/favorecoAPP/Views/EventDetailView.swift（履歴行を共通サマリー行へ差し替え）
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/favoreco-app-icon-1024.png（未参照旧アイコンPNGを削除）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedPersonSummaryIconNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 人物・団体の表示順/役割表示は簡易。ジャンル別サマリーで「主演」「作者」「アーティスト」などの見せ方を後続で調整する。
+- Home内の独自サマリーカードにも人物表示を横展開する。
+
 ## 2026-07-10: AppIconをFなししおり案へ差し替え
 
 ### 変更概要

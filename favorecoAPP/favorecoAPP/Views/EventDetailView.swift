@@ -159,7 +159,7 @@ struct EventDetailView: View {
                     NavigationLink {
                         ExperienceDetailView(visit: visit)
                     } label: {
-                        EventVisitRow(visit: visit, ratingLabel: template.ratingLabel)
+                        VisitSummaryRow(visit: visit, showsCategory: false)
                     }
                     .buttonStyle(.plain)
                 }
@@ -310,39 +310,6 @@ private struct StatSummaryTile: View {
                 .font(FavorecoTypography.latinDisplay(22, weight: .bold, relativeTo: .title3))
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
-private struct EventVisitRow: View {
-    let visit: Visit
-    let ratingLabel: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(visit.visitedAt.formatted(date: .long, time: .omitted))
-                .font(FavorecoTypography.cardTitle)
-            HStack(spacing: 10) {
-                if !visit.venueNameSnapshot.isEmpty {
-                    Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
-                        .lineLimit(1)
-                }
-                if visit.overallRating > 0 {
-                    Label("\(ratingLabel) \(String(format: "%.1f", visit.overallRating))", systemImage: "star.fill")
-                }
-            }
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(.secondary)
-
-            if !visit.note.isEmpty {
-                Text(visit.note)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)

@@ -6,11 +6,14 @@
 //
 
 import SwiftUI
+import SwiftData
 import UIKit
 
 struct VisitSummaryRow: View {
     let visit: Visit
     var showsCategory: Bool = true
+
+    @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
 
     private var title: String {
         visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
@@ -58,6 +61,13 @@ struct VisitSummaryRow: View {
                 }
 
                 VisitSummaryMetaLine(items: metaItems)
+
+                if !peopleSummary.isEmpty {
+                    Label(peopleSummary, systemImage: "person.2")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
 
                 if !visit.note.isEmpty {
                     Text(visit.note)
@@ -117,6 +127,20 @@ struct VisitSummaryRow: View {
             items.append(VisitSummaryMetaItem(icon: "star.fill", text: String(format: "%.1f", visit.overallRating)))
         }
         return items
+    }
+
+    private var peopleSummary: String {
+        let linkedPeople = personLinks
+            .filter { link in
+                !link.isArchived && (link.event?.id == visit.event?.id || link.visit?.id == visit.id)
+            }
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .prefix(2)
+            .map { link in
+                link.nameSnapshot.isEmpty ? link.person?.displayName ?? "" : link.nameSnapshot
+            }
+            .filter { !$0.isEmpty }
+        return linkedPeople.joined(separator: " / ")
     }
 
     private var hasBadges: Bool {
