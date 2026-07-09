@@ -180,6 +180,10 @@ struct ExperienceDetailView: View {
             }
 
             DetailInfoRow(icon: "star.fill", title: template.ratingLabel, value: ratingText)
+
+            if visit.amount != Decimal(0) {
+                DetailInfoRow(icon: "yensign.circle", title: "金額", value: formattedAmount)
+            }
         }
         .sectionCard()
     }
@@ -215,6 +219,15 @@ struct ExperienceDetailView: View {
             return "未評価"
         }
         return String(format: "%.1f", visit.overallRating)
+    }
+
+    private var formattedAmount: String {
+        let number = NSDecimalNumber(decimal: visit.amount)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "JPY"
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: number) ?? "¥\(number.stringValue)"
     }
 
     private func roleName(for roleKey: String) -> String {

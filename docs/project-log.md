@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 金額ユニットの実入力を追加
+
+### 変更概要
+- `money` ユニットを準備中表示から実入力に変更した。
+- 新規記録、既存対象への回追加、保存済み記録編集で、合計金額を入力できるようにした。
+- 入力値は `Visit.amount` に `Decimal` として保存し、カンマ、円記号付きの入力も数値化するようにした。
+- 記録詳細画面の基本情報に、金額が入力されている場合だけ円表示で出すようにした。
+- `RecordUnitDefinition` で `money` を実装済みユニットとして扱うようにした。
+
+### 変更意図
+チケット代、購入額、交通費などはジャンル横断の統計や年間まとめで使えるため、まずは内訳管理ではなく「合計金額メモ」として保存できる状態にした。費目別の詳細管理や遠征費分解は、実データの使い方を見ながら後続で追加する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（金額入力、保存、編集、回追加への接続）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（金額表示）
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（moneyユニットを実装済みに変更）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedMoneyUnitNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 金額内訳、費目別管理、統計画面への反映は未実装。
+- 無料/有料境界に応じた高度な統計表示は後続で行う。
+
 ## 2026-07-10: 人物・団体ユニットの実入力を追加
 
 ### 変更概要

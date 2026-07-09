@@ -20,7 +20,7 @@ struct RecordUnitDefinition: Identifiable {
         RecordUnitDefinition(id: "ticketPlan", name: "チケット・予定", description: "チケット、座席、申込、発券、予定管理", isRequired: false, isImplemented: false),
         RecordUnitDefinition(id: "photos", name: "写真", description: "思い出写真、カバー写真、半券写真など", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "importOCR", name: "OCR・取込", description: "半券、チケット、レシート、リスト画像の読み取り", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "money", name: "金額", description: "チケット代、購入額、交通費、遠征費など", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "money", name: "金額", description: "チケット代、購入額、交通費、遠征費など", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "officialInfo", name: "公式情報", description: "公式URL、SNS投稿リンク、参考URLなど", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "memo", name: "メモ", description: "感想、印象、あとで見返したいこと", isRequired: true, isImplemented: true),
         RecordUnitDefinition(id: "advanced", name: "詳細オプション", description: "ジャンル固有の追加項目や高度な記録", isRequired: false, isImplemented: false),

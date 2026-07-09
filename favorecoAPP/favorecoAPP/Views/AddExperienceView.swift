@@ -92,6 +92,8 @@ struct AddExperienceView: View {
             return pendingPeople.isEmpty ? .optional : .entered
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
+        case "money":
+            return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "memo":
             return draft.trimmedNote.isEmpty ? .optional : .entered
         default:
@@ -122,6 +124,8 @@ struct AddExperienceView: View {
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems
             )
+        case "money":
+            moneyFields(amountText: $draft.amountText)
         case "memo":
             memoEditor
         default:
@@ -185,6 +189,7 @@ struct AddExperienceView: View {
             venueNameSnapshot: draft.trimmedVenueName,
             overallRating: draft.overallRating,
             note: draft.trimmedNote,
+            amount: parsedCurrencyAmount(from: draft.amountText),
             createdAt: now,
             updatedAt: now,
             event: event
@@ -324,6 +329,8 @@ struct EditExperienceView: View {
             return visiblePersonLinks.isEmpty && pendingPeople.isEmpty ? .optional : .entered
         case "photos":
             return visibleExistingPhotos.isEmpty && pendingPhotos.isEmpty ? .optional : .entered
+        case "money":
+            return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "memo":
             return draft.trimmedNote.isEmpty ? .optional : .entered
         default:
@@ -354,6 +361,8 @@ struct EditExperienceView: View {
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems
             )
+        case "money":
+            moneyFields(amountText: $draft.amountText)
         case "memo":
             memoEditor
         default:
@@ -415,6 +424,7 @@ struct EditExperienceView: View {
         visit.endedAt = draft.visitedAt
         visit.venueNameSnapshot = draft.trimmedVenueName
         visit.overallRating = draft.overallRating
+        visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
         visit.updatedAt = now
         deleteMarkedPersonLinks()
@@ -561,6 +571,8 @@ struct AddVisitView: View {
             return draft.trimmedNote.isEmpty ? .optional : .entered
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
+        case "money":
+            return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "people":
             return pendingPeople.isEmpty ? .optional : .entered
         default:
@@ -591,6 +603,8 @@ struct AddVisitView: View {
                 pendingLinks: $pendingPeople,
                 personMasters: personMasters
             )
+        case "money":
+            moneyFields(amountText: $draft.amountText)
         case "officialInfo":
             Text("公式URLや参考リンクは対象詳細で編集します。")
                 .font(FavorecoTypography.caption)
@@ -644,6 +658,7 @@ struct AddVisitView: View {
             venueNameSnapshot: draft.trimmedVenueName,
             overallRating: draft.overallRating,
             note: draft.trimmedNote,
+            amount: parsedCurrencyAmount(from: draft.amountText),
             createdAt: now,
             updatedAt: now,
             event: event
@@ -702,6 +717,7 @@ struct AddExperienceDraft {
     var visitedAt: Date = Date()
     var venueName: String = ""
     var overallRating: Double = 0
+    var amountText: String = ""
     var note: String = ""
 
     init() {}
@@ -713,6 +729,7 @@ struct AddExperienceDraft {
         visitedAt = visit.visitedAt
         venueName = visit.venueNameSnapshot
         overallRating = visit.overallRating
+        amountText = formattedCurrencyAmount(visit.amount)
         note = visit.note
     }
 
@@ -742,6 +759,10 @@ struct AddExperienceDraft {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var trimmedAmountText: String {
+        amountText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var canSave: Bool {
         !trimmedTitle.isEmpty
     }
@@ -758,6 +779,7 @@ private struct VisitDraft {
     var visitedAt: Date = Date()
     var venueName: String = ""
     var overallRating: Double = 0
+    var amountText: String = ""
     var note: String = ""
 
     var trimmedVenueName: String {
@@ -766,6 +788,10 @@ private struct VisitDraft {
 
     var trimmedNote: String {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedAmountText: String {
+        amountText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var ratingLabel: String {
@@ -892,6 +918,31 @@ private func ratingSlider(label: String, value: Binding<Double>, text: String) -
         }
         Slider(value: value, in: 0...5, step: 0.5)
     }
+}
+
+private func moneyFields(amountText: Binding<String>) -> some View {
+    VStack(alignment: .leading, spacing: 10) {
+        TextField("合計金額（例: 8500）", text: amountText)
+            .keyboardType(.numberPad)
+        Text("チケット代、購入額、交通費などの合計メモとして保存します。内訳管理は後続で追加します。")
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private func parsedCurrencyAmount(from text: String) -> Decimal {
+    let normalized = text
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: ",", with: "")
+        .replacingOccurrences(of: "¥", with: "")
+        .replacingOccurrences(of: "￥", with: "")
+    return Decimal(string: normalized) ?? Decimal(0)
+}
+
+private func formattedCurrencyAmount(_ amount: Decimal) -> String {
+    guard amount != Decimal(0) else { return "" }
+    return NSDecimalNumber(decimal: amount).stringValue
 }
 
 private struct PeopleUnitEditor: View {
