@@ -120,17 +120,14 @@ private struct RecordsView: View {
                         NavigationLink {
                             ExperienceDetailView(visit: visit)
                         } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録")
-                                    .font(FavorecoTypography.bodyStrong)
-                                Text(visit.visitedAt.formatted(date: .numeric, time: .omitted))
-                                    .font(FavorecoTypography.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            VisitSummaryRow(visit: visit)
                         }
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowSeparator(.hidden)
                     }
                 }
             }
+            .listStyle(.plain)
             .navigationTitle("記録")
         }
     }

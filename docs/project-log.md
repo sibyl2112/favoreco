@@ -5,6 +5,30 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 記録一覧とカテゴリ内記録にサマリー行を適用
+
+### 変更概要
+- `VisitSummaryRow` を追加し、記録一覧で写真、カテゴリ、日付、場所、評価、チケット状態、金額、OCR/詳細オプション有無、短いメモを表示できるようにした。
+- `RecordsView` の行表示を `VisitSummaryRow` に差し替え、Listの余白と区切り線を調整した。
+- `CategoryTopView` の最近の記録にも同じサマリー行を適用し、カテゴリ内ではカテゴリ名を省略するようにした。
+
+### 変更意図
+Homeだけでなく、記録一覧やカテゴリ内でも保存したユニット情報が見えるようにするため。写真、予定状態、支出、OCR/詳細有無が一覧で見えることで、詳細画面を開く前に記録の内容を思い出しやすくする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/VisitSummaryRow.swift（共通サマリー行追加）
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（RecordsViewに適用）
+- favorecoAPP/favorecoAPP/Views/CategoryTopView.swift（カテゴリ内最近の記録に適用）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedVisitSummaryNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- Home側の独自カードと共通サマリー部品の重複整理は後続で行う。
+- 人物・団体のサマリー表示、EventDetailView履歴行への横展開は未実装。
+
 ## 2026-07-10: Homeサマリーカードの表示情報を強化
 
 ### 変更概要

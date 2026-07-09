@@ -162,7 +162,7 @@ struct CategoryTopView: View {
                     NavigationLink {
                         ExperienceDetailView(visit: visit)
                     } label: {
-                        CategoryVisitRow(visit: visit)
+                        VisitSummaryRow(visit: visit, showsCategory: false)
                     }
                     .buttonStyle(.plain)
                 }
