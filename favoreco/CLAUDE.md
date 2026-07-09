@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-09（Home横断ミニ統計実装）
+> **最終更新**: 2026-07-09（設定画面整理・データ管理入口実装）
 
 ---
 
@@ -40,7 +40,10 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `RecordsView`: 全ジャンル横断の記録一覧。保存済みVisitから詳細へ遷移する。
 - `CalendarView`: カレンダータブのプレースホルダー。予定/申込/訪問済み記録の日付軸を置く想定。
 - `StatsView`: 統計タブのプレースホルダー。ジャンル別回数、年間まとめ、支出、評価などを置く想定。
-- `SettingsView`: 設定画面。プロフィール、ジャンル管理、初回ジャンル選択のやり直し、写真付き仮データ追加のデバッグボタンを持つ。
+- `SettingsView`: 設定画面。マイ、表示、ジャンル、データ管理、リンク、開発にセクション整理し、各詳細画面への入口を持つ。
+- `DisplaySettingsView`: 表示設定。Home各セクションのON/OFFと、将来の文字サイズ/外観モード設定入口を持つ。
+- `DataManagementView`: データ管理。保存データ件数、同期プレースホルダー、JSON/CSVインポート/エクスポート入口、バックアップ説明を持つ。
+- `SettingsDocumentView`: 利用規約、プライバシーポリシー、お問い合わせ、インポート/エクスポート説明などの暫定本文表示に使う共通プレースホルダー。
 - `ProfileSettingsView`: プロフィール設定。SNSアカウントを複数登録・編集でき、登録済みアカウントはタップで外部URLを開く。
 - `EditSocialAccountView`: SNS追加/編集フォーム。SNS種別、メモ/名前、IDまたはURL、ジャンル紐付け、用途メモを保存する。
 - `GenreManagementView`: ジャンル管理。ジャンル一覧の表示/非表示切り替え、並び替え、詳細設定への遷移、自作ジャンル追加を行う。最後の1ジャンルは非表示にできない。
@@ -64,6 +67,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - 記録追加/編集フォームのカテゴリ別文言は `CategoryRecordTemplate` を通す。フォーム内では入力中にSwiftDataを書かず、DraftState→Save→Modelを守る。
 - 既存対象への再訪/再鑑賞/再飲は `AddVisitView` で `Visit` のみ追加し、`ExperienceEvent` を重複作成しない。
 - 主要ナビは4タブ + 中央 `+` + 右上プロフィール入口。下部タブに設定は置かず、設定/マイ領域はプロフィールアイコンから開く。
+- 設定画面は `マイ / 表示 / ジャンル / データ管理 / リンク / 開発` のセクションで整理する。Home表示ON/OFFは `SettingsView` 直下ではなく `DisplaySettingsView` に置く。
 - Homeのセクション順は固定で、並び替えは実装しない。表示ON/OFFは `AppStorageKeys.showsHome...` で管理する。初期ONはアテンション、体験ギャラリー、あとで記録、最近の記録、ジャンル一覧。初期OFFは統計サマリ、お気に入り/ベスト。
 - Home横断ミニ統計は常設表示とし、設定ON/OFF対象にはしない。現時点の「今後の予定」は未来日Visit数、「今年の記録」は今年のVisit数、「総記録数」は全Visit数。Planモデル追加後は「今後の予定」をPlan/TicketAttempt中心へ切り替える。
 - Homeのアテンション枠はファーストビュー想定。現状は未来日Visitと未整理Inboxを表示し、将来は申込開始/締切/当落/入金/発券/会員期限/通知リマインダーを同じ枠に集約する。
@@ -76,6 +80,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - 自作ジャンルの記録フォーム文言は `CategoryRecordTemplate` が `targetNameLabel`、`recordUnitName`、`dateLabel` から生成する。標準ジャンルは従来どおり `templateKey` 別の固定文言を優先する。
 - ジャンルの有効ユニットは `RecordCategory.enabledUnitsRaw` を正本とし、`RecordUnitDefinition` で表示名/説明に変換する。U1基本情報とU3メモは必須で、詳細画面/自作ジャンル作成画面では外せない。
 - デバッグ用の仮データ投入は `DebugDataSeeder` に閉じ込める。写真は `PhotoBlob` に1px PNGデータを入れ、通常の `ExperienceEvent` / `Visit` と同じSwiftData経路で保存する。
+- データ管理の同期、JSON/CSVインポート/エクスポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。実データを変更する処理はまだ接続しない。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る
 - **Mystorium再発防止の性能・構造ルールを最初から守る**（詳細: `docs/14-実装アーキテクチャ・性能ルール.md`）。最重要4原則は **①入力中にDBを書かない ②一覧で原寸画像を使わない ③bodyで全件処理しない ④巨大Viewを作らない**。全登録/編集画面はDraftState→Save→Model、Home/GenreTop/Calendar/Statsは軽量Snapshot/DTO経由、画像はthumbnail/detail/originalの3段階、I/O/画像処理/import/export/migrationはMainActor禁止＋background＋batch save。
 - **ライフサイクル状態・予定・申込・記録を混ぜない**。クイック登録は `InboxItem`、対象は `Event`、予定/公演回は `Plan`/`Performance`、申込1件は `TicketAttempt`、実体験は `Visit`、記録下書きは `MemoryDraft`/`VisitDraft` として責務分離する。`Visit` にチケット状態を直持ちしない。複数先行・落選履歴・名義別当選率・通知更新のため `TicketAttempt` を独立モデルにする。
