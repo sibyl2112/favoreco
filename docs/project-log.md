@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: Homeサマリーカードの表示情報を強化
+
+### 変更概要
+- Homeの体験ギャラリーカードに、カテゴリ、チケット状態、日付、場所、金額、OCR有無、詳細オプション有無を表示するようにした。
+- Homeの最近の記録カードに、写真サムネイル、カテゴリ色、日付、場所、評価、チケット状態、金額、OCR/詳細オプション有無、短いメモを表示するようにした。
+- 写真がない記録ではジャンルアイコンとテーマカラーを使ったプレースホルダーを表示するようにした。
+
+### 変更意図
+標準入力ユニットが一通り保存できるようになったため、Homeで「何を記録したか」が一目でわかる状態に近づけるため。詳細画面まで開かなくても、写真・予定状態・支出・取込有無が見えると、アプリを開いた時の見返し体験が強くなる。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（体験ギャラリー/最近の記録カード強化）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedHomeCardsNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 人物・団体のサマリー表示は未接続。`EventPersonLink` の取得方法を整理してから追加する。
+- RecordsView / CategoryTopView / EventDetailView の一覧行にも同じサマリー表現を横展開する。
+
 ## 2026-07-10: 詳細オプションユニットの実入力を追加
 
 ### 変更概要
