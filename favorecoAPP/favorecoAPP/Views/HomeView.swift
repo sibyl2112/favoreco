@@ -40,6 +40,12 @@ struct HomeView: View {
             .sorted { $0.visitedAt < $1.visitedAt }
     }
 
+    private var currentYearVisitCount: Int {
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: Date())
+        return visits.filter { calendar.component(.year, from: $0.visitedAt) == year }.count
+    }
+
     private var attentionItems: [HomeAttentionItem] {
         var items = upcomingVisits.prefix(3).map { visit in
             HomeAttentionItem(
@@ -70,6 +76,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     hero
+                    crossGenreMiniStats
                     if showsAttention {
                         attentionSection
                     }
@@ -128,6 +135,30 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var crossGenreMiniStats: some View {
+        HStack(spacing: 10) {
+            HomeMiniStatCell(
+                value: "\(upcomingVisits.count)",
+                label: "今後の予定",
+                icon: "calendar.badge.clock",
+                tint: Color(hex: "#147C88")
+            )
+            HomeMiniStatCell(
+                value: "\(currentYearVisitCount)",
+                label: "今年の記録",
+                icon: "sparkles.rectangle.stack",
+                tint: Color(hex: "#8B2F45")
+            )
+            HomeMiniStatCell(
+                value: "\(visits.count)",
+                label: "総記録数",
+                icon: "chart.bar.fill",
+                tint: Color(hex: "#B8792F")
+            )
+        }
+        .accessibilityElement(children: .contain)
     }
 
     private var categorySection: some View {
@@ -287,6 +318,37 @@ private struct HomeAttentionItem: Identifiable {
     let title: String
     let subtitle: String
     let tint: Color
+}
+
+private struct HomeMiniStatCell: View {
+    let value: String
+    let label: String
+    let icon: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(tint)
+                .frame(width: 24, height: 24)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            Text(value)
+                .font(FavorecoTypography.jpSans(24, weight: .bold, relativeTo: .title3))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Text(label)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
 }
 
 private struct AttentionRow: View {
