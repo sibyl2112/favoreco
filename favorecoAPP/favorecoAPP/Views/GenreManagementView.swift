@@ -548,7 +548,7 @@ private struct CustomGenreDraft {
     var targetNameLabel = "対象"
     var recordUnitName = "回"
     var dateLabel = "日付"
-    var selectedUnitIDs: Set<String> = ["U1", "U3", "U11", "U12", "U15"]
+    var selectedUnitIDs: Set<String> = ["basic", "photos", "memo"]
 
     var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -611,12 +611,12 @@ private struct CustomGenreTemplateType: Identifiable {
     let defaultUnitIDs: [String]
 
     static let all: [CustomGenreTemplateType] = [
-        CustomGenreTemplateType(id: "watching", name: "鑑賞系", description: "映画、配信、ゲーム実況、イベント視聴など。作品を見た/体験した記録向け。", targetNameLabel: "作品", recordUnitName: "鑑賞", dateLabel: "鑑賞日", defaultUnitIDs: ["U1", "U3", "U11", "U12", "U15"]),
-        CustomGenreTemplateType(id: "visiting", name: "訪問系", description: "カフェ、温泉、ショップ、施設など。場所に行った記録向け。", targetNameLabel: "場所", recordUnitName: "訪問", dateLabel: "訪問日", defaultUnitIDs: ["U1", "U3", "U11", "U12", "U14", "U15", "U16"]),
-        CustomGenreTemplateType(id: "reading", name: "読書系", description: "本、漫画、雑誌、同人誌など。読んだものを残す記録向け。", targetNameLabel: "本", recordUnitName: "読書", dateLabel: "読了日", defaultUnitIDs: ["U1", "U3", "U11", "U12", "U15", "U17"]),
-        CustomGenreTemplateType(id: "collection", name: "コレクション系", description: "グッズ、香水、文具、カードなど。所有物や使用感を残す記録向け。", targetNameLabel: "アイテム", recordUnitName: "入手", dateLabel: "入手日", defaultUnitIDs: ["U1", "U3", "U9", "U11", "U12", "U16", "U17"]),
-        CustomGenreTemplateType(id: "food", name: "飲食系", description: "カフェ、料理、菓子、ドリンクなど。味や店を残す記録向け。", targetNameLabel: "メニュー", recordUnitName: "飲食", dateLabel: "飲食日", defaultUnitIDs: ["U1", "U3", "U10", "U11", "U12", "U14", "U16"]),
-        CustomGenreTemplateType(id: "free", name: "自由", description: "決まった型を持たず、あとから育てるジャンル向け。", targetNameLabel: "対象", recordUnitName: "回", dateLabel: "日付", defaultUnitIDs: ["U1", "U3", "U11", "U12", "U15"]),
+        CustomGenreTemplateType(id: "watching", name: "鑑賞系", description: "映画、配信、ゲーム実況、イベント視聴など。作品を見た/体験した記録向け。", targetNameLabel: "作品", recordUnitName: "鑑賞", dateLabel: "鑑賞日", defaultUnitIDs: ["basic", "people", "photos", "importOCR", "officialInfo", "memo"]),
+        CustomGenreTemplateType(id: "visiting", name: "訪問系", description: "カフェ、温泉、ショップ、施設など。場所に行った記録向け。", targetNameLabel: "場所", recordUnitName: "訪問", dateLabel: "訪問日", defaultUnitIDs: ["basic", "ticketPlan", "photos", "importOCR", "money", "officialInfo", "memo"]),
+        CustomGenreTemplateType(id: "reading", name: "読書系", description: "本、漫画、雑誌、同人誌など。読んだものを残す記録向け。", targetNameLabel: "本", recordUnitName: "読書", dateLabel: "読了日", defaultUnitIDs: ["basic", "people", "photos", "importOCR", "memo"]),
+        CustomGenreTemplateType(id: "collection", name: "コレクション系", description: "グッズ、香水、文具、カードなど。所有物や使用感を残す記録向け。", targetNameLabel: "アイテム", recordUnitName: "入手", dateLabel: "入手日", defaultUnitIDs: ["basic", "photos", "money", "officialInfo", "memo", "advanced"]),
+        CustomGenreTemplateType(id: "food", name: "飲食系", description: "カフェ、料理、菓子、ドリンクなど。味や店を残す記録向け。", targetNameLabel: "メニュー", recordUnitName: "飲食", dateLabel: "飲食日", defaultUnitIDs: ["basic", "photos", "importOCR", "money", "memo", "advanced"]),
+        CustomGenreTemplateType(id: "free", name: "自由", description: "決まった型を持たず、あとから育てるジャンル向け。", targetNameLabel: "対象", recordUnitName: "回", dateLabel: "日付", defaultUnitIDs: ["basic", "photos", "memo"]),
     ]
 
     static func type(for id: String) -> CustomGenreTemplateType {

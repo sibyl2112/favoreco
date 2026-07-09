@@ -166,6 +166,51 @@ final class PersonMaster {
 }
 
 @Model
+final class EventPersonLink {
+    var id: UUID = UUID()
+    var roleKey: String = "other"
+    var displayRole: String = ""
+    var sortOrder: Int = 0
+    var nameSnapshot: String = ""
+    var memo: String = ""
+    var isArchived: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var person: PersonMaster?
+    var event: ExperienceEvent?
+    var visit: Visit?
+
+    init(
+        id: UUID = UUID(),
+        roleKey: String = "other",
+        displayRole: String = "",
+        sortOrder: Int = 0,
+        nameSnapshot: String = "",
+        memo: String = "",
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        person: PersonMaster? = nil,
+        event: ExperienceEvent? = nil,
+        visit: Visit? = nil
+    ) {
+        self.id = id
+        self.roleKey = roleKey
+        self.displayRole = displayRole
+        self.sortOrder = sortOrder
+        self.nameSnapshot = nameSnapshot
+        self.memo = memo
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.person = person
+        self.event = event
+        self.visit = visit
+    }
+}
+
+@Model
 final class PlaceMaster {
     var id: UUID = UUID()
     var name: String = ""
@@ -301,6 +346,7 @@ final class Visit {
     var updatedAt: Date = Date()
 
     var event: ExperienceEvent?
+    var placeMaster: PlaceMaster?
 
     @Relationship(deleteRule: .cascade, inverse: \PhotoBlob.visit)
     var photos: [PhotoBlob]? = []
@@ -323,7 +369,8 @@ final class Visit {
         unitFieldsRaw: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        event: ExperienceEvent? = nil
+        event: ExperienceEvent? = nil,
+        placeMaster: PlaceMaster? = nil
     ) {
         self.id = id
         self.visitedAt = visitedAt
@@ -343,6 +390,7 @@ final class Visit {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.event = event
+        self.placeMaster = placeMaster
     }
 }
 

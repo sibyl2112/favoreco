@@ -5,6 +5,38 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 新ユニットID採用と人物/場所リンクモデルを追加
+
+### 変更概要
+- `RecordUnitDefinition` を、`basic` / `people` / `ticketPlan` / `photos` / `importOCR` / `money` / `officialInfo` / `memo` / `advanced` の9ユニットへ更新した。
+- 旧 `U1` / `U3` / `U4` などの `enabledUnitsRaw` が残っていても新ユニットへ読み替える互換マップを追加した。
+- `CategoryPresetSeeder` の標準ジャンル初期ユニットを、確定済みのジャンル別構成へ更新した。
+- 自作ジャンル追加のテンプレ初期値も新ユニットIDへ更新した。
+- `EventPersonLink` を追加し、人物/団体と `ExperienceEvent` / `Visit` の関係役割をリンク側に保存できるようにした。
+- `Visit.placeMaster` を追加し、会場スナップショットを残したまま `PlaceMaster` へ参照できるようにした。
+- OCR高度化はPro買い切り候補に寄せる方針を正本仕様へ反映した。
+
+### 変更意図
+入力アコーディオンの標準構成が固まったため、古いU番号ベースの実装を早めに整理し、標準ジャンル・自作ジャンル・設定画面で同じユニット語彙を使えるようにするため。人物/団体は作品・回ごとに役割が変わるため、マスター本体ではなく中間リンクに役割を持たせる。場所は過去記録を壊さないよう、既存の会場名/座標スナップショットを残しつつマスター参照を足した。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（新ユニットIDと旧ID互換マップ）
+- favorecoAPP/favorecoAPP/Services/CategoryPresetSeeder.swift（標準ジャンル初期ユニット更新）
+- favorecoAPP/favorecoAPP/Views/GenreManagementView.swift（自作ジャンル初期ユニット更新）
+- favorecoAPP/favorecoAPP/Views/CategoryTopView.swift（プレビューのユニットID更新）
+- favorecoAPP/favorecoAPP/Models/CoreModels.swift（`EventPersonLink` と `Visit.placeMaster` 追加）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（Schema登録）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/favorecoDerivedUnitLinks build` 成功。
+
+### 残課題
+- `EventPersonLink` と `PlaceMaster` を使う入力/詳細/統合UIを実装する。
+- 課金・プラン画面に無料/Pro/Premium境界の表示を追加する。
+- 記録入力アコーディオンを本実装し、各ユニットの入力項目をジャンル別に接続する。
+
 ## 2026-07-09: 無料/有料境界表とPerson/Place最小モデルを追加
 
 ### 変更概要

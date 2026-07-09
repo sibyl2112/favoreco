@@ -23,6 +23,7 @@ struct favorecoAPPApp: App {
             PhotoBlob.self,
             SocialAccount.self,
             PersonMaster.self,
+            EventPersonLink.self,
             PlaceMaster.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)

@@ -345,7 +345,7 @@ private struct EmptyStateMessage: View {
         colorHex: "#8B2F45",
         isBuiltIn: true,
         templateKey: "theater",
-        enabledUnitsRaw: "U1,U3,U4,U7,U11,U12,U14,U15,U18"
+        enabledUnitsRaw: "basic,people,ticketPlan,photos,importOCR,money,officialInfo,memo"
     )
 
     NavigationStack {

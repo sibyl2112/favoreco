@@ -30,7 +30,7 @@ enum CategoryPresetSeeder {
             iconSymbol: "theatermasks.fill",
             colorHex: "#8B2F45",
             sortOrder: 10,
-            enabledUnitsRaw: "U1,U3,U4,U7,U11,U12,U14,U15,U18",
+            enabledUnitsRaw: "basic,people,ticketPlan,photos,importOCR,money,officialInfo,memo",
             targetNameLabel: "作品・公演",
             recordUnitName: "観劇",
             dateLabel: "観劇日"
@@ -42,7 +42,7 @@ enum CategoryPresetSeeder {
             iconSymbol: "paintpalette.fill",
             colorHex: "#7D8C78",
             sortOrder: 20,
-            enabledUnitsRaw: "U1,U3,U4,U11,U12,U14,U15",
+            enabledUnitsRaw: "basic,people,ticketPlan,photos,importOCR,officialInfo,memo",
             targetNameLabel: "展示",
             recordUnitName: "訪問",
             dateLabel: "訪問日"
@@ -54,7 +54,7 @@ enum CategoryPresetSeeder {
             iconSymbol: "music.mic",
             colorHex: "#147C88",
             sortOrder: 30,
-            enabledUnitsRaw: "U1,U3,U4,U7,U11,U12,U14,U15,U18",
+            enabledUnitsRaw: "basic,people,ticketPlan,photos,importOCR,money,officialInfo,memo",
             targetNameLabel: "ライブ",
             recordUnitName: "参戦",
             dateLabel: "参戦日"
@@ -66,7 +66,7 @@ enum CategoryPresetSeeder {
             iconSymbol: "movieclapper.fill",
             colorHex: "#3B3D4A",
             sortOrder: 40,
-            enabledUnitsRaw: "U1,U3,U7,U11,U12,U14,U15",
+            enabledUnitsRaw: "basic,people,photos,importOCR,officialInfo,memo",
             targetNameLabel: "映画",
             recordUnitName: "鑑賞",
             dateLabel: "鑑賞日"
@@ -78,7 +78,7 @@ enum CategoryPresetSeeder {
             iconSymbol: "wineglass.fill",
             colorHex: "#B8792F",
             sortOrder: 50,
-            enabledUnitsRaw: "U1,U3,U7,U9,U10,U11,U12,U16,U17",
+            enabledUnitsRaw: "basic,photos,importOCR,memo",
             targetNameLabel: "お酒",
             recordUnitName: "飲んだ回",
             dateLabel: "飲んだ日"
@@ -90,7 +90,7 @@ enum CategoryPresetSeeder {
             iconSymbol: "ticket.fill",
             colorHex: "#2E7D60",
             sortOrder: 60,
-            enabledUnitsRaw: "U1,U3,U4,U7,U11,U12,U14,U18",
+            enabledUnitsRaw: "basic,ticketPlan,photos,importOCR,money,officialInfo,memo",
             targetNameLabel: "施設",
             recordUnitName: "訪問",
             dateLabel: "訪問日"
@@ -102,7 +102,7 @@ enum CategoryPresetSeeder {
             iconSymbol: "seal.fill",
             colorHex: "#A24C55",
             sortOrder: 70,
-            enabledUnitsRaw: "U1,U3,U11,U12,U14",
+            enabledUnitsRaw: "basic,photos,importOCR,memo",
             targetNameLabel: "参拝先",
             recordUnitName: "いただいた回",
             dateLabel: "参拝日"
@@ -114,7 +114,7 @@ enum CategoryPresetSeeder {
             iconSymbol: "books.vertical.fill",
             colorHex: "#536C95",
             sortOrder: 80,
-            enabledUnitsRaw: "U1,U3,U7,U11,U12,U14,U15",
+            enabledUnitsRaw: "basic,people,photos,importOCR,memo",
             targetNameLabel: "本",
             recordUnitName: "読書",
             dateLabel: "読了日"

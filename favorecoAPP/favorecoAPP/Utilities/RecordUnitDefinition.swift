@@ -15,19 +15,31 @@ struct RecordUnitDefinition: Identifiable {
     let isImplemented: Bool
 
     static let all: [RecordUnitDefinition] = [
-        RecordUnitDefinition(id: "U1", name: "基本情報", description: "対象名、日付、場所など", isRequired: true, isImplemented: true),
-        RecordUnitDefinition(id: "U3", name: "メモ", description: "感想、印象、あとで見返したいこと", isRequired: true, isImplemented: true),
-        RecordUnitDefinition(id: "U4", name: "リスト/OCR", description: "セトリ、演目、作品リストなど", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U7", name: "チケット/座席", description: "チケット、座席、発券情報", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U9", name: "スペック", description: "酒や本などの詳細スペック", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U10", name: "味/評価軸", description: "味わい、好み、ジャンル別評価軸", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U11", name: "写真", description: "思い出写真、半券、表紙など", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U12", name: "タグ", description: "気分、同行者、分類タグ", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U14", name: "場所", description: "地図、会場、施設スナップショット", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U15", name: "統計", description: "回数、評価、年間まとめへの集計", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U16", name: "金額", description: "購入額、チケット代、交通費など", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U17", name: "在庫/コレクション", description: "酒、本、グッズなどの所有管理", isRequired: false, isImplemented: false),
-        RecordUnitDefinition(id: "U18", name: "通知/予定", description: "申込、当落、訪問予定、リマインダー", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "basic", name: "基本情報", description: "対象名、日付、場所、種別、評価など", isRequired: true, isImplemented: true),
+        RecordUnitDefinition(id: "people", name: "人物・団体", description: "出演者、作家、作者、主催、制作など", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "ticketPlan", name: "チケット・予定", description: "チケット、座席、申込、発券、予定管理", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "photos", name: "写真", description: "思い出写真、カバー写真、半券写真など", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "importOCR", name: "OCR・取込", description: "半券、チケット、レシート、リスト画像の読み取り", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "money", name: "金額", description: "チケット代、購入額、交通費、遠征費など", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "officialInfo", name: "公式情報", description: "公式URL、SNS投稿リンク、参考URLなど", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "memo", name: "メモ", description: "感想、印象、あとで見返したいこと", isRequired: true, isImplemented: true),
+        RecordUnitDefinition(id: "advanced", name: "詳細オプション", description: "ジャンル固有の追加項目や高度な記録", isRequired: false, isImplemented: false),
+    ]
+
+    static let legacyIDMap: [String: String] = [
+        "U1": "basic",
+        "U3": "memo",
+        "U4": "importOCR",
+        "U7": "ticketPlan",
+        "U9": "advanced",
+        "U10": "advanced",
+        "U11": "photos",
+        "U12": "advanced",
+        "U14": "basic",
+        "U15": "advanced",
+        "U16": "money",
+        "U17": "advanced",
+        "U18": "ticketPlan",
     ]
 
     static var requiredIDs: Set<String> {
@@ -38,7 +50,16 @@ struct RecordUnitDefinition: Identifiable {
         let keys = rawValue
             .split(separator: ",")
             .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-        return keys.compactMap { key in all.first { $0.id == key } }
+        var seenIDs = Set<String>()
+        return keys.compactMap { key in
+            let normalizedKey = legacyIDMap[key] ?? key
+            guard !seenIDs.contains(normalizedKey),
+                  let definition = all.first(where: { $0.id == normalizedKey }) else {
+                return nil
+            }
+            seenIDs.insert(normalizedKey)
+            return definition
+        }
     }
 
     static func orderedIDs(from ids: Set<String>) -> [String] {
