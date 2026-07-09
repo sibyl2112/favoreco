@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: チケット・予定ユニットの実入力を追加
+
+### 変更概要
+- `ticketPlan` ユニットを準備中表示から実入力に変更した。
+- 新規記録、既存対象への回追加、保存済み記録編集で、チケット状態と座席・チケットメモを入力できるようにした。
+- チケット状態は `Visit.outcomeKey`、座席・チケットメモは `Visit.seatText` に保存する。
+- 記録詳細画面の基本情報に、チケット状態と座席・チケットメモが入力されている場合だけ表示するようにした。
+- `RecordUnitDefinition` で `ticketPlan` を実装済みユニットとして扱うようにした。
+
+### 変更意図
+観劇/ライブ/テーマパーク系で重要な「申込中」「当選」「発券済み」「座席」を、まず既存の `Visit` フィールドに接続して実データを入れられるようにした。申込締切、当落日、入金期限、発券日などの細かい予定管理は後続で専用モデル/通知と合わせて拡張する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（チケット・予定入力、保存、編集、回追加への接続）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（チケット状態/座席メモ表示）
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（ticketPlanユニットを実装済みに変更）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketPlanNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 申込締切、当落日、入金期限、発券日、公演前日/当日通知への接続は未実装。
+- チケット画像/OCRとの連携、席種/座席の構造化、カレンダー反映は後続で行う。
+
 ## 2026-07-10: 金額ユニットの実入力を追加
 
 ### 変更概要

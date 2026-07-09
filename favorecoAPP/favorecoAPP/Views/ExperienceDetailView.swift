@@ -181,6 +181,14 @@ struct ExperienceDetailView: View {
 
             DetailInfoRow(icon: "star.fill", title: template.ratingLabel, value: ratingText)
 
+            if !visit.outcomeKey.isEmpty {
+                DetailInfoRow(icon: "ticket", title: "チケット状態", value: ticketStatusText)
+            }
+
+            if !visit.seatText.isEmpty {
+                DetailInfoRow(icon: "chair", title: "座席・チケット", value: visit.seatText)
+            }
+
             if visit.amount != Decimal(0) {
                 DetailInfoRow(icon: "yensign.circle", title: "金額", value: formattedAmount)
             }
@@ -219,6 +227,19 @@ struct ExperienceDetailView: View {
             return "未評価"
         }
         return String(format: "%.1f", visit.overallRating)
+    }
+
+    private var ticketStatusText: String {
+        switch visit.outcomeKey {
+        case "planned": return "予定"
+        case "applied": return "申込中"
+        case "won": return "当選"
+        case "paid": return "入金済み"
+        case "ticketed": return "発券済み"
+        case "attended": return "参加済み"
+        case "canceled": return "中止・キャンセル"
+        default: return visit.outcomeKey
+        }
     }
 
     private var formattedAmount: String {

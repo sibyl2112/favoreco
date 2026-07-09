@@ -18,7 +18,7 @@ struct AddExperienceView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
-    @State private var expandedUnitIDs: Set<String> = ["basic", "people", "photos", "officialInfo", "memo"]
+    @State private var expandedUnitIDs: Set<String> = ["basic", "people", "ticketPlan", "photos", "officialInfo", "memo"]
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var pendingPeople: [PendingPersonLink] = []
@@ -90,6 +90,8 @@ struct AddExperienceView: View {
             return draft.trimmedOfficialURL.isEmpty ? .optional : .entered
         case "people":
             return pendingPeople.isEmpty ? .optional : .entered
+        case "ticketPlan":
+            return draft.hasTicketPlan ? .entered : .optional
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
         case "money":
@@ -117,6 +119,8 @@ struct AddExperienceView: View {
                 pendingLinks: $pendingPeople,
                 personMasters: personMasters
             )
+        case "ticketPlan":
+            ticketPlanFields(outcomeKey: $draft.outcomeKey, seatText: $draft.seatText)
         case "photos":
             PhotoUnitEditor(
                 existingPhotos: [],
@@ -188,6 +192,8 @@ struct AddExperienceView: View {
             endedAt: draft.visitedAt,
             venueNameSnapshot: draft.trimmedVenueName,
             overallRating: draft.overallRating,
+            outcomeKey: draft.outcomeKey,
+            seatText: draft.trimmedSeatText,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
             createdAt: now,
@@ -327,6 +333,8 @@ struct EditExperienceView: View {
             return draft.trimmedOfficialURL.isEmpty ? .optional : .entered
         case "people":
             return visiblePersonLinks.isEmpty && pendingPeople.isEmpty ? .optional : .entered
+        case "ticketPlan":
+            return draft.hasTicketPlan ? .entered : .optional
         case "photos":
             return visibleExistingPhotos.isEmpty && pendingPhotos.isEmpty ? .optional : .entered
         case "money":
@@ -354,6 +362,8 @@ struct EditExperienceView: View {
                 pendingLinks: $pendingPeople,
                 personMasters: personMasters
             )
+        case "ticketPlan":
+            ticketPlanFields(outcomeKey: $draft.outcomeKey, seatText: $draft.seatText)
         case "photos":
             PhotoUnitEditor(
                 existingPhotos: visibleExistingPhotos,
@@ -424,6 +434,8 @@ struct EditExperienceView: View {
         visit.endedAt = draft.visitedAt
         visit.venueNameSnapshot = draft.trimmedVenueName
         visit.overallRating = draft.overallRating
+        visit.outcomeKey = draft.outcomeKey
+        visit.seatText = draft.trimmedSeatText
         visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
         visit.updatedAt = now
@@ -510,7 +522,7 @@ struct AddVisitView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft = VisitDraft()
-    @State private var expandedUnitIDs: Set<String> = ["basic", "people", "photos", "memo"]
+    @State private var expandedUnitIDs: Set<String> = ["basic", "people", "ticketPlan", "photos", "memo"]
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var pendingPeople: [PendingPersonLink] = []
@@ -575,6 +587,8 @@ struct AddVisitView: View {
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "people":
             return pendingPeople.isEmpty ? .optional : .entered
+        case "ticketPlan":
+            return draft.hasTicketPlan ? .entered : .optional
         default:
             return .planned
         }
@@ -603,6 +617,8 @@ struct AddVisitView: View {
                 pendingLinks: $pendingPeople,
                 personMasters: personMasters
             )
+        case "ticketPlan":
+            ticketPlanFields(outcomeKey: $draft.outcomeKey, seatText: $draft.seatText)
         case "money":
             moneyFields(amountText: $draft.amountText)
         case "officialInfo":
@@ -657,6 +673,8 @@ struct AddVisitView: View {
             endedAt: draft.visitedAt,
             venueNameSnapshot: draft.trimmedVenueName,
             overallRating: draft.overallRating,
+            outcomeKey: draft.outcomeKey,
+            seatText: draft.trimmedSeatText,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
             createdAt: now,
@@ -717,6 +735,8 @@ struct AddExperienceDraft {
     var visitedAt: Date = Date()
     var venueName: String = ""
     var overallRating: Double = 0
+    var outcomeKey: String = ""
+    var seatText: String = ""
     var amountText: String = ""
     var note: String = ""
 
@@ -729,6 +749,8 @@ struct AddExperienceDraft {
         visitedAt = visit.visitedAt
         venueName = visit.venueNameSnapshot
         overallRating = visit.overallRating
+        outcomeKey = visit.outcomeKey
+        seatText = visit.seatText
         amountText = formattedCurrencyAmount(visit.amount)
         note = visit.note
     }
@@ -763,6 +785,14 @@ struct AddExperienceDraft {
         amountText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var trimmedSeatText: String {
+        seatText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var hasTicketPlan: Bool {
+        !outcomeKey.isEmpty || !trimmedSeatText.isEmpty
+    }
+
     var canSave: Bool {
         !trimmedTitle.isEmpty
     }
@@ -779,6 +809,8 @@ private struct VisitDraft {
     var visitedAt: Date = Date()
     var venueName: String = ""
     var overallRating: Double = 0
+    var outcomeKey: String = ""
+    var seatText: String = ""
     var amountText: String = ""
     var note: String = ""
 
@@ -792,6 +824,14 @@ private struct VisitDraft {
 
     var trimmedAmountText: String {
         amountText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedSeatText: String {
+        seatText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var hasTicketPlan: Bool {
+        !outcomeKey.isEmpty || !trimmedSeatText.isEmpty
     }
 
     var ratingLabel: String {
@@ -920,6 +960,24 @@ private func ratingSlider(label: String, value: Binding<Double>, text: String) -
     }
 }
 
+private func ticketPlanFields(outcomeKey: Binding<String>, seatText: Binding<String>) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+        Picker("状態", selection: outcomeKey) {
+            ForEach(TicketPlanOption.all) { option in
+                Text(option.name).tag(option.key)
+            }
+        }
+
+        TextField("座席・チケットメモ（例: 1階A列12番 / 整理番号B120）", text: seatText, axis: .vertical)
+            .lineLimit(1...3)
+
+        Text("申込、当落、入金、発券などの詳細期限は後続で専用項目に分けます。")
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 private func moneyFields(amountText: Binding<String>) -> some View {
     VStack(alignment: .leading, spacing: 10) {
         TextField("合計金額（例: 8500）", text: amountText)
@@ -943,6 +1001,28 @@ private func parsedCurrencyAmount(from text: String) -> Decimal {
 private func formattedCurrencyAmount(_ amount: Decimal) -> String {
     guard amount != Decimal(0) else { return "" }
     return NSDecimalNumber(decimal: amount).stringValue
+}
+
+private struct TicketPlanOption: Identifiable {
+    let key: String
+    let name: String
+
+    var id: String { key }
+
+    static let all: [TicketPlanOption] = [
+        TicketPlanOption(key: "", name: "未設定"),
+        TicketPlanOption(key: "planned", name: "予定"),
+        TicketPlanOption(key: "applied", name: "申込中"),
+        TicketPlanOption(key: "won", name: "当選"),
+        TicketPlanOption(key: "paid", name: "入金済み"),
+        TicketPlanOption(key: "ticketed", name: "発券済み"),
+        TicketPlanOption(key: "attended", name: "参加済み"),
+        TicketPlanOption(key: "canceled", name: "中止・キャンセル")
+    ]
+
+    static func name(for key: String) -> String {
+        all.first(where: { $0.key == key })?.name ?? key
+    }
 }
 
 private struct PeopleUnitEditor: View {
