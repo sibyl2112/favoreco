@@ -48,6 +48,14 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("通知") {
+                    NavigationLink {
+                        NotificationSettingsView()
+                    } label: {
+                        Label("通知設定", systemImage: "bell")
+                    }
+                }
+
                 Section("データ管理") {
                     NavigationLink {
                         DataManagementView()
@@ -56,23 +64,27 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("リンク") {
+                Section("同期・バックアップ") {
                     NavigationLink {
-                        SettingsDocumentView(title: "利用規約", bodyText: "利用規約は準備中です。写真、座席、メモ、SNS紐付けなどの扱いを整理してから掲載します。")
+                        SyncBackupSettingsView()
                     } label: {
-                        Label("利用規約", systemImage: "doc.text")
+                        Label("同期・バックアップ", systemImage: "arrow.triangle.2.circlepath.icloud")
                     }
+                }
 
+                Section("課金・プラン") {
                     NavigationLink {
-                        SettingsDocumentView(title: "プライバシーポリシー", bodyText: "プライバシーポリシーは準備中です。端末内保存、写真、位置情報、同期、外部サービス連携の扱いを明記します。")
+                        BillingPlanSettingsView()
                     } label: {
-                        Label("プライバシーポリシー", systemImage: "hand.raised")
+                        Label("課金・プラン", systemImage: "crown")
                     }
+                }
 
+                Section("リンク・サポート") {
                     NavigationLink {
-                        SettingsDocumentView(title: "お問い合わせ", bodyText: "お問い合わせ導線は準備中です。不具合報告、ご意見、ご要望を送れる入口にします。")
+                        SupportLinksView()
                     } label: {
-                        Label("お問い合わせ", systemImage: "envelope")
+                        Label("リンク・サポート", systemImage: "questionmark.circle")
                     }
                 }
 
@@ -110,6 +122,37 @@ struct SettingsView: View {
             debugMessage = "仮データの追加に失敗しました。"
             assertionFailure("Failed to insert debug data: \(error)")
         }
+    }
+}
+
+struct NotificationSettingsView: View {
+    var body: some View {
+        Form {
+            Section("通知") {
+                Toggle("通知を有効化", isOn: .constant(false))
+                    .disabled(true)
+                LabeledContent("状態", value: "準備中")
+            }
+
+            Section("予定・チケット") {
+                LabeledContent("申込開始", value: "準備中")
+                LabeledContent("申込締切", value: "準備中")
+                LabeledContent("当落発表", value: "準備中")
+                LabeledContent("入金締切", value: "準備中")
+                LabeledContent("発券開始", value: "準備中")
+                LabeledContent("公演前日/当日", value: "準備中")
+            }
+
+            Section("アカウント") {
+                LabeledContent("FC・会員期限", value: "準備中")
+            }
+
+            Section("思い出") {
+                LabeledContent("思い出リマインダー", value: "準備中")
+            }
+        }
+        .navigationTitle("通知設定")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -173,18 +216,6 @@ struct DataManagementView: View {
                 LabeledContent("写真", value: "\(photos.count)")
             }
 
-            Section("同期") {
-                Toggle("iCloud同期", isOn: .constant(false))
-                    .disabled(true)
-                LabeledContent("最終同期", value: "未同期")
-                Button {
-                } label: {
-                    Label("今すぐ同期", systemImage: "arrow.clockwise")
-                }
-                .disabled(true)
-                LabeledContent("写真の同期", value: "準備中")
-            }
-
             Section("インポート・エクスポート") {
                 NavigationLink {
                     SettingsDocumentView(title: "JSONエクスポート", bodyText: "アプリに戻せるバックアップ形式として準備予定です。写真データは別扱いにします。")
@@ -218,6 +249,143 @@ struct DataManagementView: View {
             }
         }
         .navigationTitle("データ管理")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct SyncBackupSettingsView: View {
+    var body: some View {
+        Form {
+            Section("同期") {
+                Toggle("iCloud同期", isOn: .constant(false))
+                    .disabled(true)
+                LabeledContent("最終同期", value: "未同期")
+                Button {
+                } label: {
+                    Label("今すぐ同期", systemImage: "arrow.clockwise")
+                }
+                .disabled(true)
+                LabeledContent("写真の同期", value: "準備中")
+            }
+
+            Section("バックアップ") {
+                Toggle("自動バックアップ", isOn: .constant(false))
+                    .disabled(true)
+                LabeledContent("バックアップ先", value: "準備中")
+                NavigationLink {
+                    SettingsDocumentView(title: "復元", bodyText: "バックアップから復元する入口として準備予定です。既存データを壊さない取り込み方式にします。")
+                } label: {
+                    Label("復元", systemImage: "clock.arrow.circlepath")
+                }
+            }
+
+            Section("同期トラブル診断") {
+                NavigationLink {
+                    SettingsDocumentView(title: "同期トラブル診断", bodyText: "iCloud状態、端末容量、写真同期、最終同期時刻を確認する画面として準備予定です。")
+                } label: {
+                    Label("診断を開く", systemImage: "stethoscope")
+                }
+            }
+        }
+        .navigationTitle("同期・バックアップ")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct BillingPlanSettingsView: View {
+    var body: some View {
+        Form {
+            Section("現在のプラン") {
+                LabeledContent("プラン", value: "無料")
+                NavigationLink {
+                    SettingsDocumentView(title: "アップグレード", bodyText: "買い切り、サブスク、カテゴリDBパックの見せ方を整理してから実装します。")
+                } label: {
+                    Label("アップグレード", systemImage: "crown")
+                }
+                Button {
+                } label: {
+                    Label("購入を復元", systemImage: "arrow.clockwise")
+                }
+                .disabled(true)
+            }
+
+            Section("プラン管理") {
+                NavigationLink {
+                    SettingsDocumentView(title: "Pro機能一覧", bodyText: "統計、年間まとめ、エクスポート、自作カテゴリ、同期、自動バックアップ、参照DBなどを整理して掲載予定です。")
+                } label: {
+                    Label("Pro機能一覧", systemImage: "sparkles")
+                }
+
+                NavigationLink {
+                    SettingsDocumentView(title: "DBパック管理", bodyText: "御朱印、100名城、御船印などのカテゴリDBパックを管理する入口として準備予定です。")
+                } label: {
+                    Label("DBパック管理", systemImage: "shippingbox")
+                }
+            }
+        }
+        .navigationTitle("課金・プラン")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct SupportLinksView: View {
+    var body: some View {
+        Form {
+            Section("リンク") {
+                NavigationLink {
+                    SettingsDocumentView(title: "公式サイト", bodyText: "公式サイトへのリンク入口として準備予定です。")
+                } label: {
+                    Label("公式サイト", systemImage: "globe")
+                }
+
+                NavigationLink {
+                    SettingsDocumentView(title: "利用規約", bodyText: "利用規約は準備中です。写真、座席、メモ、SNS紐付けなどの扱いを整理してから掲載します。")
+                } label: {
+                    Label("利用規約", systemImage: "doc.text")
+                }
+
+                NavigationLink {
+                    SettingsDocumentView(title: "プライバシーポリシー", bodyText: "プライバシーポリシーは準備中です。端末内保存、写真、位置情報、同期、外部サービス連携の扱いを明記します。")
+                } label: {
+                    Label("プライバシーポリシー", systemImage: "hand.raised")
+                }
+            }
+
+            Section("サポート") {
+                NavigationLink {
+                    SettingsDocumentView(title: "お問い合わせ", bodyText: "お問い合わせ導線は準備中です。不具合報告、ご意見、ご要望を送れる入口にします。")
+                } label: {
+                    Label("お問い合わせ", systemImage: "envelope")
+                }
+
+                Button {
+                } label: {
+                    Label("レビューで応援", systemImage: "star")
+                }
+                .disabled(true)
+
+                Button {
+                } label: {
+                    Label("アプリをシェア", systemImage: "square.and.arrow.up")
+                }
+                .disabled(true)
+            }
+
+            Section("公式SNS") {
+                NavigationLink {
+                    SettingsDocumentView(title: "公式X", bodyText: "公式Xへのリンク入口として準備予定です。")
+                } label: {
+                    Label("公式X", systemImage: "arrow.up.right.square")
+                }
+
+                NavigationLink {
+                    SettingsDocumentView(title: "公式Threads", bodyText: "公式Threadsへのリンク入口として準備予定です。")
+                } label: {
+                    Label("公式Threads", systemImage: "arrow.up.right.square")
+                }
+            }
+        }
+        .navigationTitle("リンク・サポート")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
