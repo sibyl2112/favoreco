@@ -60,6 +60,7 @@ struct ExperienceDetailView: View {
                 peopleSection
                 ocrSection
                 basicInfo
+                advancedSection
                 memoSection
             }
             .padding(.horizontal, 20)
@@ -209,6 +210,27 @@ struct ExperienceDetailView: View {
             }
         }
         .sectionCard()
+    }
+
+    @ViewBuilder
+    private var advancedSection: some View {
+        if !unitFields.advancedEntries.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("詳細オプション")
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(unitFields.advancedEntries) { entry in
+                        if !entry.isEmpty {
+                            DetailInfoRow(
+                                icon: "slider.horizontal.3",
+                                title: entry.trimmedLabel.isEmpty ? "追加項目" : entry.trimmedLabel,
+                                value: entry.trimmedValue
+                            )
+                        }
+                    }
+                }
+            }
+            .sectionCard()
+        }
     }
 
     @ViewBuilder

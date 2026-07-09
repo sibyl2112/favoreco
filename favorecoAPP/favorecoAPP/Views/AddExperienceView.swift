@@ -103,6 +103,8 @@ struct AddExperienceView: View {
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "memo":
             return draft.trimmedNote.isEmpty ? .optional : .entered
+        case "advanced":
+            return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
             return .planned
         }
@@ -139,6 +141,8 @@ struct AddExperienceView: View {
             moneyFields(amountText: $draft.amountText)
         case "memo":
             memoEditor
+        case "advanced":
+            AdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
             PendingUnitView(unit: unit)
         }
@@ -203,7 +207,7 @@ struct AddExperienceView: View {
             seatText: draft.trimmedSeatText,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
-            unitFieldsRaw: VisitUnitFields(ocrText: draft.trimmedOCRText).encodedRawValue,
+            unitFieldsRaw: VisitUnitFields(ocrText: draft.trimmedOCRText, advancedEntries: draft.trimmedAdvancedEntries).encodedRawValue,
             createdAt: now,
             updatedAt: now,
             event: event
@@ -352,6 +356,8 @@ struct EditExperienceView: View {
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "memo":
             return draft.trimmedNote.isEmpty ? .optional : .entered
+        case "advanced":
+            return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
             return .planned
         }
@@ -388,6 +394,8 @@ struct EditExperienceView: View {
             moneyFields(amountText: $draft.amountText)
         case "memo":
             memoEditor
+        case "advanced":
+            AdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
             PendingUnitView(unit: unit)
         }
@@ -451,7 +459,7 @@ struct EditExperienceView: View {
         visit.seatText = draft.trimmedSeatText
         visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
-        visit.unitFieldsRaw = VisitUnitFields(ocrText: draft.trimmedOCRText).encodedRawValue
+        visit.unitFieldsRaw = VisitUnitFields(ocrText: draft.trimmedOCRText, advancedEntries: draft.trimmedAdvancedEntries).encodedRawValue
         visit.updatedAt = now
         deleteMarkedPersonLinks()
         insertPendingPeople(for: event, visit: nil)
@@ -606,6 +614,8 @@ struct AddVisitView: View {
             return pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
             return draft.hasTicketPlan ? .entered : .optional
+        case "advanced":
+            return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
             return .planned
         }
@@ -640,6 +650,8 @@ struct AddVisitView: View {
             ticketPlanFields(outcomeKey: $draft.outcomeKey, seatText: $draft.seatText)
         case "money":
             moneyFields(amountText: $draft.amountText)
+        case "advanced":
+            AdvancedUnitEditor(entries: $draft.advancedEntries)
         case "officialInfo":
             Text("公式URLや参考リンクは対象詳細で編集します。")
                 .font(FavorecoTypography.caption)
@@ -696,7 +708,7 @@ struct AddVisitView: View {
             seatText: draft.trimmedSeatText,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
-            unitFieldsRaw: VisitUnitFields(ocrText: draft.trimmedOCRText).encodedRawValue,
+            unitFieldsRaw: VisitUnitFields(ocrText: draft.trimmedOCRText, advancedEntries: draft.trimmedAdvancedEntries).encodedRawValue,
             createdAt: now,
             updatedAt: now,
             event: event
@@ -758,6 +770,7 @@ struct AddExperienceDraft {
     var outcomeKey: String = ""
     var seatText: String = ""
     var ocrText: String = ""
+    var advancedEntries: [AdvancedFieldEntry] = []
     var amountText: String = ""
     var note: String = ""
 
@@ -772,7 +785,9 @@ struct AddExperienceDraft {
         overallRating = visit.overallRating
         outcomeKey = visit.outcomeKey
         seatText = visit.seatText
-        ocrText = VisitUnitFields(rawValue: visit.unitFieldsRaw).ocrText
+        let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+        ocrText = unitFields.ocrText
+        advancedEntries = unitFields.advancedEntries
         amountText = formattedCurrencyAmount(visit.amount)
         note = visit.note
     }
@@ -815,6 +830,12 @@ struct AddExperienceDraft {
         seatText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var trimmedAdvancedEntries: [AdvancedFieldEntry] {
+        advancedEntries
+            .map(\.normalized)
+            .filter { !$0.isEmpty }
+    }
+
     var hasTicketPlan: Bool {
         !outcomeKey.isEmpty || !trimmedSeatText.isEmpty
     }
@@ -838,6 +859,7 @@ private struct VisitDraft {
     var outcomeKey: String = ""
     var seatText: String = ""
     var ocrText: String = ""
+    var advancedEntries: [AdvancedFieldEntry] = []
     var amountText: String = ""
     var note: String = ""
 
@@ -859,6 +881,12 @@ private struct VisitDraft {
 
     var trimmedSeatText: String {
         seatText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedAdvancedEntries: [AdvancedFieldEntry] {
+        advancedEntries
+            .map(\.normalized)
+            .filter { !$0.isEmpty }
     }
 
     var hasTicketPlan: Bool {
@@ -1127,6 +1155,45 @@ private struct OCRUnitEditor: View {
                 return ""
             }
         }.value
+    }
+}
+
+private struct AdvancedUnitEditor: View {
+    @Binding var entries: [AdvancedFieldEntry]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if entries.isEmpty {
+                Text("ジャンル固有の項目を自由に追加できます。例: 精米歩合、所要時間、購入店舗、同行者メモなど。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach($entries) { $entry in
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("項目名（例: 所要時間）", text: $entry.label)
+                        TextField("値（例: 90分）", text: $entry.value, axis: .vertical)
+                            .lineLimit(1...3)
+
+                        Button(role: .destructive) {
+                            entries.removeAll { $0.id == entry.id }
+                        } label: {
+                            Label("この項目を削除", systemImage: "minus.circle")
+                        }
+                        .font(FavorecoTypography.caption)
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+
+            Button {
+                entries.append(AdvancedFieldEntry())
+            } label: {
+                Label("項目を追加", systemImage: "plus.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+        }
     }
 }
 

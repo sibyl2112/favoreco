@@ -23,7 +23,7 @@ struct RecordUnitDefinition: Identifiable {
         RecordUnitDefinition(id: "money", name: "金額", description: "チケット代、購入額、交通費、遠征費など", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "officialInfo", name: "公式情報", description: "公式URL、SNS投稿リンク、参考URLなど", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "memo", name: "メモ", description: "感想、印象、あとで見返したいこと", isRequired: true, isImplemented: true),
-        RecordUnitDefinition(id: "advanced", name: "詳細オプション", description: "ジャンル固有の追加項目や高度な記録", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "advanced", name: "詳細オプション", description: "ジャンル固有の追加項目や高度な記録", isRequired: false, isImplemented: true),
     ]
 
     static let legacyIDMap: [String: String] = [

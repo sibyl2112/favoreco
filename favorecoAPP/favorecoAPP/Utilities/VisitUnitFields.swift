@@ -9,9 +9,11 @@ import Foundation
 
 struct VisitUnitFields: Codable {
     var ocrText: String = ""
+    var advancedEntries: [AdvancedFieldEntry] = []
 
-    init(ocrText: String = "") {
+    init(ocrText: String = "", advancedEntries: [AdvancedFieldEntry] = []) {
         self.ocrText = ocrText
+        self.advancedEntries = advancedEntries
     }
 
     init(rawValue: String) {
@@ -24,11 +26,33 @@ struct VisitUnitFields: Codable {
     }
 
     var encodedRawValue: String {
-        guard !ocrText.isEmpty,
+        guard !ocrText.isEmpty || !advancedEntries.isEmpty,
               let data = try? JSONEncoder().encode(self),
               let string = String(data: data, encoding: .utf8) else {
             return ""
         }
         return string
+    }
+}
+
+struct AdvancedFieldEntry: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var label: String = ""
+    var value: String = ""
+
+    var trimmedLabel: String {
+        label.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedValue: String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var isEmpty: Bool {
+        trimmedLabel.isEmpty && trimmedValue.isEmpty
+    }
+
+    var normalized: AdvancedFieldEntry {
+        AdvancedFieldEntry(id: id, label: trimmedLabel, value: trimmedValue)
     }
 }

@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-10（OCR・取込ユニット入力追加）
+> **最終更新**: 2026-07-10（詳細オプションユニット入力追加）
 
 ---
 
@@ -60,12 +60,12 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `CategoryTopView`: カテゴリ単位の簡易トップ。対象数・記録数・対象一覧・最近の記録を表示。見出しのジャンル名は `映画 ▼` 形式のスイッチャーで、他の有効ジャンルへ切り替えられる。対象一覧から対象詳細へ遷移でき、同じ対象に回を追加できる。
 - `AddInboxItemView`: 気になるもの・あとで記録したいものを、タイトル / URL / カテゴリ候補 / メモで `InboxItem` として保存する手動追加フォーム。
 - `InboxDetailView`: InboxItemの詳細表示。カテゴリ候補を選び、InboxItemのタイトル / URL / メモを下書きにして本記録へ変換できる。変換済みのInboxItemは `resolved` にする。
-- `AddExperienceView`: 記録追加フォーム。入力中は `AddExperienceDraft`、人物/団体リンク用の一時状態、写真用の一時状態に保持し、保存時だけ `ExperienceEvent` + `Visit` + `EventPersonLink` + `PhotoBlob` を作成する。`RecordCategory.enabledUnitsRaw` に応じてユニット単位アコーディオンを表示し、現時点では `basic`（対象名/日付/場所/評価）、`people`（人物・団体名/役割）、`ticketPlan`（チケット状態/座席メモ）、`photos`（写真ライブラリから追加・10枚上限）、`importOCR`（画像からのVision OCR/手入力テキスト）、`money`（合計金額）、`officialInfo`（公式URL）、`memo`（メモ）を実入力、その他は準備中表示にする。
-- `AddVisitView`: 既存 `ExperienceEvent` に新しい `Visit` だけを追加するフォーム。ユニット単位アコーディオンを表示し、`basic`、`people`、`ticketPlan`、`photos`、`importOCR`、`money`、`memo` を実入力、その他は準備中表示にする。人物・団体はその回だけのゲスト等として `Visit` 側に紐付ける。
+- `AddExperienceView`: 記録追加フォーム。入力中は `AddExperienceDraft`、人物/団体リンク用の一時状態、写真用の一時状態に保持し、保存時だけ `ExperienceEvent` + `Visit` + `EventPersonLink` + `PhotoBlob` を作成する。`RecordCategory.enabledUnitsRaw` に応じてユニット単位アコーディオンを表示し、現時点では `basic`（対象名/日付/場所/評価）、`people`（人物・団体名/役割）、`ticketPlan`（チケット状態/座席メモ）、`photos`（写真ライブラリから追加・10枚上限）、`importOCR`（画像からのVision OCR/手入力テキスト）、`money`（合計金額）、`officialInfo`（公式URL）、`memo`（メモ）、`advanced`（自由項目）を実入力する。
+- `AddVisitView`: 既存 `ExperienceEvent` に新しい `Visit` だけを追加するフォーム。ユニット単位アコーディオンを表示し、`basic`、`people`、`ticketPlan`、`photos`、`importOCR`、`money`、`memo`、`advanced` を実入力する。人物・団体はその回だけのゲスト等として `Visit` 側に紐付ける。
 - `EventDetailView`: 対象詳細。対象のカテゴリ、シリーズ、対象メモ、公式URL、記録数、最新日、平均評価、履歴を表示し、対象編集・回追加・各Visit詳細へ遷移できる。
 - `EditEventView`: 対象自体のタイトル、シリーズ、公式URL、対象メモを編集するフォーム。
-- `EditExperienceView`: 保存済み記録の編集フォーム。既存 `ExperienceEvent` + `Visit` を更新する。記録追加と同じユニット単位アコーディオンを使い、長いジャンル入力に備える。人物・団体ユニットでは保存済みリンクの確認/削除と新規追加、チケット・予定ユニットでは状態/座席メモ、写真ユニットでは保存済み写真の確認/削除と新規写真追加、OCR・取込ユニットでは読み取りテキストの編集/追記、金額ユニットでは合計金額の編集ができる。
-- `ExperienceDetailView`: 保存済みVisitの詳細表示。記録詳細では保存した情報を原則すべて見せる。Home/一覧/サマリーカードではカバー写真、ジャンル色/アイコン、タイトル、日付、場所、人物/団体1〜2件、評価またはステータス、短いメモ1行など厳選した情報だけを表示し、詳細画面で写真、人物、チケット、場所、天気、金額、URL、SNS、メモなどへ深掘りできる。`EventPersonLink` がある場合は役割つきで人物・団体を表示し、`PhotoBlob.data` がある場合は1枚なら大きく、複数枚ならグリッドで表示する。`Visit.unitFieldsRaw` にOCRテキストがある場合はOCR・取込セクション、`Visit.outcomeKey` / `seatText` がある場合はチケット状態と座席メモ、`Visit.amount` がある場合は金額を基本情報に出す。
+- `EditExperienceView`: 保存済み記録の編集フォーム。既存 `ExperienceEvent` + `Visit` を更新する。記録追加と同じユニット単位アコーディオンを使い、長いジャンル入力に備える。人物・団体ユニットでは保存済みリンクの確認/削除と新規追加、チケット・予定ユニットでは状態/座席メモ、写真ユニットでは保存済み写真の確認/削除と新規写真追加、OCR・取込ユニットでは読み取りテキストの編集/追記、金額ユニットでは合計金額、詳細オプションでは自由項目の編集ができる。
+- `ExperienceDetailView`: 保存済みVisitの詳細表示。記録詳細では保存した情報を原則すべて見せる。Home/一覧/サマリーカードではカバー写真、ジャンル色/アイコン、タイトル、日付、場所、人物/団体1〜2件、評価またはステータス、短いメモ1行など厳選した情報だけを表示し、詳細画面で写真、人物、チケット、場所、天気、金額、URL、SNS、メモなどへ深掘りできる。`EventPersonLink` がある場合は役割つきで人物・団体を表示し、`PhotoBlob.data` がある場合は1枚なら大きく、複数枚ならグリッドで表示する。`Visit.unitFieldsRaw` にOCRテキストがある場合はOCR・取込セクション、自由項目がある場合は詳細オプションセクション、`Visit.outcomeKey` / `seatText` がある場合はチケット状態と座席メモ、`Visit.amount` がある場合は金額を基本情報に出す。
 
 テンプレ別の専用入力ユニット、チケット/写真/Map/OCR、Inboxから既存対象/予定への変換、対象のアーカイブは未実装。
 
@@ -127,7 +127,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - ジャンルのテーマカラーは `RecordCategory.colorHex` を正本とする。標準ジャンルにも、自作ジャンル追加時にも同じフィールドを使う。
 - 自作ジャンルの `templateKey` は `custom_<UUID>` とし、標準プリセットとは衝突させない。作成時は `isBuiltIn = false`、`isArchived = false`。
 - 自作ジャンルの記録フォーム文言は `CategoryRecordTemplate` が `targetNameLabel`、`recordUnitName`、`dateLabel` から生成する。標準ジャンルは従来どおり `templateKey` 別の固定文言を優先する。
-- ジャンルの有効ユニットは `RecordCategory.enabledUnitsRaw` を正本とし、`RecordUnitDefinition` で表示名/説明に変換する。採用ユニットIDは `basic`（基本情報）、`people`（人物・団体）、`ticketPlan`（チケット・予定）、`photos`（写真）、`importOCR`（OCR・取込）、`money`（金額）、`officialInfo`（公式情報）、`memo`（メモ）、`advanced`（詳細オプション）。`basic` と `memo` は必須で、詳細画面/自作ジャンル作成画面では外せない。旧 `U1` / `U3` などは読み取り時だけ互換変換する。実入力接続済みは `basic`、`people`、`ticketPlan`、`photos`、`importOCR`、`money`、`officialInfo`、`memo`。
+- ジャンルの有効ユニットは `RecordCategory.enabledUnitsRaw` を正本とし、`RecordUnitDefinition` で表示名/説明に変換する。採用ユニットIDは `basic`（基本情報）、`people`（人物・団体）、`ticketPlan`（チケット・予定）、`photos`（写真）、`importOCR`（OCR・取込）、`money`（金額）、`officialInfo`（公式情報）、`memo`（メモ）、`advanced`（詳細オプション）。`basic` と `memo` は必須で、詳細画面/自作ジャンル作成画面では外せない。旧 `U1` / `U3` などは読み取り時だけ互換変換する。実入力接続済みは `basic`、`people`、`ticketPlan`、`photos`、`importOCR`、`money`、`officialInfo`、`memo`、`advanced`。
 - デバッグ用の仮データ投入/削除は `DebugDataSeeder` に閉じ込める。挿入時は既存仮データを削除してから、全ジャンルを有効化し、各ジャンル1件以上の `ExperienceEvent` / `Visit` / `PhotoBlob` を通常のSwiftData経路で保存する。写真はジャンル色のPNGを生成して `PhotoBlob.data` に入れる。削除時は `https://example.com/favoreco/` と `debug/sample-` に紐付く仮データだけを削除する。
 - 通知、同期・バックアップ、課金・プラン、JSON/CSVインポート/エクスポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。実データを変更する処理はまだ接続しない。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る

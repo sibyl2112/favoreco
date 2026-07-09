@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 詳細オプションユニットの実入力を追加
+
+### 変更概要
+- `advanced` ユニットを準備中表示から実入力に変更した。
+- 新規記録、既存対象への回追加、保存済み記録編集で、ラベル/値の自由項目を複数追加できるようにした。
+- 自由項目は `VisitUnitFields.advancedEntries` として `Visit.unitFieldsRaw` にJSON保存する。
+- 空の自由項目は保存時に除外し、詳細画面には入力済み項目だけ表示するようにした。
+- 記録詳細画面に `詳細オプション` セクションを追加した。
+
+### 変更意図
+ジャンルごとに必要な細かい項目は実データを触るまで揺れるため、いきなり専用モデルにせず、まず自由項目として保存できる受け皿を作った。日本酒の精米歩合、美術展の所要時間、御朱印の印種別など、後から検索/統計に昇格したい値の試験場として使う。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（詳細オプション入力、保存、編集、回追加への接続）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（詳細オプション表示）
+- favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift（自由項目配列を追加）
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（advancedユニットを実装済みに変更）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedAdvancedNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- ジャンル別の詳細項目プリセット、入力型（数値/日付/選択肢）、統計への昇格は後続で行う。
+- 自由項目の並び替え、テンプレ保存、重複ラベル補正は未実装。
+
 ## 2026-07-10: OCR・取込ユニットの実入力を追加
 
 ### 変更概要
