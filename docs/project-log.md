@@ -5,6 +5,38 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 入力アコーディオン土台と仮データ削除/写真表示を追加
+
+### 変更概要
+- `AddExperienceView` / `EditExperienceView` / `AddVisitView` を、ユニット単位の `DisclosureGroup` で入力する土台に変更した。
+- `basic`、`officialInfo`、`memo` は既存保存項目に接続し、`people`、`ticketPlan`、`photos`、`importOCR`、`money`、`advanced` は準備中ユニットとして表示するようにした。
+- 各ユニットに、必須/入力済み/任意/準備中のステータスを表示した。
+- `DebugDataSeeder` の仮データ挿入を、先頭4ジャンルではなく全ジャンルに1件ずつ作るように変更した。
+- 仮データ挿入前に既存の仮データを削除し、重複して増え続けないようにした。
+- 設定の開発セクションに `仮データを削除` ボタンを追加した。
+- 仮データ写真を1px PNGではなく、ジャンル色のPNGとして生成して `PhotoBlob.data` に保存するようにした。
+- Homeの体験ギャラリーと記録詳細で、先頭の `PhotoBlob.data` を実画像として表示するようにした。
+
+### 変更意図
+ジャンルごとに入力項目が長くなる前提に合わせ、早い段階でMystorium同様の折りたたみ入力構造へ移行するため。仮データは画面確認用なので、各ジャンルに最低1件あり、写真が実際に見える必要がある。追加だけで削除できないと検証データが増え続けるため、通常データと区別できるデバッグURL/パスを使って安全に削除できるようにした。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（入力アコーディオン土台）
+- favorecoAPP/favorecoAPP/Services/DebugDataSeeder.swift（全ジャンル仮データ、写真生成、削除処理）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（仮データ削除ボタン）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（ギャラリー写真表示）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（詳細写真表示）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/favorecoDerivedAccordionDebug build` 成功。
+
+### 残課題
+- `people`、`ticketPlan`、`photos`、`importOCR`、`money`、`advanced` の実入力UIを順番に接続する。
+- 仮データ写真のデザインは検証用の簡易画像なので、本番サンプル用には後でカテゴリ別の見栄えを調整する。
+- 仮データ削除はデバッグ用URL/パスのみを対象にしているため、将来のデバッグデータ拡張時は同じ識別ルールを守る。
+
 ## 2026-07-10: 課金・プラン画面に無料/有料境界を表示
 
 ### 変更概要

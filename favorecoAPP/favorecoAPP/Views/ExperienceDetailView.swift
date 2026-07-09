@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct ExperienceDetailView: View {
     let visit: Visit
@@ -28,10 +29,19 @@ struct ExperienceDetailView: View {
         CategoryRecordTemplate.template(for: category)
     }
 
+    private var firstPhotoImage: UIImage? {
+        guard let photo = visit.photos?.first(where: { $0.mediaKind == "photo" }),
+              !photo.data.isEmpty else {
+            return nil
+        }
+        return UIImage(data: photo.data)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero
+                photoSection
                 basicInfo
                 memoSection
             }
@@ -83,6 +93,18 @@ struct ExperienceDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var photoSection: some View {
+        if let firstPhotoImage {
+            Image(uiImage: firstPhotoImage)
+                .resizable()
+                .scaledToFill()
+                .frame(height: 220)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
     }
 
     private var basicInfo: some View {

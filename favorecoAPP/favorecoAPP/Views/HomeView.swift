@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct HomeView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
@@ -385,15 +386,31 @@ private struct ExperienceGalleryCard: View {
         Color(hex: visit.event?.category?.colorHex ?? "#147C88")
     }
 
+    private var firstPhotoImage: UIImage? {
+        guard let photo = visit.photos?.first(where: { $0.mediaKind == "photo" }),
+              !photo.data.isEmpty else {
+            return nil
+        }
+        return UIImage(data: photo.data)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .bottomLeading) {
-                Rectangle()
-                    .fill(categoryColor.opacity(0.18))
-                Image(systemName: visit.eyecatchPath.isEmpty ? "sparkles" : "photo.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(categoryColor)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if let firstPhotoImage {
+                    Image(uiImage: firstPhotoImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                } else {
+                    Rectangle()
+                        .fill(categoryColor.opacity(0.18))
+                    Image(systemName: visit.eyecatchPath.isEmpty ? "sparkles" : "photo.fill")
+                        .font(.largeTitle)
+                        .foregroundStyle(categoryColor)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
 
                 Text(visit.event?.category?.name ?? "記録")
                     .font(FavorecoTypography.captionStrong)

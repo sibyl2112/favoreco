@@ -103,6 +103,12 @@ struct SettingsView: View {
                         Label("写真付き仮データを追加", systemImage: "hammer.fill")
                     }
 
+                    Button(role: .destructive) {
+                        deleteDebugData()
+                    } label: {
+                        Label("仮データを削除", systemImage: "trash")
+                    }
+
                     if !debugMessage.isEmpty {
                         Text(debugMessage)
                             .font(FavorecoTypography.caption)
@@ -129,6 +135,16 @@ struct SettingsView: View {
         } catch {
             debugMessage = "仮データの追加に失敗しました。"
             assertionFailure("Failed to insert debug data: \(error)")
+        }
+    }
+
+    private func deleteDebugData() {
+        do {
+            try DebugDataSeeder.deleteSampleData(in: modelContext)
+            debugMessage = "仮データを削除しました。"
+        } catch {
+            debugMessage = "仮データの削除に失敗しました。"
+            assertionFailure("Failed to delete debug data: \(error)")
         }
     }
 }
