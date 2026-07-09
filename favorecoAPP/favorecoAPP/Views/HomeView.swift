@@ -248,7 +248,7 @@ struct HomeView: View {
                     NavigationLink {
                         ExperienceDetailView(visit: visit)
                     } label: {
-                        VisitRow(visit: visit)
+                        VisitSummaryRow(visit: visit)
                     }
                     .buttonStyle(.plain)
                 }
@@ -382,6 +382,8 @@ private struct AttentionRow: View {
 private struct ExperienceGalleryCard: View {
     let visit: Visit
 
+    @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
+
     private var categoryColor: Color {
         Color(hex: visit.event?.category?.colorHex ?? "#147C88")
     }
@@ -404,6 +406,20 @@ private struct ExperienceGalleryCard: View {
 
     private var unitFields: VisitUnitFields {
         VisitUnitFields(rawValue: visit.unitFieldsRaw)
+    }
+
+    private var peopleSummary: String {
+        let linkedPeople = personLinks
+            .filter { link in
+                !link.isArchived && (link.event?.id == visit.event?.id || link.visit?.id == visit.id)
+            }
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .prefix(2)
+            .map { link in
+                link.nameSnapshot.isEmpty ? link.person?.displayName ?? "" : link.nameSnapshot
+            }
+            .filter { !$0.isEmpty }
+        return linkedPeople.joined(separator: " / ")
     }
 
     var body: some View {
@@ -457,6 +473,13 @@ private struct ExperienceGalleryCard: View {
 
                 if !visit.venueNameSnapshot.isEmpty {
                     Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if !peopleSummary.isEmpty {
+                    Label(peopleSummary, systemImage: "person.2")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -589,128 +612,6 @@ private struct CategoryTile: View {
 
     private func unitSummary(_ rawValue: String) -> String {
         "ユニット \(rawValue.split(separator: ",").count)件"
-    }
-}
-
-private struct VisitRow: View {
-    let visit: Visit
-
-    private var title: String {
-        visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
-    }
-
-    private var categoryColor: Color {
-        Color(hex: visit.event?.category?.colorHex ?? "#147C88")
-    }
-
-    private var firstPhotoImage: UIImage? {
-        guard let photo = visit.photos?.first(where: { $0.mediaKind == "photo" }),
-              !photo.data.isEmpty else {
-            return nil
-        }
-        return UIImage(data: photo.data)
-    }
-
-    private var unitFields: VisitUnitFields {
-        VisitUnitFields(rawValue: visit.unitFieldsRaw)
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            thumbnail
-
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(title)
-                        .font(FavorecoTypography.cardTitle)
-                        .lineLimit(2)
-                    Spacer(minLength: 8)
-                    if let statusText = visitTicketStatusText(visit.outcomeKey) {
-                        Text(statusText)
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(categoryColor)
-                            .lineLimit(1)
-                    }
-                }
-
-                FlowMetaLine(items: metaItems)
-
-                if !visit.note.isEmpty {
-                    Text(visit.note)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                if visit.amount != Decimal(0) || !unitFields.ocrText.isEmpty || !unitFields.advancedEntries.isEmpty {
-                    HStack(spacing: 6) {
-                        if visit.amount != Decimal(0) {
-                            HomeVisitBadge(text: formattedVisitAmount(visit.amount), icon: "yensign.circle")
-                        }
-                        if !unitFields.ocrText.isEmpty {
-                            HomeVisitBadge(text: "OCR", icon: "text.viewfinder")
-                        }
-                        if !unitFields.advancedEntries.isEmpty {
-                            HomeVisitBadge(text: "詳細", icon: "slider.horizontal.3")
-                        }
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    @ViewBuilder
-    private var thumbnail: some View {
-        if let firstPhotoImage {
-            Image(uiImage: firstPhotoImage)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        } else {
-            Image(systemName: visit.event?.category?.iconSymbol ?? "sparkles.rectangle.stack")
-                .font(.title3)
-                .foregroundStyle(categoryColor)
-                .frame(width: 64, height: 64)
-                .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-    }
-
-    private var metaItems: [FlowMetaItem] {
-        var items: [FlowMetaItem] = [
-            FlowMetaItem(icon: "calendar", text: visit.visitedAt.formatted(date: .numeric, time: .omitted))
-        ]
-        if !visit.venueNameSnapshot.isEmpty {
-            items.append(FlowMetaItem(icon: "mappin.and.ellipse", text: visit.venueNameSnapshot))
-        }
-        if visit.overallRating > 0 {
-            items.append(FlowMetaItem(icon: "star.fill", text: String(format: "%.1f", visit.overallRating)))
-        }
-        return items
-    }
-}
-
-private struct FlowMetaItem: Identifiable {
-    let id = UUID()
-    var icon: String
-    var text: String
-}
-
-private struct FlowMetaLine: View {
-    let items: [FlowMetaItem]
-
-    var body: some View {
-        HStack(spacing: 10) {
-            ForEach(items) { item in
-                Label(item.text, systemImage: item.icon)
-                    .lineLimit(1)
-            }
-        }
-        .font(FavorecoTypography.caption)
-        .foregroundStyle(.secondary)
     }
 }
 

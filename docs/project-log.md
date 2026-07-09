@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: Homeにも人物・団体サマリーを反映
+
+### 変更概要
+- Homeの最近の記録を共通 `VisitSummaryRow` へ差し替えた。
+- 体験ギャラリーカードにも `EventPersonLink` から人物・団体を最大2件表示するようにした。
+- Home内の独自 `VisitRow` / `FlowMetaItem` / `FlowMetaLine` を削除し、一覧表現の重複を減らした。
+
+### 変更意図
+Records、カテゴリトップ、対象詳細の履歴で人物・団体が見えるようになったため、Homeでも同じ情報が自然に見えるように揃えるため。Homeはアプリを開いた最初の見返し面なので、写真・場所だけでなく「誰の体験か」も短く出す。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（Home最近の記録を共通サマリーへ差し替え、ギャラリーに人物・団体表示追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedHomePeopleNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 役割表示やジャンル別の人物ラベル最適化は後続で調整する。
+- Homeの体験ギャラリーは現状 `@Query` で人物リンクを参照しているため、件数が増えた段階でSnapshot/DTO化を検討する。
+
 ## 2026-07-10: AppIconをワインレッドしおり案へ差し替え
 
 ### 変更概要
@@ -2573,6 +2595,28 @@ Fモノグラムではなく、男女問わず使いやすい中性的な記録/
 
 ### 確認結果（実機 / ビルド）
 - AppIconのfilenameが通常/ダーク/ティントすべて favoreco-app-icon-no-f-bookmark-1024.png になっていることを確認
+- AppIcon用PNGが1024x1024pxであることを確認
+- ビルド/実機確認は未実施
+
+### 残課題
+- 実機ホーム画面で小サイズ視認性を確認する
+- 必要に応じてダーク/ティント用の専用アイコンを作成する
+
+## 2026-07-10: AppIconをFなしワインレッド案へ修正
+
+### 変更概要
+- 暫定設定していたFなしアイボリー案から、Fなしワインレッドしおり案へAppIconを差し替え
+- 通常/ダーク/ティントの3枠すべてに同じ1024px PNGを指定
+
+### 変更意図
+ユーザー指定の採用色がアイボリーではなくワインレッドだったため、アプリ本体のAppIcon参照を正しい候補に修正するため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/favoreco-app-icon-wine-bookmark-1024.png（AppIcon用PNG）
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/Contents.json（AppIcon参照先をFなしワインレッド案へ変更）
+
+### 確認結果（実機 / ビルド）
+- AppIconのfilenameが通常/ダーク/ティントすべて favoreco-app-icon-wine-bookmark-1024.png になっていることを確認
 - AppIcon用PNGが1024x1024pxであることを確認
 - ビルド/実機確認は未実施
 
