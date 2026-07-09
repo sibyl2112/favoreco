@@ -5,6 +5,29 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: CSVエクスポートを実装
+
+### 変更概要
+- `CSVExportService` を追加し、保存済みVisitをUTF-8 CSVに変換できるようにした。
+- データ管理の `CSVエクスポート` を準備中ページから実際の書き出し画面へ差し替えた。
+- CSV書き出し画面で対象件数、形式、写真を含めないこと、出力列を確認できるようにした。
+
+### 変更意図
+無料で守る手動バックアップ/持ち出し導線の最初の実処理として、表計算アプリで開ける記録一覧CSVを出せるようにするため。JSONバックアップより先に軽いCSVを入れることで、端末内データを確認・退避しやすくする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/CSVExportService.swift（CSV生成とFileDocument追加）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（CSVエクスポート画面追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedCSVExportNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- JSONバックアップ、CSVインポート、写真を含むバックアップは未実装。
+- 人物・団体、写真、詳細オプションなどの複雑なサブデータをCSVへ展開するかは後続で検討する。
+
 ## 2026-07-10: Homeにも人物・団体サマリーを反映
 
 ### 変更概要
@@ -2623,3 +2646,24 @@ Fモノグラムではなく、男女問わず使いやすい中性的な記録/
 ### 残課題
 - 実機ホーム画面で小サイズ視認性を確認する
 - 必要に応じてダーク/ティント用の専用アイコンを作成する
+
+## 2026-07-10: AppIconダーク表示を黒系案へ変更
+
+### 変更概要
+- AppIconのダーク表示枠のみ黒系アイコンへ変更
+- 通常表示とティント表示はFなしワインレッドしおり案のまま維持
+
+### 変更意図
+ダークモード時に黒系の高級感あるアイコンを使い、通常表示との差分を確認できる状態にするため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/favoreco-app-icon-black-1024.png（ダーク表示用AppIcon PNG）
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/Contents.json（dark luminosity枠のみ黒系案へ変更）
+
+### 確認結果（実機 / ビルド）
+- 通常/ティントは favoreco-app-icon-wine-bookmark-1024.png、ダークは favoreco-app-icon-black-1024.png を参照していることを確認
+- 黒系AppIcon用PNGが1024x1024pxであることを確認
+- ビルド/実機確認は未実施
+
+### 残課題
+- 実機でライト/ダーク切替時のホーム画面アイコン表示を確認する

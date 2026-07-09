@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -308,7 +309,7 @@ struct DataManagementView: View {
                 }
 
                 NavigationLink {
-                    SettingsDocumentView(title: "CSVエクスポート", bodyText: "表計算アプリで開ける形式として準備予定です。ジャンル横断とジャンル別の両方を検討します。")
+                    CSVExportView()
                 } label: {
                     Label("CSVエクスポート", systemImage: "tablecells")
                 }
@@ -334,6 +335,83 @@ struct DataManagementView: View {
         }
         .navigationTitle("データ管理")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct CSVExportView: View {
+    @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
+    @State private var isExporterPresented = false
+    @State private var exportDocument = CSVExportDocument()
+    @State private var exportErrorMessage = ""
+
+    private var csvText: String {
+        CSVExportService.makeVisitsCSV(visits: visits)
+    }
+
+    private var fileName: String {
+        "favoreco-visits-\(Date().formatted(.iso8601.year().month().day()))"
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("記録CSV")
+                        .font(FavorecoTypography.sectionTitle)
+                    Text("保存済みの訪問/鑑賞記録を、表計算アプリで開けるCSVとして書き出します。写真データは含みません。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+            }
+
+            Section("対象データ") {
+                LabeledContent("記録数", value: "\(visits.count)")
+                LabeledContent("形式", value: "CSV / UTF-8")
+                LabeledContent("写真", value: "含めない")
+            }
+
+            Section("書き出し") {
+                Button {
+                    exportDocument = CSVExportDocument(text: csvText)
+                    exportErrorMessage = ""
+                    isExporterPresented = true
+                } label: {
+                    Label("CSVファイルを書き出す", systemImage: "square.and.arrow.up")
+                }
+                .disabled(visits.isEmpty)
+
+                if visits.isEmpty {
+                    Text("書き出せる記録がまだありません。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !exportErrorMessage.isEmpty {
+                    Text(exportErrorMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section("列") {
+                Text("date, category, title, series, venue, rating, status, seat, amount, official_url, tags, companions, note などを書き出します。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("CSVエクスポート")
+        .navigationBarTitleDisplayMode(.inline)
+        .fileExporter(
+            isPresented: $isExporterPresented,
+            document: exportDocument,
+            contentType: .commaSeparatedText,
+            defaultFilename: fileName
+        ) { result in
+            if case .failure(let error) = result {
+                exportErrorMessage = error.localizedDescription
+            }
+        }
     }
 }
 
