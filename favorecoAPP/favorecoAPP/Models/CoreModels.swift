@@ -107,6 +107,124 @@ final class SocialAccount {
 }
 
 @Model
+final class PersonMaster {
+    var id: UUID = UUID()
+    var displayName: String = ""
+    var reading: String = ""
+    var aliasesRaw: String = ""
+    var roleTagsRaw: String = ""
+    var memo: String = ""
+    var officialURL: String = ""
+    var socialLinksRaw: String = ""
+    var imagePath: String = ""
+    var musicBrainzID: String = ""
+    var wikidataQID: String = ""
+    var appleMusicID: String = ""
+    var sourceSnapshotRaw: String = ""
+    var normalizedName: String = ""
+    var isArchived: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    init(
+        id: UUID = UUID(),
+        displayName: String = "",
+        reading: String = "",
+        aliasesRaw: String = "",
+        roleTagsRaw: String = "",
+        memo: String = "",
+        officialURL: String = "",
+        socialLinksRaw: String = "",
+        imagePath: String = "",
+        musicBrainzID: String = "",
+        wikidataQID: String = "",
+        appleMusicID: String = "",
+        sourceSnapshotRaw: String = "",
+        normalizedName: String = "",
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.reading = reading
+        self.aliasesRaw = aliasesRaw
+        self.roleTagsRaw = roleTagsRaw
+        self.memo = memo
+        self.officialURL = officialURL
+        self.socialLinksRaw = socialLinksRaw
+        self.imagePath = imagePath
+        self.musicBrainzID = musicBrainzID
+        self.wikidataQID = wikidataQID
+        self.appleMusicID = appleMusicID
+        self.sourceSnapshotRaw = sourceSnapshotRaw
+        self.normalizedName = normalizedName
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+@Model
+final class PlaceMaster {
+    var id: UUID = UUID()
+    var name: String = ""
+    var reading: String = ""
+    var aliasesRaw: String = ""
+    var placeTagsRaw: String = ""
+    var address: String = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
+    var officialURL: String = ""
+    var memo: String = ""
+    var externalIDsRaw: String = ""
+    var sourceSnapshotRaw: String = ""
+    var normalizedName: String = ""
+    var normalizedAddress: String = ""
+    var isArchived: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    init(
+        id: UUID = UUID(),
+        name: String = "",
+        reading: String = "",
+        aliasesRaw: String = "",
+        placeTagsRaw: String = "",
+        address: String = "",
+        latitude: Double = 0,
+        longitude: Double = 0,
+        officialURL: String = "",
+        memo: String = "",
+        externalIDsRaw: String = "",
+        sourceSnapshotRaw: String = "",
+        normalizedName: String = "",
+        normalizedAddress: String = "",
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.reading = reading
+        self.aliasesRaw = aliasesRaw
+        self.placeTagsRaw = placeTagsRaw
+        self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+        self.officialURL = officialURL
+        self.memo = memo
+        self.externalIDsRaw = externalIDsRaw
+        self.sourceSnapshotRaw = sourceSnapshotRaw
+        self.normalizedName = normalizedName
+        self.normalizedAddress = normalizedAddress
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+@Model
 final class ExperienceEvent {
     var id: UUID = UUID()
     var title: String = ""

@@ -5,6 +5,35 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-09: 無料/有料境界表とPerson/Place最小モデルを追加
+
+### 変更概要
+- 無料/Pro買い切り候補/Premium候補の境界を表に整理した。
+- 無料は、基本記録、写真10枚、URL/動画リンク保存、カレンダー手動追加/追加先選択、基本統計、手動バックアップまで広めに扱う方針にした。
+- Premium候補は、同期/自動バックアップ、外部候補補助、高度取込、OCR高度化、カレンダー片方向自動更新/一括追加を中心にした。
+- `PersonMaster` の最小SwiftDataモデルを追加した。
+- `PlaceMaster` の最小SwiftDataモデルを追加した。
+- アプリSchemaに `PersonMaster` / `PlaceMaster` を登録した。
+- カレンダーのv1範囲を、手動追加/追加先選択に加えて、外部カレンダー予定の読み取り重ね表示までにした。
+- 動画のv1範囲を、外部リンク保存、Photos参照、サムネイル表示までにした。
+
+### 変更意図
+企画で決まった無料/有料境界を一覧化し、後から課金設計で迷わないようにするため。人物・会場は横断マスターとして後続の入力補助、重複統合、サマリーカード、統計に効くため、まずCloudKit互換の最小モデルだけを追加した。カレンダーと動画は、便利さと実装/容量コストのバランスを取り、v1の現実的な範囲を明確にした。
+
+### 主な変更ファイル
+- favoreco/CLAUDE.md（無料/有料境界表、カレンダーv1範囲、動画v1範囲を更新）
+- favorecoAPP/favorecoAPP/Models/CoreModels.swift（`PersonMaster` / `PlaceMaster` 追加）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（Schema登録）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/favorecoDerivedPersonPlace build` 成功。
+
+### 残課題
+- `PersonMaster` / `PlaceMaster` と `ExperienceEvent` / `Visit` を結ぶリンクモデルを設計する。
+- 重複候補UI、統合UI、外部候補取得UIを実装する。
+- 外部カレンダー読み取り重ね表示と動画サムネイルの実装を行う。
+
 ## 2026-07-09: 美術展ユニット/関係タイプ/サマリーカード方針を確定
 
 ### 変更概要
