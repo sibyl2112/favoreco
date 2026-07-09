@@ -16,7 +16,7 @@ struct RecordUnitDefinition: Identifiable {
 
     static let all: [RecordUnitDefinition] = [
         RecordUnitDefinition(id: "basic", name: "基本情報", description: "対象名、日付、場所、種別、評価など", isRequired: true, isImplemented: true),
-        RecordUnitDefinition(id: "people", name: "人物・団体", description: "出演者、作家、作者、主催、制作など", isRequired: false, isImplemented: false),
+        RecordUnitDefinition(id: "people", name: "人物・団体", description: "出演者、作家、作者、主催、制作など", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "ticketPlan", name: "チケット・予定", description: "チケット、座席、申込、発券、予定管理", isRequired: false, isImplemented: false),
         RecordUnitDefinition(id: "photos", name: "写真", description: "思い出写真、カバー写真、半券写真など", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "importOCR", name: "OCR・取込", description: "半券、チケット、レシート、リスト画像の読み取り", isRequired: false, isImplemented: false),

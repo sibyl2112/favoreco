@@ -5,6 +5,37 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 人物・団体ユニットの実入力を追加
+
+### 変更概要
+- `people` ユニットを準備中表示から実入力に変更した。
+- 新規記録、既存対象への回追加、保存済み記録編集で、人物・団体名と役割を追加できるようにした。
+- 入力された人物・団体は `PersonMaster` を正規化名で再利用し、なければ新規作成するようにした。
+- `ExperienceEvent` / `Visit` との紐付けは `EventPersonLink` に保存し、役割はリンク側の `roleKey` / `displayRole` に持たせた。
+- 編集画面では保存済みリンクの削除予約と、新規追加予定リンクの削除ができるようにした。
+- 入力中の名前に対して、既存 `PersonMaster` から簡易候補を表示するようにした。
+- 記録詳細画面に、人物・団体を役割つきで表示するセクションを追加した。
+- `RecordUnitDefinition` で `people` を実装済みユニットとして扱うようにした。
+
+### 変更意図
+観劇/ライブ/映画/本/美術展などで、人物・団体は記録価値と後続の統計・検索・重複統合に直結するため、早めにマスターとリンクを実際に動かすため。巨大な外部名鑑やApple Music連携はまだ接続せず、まずは手入力で正本データを作り、後から外部候補を入力補助として重ねられる構造にした。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（人物・団体入力、既存候補、PersonMaster再利用、EventPersonLink保存）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（人物・団体セクション表示）
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（peopleユニットを実装済みに変更）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/favorecoDerivedPeopleUnit build` 成功。
+
+### 残課題
+- PersonMaster一覧、詳細編集、重複統合UIは未実装。
+- Apple Music / MusicBrainz / Wikidata / TMDb等の外部候補は未接続。
+- Home/一覧/サマリーカードへの人物・団体表示は未接続。
+- 役割プリセットは共通固定。ジャンル別の初期候補最適化は後続で行う。
+
 ## 2026-07-10: 写真ユニットの実入力を追加
 
 ### 変更概要

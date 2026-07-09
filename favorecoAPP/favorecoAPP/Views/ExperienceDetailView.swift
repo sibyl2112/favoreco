@@ -11,6 +11,7 @@ import UIKit
 
 struct ExperienceDetailView: View {
     let visit: Visit
+    @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var isShowingEdit = false
 
     private var event: ExperienceEvent? {
@@ -43,11 +44,20 @@ struct ExperienceDetailView: View {
             .sorted { $0.createdAt < $1.createdAt }
     }
 
+    private var linkedPeople: [EventPersonLink] {
+        personLinks
+            .filter { link in
+                !link.isArchived && (link.event?.id == event?.id || link.visit?.id == visit.id)
+            }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero
                 photoSection
+                peopleSection
                 basicInfo
                 memoSection
             }
@@ -133,6 +143,33 @@ struct ExperienceDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var peopleSection: some View {
+        if !linkedPeople.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("人物・団体")
+
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(linkedPeople) { link in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text(link.displayRole.isEmpty ? roleName(for: link.roleKey) : link.displayRole)
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(accentColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(accentColor.opacity(0.12), in: Capsule())
+
+                            Text(link.nameSnapshot.isEmpty ? link.person?.displayName ?? "人物・団体" : link.nameSnapshot)
+                                .font(FavorecoTypography.bodyStrong)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            .sectionCard()
+        }
+    }
+
     private var basicInfo: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(template.visitSectionTitle)
@@ -178,6 +215,29 @@ struct ExperienceDetailView: View {
             return "未評価"
         }
         return String(format: "%.1f", visit.overallRating)
+    }
+
+    private func roleName(for roleKey: String) -> String {
+        switch roleKey {
+        case "artist": return "アーティスト"
+        case "cast": return "出演"
+        case "lead": return "主演"
+        case "writer": return "作家"
+        case "author": return "作者"
+        case "director": return "監督"
+        case "screenplay": return "脚本"
+        case "stage_director": return "演出"
+        case "original_work": return "原作"
+        case "music": return "音楽"
+        case "performer": return "演奏"
+        case "translator": return "翻訳"
+        case "curator": return "キュレーター"
+        case "organizer": return "主催"
+        case "production": return "制作"
+        case "publisher": return "出版社"
+        case "guest": return "ゲスト"
+        default: return "その他"
+        }
     }
 }
 
