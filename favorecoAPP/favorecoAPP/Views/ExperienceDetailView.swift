@@ -11,9 +11,13 @@ import UIKit
 
 struct ExperienceDetailView: View {
     let visit: Visit
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var isShowingEdit = false
     @State private var calendarDraft: CalendarEventDraft?
+    @State private var isShowingDeleteConfirmation = false
+    @State private var deletionErrorMessage: String?
 
     private var event: ExperienceEvent? {
         visit.event
@@ -80,10 +84,20 @@ struct ExperienceDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isShowingEdit = true
+                Menu {
+                    Button {
+                        isShowingEdit = true
+                    } label: {
+                        Label("編集", systemImage: "pencil")
+                    }
+
+                    Button(role: .destructive) {
+                        isShowingDeleteConfirmation = true
+                    } label: {
+                        Label("この記録だけ削除", systemImage: "trash")
+                    }
                 } label: {
-                    Label("編集", systemImage: "pencil")
+                    Label("メニュー", systemImage: "ellipsis.circle")
                 }
             }
         }
@@ -92,6 +106,32 @@ struct ExperienceDetailView: View {
         }
         .sheet(item: $calendarDraft) { draft in
             CalendarEventEditSheet(draft: draft)
+        }
+        .confirmationDialog("この記録を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
+            Button("この記録だけ削除", role: .destructive) {
+                deleteThisVisit()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("この回の記録と写真を削除します。対象（\(eventTitle)）と他の記録は残ります。取り消せません。")
+        }
+        .alert("削除に失敗しました", isPresented: Binding(
+            get: { deletionErrorMessage != nil },
+            set: { if !$0 { deletionErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { deletionErrorMessage = nil }
+        } message: {
+            Text(deletionErrorMessage ?? "")
+        }
+    }
+
+    private func deleteThisVisit() {
+        do {
+            try RecordDeletionService.deleteVisit(visit, in: modelContext)
+            dismiss()
+        } catch {
+            deletionErrorMessage = "この記録を削除できませんでした。もう一度お試しください。"
+            assertionFailure("Failed to delete visit: \(error)")
         }
     }
 

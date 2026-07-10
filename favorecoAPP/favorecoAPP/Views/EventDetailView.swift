@@ -10,8 +10,12 @@ import SwiftData
 
 struct EventDetailView: View {
     let event: ExperienceEvent
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var isShowingAddVisit = false
     @State private var isShowingEditEvent = false
+    @State private var isShowingDeleteConfirmation = false
+    @State private var deletionErrorMessage: String?
 
     private var category: RecordCategory? {
         event.category
@@ -45,10 +49,20 @@ struct EventDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isShowingEditEvent = true
+                Menu {
+                    Button {
+                        isShowingEditEvent = true
+                    } label: {
+                        Label("対象を編集", systemImage: "pencil")
+                    }
+
+                    Button(role: .destructive) {
+                        isShowingDeleteConfirmation = true
+                    } label: {
+                        Label("この対象とすべての記録を削除", systemImage: "trash")
+                    }
                 } label: {
-                    Label("対象を編集", systemImage: "pencil")
+                    Label("メニュー", systemImage: "ellipsis.circle")
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -64,6 +78,32 @@ struct EventDetailView: View {
         }
         .sheet(isPresented: $isShowingEditEvent) {
             EditEventView(event: event)
+        }
+        .confirmationDialog("この対象を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
+            Button("この対象とすべての記録を削除", role: .destructive) {
+                deleteThisEvent()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("「\(eventTitle)」と、ひもづく記録 \(visits.count) 件（写真を含む）をすべて削除します。取り消せません。")
+        }
+        .alert("削除に失敗しました", isPresented: Binding(
+            get: { deletionErrorMessage != nil },
+            set: { if !$0 { deletionErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { deletionErrorMessage = nil }
+        } message: {
+            Text(deletionErrorMessage ?? "")
+        }
+    }
+
+    private func deleteThisEvent() {
+        do {
+            try RecordDeletionService.deleteEvent(event, in: modelContext)
+            dismiss()
+        } catch {
+            deletionErrorMessage = "この対象を削除できませんでした。もう一度お試しください。"
+            assertionFailure("Failed to delete event: \(error)")
         }
     }
 

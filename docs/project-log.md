@@ -5,6 +5,34 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 通常記録に削除機能を追加（ハード削除＋関連整理・方式1）
+
+### 変更概要
+監査で欠落していた通常記録の削除を、ユーザー選択の**方式1（ハード削除＋関連整理）**＋追加条件で実装。データモデル定義は変更せず、削除時の後始末のみ追加。
+- **`RecordDeletionService.swift`（新規）**：削除ロジックを集約。
+  - `deleteVisit`：この記録(Visit)だけ削除。**Eventは残す（0件になっても自動削除しない）**。Plan.visit の該当参照を nil 解除、EventPersonLink の visit 参照を削除、`modelContext.delete(visit)`（PhotoBlobは Visit.photos の `.cascade` で連鎖・CoreModels:593で確認）、`modelContext.save()` を明示。
+  - `deleteEvent`：対象(Event)と配下すべてを削除。Event の `.cascade` で Visit/Plan（→PhotoBlob/TicketAttempt）が連鎖。inverse未定義の EventPersonLink（event参照・配下visit参照）を先に削除、外部 Plan.visit 参照を nil 解除、`save()` 明示。
+- **ExperienceDetailView**：メニューに **「この記録だけ削除」**（破壊的）＋確認ダイアログ（対象名・他記録は残る旨）。
+- **EventDetailView**：メニューに **「この対象とすべての記録を削除」**（破壊的）＋確認ダイアログに**関連記録件数（visits.count）を表示**。
+- 両画面とも**削除失敗時は assertionFailure＋`.alert` で画面にエラーメッセージ表示**。成功時は `dismiss()`。一覧(Home/Calendar/Category)は @Query で自動反映。
+
+### 追加条件の充足
+Visit/Event削除を明確分離／確認ダイアログ／Visit削除でEvent保持・0件でも自動削除しない／Event削除は件数表示／Plan.visit nil解除／EventPersonLink等を先に解除・削除／PhotoBlob cascadeを実コード確認／save()明示／失敗時に画面エラー表示／大規模リファクタなし。
+
+### 変更しないもの
+CoreModels（データモデル定義）・通知・JSON構造は不変（削除の後始末のみ）。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/RecordDeletionService.swift（新規）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（Visit単体削除）
+- favorecoAPP/favorecoAPP/Views/EventDetailView.swift（Event全体削除）
+
+### 確認結果（実機 / ビルド）
+コード整合確認（波括弧・import・参照シンボル・cascade根拠）。**xcodebuild／実機（Visit削除でEvent保持・Event削除で件数表示と全消去・Plan.visit解除・再起動保持・一覧反映）はMac側で要確認**。
+
+### 残課題
+- Mac側で削除の実機確認（特に：他Visitが残るEventでVisit1件削除→Event残存／Event削除→配下Visit・写真・Plan全消去／削除後の一覧・再起動反映）。
+
 ## 2026-07-10: 通常記録ワークフローv1 静的監査（削除機能の欠落を検出・要判断）
 
 ### 前提
