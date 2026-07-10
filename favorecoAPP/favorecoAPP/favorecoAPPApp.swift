@@ -10,6 +10,8 @@ import SwiftData
 
 @main
 struct favorecoAPPApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     init() {
         FontRegistrar.registerBundledFonts()
     }

@@ -5,6 +5,26 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 前面通知表示対応（UNUserNotificationCenterDelegate）
+
+### 変更概要
+- アプリ**前面表示中もローカル通知（チケット申込締切・当落・入金締切等）をバナー/サウンド/バッジで表示**する対応。iOS標準では前面時にバナーが出ないため、`UNUserNotificationCenterDelegate` を設定して明示表示させる。
+- `AppDelegate.swift`（新規）：`UIApplicationDelegate` + `UNUserNotificationCenterDelegate`。`didFinishLaunchingWithOptions` で `UNUserNotificationCenter.current().delegate = self`、async版 `willPresent` で `[.banner, .sound, .badge]` を返す。
+- `favorecoAPPApp.swift`：`@UIApplicationDelegateAdaptor(AppDelegate.self)` を追加（1行）。
+
+### 変更しないもの（仕様どおり）
+TicketNotificationScheduler／TicketAccountNotificationScheduler／NotificationDebugView／通知ID／通知タイミング／AppStorage は一切変更なし（表示挙動のみ追加）。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/AppDelegate.swift（新規）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（DelegateAdaptor 追加）
+
+### 確認結果（実機 / ビルド）
+コードレベルで整合確認（波括弧バランス・import・シンボル）。**xcodebuild／実機確認はMac側で必要**（当環境はLinuxでXcodeなし）。実機手順：①起動 ②通知診断で5秒テスト通知 ③前面のまま待機 ④バナー表示確認 ⑤バックグラウンドでも従来通り。
+
+### 残課題
+- Mac側でビルド・前面/バックグラウンド両方の通知表示を実機確認。
+
 ## 2026-07-10: チケット申込のクイック状態更新を追加
 
 ### 変更概要
