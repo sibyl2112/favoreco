@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 月刊/年間Favorecoの下書き画面を実装
+
+### 変更概要
+- 統計タブの `月刊Favoreco` / `年間Favoreco` をタップ可能にした。
+- 今月/今年のVisitから、記録数、写真数、ジャンル数、平均評価、最多ジャンル、最多場所、金額、ジャンル傾向、カード候補を表示する下書き画面を追加した。
+- 下書き画面でも金額は初期非表示にし、目アイコンで表示/非表示を切り替えるようにした。
+
+### 変更意図
+Premium候補の自動思い出レポートを、単なる予告ではなく、まずローカル集計の下書きとして触れる状態にするため。画像化、自動生成、同期込みのレポートへ進む前に、どんな情報がカード化に使えるかを画面で確認できるようにした。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（レポート下書き画面追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedReportDraftNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で月刊/年間カードのタップ感、空データ、多件データ、金額伏せ字、Dynamic Type時の見え方を確認する。
+- レポート画像化、共有、通知、自動生成、去年同月比較、同期込み集計は未実装。
+
 ## 2026-07-10: 思い出レポートをPremium候補として画面に反映
 
 ### 変更概要

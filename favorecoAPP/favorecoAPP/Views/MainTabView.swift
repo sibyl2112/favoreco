@@ -507,20 +507,275 @@ private struct StatsView: View {
                 .font(FavorecoTypography.sectionTitle)
 
             VStack(spacing: 10) {
-                StatsReportPreviewCard(
-                    title: "月刊Favoreco",
-                    badge: "Premium候補",
-                    detail: "毎月の記録、写真、ジャンル傾向、印象的な体験を自動で1枚の思い出カードにまとめる構想です。",
-                    systemImage: "sparkles"
+                NavigationLink {
+                    StatsReportDraftView(kind: .monthly, visits: thisMonthVisits, categories: categories)
+                } label: {
+                    StatsReportPreviewCard(
+                        title: "月刊Favoreco",
+                        badge: "Premium候補",
+                        detail: "今月の記録、写真、ジャンル傾向、印象的な体験を1枚の思い出カードにまとめる下書きです。",
+                        systemImage: "sparkles"
+                    )
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    StatsReportDraftView(kind: .yearly, visits: thisYearVisits, categories: categories)
+                } label: {
+                    StatsReportPreviewCard(
+                        title: "年間Favoreco",
+                        badge: "Pro / Premium候補",
+                        detail: "年間ベスト、今年の10枚、よく通った場所、ジャンル横断の変化を見返す下書きです。",
+                        systemImage: "calendar.badge.star"
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func formattedAmount(_ amount: Decimal) -> String {
+        let number = NSDecimalNumber(decimal: amount)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "JPY"
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: number) ?? "¥\(number.stringValue)"
+    }
+}
+
+private enum StatsReportKind {
+    case monthly
+    case yearly
+
+    var title: String {
+        switch self {
+        case .monthly:
+            return "月刊Favoreco"
+        case .yearly:
+            return "年間Favoreco"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .monthly:
+            return Date().formatted(.dateTime.year().month(.wide))
+        case .yearly:
+            return Date().formatted(.dateTime.year())
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .monthly:
+            return "今月の記録はまだありません"
+        case .yearly:
+            return "今年の記録はまだありません"
+        }
+    }
+
+    var emptyMessage: String {
+        switch self {
+        case .monthly:
+            return "記録が入ると、今月の思い出カード候補がここに表示されます。"
+        case .yearly:
+            return "記録が入ると、年間まとめや今年のベスト候補がここに表示されます。"
+        }
+    }
+}
+
+private struct StatsReportDraftView: View {
+    let kind: StatsReportKind
+    let visits: [Visit]
+    let categories: [RecordCategory]
+    @State private var showsAmount = false
+
+    private var sortedVisits: [Visit] {
+        visits.sorted { $0.visitedAt > $1.visitedAt }
+    }
+
+    private var categoryStats: [CategoryStat] {
+        categories
+            .filter { !$0.isArchived }
+            .map { category in
+                let count = visits.filter { $0.event?.category?.id == category.id }.count
+                return CategoryStat(category: category, count: count)
+            }
+            .filter { $0.count > 0 }
+            .sorted { $0.count > $1.count }
+    }
+
+    private var totalAmount: Decimal {
+        visits.reduce(Decimal(0)) { $0 + $1.amount }
+    }
+
+    private var photoCount: Int {
+        visits.reduce(0) { $0 + ($1.photos?.count ?? 0) }
+    }
+
+    private var averageRating: Double {
+        let ratedVisits = visits.filter { $0.overallRating > 0 }
+        guard !ratedVisits.isEmpty else { return 0 }
+        return ratedVisits.reduce(0) { $0 + $1.overallRating } / Double(ratedVisits.count)
+    }
+
+    private var topVenueName: String {
+        let names = visits
+            .map { $0.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return mostFrequentValue(in: names) ?? "未記録"
+    }
+
+    private var topCategoryName: String {
+        categoryStats.first?.category.name ?? "未記録"
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                reportHero
+
+                if visits.isEmpty {
+                    PlaceholderRow(
+                        icon: "sparkles",
+                        title: kind.emptyTitle,
+                        message: kind.emptyMessage
+                    )
+                    .padding(16)
+                    .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                } else {
+                    reportMetrics
+                    reportHighlights
+                    reportCategories
+                    recentRecords
+                    reportNextStep
+                }
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle(kind.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var reportHero: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(kind.subtitle)
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.secondary)
+            Text(kind.title)
+                .font(FavorecoTypography.jpSerif(32, weight: .bold, relativeTo: .largeTitle))
+            Text("今はローカル集計の下書きです。将来は写真、天気、場所、人物、去年同月比較を組み合わせて、自動で思い出カード化します。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var reportMetrics: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            StatsMetricCard(title: "記録", value: "\(visits.count)", icon: "rectangle.stack")
+            StatsMetricCard(title: "写真", value: "\(photoCount)", icon: "photo.on.rectangle")
+            StatsMetricCard(title: "ジャンル", value: "\(categoryStats.count)", icon: "square.grid.2x2")
+            StatsMetricCard(title: "平均評価", value: averageRating == 0 ? "-" : String(format: "%.1f", averageRating), icon: "star.fill")
+        }
+    }
+
+    private var reportHighlights: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("ハイライト")
+                .font(FavorecoTypography.sectionTitle)
+
+            VStack(spacing: 10) {
+                StatsWideCard(
+                    title: "いちばん多かったジャンル",
+                    value: topCategoryName,
+                    caption: "今後はジャンル横断の変化や、前月/前年との差もここに出します。",
+                    icon: "chart.pie"
                 )
-                StatsReportPreviewCard(
-                    title: "年間Favoreco",
-                    badge: "Pro / Premium候補",
-                    detail: "年間ベスト、今年の10枚、よく通った場所、ジャンル横断の変化を画像化できるようにします。",
-                    systemImage: "calendar.badge.star"
+                StatsWideCard(
+                    title: "よく出てきた場所",
+                    value: topVenueName,
+                    caption: "会場マスターが育つと、よく通った劇場・映画館・寺社・施設も見返せます。",
+                    icon: "mappin.and.ellipse"
+                )
+                StatsPrivateAmountCard(
+                    title: "記録済み金額",
+                    value: formattedAmount(totalAmount),
+                    isRevealed: showsAmount,
+                    caption: "金額はプライバシー情報なので、この下書きでも初期表示では伏せます。",
+                    icon: "yensign.circle",
+                    onToggle: {
+                        withAnimation(.snappy) {
+                            showsAmount.toggle()
+                        }
+                    }
                 )
             }
         }
+    }
+
+    @ViewBuilder
+    private var reportCategories: some View {
+        if !categoryStats.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("ジャンル傾向")
+                    .font(FavorecoTypography.sectionTitle)
+
+                VStack(spacing: 10) {
+                    ForEach(categoryStats.prefix(5)) { stat in
+                        CategoryStatRow(stat: stat, maxCount: categoryStats.first?.count ?? 1)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recentRecords: some View {
+        if !sortedVisits.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("カード候補")
+                    .font(FavorecoTypography.sectionTitle)
+
+                VStack(spacing: 10) {
+                    ForEach(Array(sortedVisits.prefix(3))) { visit in
+                        NavigationLink {
+                            ExperienceDetailView(visit: visit)
+                        } label: {
+                            VisitSummaryRow(visit: visit)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var reportNextStep: some View {
+        StatsWideCard(
+            title: "次に実装すること",
+            value: "画像化・共有",
+            caption: "この下書きを、月刊/年間のカード画像として保存・共有できる形へ育てます。",
+            icon: "square.and.arrow.up"
+        )
+    }
+
+    private func mostFrequentValue(in values: [String]) -> String? {
+        Dictionary(grouping: values, by: { $0 })
+            .map { (value: $0.key, count: $0.value.count) }
+            .sorted { lhs, rhs in
+                if lhs.count == rhs.count {
+                    return lhs.value < rhs.value
+                }
+                return lhs.count > rhs.count
+            }
+            .first?
+            .value
     }
 
     private func formattedAmount(_ amount: Decimal) -> String {
