@@ -5,6 +5,35 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 通常記録ワークフローv1 静的監査（削除機能の欠落を検出・要判断）
+
+### 前提
+- 実機なし（Linux）のため、11シナリオ（新規対象→初回記録→Home/Calendar反映→詳細→編集→2回目記録→Event非重複→写真/評価/タグ保持→削除→再起動保持）を**静的トレース＋2観点の並行監査**で確認。
+
+### 監査結果：既存フローは正しい（修正不要）
+- **Event/Visit責務分離＝正しい**：Event＝対象情報（title/seriesName/officialURL/category）のみ、Visit＝回情報（日時/評価/座席/金額/メモ/写真/outcome/unitFields）のみ。`AddExperienceView.save`（新規）・`AddVisitView.save`（追記）・`EditExperienceView.save`（編集）いずれも遵守。
+- **2回目記録でEventは複製しない（シナリオ8 OK）**：`AddVisitView` は既存 `ExperienceEvent` を受け取り `Visit(event: event)` を1件insertするのみ。新Event生成なし。導線は `CategoryTopView` の行内＋→`selectedEventForNewVisit`。
+- **編集の差分処理＝正しい**：写真/人物リンクは削除マーク→`modelContext.delete`→pending挿入で二重挿入なし。共有PersonMasterは消さずEventPersonLinkのみ削除。
+- **再起動保持＝OK**：`ModelConfiguration(isStoredInMemoryOnly: false)`。Home/Calendar/Categoryは@Query自動反映（onAppearスナップショットなし）。
+- **クラッシュ無し**：対象パスに強制アンラップ無し・リレーションは optional/`?? []`。
+
+### 検出した重大ギャップ（要ユーザー判断）
+- **通常記録の「削除」UIが存在しない**：ExperienceDetailView/EventDetailView/CategoryTop/Home いずれにも Visit/Event の削除（onDelete/swipe/modelContext.delete）が無い。→ **対象機能「削除」・シナリオ10「削除後の反映」は現状実行不能**。
+- **実装方式に制約の衝突**：`ExperienceEvent` は `isArchived` を持つが **`Visit` は `isArchived` を持たない**。仕様「既存データモデルは変更しない」を守るとVisitのソフト削除ができず、Visit単体削除はハード削除（`modelContext.delete`）しかない。その場合 `Visit.photos` はcascadeで消えるが、**EventPersonLink（visit参照）と Plan.visit は inverse未定義のため手動クリーンアップが必要**（放置すると孤立リンク/ダングリング参照）。
+
+### 参考（低確度・未修正）
+- `AddVisitView` の2回目記録で人物リンクが `event: nil, visit: visit`（visitスコープ）。他フローは `event`スコープ。詳細表示は event/visit 両方を拾うため当該回には表示される＝観測上の破綻はなし。設計意図次第のため今回は変更せず。
+- `CategoryTopView` の `sheet(isPresented:)`＋内部if-letはタイミング的に空シートの微リスク（`sheet(item:)`推奨）。クラッシュではない・低。
+
+### 主な変更ファイル
+- docs/project-log.md（本記録のみ・コード変更なし＝既存フローに修正すべきバグが無かったため）
+
+### 確認結果（実機 / ビルド）
+静的監査のみ。ビルド/実機はMac側。
+
+### 残課題（要判断）
+- **削除機能の実装方針**：①Event単位のソフト削除（Event.isArchived流用＋各一覧にフィルタ追加・Visit単体削除は不可）／②ハード削除（Visit/Event＋関連手動クリーンアップ・不可逆・モデル不変）／③Visit.isArchived追加（最もきれいだが「モデル変更しない」に抵触）／④別タスク化。方針決定後に実装＋実機確認。
+
 ## 2026-07-10: チケットワークフローv1 静的監査＋不具合修正（outcomeKey体系不一致）
 
 ### 前提（正直な範囲）
