@@ -5,6 +5,30 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 予定から参加記録を作成する導線を追加
+
+### 変更概要
+- `PlanDetailView` のメニューに「参加記録を作成 / 参加記録を開く」を追加した。
+- 未作成の場合は確認ダイアログを挟み、予定のタイトル、日時、会場、チケット状態、座席、金額、メモを引き継いだ `ExperienceEvent` / `Visit` を作成するようにした。
+- 作成した `Visit` を `Plan.visit` に紐付け、作成後は記録詳細へ遷移するようにした。
+- 参加記録作成時は `Plan.stateKey` を `attended` にし、最新申込が落選/見送りでなければ `TicketAttempt.statusKey` も `attended` に更新するようにした。
+
+### 変更意図
+チケット予定を「行って終わり」にせず、そのまま体験記録へつなげるため。最初は最小の記録を自動作成し、あとから詳細編集で写真や感想を追加できる流れにする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/PlanDetailView.swift（参加記録作成/表示導線）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedPlanToVisitNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で予定詳細から参加記録作成後、記録詳細へ遷移し、Home/記録一覧/CalendarでVisitとして見えることを確認する。
+- 作成後に詳細編集で写真・感想・人物などを追記する導線の使い勝手を確認する。
+- 複数申込がある場合、どの申込を参加記録へ反映するかは現状「更新日時が新しい申込」を採用する。必要なら明示選択UIを追加する。
+
 ## 2026-07-10: 登録情報の非表示と期限通知キャンセルを追加
 
 ### 変更概要
