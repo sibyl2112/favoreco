@@ -14,6 +14,7 @@ struct MainTabView: View {
     @State private var selectedTab: MainTab = .home
     @State private var isShowingCreateMenu = false
     @State private var isShowingAddInboxItem = false
+    @State private var isShowingAddTicketPlan = false
     @State private var selectedCategoryForRecord: RecordCategory?
 
     private var visibleCategories: [RecordCategory] {
@@ -67,6 +68,9 @@ struct MainTabView: View {
             Button("あとで記録") {
                 isShowingAddInboxItem = true
             }
+            Button("予定・チケットを追加") {
+                isShowingAddTicketPlan = true
+            }
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("今すぐ記録するか、Inboxに一時保存します。")
@@ -76,6 +80,9 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $isShowingAddInboxItem) {
             AddInboxItemView()
+        }
+        .sheet(isPresented: $isShowingAddTicketPlan) {
+            AddTicketPlanView()
         }
     }
 }
@@ -136,6 +143,7 @@ private struct RecordsView: View {
 
 private struct CalendarView: View {
     @Query(sort: \Visit.visitedAt, order: .forward) private var visits: [Visit]
+    @Query(sort: \Plan.startsAt, order: .forward) private var plans: [Plan]
     @AppStorage(AppStorageKeys.showsExternalCalendarEvents) private var showsExternalCalendarEvents = true
     @StateObject private var externalCalendarStore = ExternalCalendarOverlayStore()
     @State private var displayedMonth = Date().startOfMonth
@@ -153,6 +161,12 @@ private struct CalendarView: View {
         }
     }
 
+    private var plansByDay: [Date: [Plan]] {
+        Dictionary(grouping: plans.filter { !$0.isArchived }) { plan in
+            calendar.startOfDay(for: plan.startsAt)
+        }
+    }
+
     private var externalEventsByDay: [Date: [ExternalCalendarEvent]] {
         Dictionary(grouping: externalCalendarStore.events) { event in
             calendar.startOfDay(for: event.startDate)
@@ -163,6 +177,10 @@ private struct CalendarView: View {
         visitsByDay[calendar.startOfDay(for: selectedDate)] ?? []
     }
 
+    private var selectedDayPlans: [Plan] {
+        plansByDay[calendar.startOfDay(for: selectedDate)] ?? []
+    }
+
     private var selectedDayExternalEvents: [ExternalCalendarEvent] {
         externalEventsByDay[calendar.startOfDay(for: selectedDate)] ?? []
     }
@@ -171,6 +189,14 @@ private struct CalendarView: View {
         let today = calendar.startOfDay(for: Date())
         return visits
             .filter { calendar.startOfDay(for: $0.visitedAt) >= today }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    private var upcomingPlans: [Plan] {
+        let now = Date()
+        return plans
+            .filter { !$0.isArchived && $0.endsAt >= now }
             .prefix(5)
             .map { $0 }
     }
@@ -321,12 +347,14 @@ private struct CalendarView: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
             ForEach(daysInDisplayedMonth) { day in
                 let dayVisits = visitsByDay[calendar.startOfDay(for: day.date)] ?? []
+                let dayPlans = plansByDay[calendar.startOfDay(for: day.date)] ?? []
                 let dayExternalEvents = externalEventsByDay[calendar.startOfDay(for: day.date)] ?? []
                 CalendarDayCell(
                     day: day,
                     isSelected: calendar.isDate(day.date, inSameDayAs: selectedDate),
                     isToday: calendar.isDateInToday(day.date),
                     visitCount: dayVisits.count,
+                    planCount: dayPlans.count,
                     externalEventCount: showsExternalCalendarEvents ? dayExternalEvents.count : 0
                 ) {
                     selectedDate = day.date
@@ -345,7 +373,7 @@ private struct CalendarView: View {
             Text(selectedDate.formatted(date: .long, time: .omitted))
                 .font(FavorecoTypography.sectionTitle)
 
-            if selectedDayVisits.isEmpty && (!showsExternalCalendarEvents || selectedDayExternalEvents.isEmpty) {
+            if selectedDayVisits.isEmpty && selectedDayPlans.isEmpty && (!showsExternalCalendarEvents || selectedDayExternalEvents.isEmpty) {
                 PlaceholderRow(
                     icon: "calendar.badge.exclamationmark",
                     title: "この日の記録はありません",
@@ -355,7 +383,22 @@ private struct CalendarView: View {
                 .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else {
                 VStack(alignment: .leading, spacing: 10) {
+                    if !selectedDayPlans.isEmpty {
+                        Text("予定・チケット")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
+
+                        ForEach(selectedDayPlans) { plan in
+                            PlanSummaryRow(plan: plan)
+                        }
+                    }
+
                     if !selectedDayVisits.isEmpty {
+                        Text("記録")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, selectedDayPlans.isEmpty ? 0 : 4)
+
                         ForEach(selectedDayVisits) { visit in
                             NavigationLink {
                                 ExperienceDetailView(visit: visit)
@@ -370,7 +413,7 @@ private struct CalendarView: View {
                         Text("外部カレンダー")
                             .font(FavorecoTypography.captionStrong)
                             .foregroundStyle(.secondary)
-                            .padding(.top, selectedDayVisits.isEmpty ? 0 : 4)
+                            .padding(.top, selectedDayVisits.isEmpty && selectedDayPlans.isEmpty ? 0 : 4)
 
                         ForEach(selectedDayExternalEvents) { event in
                             ExternalCalendarEventRow(event: event)
@@ -383,13 +426,24 @@ private struct CalendarView: View {
 
     @ViewBuilder
     private var upcomingSection: some View {
-        if !upcomingVisits.isEmpty || (showsExternalCalendarEvents && !upcomingExternalEvents.isEmpty) {
+        if !upcomingPlans.isEmpty || !upcomingVisits.isEmpty || (showsExternalCalendarEvents && !upcomingExternalEvents.isEmpty) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("直近の予定")
                     .font(FavorecoTypography.sectionTitle)
 
                 VStack(alignment: .leading, spacing: 10) {
+                    if !upcomingPlans.isEmpty {
+                        ForEach(upcomingPlans) { plan in
+                            PlanSummaryRow(plan: plan)
+                        }
+                    }
+
                     if !upcomingVisits.isEmpty {
+                        Text("記録")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, upcomingPlans.isEmpty ? 0 : 4)
+
                         ForEach(upcomingVisits) { visit in
                             NavigationLink {
                                 ExperienceDetailView(visit: visit)
@@ -404,7 +458,7 @@ private struct CalendarView: View {
                         Text("外部カレンダー")
                             .font(FavorecoTypography.captionStrong)
                             .foregroundStyle(.secondary)
-                            .padding(.top, upcomingVisits.isEmpty ? 0 : 4)
+                            .padding(.top, upcomingVisits.isEmpty && upcomingPlans.isEmpty ? 0 : 4)
 
                         ForEach(upcomingExternalEvents) { event in
                             ExternalCalendarEventRow(event: event)
@@ -461,6 +515,7 @@ private struct CalendarDayCell: View {
     let isSelected: Bool
     let isToday: Bool
     let visitCount: Int
+    let planCount: Int
     let externalEventCount: Int
     let action: () -> Void
 
@@ -476,6 +531,11 @@ private struct CalendarDayCell: View {
                         Circle()
                             .fill(isSelected ? .white : Color.accentColor)
                             .frame(width: 4, height: 4)
+                    }
+                    ForEach(0..<min(planCount, 2), id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 1, style: .continuous)
+                            .fill(isSelected ? .white : Color.orange)
+                            .frame(width: 5, height: 4)
                     }
                     ForEach(0..<min(externalEventCount, 2), id: \.self) { _ in
                         Circle()
@@ -504,10 +564,72 @@ private struct CalendarDayCell: View {
         if visitCount > 0 {
             return AnyShapeStyle(Color.accentColor.opacity(0.10))
         }
+        if planCount > 0 {
+            return AnyShapeStyle(Color.orange.opacity(0.12))
+        }
         if externalEventCount > 0 {
             return AnyShapeStyle(Color(.tertiarySystemGroupedBackground))
         }
         return AnyShapeStyle(Color(.secondarySystemGroupedBackground))
+    }
+}
+
+private struct PlanSummaryRow: View {
+    let plan: Plan
+
+    private var categoryColor: Color {
+        Color(hex: plan.category?.colorHex ?? "#147C88")
+    }
+
+    private var ticketAttempt: TicketAttempt? {
+        plan.ticketAttempts?.filter { !$0.isArchived }.sorted { $0.updatedAt > $1.updatedAt }.first
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: plan.category?.iconSymbol ?? "ticket")
+                .font(.title3)
+                .foregroundStyle(categoryColor)
+                .frame(width: 44, height: 44)
+                .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(plan.title.isEmpty ? "予定" : plan.title)
+                        .font(FavorecoTypography.bodyStrong)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+
+                    Spacer(minLength: 8)
+
+                    if let ticketAttempt {
+                        Text(TicketStatusDefinition.name(for: ticketAttempt.statusKey))
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.orange)
+                            .lineLimit(1)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Label(plan.startsAt.formatted(date: .omitted, time: .shortened), systemImage: "clock")
+                    if !plan.venueNameSnapshot.isEmpty {
+                        Label(plan.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                    }
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+                if let ticketAttempt, !ticketAttempt.entryRouteKey.isEmpty {
+                    Text(TicketEntryRouteDefinition.name(for: ticketAttempt.entryRouteKey))
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(12)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

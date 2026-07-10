@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 予定・チケット追加UIとカレンダー表示を接続
+
+### 変更概要
+- `AddTicketPlanView` を追加し、中央 `+` から「予定・チケットを追加」を開けるようにした。
+- 予定のジャンル、タイトル、日時、開場、会場、公式URLを `Plan` として保存できるようにした。
+- チケット申込を同時作成する場合、状態、先行区分、名義/アカウント、申込開始/締切、当落、入金、発券、金額、枚数、座席、購入URLを `TicketAttempt` として保存できるようにした。
+- 登録情報・連携ハブで作った `TicketAccount` を申込の名義/アカウントとして選べるようにした。
+- Calendarに `Plan` を表示し、月グリッド/選択日/直近予定で予定・チケットを確認できるようにした。
+
+### 変更意図
+前回追加した `Plan` / `TicketAttempt` / `TicketAccount` を、実際にユーザーが入力できる状態へ進めるため。まず保存と確認の往復を作り、次に通知予約やHomeアテンションへ接続できるようにした。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift（予定・チケット追加フォーム）
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（中央+導線、CalendarのPlan表示）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketPlanInputNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- `Plan` / `TicketAttempt` の編集画面を作る。
+- 通知予約を申込開始/締切、当落、入金、発券、公演前日/当日へ接続する。
+- Homeアテンションを `Plan` / `TicketAttempt` 中心へ切り替える。
+- チケット申込一覧、当選率/名義別統計は後続。
+
 ## 2026-07-10: チケット予定モデルと登録情報ハブを追加
 
 ### 変更概要
