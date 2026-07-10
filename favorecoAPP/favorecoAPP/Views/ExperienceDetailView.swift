@@ -13,6 +13,7 @@ struct ExperienceDetailView: View {
     let visit: Visit
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var isShowingEdit = false
+    @State private var calendarDraft: CalendarEventDraft?
 
     private var event: ExperienceEvent? {
         visit.event
@@ -80,6 +81,9 @@ struct ExperienceDetailView: View {
         }
         .sheet(isPresented: $isShowingEdit) {
             EditExperienceView(visit: visit)
+        }
+        .sheet(item: $calendarDraft) { draft in
+            CalendarEventEditSheet(draft: draft)
         }
     }
 
@@ -208,6 +212,14 @@ struct ExperienceDetailView: View {
             if visit.amount != Decimal(0) {
                 DetailInfoRow(icon: "yensign.circle", title: "金額", value: formattedAmount)
             }
+
+            Button {
+                calendarDraft = makeCalendarDraft()
+            } label: {
+                Label("カレンダーに追加", systemImage: "calendar.badge.plus")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.bordered)
         }
         .sectionCard()
     }
@@ -290,6 +302,38 @@ struct ExperienceDetailView: View {
         formatter.currencyCode = "JPY"
         formatter.maximumFractionDigits = 0
         return formatter.string(from: number) ?? "¥\(number.stringValue)"
+    }
+
+    private func makeCalendarDraft() -> CalendarEventDraft {
+        let endDate = visit.endedAt > visit.visitedAt
+            ? visit.endedAt
+            : Calendar.current.date(byAdding: .hour, value: 2, to: visit.visitedAt) ?? visit.visitedAt
+        var notes: [String] = []
+        if !visit.seatText.isEmpty {
+            notes.append("座席・チケット: \(visit.seatText)")
+        }
+        if !ticketStatusText.isEmpty && !visit.outcomeKey.isEmpty {
+            notes.append("チケット状態: \(ticketStatusText)")
+        }
+        if visit.amount != Decimal(0) {
+            notes.append("金額: \(formattedAmount)")
+        }
+        if !visit.note.isEmpty {
+            notes.append("")
+            notes.append(visit.note)
+        }
+        if let url = event?.officialURL, !url.isEmpty {
+            notes.append("")
+            notes.append(url)
+        }
+
+        return CalendarEventDraft(
+            title: eventTitle,
+            location: visit.venueNameSnapshot,
+            notes: notes.joined(separator: "\n"),
+            startDate: visit.visitedAt,
+            endDate: endDate
+        )
     }
 
     private func roleName(for roleKey: String) -> String {

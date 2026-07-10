@@ -5,6 +5,31 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 記録詳細からカレンダー手動追加を実装
+
+### 変更概要
+- `CalendarEventEditSheet` を追加し、EventKitUIのネイティブイベント編集画面をSwiftUIから表示できるようにした。
+- `ExperienceDetailView` の基本情報に `カレンダーに追加` ボタンを追加した。
+- カレンダー追加時に、記録タイトル、日時、場所、座席、チケット状態、金額、メモ、公式URLをイベント下書きへ入れるようにした。
+- 生成Info.plist用にカレンダー利用説明文をDebug/Release両方へ追加した。
+
+### 変更意図
+無料機能として決めていた「手動でカレンダーに追加」を、Mystorium同様にユーザー操作で使える状態にするため。ネイティブ編集画面を使うことで、iOSに登録済みのApple/Googleカレンダーをユーザーが選べる余地を残す。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/CalendarEventEditSheet.swift（EventKitUIラッパー追加）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（カレンダー追加ボタンとイベント下書き作成）
+- favorecoAPP/favorecoAPP.xcodeproj/project.pbxproj（カレンダー利用説明文追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedCalendarAddNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で初回権限ダイアログ、保存/キャンセル、Googleカレンダー選択の挙動を確認する。
+- 外部カレンダーイベントIDの保存、更新/削除、読み取り重ね表示は未実装。
+
 ## 2026-07-10: 初回説明オンボーディングを実装
 
 ### 変更概要
