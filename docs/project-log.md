@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 予定・チケット詳細画面を追加
+
+### 変更概要
+- `PlanDetailView` を追加し、予定の基本情報、公式情報、メモ、紐づくチケット申込を確認できるようにした。
+- チケット申込カードで、状態、先行区分、名義/アカウント、申込開始/締切、当落、入金、発券、金額、座席、購入URL、メモを表示するようにした。
+- Homeアテンションの予定/チケット行から `PlanDetailView` へ遷移できるようにした。
+- Calendarの選択日/直近予定に出るPlan行から `PlanDetailView` へ遷移できるようにした。
+
+### 変更意図
+HomeアテンションとCalendarに出した予定・チケットを、タップして詳しく確認できる状態にするため。編集に進む前に、保存済みデータの見え方と情報量を先に固めた。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/PlanDetailView.swift（予定・チケット詳細画面）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（Homeアテンションから予定詳細へ遷移）
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（CalendarのPlan行から予定詳細へ遷移）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedPlanDetailNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 予定・チケット編集画面を作る。
+- 編集後に通知再予約/キャンセルを行う。
+- Home/Calendarから外部カレンダー追加や申込URLへ進む導線を整理する。
+
 ## 2026-07-10: Homeアテンションを予定・チケット中心へ接続
 
 ### 変更概要

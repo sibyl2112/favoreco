@@ -70,6 +70,7 @@ struct HomeView: View {
                     title: plan.title.isEmpty ? "予定" : plan.title,
                     subtitle: "公演 \(attentionDateFormatter.string(from: plan.startsAt))",
                     dueDate: plan.startsAt,
+                    plan: plan,
                     tint: Color(hex: plan.category?.colorHex ?? "#147C88"),
                     priority: 20
                 )
@@ -144,6 +145,7 @@ struct HomeView: View {
                 label: "申込開始",
                 title: title,
                 date: attempt.saleStartAt,
+                plan: plan,
                 tint: tint,
                 priority: 12
             ))
@@ -155,6 +157,7 @@ struct HomeView: View {
                 label: "申込締切",
                 title: title,
                 date: attempt.applyDeadlineAt,
+                plan: plan,
                 tint: .red,
                 priority: 1
             ))
@@ -166,6 +169,7 @@ struct HomeView: View {
                 label: "当落発表",
                 title: title,
                 date: attempt.resultAnnounceAt,
+                plan: plan,
                 tint: .purple,
                 priority: 5
             ))
@@ -177,6 +181,7 @@ struct HomeView: View {
                 label: "入金締切",
                 title: title,
                 date: attempt.paymentDeadlineAt,
+                plan: plan,
                 tint: .orange,
                 priority: 2
             ))
@@ -188,6 +193,7 @@ struct HomeView: View {
                 label: "発券開始",
                 title: title,
                 date: attempt.issueStartAt,
+                plan: plan,
                 tint: .teal,
                 priority: 10
             ))
@@ -201,6 +207,7 @@ struct HomeView: View {
         label: String,
         title: String,
         date: Date,
+        plan: Plan?,
         tint: Color,
         priority: Int
     ) -> HomeAttentionItem {
@@ -209,6 +216,7 @@ struct HomeView: View {
             title: title,
             subtitle: "\(label) \(attentionDateFormatter.string(from: date))",
             dueDate: date,
+            plan: plan,
             tint: tint,
             priority: priority
         )
@@ -348,7 +356,16 @@ struct HomeView: View {
                 )
             } else {
                 ForEach(attentionItems) { item in
-                    AttentionRow(item: item)
+                    if let plan = item.plan {
+                        NavigationLink {
+                            PlanDetailView(plan: plan)
+                        } label: {
+                            AttentionRow(item: item)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        AttentionRow(item: item)
+                    }
                 }
             }
         }
@@ -468,6 +485,7 @@ private struct HomeAttentionItem: Identifiable {
     let title: String
     let subtitle: String
     let dueDate: Date
+    var plan: Plan? = nil
     let tint: Color
     let priority: Int
 }

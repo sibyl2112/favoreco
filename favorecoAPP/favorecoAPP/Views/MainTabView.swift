@@ -389,7 +389,12 @@ private struct CalendarView: View {
                             .foregroundStyle(.secondary)
 
                         ForEach(selectedDayPlans) { plan in
-                            PlanSummaryRow(plan: plan)
+                            NavigationLink {
+                                PlanDetailView(plan: plan)
+                            } label: {
+                                PlanSummaryRow(plan: plan)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 
@@ -434,7 +439,12 @@ private struct CalendarView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     if !upcomingPlans.isEmpty {
                         ForEach(upcomingPlans) { plan in
-                            PlanSummaryRow(plan: plan)
+                            NavigationLink {
+                                PlanDetailView(plan: plan)
+                            } label: {
+                                PlanSummaryRow(plan: plan)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 
