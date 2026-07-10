@@ -102,7 +102,7 @@ enum CategoryPresetSeeder {
             iconSymbol: "seal.fill",
             colorHex: "#A24C55",
             sortOrder: 70,
-            enabledUnitsRaw: "basic,photos,importOCR,memo",
+            enabledUnitsRaw: "basic,goshuinBook,photos,importOCR,memo",
             targetNameLabel: "参拝先",
             recordUnitName: "いただいた回",
             dateLabel: "参拝日"

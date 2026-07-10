@@ -19,6 +19,7 @@ struct RecordUnitDefinition: Identifiable {
         RecordUnitDefinition(id: "people", name: "人物・団体", description: "出演者、作家、作者、主催、制作など", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "ticketPlan", name: "チケット・予定", description: "チケット、座席、申込、発券、予定管理", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "photos", name: "写真", description: "思い出写真、カバー写真、半券写真など", isRequired: false, isImplemented: true),
+        RecordUnitDefinition(id: "goshuinBook", name: "御朱印帳", description: "御朱印帳のサイズに合わせて御朱印を登録", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "importOCR", name: "OCR・取込", description: "半券、チケット、レシート、リスト画像の読み取り", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "money", name: "金額", description: "チケット代、購入額、交通費、遠征費など", isRequired: false, isImplemented: true),
         RecordUnitDefinition(id: "officialInfo", name: "公式情報", description: "公式URL、SNS投稿リンク、参考URLなど", isRequired: false, isImplemented: true),

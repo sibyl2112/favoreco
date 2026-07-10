@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 写真カバー比率と御朱印帳ユニットを接続
+
+### 変更概要
+- 写真ユニットにカバー比率Pickerを追加し、正方形、映画ポスター、チラシ/ポスター、書影、横長ラベル、御朱印帳標準から選べるようにした。
+- `VisitUnitFields` に `eyecatchAspectRatioKey` と `goshuinBookSizeKey` を追加した。
+- 御朱印ジャンル向けに `goshuinBook` ユニットを追加し、御朱印帳サイズを保存できるようにした。
+- 御朱印ジャンルの初期有効ユニットに `goshuinBook` を含めた。
+
+### 変更意図
+写真/カバー/比率指定まわりを、将来のカード表示・レポート画像化・御朱印帳表示へつなげるため。ジャンルごとに写真の自然な比率が違うため、画像自体を切り抜く前に記録側へ表示意図を保存する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/EyecatchAspectRatio.swift（比率/御朱印帳サイズ定義）
+- favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift（保存項目追加）
+- favorecoAPP/favorecoAPP/Utilities/RecordUnitDefinition.swift（御朱印帳ユニット追加）
+- favorecoAPP/favorecoAPP/Services/CategoryPresetSeeder.swift（御朱印ジャンルの初期ユニット更新）
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（写真比率/御朱印帳入力UI接続）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedPhotoRatioNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で写真比率Picker、御朱印帳サイズPicker、既存記録編集時の復元を確認する。
+- 選択した比率をHome/一覧/詳細/レポート画像の表示に反映する処理は後続で行う。
+
 ## 2026-07-10: 思い出レポートのカードプレビューを追加
 
 ### 変更概要

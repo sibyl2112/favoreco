@@ -97,6 +97,8 @@ struct AddExperienceView: View {
             return draft.hasTicketPlan ? .entered : .optional
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
+        case "goshuinBook":
+            return draft.goshuinBookSizeKey.isEmpty ? .optional : .entered
         case "importOCR":
             return draft.trimmedOCRText.isEmpty ? .optional : .entered
         case "money":
@@ -133,7 +135,14 @@ struct AddExperienceView: View {
                 existingPhotos: [],
                 deletedPhotoIDs: .constant([]),
                 pendingPhotos: $pendingPhotos,
-                selectedItems: $selectedPhotoItems
+                selectedItems: $selectedPhotoItems,
+                category: category,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey
+            )
+        case "goshuinBook":
+            goshuinBookFields(
+                sizeKey: $draft.goshuinBookSizeKey,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey
             )
         case "importOCR":
             OCRUnitEditor(ocrText: $draft.ocrText, selectedItems: $selectedOCRItems)
@@ -207,7 +216,7 @@ struct AddExperienceView: View {
             seatText: draft.trimmedSeatText,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
-            unitFieldsRaw: VisitUnitFields(ocrText: draft.trimmedOCRText, advancedEntries: draft.trimmedAdvancedEntries).encodedRawValue,
+            unitFieldsRaw: draft.makeUnitFields(for: category).encodedRawValue,
             createdAt: now,
             updatedAt: now,
             event: event
@@ -350,6 +359,8 @@ struct EditExperienceView: View {
             return draft.hasTicketPlan ? .entered : .optional
         case "photos":
             return visibleExistingPhotos.isEmpty && pendingPhotos.isEmpty ? .optional : .entered
+        case "goshuinBook":
+            return draft.goshuinBookSizeKey.isEmpty ? .optional : .entered
         case "importOCR":
             return draft.trimmedOCRText.isEmpty ? .optional : .entered
         case "money":
@@ -386,7 +397,14 @@ struct EditExperienceView: View {
                 existingPhotos: visibleExistingPhotos,
                 deletedPhotoIDs: $deletedPhotoIDs,
                 pendingPhotos: $pendingPhotos,
-                selectedItems: $selectedPhotoItems
+                selectedItems: $selectedPhotoItems,
+                category: event?.category,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey
+            )
+        case "goshuinBook":
+            goshuinBookFields(
+                sizeKey: $draft.goshuinBookSizeKey,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey
             )
         case "importOCR":
             OCRUnitEditor(ocrText: $draft.ocrText, selectedItems: $selectedOCRItems)
@@ -459,7 +477,7 @@ struct EditExperienceView: View {
         visit.seatText = draft.trimmedSeatText
         visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
-        visit.unitFieldsRaw = VisitUnitFields(ocrText: draft.trimmedOCRText, advancedEntries: draft.trimmedAdvancedEntries).encodedRawValue
+        visit.unitFieldsRaw = draft.makeUnitFields(for: event?.category).encodedRawValue
         visit.updatedAt = now
         deleteMarkedPersonLinks()
         insertPendingPeople(for: event, visit: nil)
@@ -606,6 +624,8 @@ struct AddVisitView: View {
             return draft.trimmedNote.isEmpty ? .optional : .entered
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
+        case "goshuinBook":
+            return draft.goshuinBookSizeKey.isEmpty ? .optional : .entered
         case "importOCR":
             return draft.trimmedOCRText.isEmpty ? .optional : .entered
         case "money":
@@ -635,7 +655,14 @@ struct AddVisitView: View {
                 existingPhotos: [],
                 deletedPhotoIDs: .constant([]),
                 pendingPhotos: $pendingPhotos,
-                selectedItems: $selectedPhotoItems
+                selectedItems: $selectedPhotoItems,
+                category: event.category,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey
+            )
+        case "goshuinBook":
+            goshuinBookFields(
+                sizeKey: $draft.goshuinBookSizeKey,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey
             )
         case "importOCR":
             OCRUnitEditor(ocrText: $draft.ocrText, selectedItems: $selectedOCRItems)
@@ -708,7 +735,7 @@ struct AddVisitView: View {
             seatText: draft.trimmedSeatText,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
-            unitFieldsRaw: VisitUnitFields(ocrText: draft.trimmedOCRText, advancedEntries: draft.trimmedAdvancedEntries).encodedRawValue,
+            unitFieldsRaw: draft.makeUnitFields(for: event.category).encodedRawValue,
             createdAt: now,
             updatedAt: now,
             event: event
@@ -770,6 +797,8 @@ struct AddExperienceDraft {
     var outcomeKey: String = ""
     var seatText: String = ""
     var ocrText: String = ""
+    var eyecatchAspectRatioKey: String = ""
+    var goshuinBookSizeKey: String = ""
     var advancedEntries: [AdvancedFieldEntry] = []
     var amountText: String = ""
     var note: String = ""
@@ -787,6 +816,8 @@ struct AddExperienceDraft {
         seatText = visit.seatText
         let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
         ocrText = unitFields.ocrText
+        eyecatchAspectRatioKey = unitFields.eyecatchAspectRatioKey
+        goshuinBookSizeKey = unitFields.goshuinBookSizeKey
         advancedEntries = unitFields.advancedEntries
         amountText = formattedCurrencyAmount(visit.amount)
         note = visit.note
@@ -840,6 +871,15 @@ struct AddExperienceDraft {
         !outcomeKey.isEmpty || !trimmedSeatText.isEmpty
     }
 
+    func makeUnitFields(for category: RecordCategory?) -> VisitUnitFields {
+        VisitUnitFields(
+            ocrText: trimmedOCRText,
+            eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.recommended(for: category).key : eyecatchAspectRatioKey,
+            goshuinBookSizeKey: goshuinBookSizeKey,
+            advancedEntries: trimmedAdvancedEntries
+        )
+    }
+
     var canSave: Bool {
         !trimmedTitle.isEmpty
     }
@@ -859,6 +899,8 @@ private struct VisitDraft {
     var outcomeKey: String = ""
     var seatText: String = ""
     var ocrText: String = ""
+    var eyecatchAspectRatioKey: String = ""
+    var goshuinBookSizeKey: String = ""
     var advancedEntries: [AdvancedFieldEntry] = []
     var amountText: String = ""
     var note: String = ""
@@ -891,6 +933,15 @@ private struct VisitDraft {
 
     var hasTicketPlan: Bool {
         !outcomeKey.isEmpty || !trimmedSeatText.isEmpty
+    }
+
+    func makeUnitFields(for category: RecordCategory?) -> VisitUnitFields {
+        VisitUnitFields(
+            ocrText: trimmedOCRText,
+            eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.recommended(for: category).key : eyecatchAspectRatioKey,
+            goshuinBookSizeKey: goshuinBookSizeKey,
+            advancedEntries: trimmedAdvancedEntries
+        )
     }
 
     var ratingLabel: String {
@@ -1045,6 +1096,31 @@ private func moneyFields(amountText: Binding<String>) -> some View {
             .font(FavorecoTypography.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private func goshuinBookFields(sizeKey: Binding<String>, aspectRatioKey: Binding<String>) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+        Picker("御朱印帳サイズ", selection: sizeKey) {
+            Text("未設定").tag("")
+            ForEach(GoshuinBookSize.all) { size in
+                Text("\(size.name)（\(size.displaySize)）").tag(size.key)
+            }
+        }
+
+        let selectedSize = GoshuinBookSize.option(for: sizeKey.wrappedValue)
+        Text(selectedSize.note)
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+        Button {
+            aspectRatioKey.wrappedValue = EyecatchAspectRatio.goshuinStandard.key
+        } label: {
+            Label("カバー比率を御朱印帳に合わせる", systemImage: "aspectratio")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
     }
 }
 
@@ -1383,8 +1459,14 @@ private struct PhotoUnitEditor: View {
     @Binding var deletedPhotoIDs: Set<UUID>
     @Binding var pendingPhotos: [PendingPhoto]
     @Binding var selectedItems: [PhotosPickerItem]
+    let category: RecordCategory?
+    @Binding var aspectRatioKey: String
 
     private let maxPhotoCount = 10
+
+    private var selectedAspectRatio: EyecatchAspectRatio {
+        EyecatchAspectRatio.option(for: aspectRatioKey, category: category)
+    }
 
     private var currentPhotoCount: Int {
         existingPhotos.count + pendingPhotos.count
@@ -1404,6 +1486,17 @@ private struct PhotoUnitEditor: View {
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Picker("カバー比率", selection: $aspectRatioKey) {
+                ForEach(EyecatchAspectRatio.all) { ratio in
+                    Text("\(ratio.name)（\(ratio.displayValue)）").tag(ratio.key)
+                }
+            }
+
+            Text(selectedAspectRatio.note)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             if currentPhotoCount == 0 {
                 Text("思い出写真、半券写真、表紙画像などを追加できます。")
@@ -1434,6 +1527,11 @@ private struct PhotoUnitEditor: View {
                 Label("無料枠の10枚に達しています", systemImage: "checkmark.circle")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
+            }
+        }
+        .onAppear {
+            if aspectRatioKey.isEmpty {
+                aspectRatioKey = EyecatchAspectRatio.recommended(for: category).key
             }
         }
     }

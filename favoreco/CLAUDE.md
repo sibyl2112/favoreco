@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-10（思い出レポートカードプレビュー実装）
+> **最終更新**: 2026-07-10（写真カバー比率・御朱印帳ユニット実装）
 
 ---
 
@@ -62,7 +62,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `CategoryTopView`: カテゴリ単位の簡易トップ。対象数・記録数・対象一覧・最近の記録を表示。見出しのジャンル名は `映画 ▼` 形式のスイッチャーで、他の有効ジャンルへ切り替えられる。対象一覧から対象詳細へ遷移でき、同じ対象に回を追加できる。最近の記録は `VisitSummaryRow` をカテゴリ名なしで表示する。
 - `AddInboxItemView`: 気になるもの・あとで記録したいものを、タイトル / URL / カテゴリ候補 / メモで `InboxItem` として保存する手動追加フォーム。
 - `InboxDetailView`: InboxItemの詳細表示。カテゴリ候補を選び、InboxItemのタイトル / URL / メモを下書きにして本記録へ変換できる。変換済みのInboxItemは `resolved` にする。
-- `AddExperienceView`: 記録追加フォーム。入力中は `AddExperienceDraft`、人物/団体リンク用の一時状態、写真用の一時状態に保持し、保存時だけ `ExperienceEvent` + `Visit` + `EventPersonLink` + `PhotoBlob` を作成する。`RecordCategory.enabledUnitsRaw` に応じてユニット単位アコーディオンを表示し、現時点では `basic`（対象名/日付/場所/評価）、`people`（人物・団体名/役割）、`ticketPlan`（チケット状態/座席メモ）、`photos`（写真ライブラリから追加・10枚上限）、`importOCR`（画像からのVision OCR/手入力テキスト）、`money`（合計金額）、`officialInfo`（公式URL）、`memo`（メモ）、`advanced`（自由項目）を実入力する。
+- `AddExperienceView`: 記録追加フォーム。入力中は `AddExperienceDraft`、人物/団体リンク用の一時状態、写真用の一時状態に保持し、保存時だけ `ExperienceEvent` + `Visit` + `EventPersonLink` + `PhotoBlob` を作成する。`RecordCategory.enabledUnitsRaw` に応じてユニット単位アコーディオンを表示し、現時点では `basic`（対象名/日付/場所/評価）、`people`（人物・団体名/役割）、`ticketPlan`（チケット状態/座席メモ）、`photos`（写真ライブラリから追加・10枚上限・カバー比率指定）、`goshuinBook`（御朱印帳サイズ指定）、`importOCR`（画像からのVision OCR/手入力テキスト）、`money`（合計金額）、`officialInfo`（公式URL）、`memo`（メモ）、`advanced`（自由項目）を実入力する。
 - `AddVisitView`: 既存 `ExperienceEvent` に新しい `Visit` だけを追加するフォーム。ユニット単位アコーディオンを表示し、`basic`、`people`、`ticketPlan`、`photos`、`importOCR`、`money`、`memo`、`advanced` を実入力する。人物・団体はその回だけのゲスト等として `Visit` 側に紐付ける。
 - `EventDetailView`: 対象詳細。対象のカテゴリ、シリーズ、対象メモ、公式URL、記録数、最新日、平均評価、履歴を表示し、対象編集・回追加・各Visit詳細へ遷移できる。履歴行は `VisitSummaryRow` を使い、写真、日付、場所、評価、チケット状態、人物・団体、金額、OCR/詳細オプション有無、短いメモを表示する。
 - `EditEventView`: 対象自体のタイトル、シリーズ、公式URL、対象メモを編集するフォーム。
@@ -105,6 +105,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 | iCloud同期/自動バックアップ | × | × | ○ |
 
 - 動画は容量とiCloud同期負荷が大きいため、v1では外部リンク保存、Photos参照、サムネイル表示までを基本にする。動画ファイルをアプリ内へコピーする保存、動画のCloud同期、一括バックアップ同梱は明示ON/容量警告つき、またはv2以降の有料候補とする。カバー写真指定は無料で扱う。
+- 写真/カバー比率は `VisitUnitFields.eyecatchAspectRatioKey` に保存する。比率候補は `EyecatchAspectRatio` で、正方形、映画ポスター、チラシ/ポスター、書影、横長ラベル、御朱印帳標準を持つ。未設定時はジャンルから推奨比率を返す。御朱印は専用ユニット `goshuinBook` を持ち、御朱印帳サイズを `VisitUnitFields.goshuinBookSizeKey` に保存する。御朱印ジャンルの初期ユニットには `goshuinBook` を含める。
 - 人物/アーティストマスターは、巨大なタレント名鑑を自前保持する設計にしない。無料/ローカルではユーザーが記録した人物を再利用する個人用マスター、Premium/サブスクでは外部候補読み込みを入力補助としてONにする。外部候補は補助・キャッシュであり、記録の正本はユーザーが保存したスナップショットとする。重複候補は「似た人物があります」と提示し、ユーザー確認で統合する。別名、メモ、公式URL、SNSは必須項目にせず、詳細オプション/アコーディオンに置く。
 - 会場マスターは `PlaceMaster` として横断で扱う。劇場/ライブ会場/映画館/美術館/寺社/酒蔵/飲食店/施設などはタグ/種別で切り分け、同一場所が複数タグを持てるようにする。重複候補は名称、住所、座標、よみ、公式URLから判定し、自動統合せずユーザーに確認する。
 - カレンダーは、アプリ内カレンダーを正本表示にし、外部カレンダー書き出しはMystorium同様にユーザーが押す `カレンダーに追加` ボタンから始める。実装済みの手動追加は `EKEventEditViewController` を使い、iOS標準のイベント編集画面上で追加先カレンダーを選ぶ方式。GoogleカレンダーもiOS標準カレンダーに登録済みで書き込み可能なら追加先として選べる。次回以降は最後に使ったカレンダーを初期選択し、設定で既定の追加先カレンダーを変更できるようにする。EventKit権限許可後はイベント作成/更新が可能なので、favorecoが作成した外部カレンダーイベントの識別子を保存し、後から更新/削除できる余地を持つ。v1は無料の手動追加/追加先選択に加え、外部カレンダー予定の読み取り重ね表示までを実装範囲にする。Premium候補はfavorecoで作った予定の片方向自動更新、一括追加、自動で既定カレンダーへ追加。外部側の変更追従、双方向同期は技術的には可能な範囲があるが、権限・重複・競合解決・ユーザーの外部編集検知が重いためv2以降または有料候補として扱う。
@@ -131,7 +132,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - ジャンルのテーマカラーは `RecordCategory.colorHex` を正本とする。標準ジャンルにも、自作ジャンル追加時にも同じフィールドを使う。
 - 自作ジャンルの `templateKey` は `custom_<UUID>` とし、標準プリセットとは衝突させない。作成時は `isBuiltIn = false`、`isArchived = false`。
 - 自作ジャンルの記録フォーム文言は `CategoryRecordTemplate` が `targetNameLabel`、`recordUnitName`、`dateLabel` から生成する。標準ジャンルは従来どおり `templateKey` 別の固定文言を優先する。
-- ジャンルの有効ユニットは `RecordCategory.enabledUnitsRaw` を正本とし、`RecordUnitDefinition` で表示名/説明に変換する。採用ユニットIDは `basic`（基本情報）、`people`（人物・団体）、`ticketPlan`（チケット・予定）、`photos`（写真）、`importOCR`（OCR・取込）、`money`（金額）、`officialInfo`（公式情報）、`memo`（メモ）、`advanced`（詳細オプション）。`basic` と `memo` は必須で、詳細画面/自作ジャンル作成画面では外せない。旧 `U1` / `U3` などは読み取り時だけ互換変換する。実入力接続済みは `basic`、`people`、`ticketPlan`、`photos`、`importOCR`、`money`、`officialInfo`、`memo`、`advanced`。
+- ジャンルの有効ユニットは `RecordCategory.enabledUnitsRaw` を正本とし、`RecordUnitDefinition` で表示名/説明に変換する。採用ユニットIDは `basic`（基本情報）、`people`（人物・団体）、`ticketPlan`（チケット・予定）、`photos`（写真）、`goshuinBook`（御朱印帳）、`importOCR`（OCR・取込）、`money`（金額）、`officialInfo`（公式情報）、`memo`（メモ）、`advanced`（詳細オプション）。`basic` と `memo` は必須で、詳細画面/自作ジャンル作成画面では外せない。旧 `U1` / `U3` などは読み取り時だけ互換変換する。実入力接続済みは `basic`、`people`、`ticketPlan`、`photos`、`goshuinBook`、`importOCR`、`money`、`officialInfo`、`memo`、`advanced`。
 - デバッグ用の仮データ投入/削除は `DebugDataSeeder` に閉じ込める。挿入時は既存仮データを削除してから、全ジャンルを有効化し、各ジャンル1件以上の `ExperienceEvent` / `Visit` / `PhotoBlob` を通常のSwiftData経路で保存する。写真はジャンル色のPNGを生成して `PhotoBlob.data` に入れる。削除時は `https://example.com/favoreco/` と `debug/sample-` に紐付く仮データだけを削除する。
 - 通知、同期・バックアップ、課金・プラン、JSONインポート、CSVインポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。JSONエクスポートとCSVエクスポートは手動書き出しまで接続済み。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る

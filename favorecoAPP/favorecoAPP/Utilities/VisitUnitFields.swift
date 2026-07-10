@@ -9,10 +9,19 @@ import Foundation
 
 struct VisitUnitFields: Codable {
     var ocrText: String = ""
+    var eyecatchAspectRatioKey: String = ""
+    var goshuinBookSizeKey: String = ""
     var advancedEntries: [AdvancedFieldEntry] = []
 
-    init(ocrText: String = "", advancedEntries: [AdvancedFieldEntry] = []) {
+    init(
+        ocrText: String = "",
+        eyecatchAspectRatioKey: String = "",
+        goshuinBookSizeKey: String = "",
+        advancedEntries: [AdvancedFieldEntry] = []
+    ) {
         self.ocrText = ocrText
+        self.eyecatchAspectRatioKey = eyecatchAspectRatioKey
+        self.goshuinBookSizeKey = goshuinBookSizeKey
         self.advancedEntries = advancedEntries
     }
 
@@ -26,7 +35,7 @@ struct VisitUnitFields: Codable {
     }
 
     var encodedRawValue: String {
-        guard !ocrText.isEmpty || !advancedEntries.isEmpty,
+        guard !ocrText.isEmpty || !eyecatchAspectRatioKey.isEmpty || !goshuinBookSizeKey.isEmpty || !advancedEntries.isEmpty,
               let data = try? JSONEncoder().encode(self),
               let string = String(data: data, encoding: .utf8) else {
             return ""
