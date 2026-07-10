@@ -612,6 +612,13 @@ private struct ExperienceGalleryCard: View {
         VisitUnitFields(rawValue: visit.unitFieldsRaw)
     }
 
+    private var eyecatchAspectRatio: Double {
+        EyecatchAspectRatio.option(
+            for: unitFields.eyecatchAspectRatioKey,
+            category: visit.event?.category
+        ).value
+    }
+
     private var peopleSummary: String {
         let linkedPeople = personLinks
             .filter { link in
@@ -663,7 +670,8 @@ private struct ExperienceGalleryCard: View {
                 }
                 .padding(10)
             }
-            .frame(height: 116)
+            .aspectRatio(CGFloat(eyecatchAspectRatio), contentMode: .fill)
+            .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 6) {

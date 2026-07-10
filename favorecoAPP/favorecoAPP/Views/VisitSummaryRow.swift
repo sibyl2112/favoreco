@@ -39,6 +39,10 @@ struct VisitSummaryRow: View {
         VisitUnitFields(rawValue: visit.unitFieldsRaw)
     }
 
+    private var eyecatchAspectRatio: Double {
+        EyecatchAspectRatio.option(for: unitFields.eyecatchAspectRatioKey, category: category).value
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             thumbnail
@@ -102,15 +106,20 @@ struct VisitSummaryRow: View {
             Image(uiImage: firstPhotoImage)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 64, height: 64)
+                .frame(width: 64, height: thumbnailHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {
             Image(systemName: category?.iconSymbol ?? "sparkles.rectangle.stack")
                 .font(.title3)
                 .foregroundStyle(categoryColor)
-                .frame(width: 64, height: 64)
+                .frame(width: 64, height: thumbnailHeight)
                 .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
+    }
+
+    private var thumbnailHeight: CGFloat {
+        let rawHeight = 64 / max(0.45, eyecatchAspectRatio)
+        return min(96, max(56, rawHeight))
     }
 
     private var metaItems: [VisitSummaryMetaItem] {

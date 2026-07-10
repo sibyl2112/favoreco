@@ -1607,7 +1607,7 @@ private struct PhotoThumbnail: View {
                         .background(Color(.secondarySystemGroupedBackground))
                 }
             }
-            .aspectRatio(aspectRatio, contentMode: .fill)
+            .aspectRatio(CGFloat(aspectRatio), contentMode: .fill)
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 

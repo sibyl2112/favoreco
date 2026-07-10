@@ -53,11 +53,19 @@ struct ExperienceDetailView: View {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
+    private var eyecatchAspectRatio: Double {
+        EyecatchAspectRatio.option(
+            for: unitFields.eyecatchAspectRatioKey,
+            category: category
+        ).value
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero
                 photoSection
+                goshuinBookSection
                 peopleSection
                 ocrSection
                 basicInfo
@@ -127,7 +135,7 @@ struct ExperienceDetailView: View {
                     Image(uiImage: firstPhotoImage)
                         .resizable()
                         .scaledToFill()
-                        .frame(height: 220)
+                        .aspectRatio(CGFloat(eyecatchAspectRatio), contentMode: .fill)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
@@ -137,13 +145,29 @@ struct ExperienceDetailView: View {
                                 Image(uiImage: image)
                                     .resizable()
                                     .scaledToFill()
-                                    .frame(height: 108)
+                                    .aspectRatio(CGFloat(eyecatchAspectRatio), contentMode: .fill)
                                     .frame(maxWidth: .infinity)
                                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
                         }
                     }
                 }
+            }
+            .sectionCard()
+        }
+    }
+
+    @ViewBuilder
+    private var goshuinBookSection: some View {
+        if category?.templateKey == "goshuin", !unitFields.goshuinBookSizeKey.isEmpty {
+            let size = GoshuinBookSize.option(for: unitFields.goshuinBookSizeKey)
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("御朱印帳")
+                DetailInfoRow(
+                    icon: "book.closed",
+                    title: "サイズ",
+                    value: "\(size.name)（\(size.displaySize)）"
+                )
             }
             .sectionCard()
         }
