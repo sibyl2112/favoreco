@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: Homeスクロールのカクつき対策（画像を非同期ダウンサンプル化）
+
+### 原因（静的解析）
+- `ExperienceGalleryCard`（体験ギャラリー）と `VisitSummaryRow`（最近の記録）が、`firstPhotoImage` 計算プロパティ内で **`UIImage(data:)` をbody評価のたびに同期・フル解像度デコード**していた。写真は最大1600pxで保存されるのに、190px幅カード・64px行サムネに使うため、メインスレッドで毎回フルデコード＝横/縦スクロールで確実にフレーム落ち。
+
+### 対策（Homeの表示のみ・情報/モデル/通知/JSON不変）
+- **`ThumbnailLoader.swift`（新規）**：ImageIO の `CGImageSourceCreateThumbnailAtIndex`＋`kCGImageSourceThumbnailMaxPixelSize` で**必要サイズだけデコード（ダウンサンプル）**。`NSCache`（スレッドセーフ）で再利用。
+- 両コンポーネントを**非同期ロードに変更**：`@State thumbnailImage` ＋ `.task(id: firstPhoto?.id)` で、`Data`（値型）だけを `Task.detached` に渡してメインスレッド外で生成→完了後に反映。SwiftData プロパティ（`photo.data`）はメインで読み、スレッドを跨がない。
+- サムネ目標サイズ：ギャラリー=200pt×displayScale、行=80pt×displayScale。キャッシュキーに写真ID＋サイズを含める。
+- スクロール中はプレースホルダー→画像差し込み。キャッシュヒットで再表示は即時。
+
+### 効果
+メインスレッドの同期フルデコードを撤去し、可視セル分だけ・縮小サイズで・非同期にデコード。ギャラリー水平スクロール／最近の記録の縦スクロールのカクつきを解消。
+
+### 既知の残改善（今回未対応・任意）
+- `ExperienceGalleryCard`/`VisitSummaryRow` は各インスタンスが `@Query personLinks`（全EventPersonLink取得）を持つ。リンクが大量だと軽い負荷。将来、親から渡す等で削減可（今回は画像デコードの主要因のみ対応）。
+- `ExperienceDetailView` のヒーロー画像は単一大画像のため今回対象外（一覧スクロールではない）。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/ThumbnailLoader.swift（新規）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（ExperienceGalleryCard）
+- favorecoAPP/favorecoAPP/Views/VisitSummaryRow.swift（最近の記録行）
+
+### 確認結果（実機 / ビルド）
+コード整合確認（波括弧・同期デコード撤去・参照）。**xcodebuild／実機の体感（大量＋写真付き記録でのスクロール滑らかさ・Instruments の hitches 確認）はMac側で要確認**。
+
 ## 2026-07-10: Home画面の情報優先順位・表示整理（HomeViewのみ）
 
 ### 変更概要（情報は増やさず整理。データモデル/通知/JSON/SwiftData構造は不変）

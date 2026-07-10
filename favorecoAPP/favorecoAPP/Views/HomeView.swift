@@ -613,17 +613,34 @@ private struct ExperienceGalleryCard: View {
     let visit: Visit
 
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
+    @Environment(\.displayScale) private var displayScale
+    @State private var thumbnailImage: UIImage?
 
     private var categoryColor: Color {
         Color(hex: visit.event?.category?.colorHex ?? "#147C88")
     }
 
-    private var firstPhotoImage: UIImage? {
-        guard let photo = visit.photos?.first(where: { $0.mediaKind == "photo" }),
-              !photo.data.isEmpty else {
-            return nil
+    private var firstPhoto: PhotoBlob? {
+        visit.photos?.first(where: { $0.mediaKind == "photo" && !$0.data.isEmpty })
+    }
+
+    @MainActor
+    private func loadThumbnail() async {
+        guard let photo = firstPhoto else {
+            thumbnailImage = nil
+            return
         }
-        return UIImage(data: photo.data)
+        let maxPixel = 200 * displayScale
+        let key = "\(photo.id.uuidString)@\(Int(maxPixel.rounded()))"
+        if let cached = ThumbnailLoader.cached(forKey: key) {
+            thumbnailImage = cached
+            return
+        }
+        let data = photo.data // SwiftData プロパティはメインで読み、値型で渡す
+        let image = await Task.detached(priority: .userInitiated) {
+            ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
+        }.value
+        thumbnailImage = image
     }
 
     private var title: String {
@@ -662,8 +679,8 @@ private struct ExperienceGalleryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .topLeading) {
-                if let firstPhotoImage {
-                    Image(uiImage: firstPhotoImage)
+                if let thumbnailImage {
+                    Image(uiImage: thumbnailImage)
                         .resizable()
                         .scaledToFill()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -741,6 +758,9 @@ private struct ExperienceGalleryCard: View {
         .frame(width: 190, alignment: .leading)
         .padding(10)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .task(id: firstPhoto?.id) {
+            await loadThumbnail()
+        }
     }
 }
 

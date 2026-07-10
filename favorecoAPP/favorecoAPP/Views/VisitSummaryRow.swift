@@ -14,6 +14,8 @@ struct VisitSummaryRow: View {
     var showsCategory: Bool = true
 
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
+    @Environment(\.displayScale) private var displayScale
+    @State private var thumbnailImage: UIImage?
 
     private var title: String {
         visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
@@ -27,12 +29,27 @@ struct VisitSummaryRow: View {
         Color(hex: category?.colorHex ?? "#147C88")
     }
 
-    private var firstPhotoImage: UIImage? {
-        guard let photo = visit.photos?.first(where: { $0.mediaKind == "photo" }),
-              !photo.data.isEmpty else {
-            return nil
+    private var firstPhoto: PhotoBlob? {
+        visit.photos?.first(where: { $0.mediaKind == "photo" && !$0.data.isEmpty })
+    }
+
+    @MainActor
+    private func loadThumbnail() async {
+        guard let photo = firstPhoto else {
+            thumbnailImage = nil
+            return
         }
-        return UIImage(data: photo.data)
+        let maxPixel = 80 * displayScale
+        let key = "\(photo.id.uuidString)@\(Int(maxPixel.rounded()))"
+        if let cached = ThumbnailLoader.cached(forKey: key) {
+            thumbnailImage = cached
+            return
+        }
+        let data = photo.data // SwiftData プロパティはメインで読み、値型で渡す
+        let image = await Task.detached(priority: .userInitiated) {
+            ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
+        }.value
+        thumbnailImage = image
     }
 
     private var unitFields: VisitUnitFields {
@@ -98,12 +115,15 @@ struct VisitSummaryRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .task(id: firstPhoto?.id) {
+            await loadThumbnail()
+        }
     }
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let firstPhotoImage {
-            Image(uiImage: firstPhotoImage)
+        if let thumbnailImage {
+            Image(uiImage: thumbnailImage)
                 .resizable()
                 .scaledToFill()
                 .frame(width: 64, height: thumbnailHeight)
