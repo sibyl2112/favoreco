@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: サムネイル実装の堅牢化（レビュー8観点対応）
+
+### 対応内容
+- **task(id:)に写真ID＋表示サイズを含める**：`.task(id: thumbnailTaskID)`（`"<photoID>@<pixel>"`）に変更。サイズ変更でも再取得され、サイズ違いは別キャッシュ。
+- **遅延到着の上書き防止（セル再利用対策）**：`Task.detached` 完了後に `guard !Task.isCancelled, firstPhoto?.id == targetID`。別写真に切り替わった後に古い結果が届いても上書きしない。
+- **メモリ警告でキャッシュ破棄**：`UIApplication.didReceiveMemoryWarningNotification` を購読し `cache.removeAllObjects()`（NSCache自動退避に加え明示）。`purge()` も追加。
+- **最大ピクセルのクランプ**：ギャラリー `min(200×scale, 1200)`／行 `min(80×scale, 480)`。scale過剰を防止（保存上限1600px以下）。
+
+### レビュー観点の評価（元から満たしていた点）
+- **スレッド安全**：NSCache はスレッドセーフ（set/object/remove を内部同期）。static let 初期化も一度きり。actor不要。
+- **NSCache競合**：並行 set/object でも安全。
+- **失敗時プレースホルダー**：生成失敗＝nil → `if let thumbnailImage` が偽 → プレースホルダー表示。
+- **EXIF向き**：`kCGImageSourceCreateThumbnailWithTransform: true` で回転を反映済み（`UIImage(cgImage:)` は .up で正しい）。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/ThumbnailLoader.swift（メモリ警告purge・コメント）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（task id・遅延ガード・クランプ）
+- favorecoAPP/favorecoAPP/Views/VisitSummaryRow.swift（同上）
+
+### 確認結果（実機 / ビルド）
+コード整合確認。**xcodebuild／実機（縦横向き写真・高速スクロールでの取り違え・メモリ警告時）はMac側で要確認**。
+
 ## 2026-07-10: Homeスクロールのカクつき対策（画像を非同期ダウンサンプル化）
 
 ### 原因（静的解析）

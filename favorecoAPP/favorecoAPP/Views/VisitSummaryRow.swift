@@ -33,22 +33,39 @@ struct VisitSummaryRow: View {
         visit.photos?.first(where: { $0.mediaKind == "photo" && !$0.data.isEmpty })
     }
 
+    // 64pt幅サムネ。scale過剰を避けるため上限クランプ。
+    private var thumbnailMaxPixel: CGFloat {
+        min(80 * displayScale, 480)
+    }
+
+    // 写真ID＋表示サイズをキーに含める
+    private func cacheKey(for photo: PhotoBlob) -> String {
+        "\(photo.id.uuidString)@\(Int(thumbnailMaxPixel.rounded()))"
+    }
+
+    private var thumbnailTaskID: String? {
+        firstPhoto.map { cacheKey(for: $0) }
+    }
+
     @MainActor
     private func loadThumbnail() async {
         guard let photo = firstPhoto else {
             thumbnailImage = nil
             return
         }
-        let maxPixel = 80 * displayScale
-        let key = "\(photo.id.uuidString)@\(Int(maxPixel.rounded()))"
+        let targetID = photo.id
+        let key = cacheKey(for: photo)
         if let cached = ThumbnailLoader.cached(forKey: key) {
             thumbnailImage = cached
             return
         }
         let data = photo.data // SwiftData プロパティはメインで読み、値型で渡す
+        let maxPixel = thumbnailMaxPixel
         let image = await Task.detached(priority: .userInitiated) {
             ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
         }.value
+        // セル再利用や写真変更後に遅れて届いた結果で、別の写真の画像を上書きしない
+        guard !Task.isCancelled, firstPhoto?.id == targetID else { return }
         thumbnailImage = image
     }
 
@@ -115,7 +132,7 @@ struct VisitSummaryRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .task(id: firstPhoto?.id) {
+        .task(id: thumbnailTaskID) {
             await loadThumbnail()
         }
     }

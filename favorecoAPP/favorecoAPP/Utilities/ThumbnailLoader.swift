@@ -12,13 +12,28 @@ import UIKit
 import ImageIO
 
 enum ThumbnailLoader {
+    /// NSCache はスレッドセーフ（複数スレッドからの set/object/remove を内部で同期）。
+    /// そのため本ローダは actor でなくても競合しない。static let の初期化も一度だけ（スレッド安全）。
+    /// メモリ警告時は NSCache が自動で退避するが、明示的にも全消去する。
     private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
         cache.countLimit = 240
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            cache.removeAllObjects()
+        }
         return cache
     }()
 
-    /// キャッシュ済みサムネイルを即時取得（メインスレッドから安全に呼べる）。
+    /// キャッシュを全消去する（メモリ警告時などに呼ぶ）。
+    static func purge() {
+        cache.removeAllObjects()
+    }
+
+    /// キャッシュ済みサムネイルを即時取得（どのスレッドからも安全）。
     static func cached(forKey key: String) -> UIImage? {
         cache.object(forKey: key as NSString)
     }
