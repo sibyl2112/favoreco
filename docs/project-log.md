@@ -5,6 +5,29 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 思い出レポートをPremium候補として画面に反映
+
+### 変更概要
+- 統計タブに `月刊Favoreco` / `年間Favoreco` の思い出レポート予告枠を追加した。
+- 課金・プラン画面の同期プラン候補に `自動思い出レポート` を追加した。
+- 正本仕様に、基本統計=無料、詳細統計/年間まとめ=Pro、同期込み自動レポート=Premium候補の境界を追記した。
+
+### 変更意図
+サブスクの価値を「同期だけ」ではなく、毎月/毎年、自動で届く思い出カードとして見せる方向に固めるため。Spotify Wrapped、Apple Music Replay、Google Photos Memories、日記アプリの要約系に近い価値を、favorecoでは体験記録・写真・ジャンル横断の文脈で出す。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（思い出レポート予告枠追加）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（同期プラン候補に自動思い出レポート追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedReportPreviewNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で統計タブ下部の情報量、ロック表現の強さ、無料ユーザーへの圧迫感を確認する。
+- 実際の月次カード/年間カード生成、通知、自動生成、画像書き出しは未実装。
+
 ## 2026-07-10: 統計の金額を初期非表示にした
 
 ### 変更概要

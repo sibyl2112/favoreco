@@ -630,6 +630,11 @@ struct BillingPlanSettingsView: View {
                     systemImage: "icloud.and.arrow.up"
                 )
                 PlanFeatureRow(
+                    title: "自動思い出レポート",
+                    detail: "月刊Favoreco、年間Favorecoを自動生成し、写真やジャンル傾向から思い出カードを提案する。",
+                    systemImage: "sparkles.rectangle.stack"
+                )
+                PlanFeatureRow(
                     title: "継続更新される補助",
                     detail: "外部候補、参照データ、入力補助など継続価値のある機能候補。",
                     systemImage: "sparkles"

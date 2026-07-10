@@ -426,6 +426,7 @@ private struct StatsView: View {
                     categoryStatsSection
                     spendingSection
                     ratingSection
+                    reportPreviewSection
                 }
                 .padding(20)
             }
@@ -497,6 +498,28 @@ private struct StatsView: View {
                 caption: "評価が入力された記録だけを平均しています。",
                 icon: "star.fill"
             )
+        }
+    }
+
+    private var reportPreviewSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("思い出レポート")
+                .font(FavorecoTypography.sectionTitle)
+
+            VStack(spacing: 10) {
+                StatsReportPreviewCard(
+                    title: "月刊Favoreco",
+                    badge: "Premium候補",
+                    detail: "毎月の記録、写真、ジャンル傾向、印象的な体験を自動で1枚の思い出カードにまとめる構想です。",
+                    systemImage: "sparkles"
+                )
+                StatsReportPreviewCard(
+                    title: "年間Favoreco",
+                    badge: "Pro / Premium候補",
+                    detail: "年間ベスト、今年の10枚、よく通った場所、ジャンル横断の変化を画像化できるようにします。",
+                    systemImage: "calendar.badge.star"
+                )
+            }
         }
     }
 
@@ -655,6 +678,44 @@ private struct StatsPrivateAmountCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct StatsReportPreviewCard: View {
+    let title: String
+    let badge: String
+    let detail: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title)
+                        .font(FavorecoTypography.bodyStrong)
+                    Spacer()
+                    Text(badge)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                }
+
+                Text(detail)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
         .padding(16)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
