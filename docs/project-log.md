@@ -5,6 +5,20 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 通知デバッグ画面に集中モード注意書き等を追加
+
+### 変更概要（NotificationDebugView のみ）
+- 通知権限セクション末尾に**黄色の注意書き**（`exclamationmark.triangle.fill`・caption）：「集中モード・通知要約・通知設定により通知が表示されない場合／iPhoneの設定 > 通知 > Favoreco と 設定 > 集中モード を確認」。
+- **「集中モード: 確認できません」**（APIで取得不可のため明記）を追加。
+- **「通知設定を開く」ボタン**（`openURL(UIApplication.openSettingsURLString)`）を追加。
+- テスト通知の予約成功メッセージを「通知を予約しました。表示されない場合は集中モードや通知設定を確認してください。」へ変更。
+
+### 変更しないもの（仕様どおり）
+通知予約ロジック／各Scheduler／通知ID／AppDelegate／前面通知処理 は不変（NotificationDebugView.swift のみ変更）。
+
+### 確認結果（実機 / ビルド）
+コードレベル整合確認。**ビルド・実機（集中モードON/OFFでの表示/抑止）はMac側**。
+
 ## 2026-07-10: 前面通知表示対応（UNUserNotificationCenterDelegate）
 
 ### 変更概要

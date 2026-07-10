@@ -9,9 +9,12 @@
 //
 
 import SwiftUI
+import UIKit
 import UserNotifications
 
 struct NotificationDebugView: View {
+    @Environment(\.openURL) private var openURL
+
     /// Favoreco が発行する通知IDの接頭辞（この接頭辞に一致するものだけを削除対象にする）。
     private static let favorecoPrefixes = ["plan.", "ticket.", "ticketAccount.", NotificationDebugView.testPrefix]
     /// 診断画面から送るテスト通知の接頭辞。
@@ -26,10 +29,24 @@ struct NotificationDebugView: View {
         Form {
             Section("通知権限") {
                 LabeledContent("iOS通知許可", value: authorizationStatusText)
+                LabeledContent("集中モード", value: "確認できません")
                 Button {
                     Task { await requestAuthorization() }
                 } label: {
                     Label("通知の許可をリクエスト", systemImage: "bell.badge")
+                }
+                Button {
+                    openNotificationSettings()
+                } label: {
+                    Label("通知設定を開く", systemImage: "gearshape")
+                }
+
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                    Text("集中モード・通知要約・通知設定により、通知が表示されない場合があります。通知が届かない場合は、iPhoneの『設定 > 通知 > Favoreco』と『設定 > 集中モード』を確認してください。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -174,11 +191,16 @@ struct NotificationDebugView: View {
 
         do {
             try await center.add(request)
-            statusMessage = "\(Int(seconds))秒後のテスト通知を予約しました。"
+            statusMessage = "通知を予約しました。表示されない場合は集中モードや通知設定を確認してください。"
         } catch {
             statusMessage = "テスト通知の予約に失敗しました。"
         }
         await reload()
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
     }
 
     @MainActor
