@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: カレンダータブを月表示にした
+
+### 変更概要
+- `CalendarView` をプレースホルダーから、Visitの日付を表示する月カレンダーへ変更した。
+- 月移動、日付選択、記録がある日のドット表示、選択日の記録一覧、直近予定一覧を追加した。
+- カレンダー上の記録から `ExperienceDetailView` へ遷移できるようにした。
+
+### 変更意図
+外部カレンダーへ手動追加できるようになったため、アプリ内でも日付軸で記録を見返せる最低限のカレンダーを先に作るため。予定/申込/訪問済みの厳密な分離は後続のPlan/TicketAttemptモデルで拡張する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（CalendarView実装）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedCalendarTabNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で月初曜日、縦幅、Dynamic Type、記録件数が多い日の見え方を確認する。
+- 外部カレンダー読み取り重ね表示、Plan/TicketAttemptによる予定/申込の分離は未実装。
+
 ## 2026-07-10: 記録詳細からカレンダー手動追加を実装
 
 ### 変更概要
