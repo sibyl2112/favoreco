@@ -431,12 +431,19 @@ private struct TicketAttemptDetailCard: View {
                         .foregroundStyle(accentColor)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(accentColor.opacity(0.12), in: Capsule())
+                    .background(accentColor.opacity(0.12), in: Capsule())
                 }
+            }
+
+            if let nextAction {
+                TicketNextActionCallout(action: nextAction)
             }
 
             if let accountName {
                 PlanInfoRow(icon: "person.crop.circle", title: "名義", value: accountName)
+            }
+            if !attempt.ticketSite.isEmpty {
+                PlanInfoRow(icon: "safari", title: "購入先", value: attempt.ticketSite)
             }
             if attempt.saleStartAt != Date.distantPast {
                 PlanInfoRow(icon: "ticket", title: "開始", value: attempt.saleStartAt.formatted(date: .long, time: .shortened))
@@ -495,6 +502,91 @@ private struct TicketAttemptDetailCard: View {
         let total = (attempt.price + attempt.fee) * Decimal(attempt.quantity)
         let number = NSDecimalNumber(decimal: total)
         return NumberFormatter.planCurrency.string(from: number) ?? "¥\(number.intValue)"
+    }
+
+    private var nextAction: TicketAttemptNextAction? {
+        guard !["lost", "attended", "skipped"].contains(attempt.statusKey) else {
+            return nil
+        }
+
+        let now = Date()
+        let candidates: [TicketAttemptNextAction] = [
+            TicketAttemptNextAction(
+                title: "申込・発売開始",
+                date: attempt.saleStartAt,
+                icon: "ticket",
+                tint: accentColor,
+                priority: 4
+            ),
+            TicketAttemptNextAction(
+                title: "申込締切",
+                date: attempt.applyDeadlineAt,
+                icon: "hourglass",
+                tint: .red,
+                priority: 0
+            ),
+            TicketAttemptNextAction(
+                title: "当落発表",
+                date: attempt.resultAnnounceAt,
+                icon: "checkmark.seal",
+                tint: .purple,
+                priority: 2
+            ),
+            TicketAttemptNextAction(
+                title: "入金締切",
+                date: attempt.paymentDeadlineAt,
+                icon: "yensign.circle",
+                tint: .orange,
+                priority: 1
+            ),
+            TicketAttemptNextAction(
+                title: "発券開始",
+                date: attempt.issueStartAt,
+                icon: "ticket.fill",
+                tint: .teal,
+                priority: 3
+            ),
+        ]
+
+        return candidates
+            .filter { $0.date != Date.distantPast && $0.date >= now }
+            .sorted {
+                if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
+                    return $0.priority < $1.priority
+                }
+                return $0.date < $1.date
+            }
+            .first
+    }
+}
+
+private struct TicketAttemptNextAction {
+    let title: String
+    let date: Date
+    let icon: String
+    let tint: Color
+    let priority: Int
+}
+
+private struct TicketNextActionCallout: View {
+    let action: TicketAttemptNextAction
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: action.icon)
+                .font(FavorecoTypography.captionStrong)
+            Text("次のアクション")
+                .font(FavorecoTypography.caption)
+            Text(action.title)
+                .font(FavorecoTypography.captionStrong)
+            Spacer(minLength: 8)
+            Text(action.date.formatted(date: .abbreviated, time: .shortened))
+                .font(FavorecoTypography.captionStrong)
+        }
+        .foregroundStyle(action.tint)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(action.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
