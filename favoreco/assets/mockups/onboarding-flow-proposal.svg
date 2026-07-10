@@ -1,0 +1,191 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1280" viewBox="0 0 2200 1280">
+  <defs>
+    <style>
+      .bg { fill: #f6f1ee; }
+      .phone { fill: #fbfaf8; stroke: #d8cec7; stroke-width: 3; }
+      .screen { fill: #f4efeb; }
+      .card { fill: #fffaf4; stroke: #e5dbd3; stroke-width: 2; }
+      .glass { fill: #ffffff; opacity: .82; stroke: #eadfd8; stroke-width: 2; }
+      .wine { fill: #8b2f45; }
+      .wineText { fill: #8b2f45; }
+      .gold { fill: #c79259; }
+      .blue { fill: #b9d5e8; }
+      .green { fill: #6f8f7a; }
+      .muted { fill: #8a817c; }
+      .text { fill: #342f2d; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+      .serif { font-family: "Hiragino Mincho ProN", "Noto Serif JP", serif; }
+      .title { font-size: 30px; font-weight: 700; }
+      .screenTitle { font-size: 24px; font-weight: 700; }
+      .lead { font-size: 17px; font-weight: 600; }
+      .body { font-size: 14px; }
+      .small { font-size: 12px; }
+      .tiny { font-size: 10px; }
+      .line { stroke: #d8cec7; stroke-width: 2; stroke-linecap: round; }
+      .arrow { stroke: #b9aca4; stroke-width: 3; fill: none; marker-end: url(#arrowHead); }
+      .dot { fill: #d8cec7; }
+      .dotActive { fill: #8b2f45; }
+    </style>
+    <marker id="arrowHead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#b9aca4"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="2200" height="1280"/>
+  <text x="80" y="72" class="text title">favoreco 初回オンボーディング整理案</text>
+  <text x="80" y="108" class="text body muted">目的: 初回登録時に「何のアプリか」「何が残せるか」「どこまで設定するか」を短く理解してもらい、最後にジャンル選択へ進める。</text>
+
+  <!-- Phone template: 300x540 -->
+
+  <!-- Step 1 -->
+  <g transform="translate(80 170)">
+    <rect class="phone" x="0" y="0" rx="44" width="300" height="540"/>
+    <rect class="screen" x="18" y="22" rx="30" width="264" height="496"/>
+    <g transform="translate(42 52)">
+      <rect class="glass" x="24" y="18" rx="32" width="168" height="168"/>
+      <rect x="78" y="50" rx="12" width="62" height="102" class="wine"/>
+      <rect x="58" y="70" rx="12" width="62" height="102" fill="#fffaf4" stroke="#d8cec7" stroke-width="2"/>
+      <path d="M58 150 L89 124 L120 150" fill="#fffaf4" stroke="#c79259" stroke-width="4"/>
+      <circle cx="151" cy="70" r="14" class="gold"/>
+      <text x="12" y="250" class="text screenTitle serif">観た・行った・</text>
+      <text x="12" y="282" class="text screenTitle serif">体験したを、</text>
+      <text x="12" y="316" class="text screenTitle serif wineText">美しく一生残す。</text>
+      <text x="12" y="354" class="text body muted">favorecoは、ジャンルをまたいで</text>
+      <text x="12" y="374" class="text body muted">あなたの体験を記録するアプリです。</text>
+    </g>
+    <rect x="48" y="448" rx="16" width="204" height="40" class="wine"/>
+    <text x="120" y="473" class="text body" fill="#fff">はじめる</text>
+    <circle cx="128" cy="505" r="4" class="dotActive"/><circle cx="146" cy="505" r="4" class="dot"/><circle cx="164" cy="505" r="4" class="dot"/><circle cx="182" cy="505" r="4" class="dot"/>
+    <text x="0" y="590" class="text lead">1. 価値訴求</text>
+    <text x="0" y="616" class="text small muted">最初は機能説明ではなく、何を残すアプリかを一文で伝える。</text>
+  </g>
+
+  <path class="arrow" d="M405 430 C430 430 450 430 475 430"/>
+
+  <!-- Step 2 -->
+  <g transform="translate(500 170)">
+    <rect class="phone" x="0" y="0" rx="44" width="300" height="540"/>
+    <rect class="screen" x="18" y="22" rx="30" width="264" height="496"/>
+    <text x="42" y="70" class="text screenTitle">残せるもの</text>
+    <text x="42" y="100" class="text body muted">1件の記録に、必要な情報だけ。</text>
+    <g transform="translate(38 130)">
+      <rect class="card" x="0" y="0" rx="14" width="224" height="58"/>
+      <circle cx="28" cy="29" r="14" class="wine"/><text x="54" y="26" class="text lead">体験の基本</text><text x="54" y="45" class="text tiny muted">タイトル / 日付 / 場所 / 評価</text>
+      <rect class="card" x="0" y="76" rx="14" width="224" height="58"/>
+      <circle cx="28" cy="105" r="14" class="blue"/><text x="54" y="102" class="text lead">写真と思い出</text><text x="54" y="121" class="text tiny muted">写真 / メモ / OCR取込</text>
+      <rect class="card" x="0" y="152" rx="14" width="224" height="58"/>
+      <circle cx="28" cy="181" r="14" class="gold"/><text x="54" y="178" class="text lead">予定とチケット</text><text x="54" y="197" class="text tiny muted">状態 / 座席 / 金額</text>
+      <rect class="card" x="0" y="228" rx="14" width="224" height="58"/>
+      <circle cx="28" cy="257" r="14" class="green"/><text x="54" y="254" class="text lead">人物・団体</text><text x="54" y="273" class="text tiny muted">出演 / 作者 / ゲスト</text>
+    </g>
+    <rect x="48" y="448" rx="16" width="204" height="40" class="wine"/>
+    <text x="130" y="473" class="text body" fill="#fff">次へ</text>
+    <circle cx="128" cy="505" r="4" class="dot"/><circle cx="146" cy="505" r="4" class="dotActive"/><circle cx="164" cy="505" r="4" class="dot"/><circle cx="182" cy="505" r="4" class="dot"/>
+    <text x="0" y="590" class="text lead">2. 記録できる内容</text>
+    <text x="0" y="616" class="text small muted">入力項目の多さを「必要なものだけ残せる」として見せる。</text>
+  </g>
+
+  <path class="arrow" d="M825 430 C850 430 870 430 895 430"/>
+
+  <!-- Step 3 -->
+  <g transform="translate(920 170)">
+    <rect class="phone" x="0" y="0" rx="44" width="300" height="540"/>
+    <rect class="screen" x="18" y="22" rx="30" width="264" height="496"/>
+    <text x="42" y="70" class="text screenTitle">ジャンルをまたげる</text>
+    <text x="42" y="100" class="text body muted">映画も、観劇も、酒も、同じ場所に。</text>
+    <g transform="translate(38 138)">
+      <rect class="glass" x="0" y="0" rx="16" width="224" height="218"/>
+      <circle cx="56" cy="54" r="30" class="wine"/><text x="42" y="60" class="text small" fill="#fff">観劇</text>
+      <circle cx="168" cy="54" r="30" class="blue"/><text x="154" y="60" class="text small">美術</text>
+      <circle cx="56" cy="150" r="30" class="gold"/><text x="42" y="156" class="text small">映画</text>
+      <circle cx="168" cy="150" r="30" class="green"/><text x="158" y="156" class="text small" fill="#fff">酒</text>
+    </g>
+    <text x="50" y="390" class="text body muted">あとから表示ジャンルは変更できます。</text>
+    <rect x="48" y="448" rx="16" width="204" height="40" class="wine"/>
+    <text x="130" y="473" class="text body" fill="#fff">次へ</text>
+    <circle cx="128" cy="505" r="4" class="dot"/><circle cx="146" cy="505" r="4" class="dot"/><circle cx="164" cy="505" r="4" class="dotActive"/><circle cx="182" cy="505" r="4" class="dot"/>
+    <text x="0" y="590" class="text lead">3. 横断アプリである説明</text>
+    <text x="0" y="616" class="text small muted">「特定ジャンル専用ではない」ことを早めに伝える。</text>
+  </g>
+
+  <path class="arrow" d="M1245 430 C1270 430 1290 430 1315 430"/>
+
+  <!-- Step 4 -->
+  <g transform="translate(1340 170)">
+    <rect class="phone" x="0" y="0" rx="44" width="300" height="540"/>
+    <rect class="screen" x="18" y="22" rx="30" width="264" height="496"/>
+    <text x="42" y="70" class="text screenTitle">安心して残せる</text>
+    <text x="42" y="100" class="text body muted">写真や記録は、まず端末内に保存。</text>
+    <g transform="translate(38 132)">
+      <rect class="card" x="0" y="0" rx="14" width="224" height="62"/>
+      <text x="18" y="28" class="text lead">写真メタデータ削除</text>
+      <text x="18" y="48" class="text tiny muted">位置情報などは記録データ側で管理</text>
+      <rect class="card" x="0" y="82" rx="14" width="224" height="62"/>
+      <text x="18" y="110" class="text lead">同期はあとから選択</text>
+      <text x="18" y="130" class="text tiny muted">起動直後に権限を求めない</text>
+      <rect class="card" x="0" y="164" rx="14" width="224" height="62"/>
+      <text x="18" y="192" class="text lead">通知も必要な時だけ</text>
+      <text x="18" y="212" class="text tiny muted">予定やチケット作成時に案内</text>
+    </g>
+    <rect x="48" y="448" rx="16" width="204" height="40" class="wine"/>
+    <text x="130" y="473" class="text body" fill="#fff">次へ</text>
+    <circle cx="128" cy="505" r="4" class="dot"/><circle cx="146" cy="505" r="4" class="dot"/><circle cx="164" cy="505" r="4" class="dot"/><circle cx="182" cy="505" r="4" class="dotActive"/>
+    <text x="0" y="590" class="text lead">4. 安心材料</text>
+    <text x="0" y="616" class="text small muted">写真・通知・同期の不安を先に下げる。権限要求はここではしない。</text>
+  </g>
+
+  <!-- Row 2 -->
+  <path class="arrow" d="M1490 810 C1490 850 360 850 360 890"/>
+
+  <!-- Step 5 -->
+  <g transform="translate(260 760)">
+    <rect class="phone" x="0" y="0" rx="44" width="300" height="540"/>
+    <rect class="screen" x="18" y="22" rx="30" width="264" height="496"/>
+    <text x="42" y="70" class="text screenTitle">ジャンルを選ぶ</text>
+    <text x="42" y="100" class="text body muted">まず使うものだけで始めます。</text>
+    <g transform="translate(38 130)">
+      <rect class="card" x="0" y="0" rx="12" width="224" height="44"/><circle cx="24" cy="22" r="10" class="wine"/><text x="46" y="28" class="text body">観劇</text><text x="198" y="28" class="text body wineText">✓</text>
+      <rect class="card" x="0" y="58" rx="12" width="224" height="44"/><circle cx="24" cy="80" r="10" class="blue"/><text x="46" y="86" class="text body">美術展</text><text x="198" y="86" class="text body wineText">✓</text>
+      <rect class="card" x="0" y="116" rx="12" width="224" height="44"/><circle cx="24" cy="138" r="10" class="gold"/><text x="46" y="144" class="text body">映画</text><text x="198" y="144" class="text body wineText">✓</text>
+      <rect class="card" x="0" y="174" rx="12" width="224" height="44"/><circle cx="24" cy="196" r="10" class="green"/><text x="46" y="202" class="text body">酒</text>
+      <rect class="card" x="0" y="232" rx="12" width="224" height="44"/><circle cx="24" cy="254" r="10" fill="#d8d0ca"/><text x="46" y="260" class="text body">御朱印</text>
+    </g>
+    <rect x="48" y="448" rx="16" width="204" height="40" class="wine"/>
+    <text x="102" y="473" class="text body" fill="#fff">選んで次へ</text>
+    <text x="0" y="590" class="text lead">5. 現行実装のジャンル選択</text>
+    <text x="0" y="616" class="text small muted">現在の `GenreOnboardingView` はここに相当。</text>
+  </g>
+
+  <path class="arrow" d="M585 1020 C610 1020 630 1020 655 1020"/>
+
+  <!-- Step 6 -->
+  <g transform="translate(680 760)">
+    <rect class="phone" x="0" y="0" rx="44" width="300" height="540"/>
+    <rect class="screen" x="18" y="22" rx="30" width="264" height="496"/>
+    <text x="42" y="70" class="text screenTitle">準備できました</text>
+    <text x="42" y="100" class="text body muted">最初の記録は、あとからで大丈夫。</text>
+    <rect class="glass" x="42" y="136" rx="18" width="216" height="156"/>
+    <text x="62" y="172" class="text lead">選択中</text>
+    <text x="62" y="202" class="text body">観劇 / 美術展 / 映画</text>
+    <line x1="62" y1="226" x2="238" y2="226" class="line"/>
+    <text x="62" y="256" class="text body muted">Homeに入口が表示されます。</text>
+    <rect class="card" x="42" y="326" rx="14" width="216" height="58"/>
+    <text x="62" y="352" class="text body">あとで変更可能</text>
+    <text x="62" y="370" class="text tiny muted">設定 > ジャンル管理</text>
+    <rect x="48" y="448" rx="16" width="204" height="40" class="wine"/>
+    <text x="108" y="473" class="text body" fill="#fff">favorecoを始める</text>
+    <text x="0" y="590" class="text lead">6. 開始確認</text>
+    <text x="0" y="616" class="text small muted">「登録完了」ではなく「今から使える」状態を明示。</text>
+  </g>
+
+  <g transform="translate(1080 810)">
+    <rect class="glass" x="0" y="0" rx="18" width="900" height="330"/>
+    <text x="34" y="48" class="text screenTitle">推奨方針</text>
+    <text x="34" y="92" class="text lead wineText">初回は説明4枚 + ジャンル選択 + 開始確認</text>
+    <text x="34" y="128" class="text body muted">現行のジャンル選択だけだと「なぜ選ぶのか」が先に伝わりにくい。説明画面を短く挟む方が、初回体験の納得感が高い。</text>
+    <text x="34" y="178" class="text lead">実装メモ</text>
+    <text x="34" y="208" class="text body muted">- 権限要求はオンボーディング中に出さない</text>
+    <text x="34" y="236" class="text body muted">- スキップは「説明をスキップ」まで。ジャンル選択は1件以上必須</text>
+    <text x="34" y="264" class="text body muted">- 文言は機能説明より、記録する心理的ハードルを下げる方向</text>
+    <text x="34" y="292" class="text body muted">- 最初の記録追加を強制しない。Homeへ入ってから中央＋で追加</text>
+  </g>
+</svg>
