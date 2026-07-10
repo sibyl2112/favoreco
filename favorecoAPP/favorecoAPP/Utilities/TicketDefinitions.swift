@@ -7,6 +7,72 @@
 
 import Foundation
 
+struct TicketFlowDefinition: Identifiable, Hashable {
+    let key: String
+    let name: String
+    let description: String
+    let defaultStatusKey: String
+    let defaultEntryRouteKey: String
+
+    var id: String { key }
+
+    static let all: [TicketFlowDefinition] = [
+        TicketFlowDefinition(
+            key: "interested",
+            name: "気になる",
+            description: "行くか未定。情報だけ保存",
+            defaultStatusKey: "interested",
+            defaultEntryRouteKey: ""
+        ),
+        TicketFlowDefinition(
+            key: "lotteryPlanned",
+            name: "抽選応募予定",
+            description: "FC先行・抽選・カード枠などに応募する",
+            defaultStatusKey: "beforeApply",
+            defaultEntryRouteKey: "lottery"
+        ),
+        TicketFlowDefinition(
+            key: "saleWaiting",
+            name: "発売待ち",
+            description: "先着・一般発売・当日券などを待つ",
+            defaultStatusKey: "onSaleSoon",
+            defaultEntryRouteKey: "general"
+        ),
+        TicketFlowDefinition(
+            key: "acquired",
+            name: "取得済み",
+            description: "当選済み・購入済み・招待確定",
+            defaultStatusKey: "won",
+            defaultEntryRouteKey: "other"
+        ),
+    ]
+
+    static func definition(for key: String) -> TicketFlowDefinition {
+        all.first(where: { $0.key == key }) ?? all[0]
+    }
+
+    static func inferredKey(statusKey: String, entryRouteKey: String) -> String {
+        switch statusKey {
+        case "interested", "skipped":
+            return "interested"
+        case "beforeApply", "waitingResult", "lost":
+            return "lotteryPlanned"
+        case "onSaleSoon":
+            return "saleWaiting"
+        case "won", "waitingPayment", "waitingIssue", "issued", "attended":
+            return "acquired"
+        default:
+            if ["general", "sameDay", "resale"].contains(entryRouteKey) {
+                return "saleWaiting"
+            }
+            if ["fanClub", "lottery", "card"].contains(entryRouteKey) {
+                return "lotteryPlanned"
+            }
+            return "interested"
+        }
+    }
+}
+
 struct TicketStatusDefinition: Identifiable, Hashable {
     let key: String
     let name: String

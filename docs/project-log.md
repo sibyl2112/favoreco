@@ -5,6 +5,34 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: チケット入力を段階式フローに整理
+
+### 変更概要
+- チケット入力の入口として `気になる / 抽選応募予定 / 発売待ち / 取得済み` を追加した。
+- `抽選応募予定` は申込開始/締切、当落発表、入金締切、名義/FC/カード枠を中心に表示するようにした。
+- `発売待ち` は発売開始、購入先、発券開始を中心に表示するようにした。
+- `取得済み` は詳細状態（当選/入金待ち/発券待ち/発券済み/参加済み）、金額、枚数、座席、購入URLを表示するようにした。
+- `気になる` は日付・金額・座席を隠し、最低限の情報だけ保存しやすくした。
+- 既存の `TicketAttempt.statusKey` / `entryRouteKey` は維持し、新しい入口はUI上の出し分けとして既存キーへ落とし込むようにした。
+
+### 変更意図
+従来の全部入りフォームだと「申込前」と「発売前」の温度感が分かりにくかったため。ユーザーが最初に自然な言葉で状態を選び、その状態に必要な項目だけ入力する形にして、チケット登録の迷いを減らす。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift（チケット入力フロー定義）
+- favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift（予定・チケット追加/編集の段階式表示）
+- favorecoAPP/favorecoAPP/Views/EditTicketAttemptView.swift（申込単体追加/編集の段階式表示）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketFlowNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で各入口を選んだ時の表示項目が自然か確認する。
+- `取得済み` で当選済み/購入済み/招待確定の細かな表現が足りるか確認する。
+- 複数申込の一覧で、抽選応募予定/発売待ち/取得済みの見え方を確認する。
+
 ## 2026-07-10: 予定から参加記録を作成する導線を追加
 
 ### 変更概要

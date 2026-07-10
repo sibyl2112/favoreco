@@ -35,39 +35,71 @@ struct EditTicketAttemptView: View {
         NavigationStack {
             Form {
                 Section("申込") {
-                    Picker("状態", selection: $draft.statusKey) {
-                        ForEach(TicketStatusDefinition.all) { status in
-                            Text(status.name).tag(status.key)
+                    Picker("今の状態", selection: $draft.flowKey) {
+                        ForEach(TicketFlowDefinition.all) { flow in
+                            Text(flow.name).tag(flow.key)
+                        }
+                    }
+                    .onChange(of: draft.flowKey) { _, newValue in
+                        draft.applyFlowDefaults(newValue)
+                    }
+
+                    Text(TicketFlowDefinition.definition(for: draft.flowKey).description)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+
+                    if draft.showsDetailedStatus {
+                        Picker("詳細状態", selection: $draft.statusKey) {
+                            ForEach(draft.statusOptions) { status in
+                                Text(status.name).tag(status.key)
+                            }
                         }
                     }
 
-                    Picker("区分", selection: $draft.entryRouteKey) {
-                        Text("未設定").tag("")
-                        ForEach(TicketEntryRouteDefinition.all) { route in
-                            Text(route.name).tag(route.key)
+                    if draft.showsEntryRoute {
+                        Picker("区分", selection: $draft.entryRouteKey) {
+                            Text("未設定").tag("")
+                            ForEach(draft.entryRouteOptions) { route in
+                                Text(route.name).tag(route.key)
+                            }
                         }
                     }
 
-                    Picker("名義・アカウント", selection: $draft.accountID) {
-                        Text("未設定").tag(Optional<UUID>.none)
-                        ForEach(activeAccounts) { account in
-                            Text(accountLabel(account)).tag(Optional(account.id))
+                    if draft.showsAccountFields {
+                        Picker("名義・アカウント", selection: $draft.accountID) {
+                            Text("未設定").tag(Optional<UUID>.none)
+                            ForEach(activeAccounts) { account in
+                                Text(accountLabel(account)).tag(Optional(account.id))
+                            }
                         }
-                    }
 
-                    TextField("購入先・サイト名", text: $draft.ticketSite)
-                    TextField("名義メモ", text: $draft.holderName)
+                        TextField("購入先・サイト名", text: $draft.ticketSite)
+                        TextField("名義メモ", text: $draft.holderName)
+                    }
                 }
 
-                Section("日付") {
-                    DateToggleRow(title: "申込開始", isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
-                    DateToggleRow(title: "申込締切", isOn: $draft.hasApplyDeadline, date: $draft.applyDeadlineAt)
-                    DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
-                    DateToggleRow(title: "入金締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
-                    DateToggleRow(title: "発券開始", isOn: $draft.hasIssueStart, date: $draft.issueStartAt)
+                if draft.showsDateSection {
+                    Section("日付") {
+                        if draft.showsSaleStart {
+                            DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
+                        }
+                        if draft.showsApplyDeadline {
+                            DateToggleRow(title: "申込締切", isOn: $draft.hasApplyDeadline, date: $draft.applyDeadlineAt)
+                        }
+                        if draft.showsResultAnnounce {
+                            DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
+                        }
+                        if draft.showsPaymentDeadline {
+                            DateToggleRow(title: "入金締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
+                        }
+                        if draft.showsIssueStart {
+                            DateToggleRow(title: "発券開始", isOn: $draft.hasIssueStart, date: $draft.issueStartAt)
+                        }
+                    }
                 }
 
-                Section("金額・座席") {
+                if draft.showsTicketDetails {
+                    Section("金額・座席") {
                     TextField("チケット代", text: $draft.priceText)
                         .keyboardType(.numberPad)
                     TextField("手数料", text: $draft.feeText)
@@ -78,6 +110,7 @@ struct EditTicketAttemptView: View {
                     TextField("購入URL", text: $draft.purchaseURL)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
+                    }
                 }
 
                 Section("メモ") {
@@ -182,6 +215,7 @@ struct EditTicketAttemptView: View {
 }
 
 private struct TicketAttemptDraft {
+    var flowKey = "lotteryPlanned"
     var statusKey = "beforeApply"
     var entryRouteKey = ""
     var accountID: UUID?
@@ -208,6 +242,7 @@ private struct TicketAttemptDraft {
 
     init(attempt: TicketAttempt?) {
         guard let attempt else { return }
+        flowKey = TicketFlowDefinition.inferredKey(statusKey: attempt.statusKey, entryRouteKey: attempt.entryRouteKey)
         statusKey = attempt.statusKey
         entryRouteKey = attempt.entryRouteKey
         accountID = attempt.account?.id
@@ -236,6 +271,109 @@ private struct TicketAttemptDraft {
     var trimmedSeatText: String { seatText.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedPurchaseURL: String { purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var showsDetailedStatus: Bool {
+        flowKey == "acquired"
+    }
+
+    var showsEntryRoute: Bool {
+        flowKey != "interested"
+    }
+
+    var showsAccountFields: Bool {
+        flowKey != "interested"
+    }
+
+    var showsSaleStart: Bool {
+        flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
+    }
+
+    var showsApplyDeadline: Bool {
+        flowKey == "lotteryPlanned"
+    }
+
+    var showsResultAnnounce: Bool {
+        flowKey == "lotteryPlanned"
+    }
+
+    var showsPaymentDeadline: Bool {
+        flowKey == "lotteryPlanned" || flowKey == "acquired"
+    }
+
+    var showsIssueStart: Bool {
+        flowKey == "saleWaiting" || flowKey == "acquired"
+    }
+
+    var showsDateSection: Bool {
+        showsSaleStart || showsApplyDeadline || showsResultAnnounce || showsPaymentDeadline || showsIssueStart
+    }
+
+    var showsTicketDetails: Bool {
+        flowKey == "acquired"
+    }
+
+    var saleStartLabel: String {
+        flowKey == "saleWaiting" ? "発売開始" : "申込開始"
+    }
+
+    var statusOptions: [TicketStatusDefinition] {
+        switch flowKey {
+        case "acquired":
+            return TicketStatusDefinition.all.filter { ["won", "waitingPayment", "waitingIssue", "issued", "attended"].contains($0.key) }
+        default:
+            return TicketStatusDefinition.all.filter { $0.key == TicketFlowDefinition.definition(for: flowKey).defaultStatusKey }
+        }
+    }
+
+    var entryRouteOptions: [TicketEntryRouteDefinition] {
+        switch flowKey {
+        case "lotteryPlanned":
+            return TicketEntryRouteDefinition.all.filter { ["fanClub", "lottery", "card", "other"].contains($0.key) }
+        case "saleWaiting":
+            return TicketEntryRouteDefinition.all.filter { ["general", "sameDay", "resale", "other"].contains($0.key) }
+        case "acquired":
+            return TicketEntryRouteDefinition.all
+        default:
+            return []
+        }
+    }
+
+    mutating func applyFlowDefaults(_ key: String) {
+        let flow = TicketFlowDefinition.definition(for: key)
+        flowKey = flow.key
+        statusKey = flow.defaultStatusKey
+        if entryRouteKey.isEmpty || !entryRouteOptions.contains(where: { $0.key == entryRouteKey }) {
+            entryRouteKey = flow.defaultEntryRouteKey
+        }
+
+        switch flow.key {
+        case "interested":
+            hasSaleStart = false
+            hasApplyDeadline = false
+            hasResultAnnounce = false
+            hasPaymentDeadline = false
+            hasIssueStart = false
+            priceText = ""
+            feeText = ""
+            seatText = ""
+            purchaseURL = ""
+        case "lotteryPlanned":
+            hasApplyDeadline = true
+            hasResultAnnounce = true
+            hasIssueStart = false
+        case "saleWaiting":
+            hasSaleStart = true
+            hasApplyDeadline = false
+            hasResultAnnounce = false
+            hasPaymentDeadline = false
+        case "acquired":
+            hasApplyDeadline = false
+            hasResultAnnounce = false
+            hasIssueStart = true
+        default:
+            break
+        }
+    }
 
     private func decimalText(_ value: Decimal) -> String {
         guard value != Decimal(0) else { return "" }
