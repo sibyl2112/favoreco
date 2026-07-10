@@ -72,6 +72,18 @@ struct PlanDetailView: View {
         return nil
     }
 
+    private var nextPlanAction: TicketNextActionDefinition? {
+        attempts
+            .compactMap { TicketNextActionDefinition.nextAction(for: $0) }
+            .sorted {
+                if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
+                    return $0.priority < $1.priority
+                }
+                return $0.date < $1.date
+            }
+            .first
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -197,6 +209,33 @@ struct PlanDetailView: View {
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
             }
+
+            HStack(spacing: 8) {
+                if !attempts.isEmpty {
+                    PlanStatusChip(
+                        icon: "ticket",
+                        text: "申込 \(attempts.count)件",
+                        tint: categoryColor
+                    )
+                }
+
+                if let nextPlanAction {
+                    PlanStatusChip(
+                        icon: nextPlanAction.systemImage,
+                        text: "\(nextPlanAction.title) \(nextPlanAction.date.formatted(date: .numeric, time: .shortened))",
+                        tint: .orange
+                    )
+                }
+
+                if plan.visit != nil {
+                    PlanStatusChip(
+                        icon: "checkmark.seal.fill",
+                        text: "記録済み",
+                        tint: .green
+                    )
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .planSectionCard()
     }
@@ -431,7 +470,7 @@ private struct TicketAttemptDetailCard: View {
                         .foregroundStyle(accentColor)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                    .background(accentColor.opacity(0.12), in: Capsule())
+                        .background(accentColor.opacity(0.12), in: Capsule())
                 }
             }
 
@@ -505,58 +544,29 @@ private struct TicketAttemptDetailCard: View {
     }
 
     private var nextAction: TicketAttemptNextAction? {
-        guard !["lost", "attended", "skipped"].contains(attempt.statusKey) else {
-            return nil
+        guard let action = TicketNextActionDefinition.nextAction(for: attempt) else { return nil }
+        return TicketAttemptNextAction(
+            title: action.title,
+            date: action.date,
+            icon: action.systemImage,
+            tint: tint(for: action),
+            priority: action.priority
+        )
+    }
+
+    private func tint(for action: TicketNextActionDefinition) -> Color {
+        switch action.title {
+        case "申込締切":
+            return .red
+        case "入金締切":
+            return .orange
+        case "当落発表":
+            return .purple
+        case "発券開始":
+            return .teal
+        default:
+            return accentColor
         }
-
-        let now = Date()
-        let candidates: [TicketAttemptNextAction] = [
-            TicketAttemptNextAction(
-                title: "申込・発売開始",
-                date: attempt.saleStartAt,
-                icon: "ticket",
-                tint: accentColor,
-                priority: 4
-            ),
-            TicketAttemptNextAction(
-                title: "申込締切",
-                date: attempt.applyDeadlineAt,
-                icon: "hourglass",
-                tint: .red,
-                priority: 0
-            ),
-            TicketAttemptNextAction(
-                title: "当落発表",
-                date: attempt.resultAnnounceAt,
-                icon: "checkmark.seal",
-                tint: .purple,
-                priority: 2
-            ),
-            TicketAttemptNextAction(
-                title: "入金締切",
-                date: attempt.paymentDeadlineAt,
-                icon: "yensign.circle",
-                tint: .orange,
-                priority: 1
-            ),
-            TicketAttemptNextAction(
-                title: "発券開始",
-                date: attempt.issueStartAt,
-                icon: "ticket.fill",
-                tint: .teal,
-                priority: 3
-            ),
-        ]
-
-        return candidates
-            .filter { $0.date != Date.distantPast && $0.date >= now }
-            .sorted {
-                if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
-                    return $0.priority < $1.priority
-                }
-                return $0.date < $1.date
-            }
-            .first
     }
 }
 
@@ -611,6 +621,22 @@ private struct PlanInfoRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(3)
         }
+    }
+}
+
+private struct PlanStatusChip: View {
+    let icon: String
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Label(text, systemImage: icon)
+            .font(FavorecoTypography.captionStrong)
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(tint.opacity(0.12), in: Capsule())
     }
 }
 

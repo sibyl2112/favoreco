@@ -5,6 +5,31 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: チケットの次アクション表示を共通化
+
+### 変更概要
+- チケット申込の未来日から、次に注意すべき「次のアクション」を返す `TicketNextActionDefinition` を追加した。
+- 予定詳細のヘッダーに、申込件数、次の注意日、記録済み状態のサマリーチップを表示するようにした。
+- 予定詳細の各申込カードに、次のアクション帯とプレイガイド/購入先名を表示するようにした。
+- カレンダー/直近予定の予定行にも、次の注意日を1行表示するようにした。
+
+### 変更意図
+複数先行・複数名義を登録した時に、予定詳細へ入る前後どちらでも「次に何を見ればいいか」を判断できるようにするため。締切、当落、入金、発券などの要対応を一覧と詳細で同じ基準にそろえ、チケット管理の見落としを減らす。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift（次アクション共通判定）
+- favorecoAPP/favorecoAPP/Views/PlanDetailView.swift（サマリーチップ、申込カードの次アクション表示）
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（予定行の次アクション表示）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketNextSummary CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で複数申込を登録し、最も近い未来日が一覧/詳細で同じように表示されるか確認する。
+- 期限切れ直後の扱い、時刻未入力時の見え方は実データで調整する。
+
 ## 2026-07-10: 予定詳細の開く先を優先順位つきにした
 
 ### 変更概要

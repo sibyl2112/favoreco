@@ -591,8 +591,24 @@ private struct PlanSummaryRow: View {
         Color(hex: plan.category?.colorHex ?? "#147C88")
     }
 
+    private var activeAttempts: [TicketAttempt] {
+        plan.ticketAttempts?.filter { !$0.isArchived } ?? []
+    }
+
     private var ticketAttempt: TicketAttempt? {
-        plan.ticketAttempts?.filter { !$0.isArchived }.sorted { $0.updatedAt > $1.updatedAt }.first
+        activeAttempts.sorted { $0.updatedAt > $1.updatedAt }.first
+    }
+
+    private var nextTicketAction: TicketNextActionDefinition? {
+        activeAttempts
+            .compactMap { TicketNextActionDefinition.nextAction(for: $0) }
+            .sorted {
+                if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
+                    return $0.priority < $1.priority
+                }
+                return $0.date < $1.date
+            }
+            .first
     }
 
     var body: some View {
@@ -635,6 +651,16 @@ private struct PlanSummaryRow: View {
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                }
+
+                if let nextTicketAction {
+                    Label(
+                        "\(nextTicketAction.title) \(nextTicketAction.date.formatted(date: .numeric, time: .shortened))",
+                        systemImage: nextTicketAction.systemImage
+                    )
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
                 }
             }
         }

@@ -173,6 +173,37 @@ struct TicketGuideDefinition: Identifiable, Hashable {
     }
 }
 
+struct TicketNextActionDefinition {
+    let title: String
+    let date: Date
+    let systemImage: String
+    let priority: Int
+
+    static func nextAction(for attempt: TicketAttempt, now: Date = Date()) -> TicketNextActionDefinition? {
+        guard !["lost", "attended", "skipped"].contains(attempt.statusKey) else {
+            return nil
+        }
+
+        let candidates: [TicketNextActionDefinition] = [
+            TicketNextActionDefinition(title: "申込・発売開始", date: attempt.saleStartAt, systemImage: "ticket", priority: 4),
+            TicketNextActionDefinition(title: "申込締切", date: attempt.applyDeadlineAt, systemImage: "hourglass", priority: 0),
+            TicketNextActionDefinition(title: "当落発表", date: attempt.resultAnnounceAt, systemImage: "checkmark.seal", priority: 2),
+            TicketNextActionDefinition(title: "入金締切", date: attempt.paymentDeadlineAt, systemImage: "yensign.circle", priority: 1),
+            TicketNextActionDefinition(title: "発券開始", date: attempt.issueStartAt, systemImage: "ticket.fill", priority: 3),
+        ]
+
+        return candidates
+            .filter { $0.date != Date.distantPast && $0.date >= now }
+            .sorted {
+                if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
+                    return $0.priority < $1.priority
+                }
+                return $0.date < $1.date
+            }
+            .first
+    }
+}
+
 struct TicketAccountTypeDefinition: Identifiable, Hashable {
     let key: String
     let name: String
