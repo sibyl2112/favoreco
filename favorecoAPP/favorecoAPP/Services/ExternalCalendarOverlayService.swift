@@ -110,10 +110,10 @@ final class ExternalCalendarOverlayStore: ObservableObject {
     }
 
     private static func canReadEvents(status: EKAuthorizationStatus) -> Bool {
-        if #available(iOS 17.0, *) {
-            return status == .fullAccess
+        if #unavailable(iOS 17.0) {
+            return status == .authorized
         }
-        return status == .authorized
+        return status == .fullAccess
     }
 
     private static func statusText(for status: EKAuthorizationStatus) -> String {

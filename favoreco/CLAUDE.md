@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-10（カレンダー重ね表示・通知設定接続）
+> **最終更新**: 2026-07-10（チケット予定モデル・登録情報ハブ実装）
 
 ---
 
@@ -44,6 +44,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `CalendarView`: Visitの日付を月表示で確認するアプリ内カレンダー。月移動、日付選択、記録がある日のドット表示、選択日の記録一覧、直近予定一覧を表示し、各記録から `ExperienceDetailView` へ遷移できる。`ExternalCalendarOverlayStore` 経由でEventKitの外部予定を読み取り、iOSカレンダーに登録済みのApple/Google/共有カレンダー予定を薄い外部予定行として重ね表示できる。外部予定は読み取り専用で、Favorecoの記録には変換しない。
 - `StatsView`: SwiftDataのVisit/RecordCategoryから、総記録数、今年の記録、今月の記録、平均評価、ジャンル別回数、記録済み金額を表示する簡易統計タブ。金額はプライバシー情報として初期表示では伏せ、目アイコンを押した時だけ表示する。下部に `月刊Favoreco` / `年間Favoreco` の思い出レポート導線を置き、タップすると現在の月/年のVisitから、記録数、写真数、ジャンル数、平均評価、最多ジャンル、最多場所、金額、ジャンル傾向、カード候補を表示する下書き画面へ遷移する。下書き画面では、画像化前の軽い共有導線としてカードプレビューを表示し、記録数/写真数/ジャンル数/平均評価/最多ジャンル/場所/カード候補を含む共有用テキストをiOS共有シートへ渡せる。クリップボードへのコピーもできる。共有文には金額を入れない。基本統計=無料、詳細統計/年間まとめ=Pro、同期込み自動レポート=Premium候補という境界を画面上でも見せる。画像書き出し、自動生成、通知、期間切替、グラフ、予定/申込統計は未実装。
 - `SettingsView`: 設定画面。マイ、表示、ジャンル、記録・入力補助、通知、データ管理、同期・バックアップ、課金・プラン、リンク・サポート、開発にセクション整理し、各詳細画面への入口を持つ。
+- `RegistrationIntegrationSettingsView`: マイ配下の登録情報・連携ハブ。FC、プレイガイド、劇場会員、カード枠などを `TicketAccount` として登録/編集できる。外部カレンダー連携の説明も同じハブに置く。パスワード本体は保存せず、必要になった場合はKeychain参照キーだけを使う方針。
 - `DisplaySettingsView`: 表示設定。Home各セクションのON/OFFと、将来の文字サイズ/外観モード設定入口を持つ。
 - `RecordInputAssistSettingsView`: 記録・入力補助設定。デフォルト記録日、デフォルトジャンル、記録追加後の動き、写真追加初期動作、写真圧縮、URL/OCR/Map/天気/入力補助辞書のON/OFFを持つ。Apple Music連携はV2以降で検討。
 - `NotificationSettingsView`: 通知設定。通知全体、申込開始/締切、当落、入金、発券、公演前日/当日、FC・会員期限、思い出リマインダーのON/OFFを `AppStorage` に保存する。通知全体をONにした時だけiOS通知許可を求める。公演前日/当日だけ初期ON、それ以外は初期OFFでユーザーが必要なものを選ぶ。実際の通知予約はチケット/予定モデル追加後に各日付へ接続する。
@@ -52,7 +53,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `BillingPlanSettingsView`: 課金・プラン設定。現在のプラン、無料で使えること、Pro買い切り候補、同期サブスク候補、フル買い切り候補、アップグレード/購入復元、創設メンバー特典、DBパック管理の入口を持つ。StoreKitは未接続で、まず無料/有料境界の表示だけを行う。
 - `SupportLinksView`: リンク・サポート。公式サイト、利用規約、プライバシーポリシー、お問い合わせ、レビュー、シェア、公式SNSの入口を持つ。規約/プライバシー/問い合わせの正本はRANOVIQO公式ドメイン配下に置き、アプリ内はWeb/外部リンク入口とする。
 - `SettingsDocumentView`: 利用規約、プライバシーポリシー、お問い合わせ、インポート/エクスポート説明などの暫定本文表示に使う共通プレースホルダー。
-- `JSONExportView`: 手動バックアップJSONを書き出す画面。RecordCategory / ExperienceEvent / Visit / InboxItem / PhotoBlobメタデータ / SocialAccount / PersonMaster / EventPersonLink / PlaceMaster をID付きDTOとして出力する。写真/動画バイナリ、同期状態、通知予約、外部カレンダー側イベントは含めない。
+- `JSONExportView`: 手動バックアップJSONを書き出す画面。RecordCategory / ExperienceEvent / Visit / InboxItem / PhotoBlobメタデータ / SocialAccount / PersonMaster / EventPersonLink / PlaceMaster / Plan / TicketAccount / TicketAttempt をID付きDTOとして出力する。写真/動画バイナリ、Keychainパスワード本体、同期状態、通知予約、外部カレンダー側イベントは含めない。
 - `CSVExportView`: Visit一覧をCSVとして書き出す画面。列は visit_id / event_id / date / category / title / series / venue / rating / status / seat / amount / official_url / tags / companions / note / created_at / updated_at。写真データは含めず、表計算で見返せる無料の手動エクスポートとして扱う。
 - `ProfileSettingsView`: プロフィール設定。SNSアカウントを複数登録・編集でき、登録済みアカウントはタップで外部URLを開く。マイ領域には将来、FC・プレイガイド・劇場会員・カード枠・外部カレンダー連携をまとめる「登録情報・連携」ハブを置く。
 - `EditSocialAccountView`: SNS追加/編集フォーム。SNS種別、メモ/名前、IDまたはURL、ジャンル紐付け、用途メモを保存する。
@@ -106,6 +107,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 
 - 動画は容量とiCloud同期負荷が大きいため、v1では外部リンク保存、Photos参照、サムネイル表示までを基本にする。動画ファイルをアプリ内へコピーする保存、動画のCloud同期、一括バックアップ同梱は明示ON/容量警告つき、またはv2以降の有料候補とする。カバー写真指定は無料で扱う。
 - 写真/カバー比率は `VisitUnitFields.eyecatchAspectRatioKey` に保存する。比率候補は `EyecatchAspectRatio` で、正方形、映画ポスター、チラシ/ポスター、書影、横長ラベル、御朱印帳標準を持つ。未設定時はジャンルから推奨比率を返し、写真ユニット内のサムネイルプレビューにも反映する。御朱印は専用ユニット `goshuinBook` を持ち、御朱印帳サイズを `VisitUnitFields.goshuinBookSizeKey` に保存する。御朱印ジャンルで未設定保存する場合は標準サイズを補完する。御朱印ジャンルの初期ユニットには `goshuinBook` を含める。
+- `Plan` は予定/公演回の土台モデルで、タイトル、日時、開場、会場、公式URL、外部カレンダーイベント識別子、対象/ジャンル/場所/Visitへのoptionalリンク、紐づく `TicketAttempt` を持つ。`TicketAttempt` は申込1件の独立モデルで、状態、先行区分、購入先、名義、申込開始/締切、当落、入金、発券、金額、枚数、座席、通知設定rawを持つ。`TicketAccount` はFC/プレイガイド/劇場会員/カード枠などの登録情報で、名義、会員番号、期限、年会費、ログインID、Keychain参照キーを持つ。CloudKit互換のため、全プロパティは既定値を持ち、リレーションはoptional、uniqueは使わない。未設定日付は `Date.distantPast` で表現する。
 - 人物/アーティストマスターは、巨大なタレント名鑑を自前保持する設計にしない。無料/ローカルではユーザーが記録した人物を再利用する個人用マスター、Premium/サブスクでは外部候補読み込みを入力補助としてONにする。外部候補は補助・キャッシュであり、記録の正本はユーザーが保存したスナップショットとする。重複候補は「似た人物があります」と提示し、ユーザー確認で統合する。別名、メモ、公式URL、SNSは必須項目にせず、詳細オプション/アコーディオンに置く。
 - 会場マスターは `PlaceMaster` として横断で扱う。劇場/ライブ会場/映画館/美術館/寺社/酒蔵/飲食店/施設などはタグ/種別で切り分け、同一場所が複数タグを持てるようにする。重複候補は名称、住所、座標、よみ、公式URLから判定し、自動統合せずユーザーに確認する。
 - カレンダーは、アプリ内カレンダーを正本表示にし、外部カレンダー書き出しはMystorium同様にユーザーが押す `カレンダーに追加` ボタンから始める。実装済みの手動追加は `EKEventEditViewController` を使い、iOS標準のイベント編集画面上で追加先カレンダーを選ぶ方式。GoogleカレンダーもiOS標準カレンダーに登録済みで書き込み可能なら追加先として選べる。次回以降は最後に使ったカレンダーを初期選択し、設定で既定の追加先カレンダーを変更できるようにする。EventKit権限許可後はイベント作成/更新が可能なので、favorecoが作成した外部カレンダーイベントの識別子を保存し、後から更新/削除できる余地を持つ。v1は無料の手動追加/追加先選択に加え、外部カレンダー予定の読み取り重ね表示までを実装範囲にする。読み取り重ね表示は `ExternalCalendarOverlayStore` で月表示範囲の `EKEvent` をDTO化し、CalendarViewにだけ渡す。Premium候補はfavorecoで作った予定の片方向自動更新、一括追加、自動で既定カレンダーへ追加。外部側の変更追従、双方向同期は技術的には可能な範囲があるが、権限・重複・競合解決・ユーザーの外部編集検知が重いためv2以降または有料候補として扱う。
@@ -137,7 +139,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - 同期・バックアップ、課金・プラン、JSONインポート、CSVインポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。通知設定はタイプ別ON/OFFとiOS通知許可まで接続済みで、実予約はチケット/予定モデル追加後。JSONエクスポートとCSVエクスポートは手動書き出しまで接続済み。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る
 - **Mystorium再発防止の性能・構造ルールを最初から守る**（詳細: `docs/14-実装アーキテクチャ・性能ルール.md`）。最重要4原則は **①入力中にDBを書かない ②一覧で原寸画像を使わない ③bodyで全件処理しない ④巨大Viewを作らない**。全登録/編集画面はDraftState→Save→Model、Home/GenreTop/Calendar/Statsは軽量Snapshot/DTO経由、画像はthumbnail/detail/originalの3段階、I/O/画像処理/import/export/migrationはMainActor禁止＋background＋batch save。
-- **ライフサイクル状態・予定・申込・記録を混ぜない**。クイック登録は `InboxItem`、対象は `Event`、予定/公演回は `Plan`/`Performance`、申込1件は `TicketAttempt`、実体験は `Visit`、記録下書きは `MemoryDraft`/`VisitDraft` として責務分離する。`Visit` にチケット状態を直持ちしない。複数先行・落選履歴・名義別当選率・通知更新のため `TicketAttempt` を独立モデルにする。
+- **ライフサイクル状態・予定・申込・記録を混ぜない**。クイック登録は `InboxItem`、対象は `Event`、予定/公演回は `Plan`、申込1件は `TicketAttempt`、実体験は `Visit`、記録下書きは `MemoryDraft`/`VisitDraft` として責務分離する。既存の `Visit.outcomeKey` / `seatText` は暫定互換として残すが、複数先行・落選履歴・名義別当選率・通知更新の正本は `TicketAttempt` に移す。
 - **Apple Kit依存は境界で閉じ込める**。SwiftUI/SwiftData/CloudKit/MapKit/WeatherKit/EventKit/Vision/StoreKit はiOS実装で使ってよいが、ドメインモデル・状態遷移・Smart Add解析結果・同期DTO・写真/OCR/カレンダー/通知/課金の抽象インターフェースはApple APIへ直結させない。将来Androidを完全に捨てないため、UI/OS連携以外の移植可能性を保つ。
 - **スキーマはCloudKit互換3条件で設計する**（①全プロパティにデフォルト値 ②unique禁止・fetch-first upsertで代替 ③リレーション全optional）。同期公開はv2だが構造はv1から `docs/07-CloudKit同期設計リファレンス.md` に従う。違反すると同期導入時にスキーマ再設計になる
 - **写真はPhotoBlob（externalStorage）方式**（`docs/09-CloudKit写真ストレージ仕様.md` が正本）。画面はrelativePath文字列だけ扱う・動画は `video_` プレフィックスでファイル保存・zipバックアップは `_SUPPORT` 同梱＋再起動必須・static ユーティリティは `nonisolated` 明示（Swift 6）

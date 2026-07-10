@@ -32,6 +32,9 @@ final class RecordCategory {
     @Relationship(deleteRule: .nullify, inverse: \SocialAccount.category)
     var socialAccounts: [SocialAccount]? = []
 
+    @Relationship(deleteRule: .nullify, inverse: \Plan.category)
+    var plans: [Plan]? = []
+
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -294,6 +297,9 @@ final class ExperienceEvent {
     @Relationship(deleteRule: .cascade, inverse: \Visit.event)
     var visits: [Visit]? = []
 
+    @Relationship(deleteRule: .cascade, inverse: \Plan.event)
+    var plans: [Plan]? = []
+
     init(
         id: UUID = UUID(),
         title: String = "",
@@ -322,6 +328,242 @@ final class ExperienceEvent {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.category = category
+    }
+}
+
+@Model
+final class Plan {
+    var id: UUID = UUID()
+    var title: String = ""
+    var subtitle: String = ""
+    var planKindKey: String = "performance"
+    var stateKey: String = "planned"
+    var startsAt: Date = Date()
+    var endsAt: Date = Date()
+    var opensAt: Date = Date()
+    var venueNameSnapshot: String = ""
+    var organizerNameSnapshot: String = ""
+    var officialURL: String = ""
+    var sourceURL: String = ""
+    var memo: String = ""
+    var notificationLeadTimeKey: String = "previousDay"
+    var externalCalendarEventIdentifier: String = ""
+    var unitFieldsRaw: String = ""
+    var isArchived: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var category: RecordCategory?
+    var event: ExperienceEvent?
+    var placeMaster: PlaceMaster?
+    var visit: Visit?
+
+    @Relationship(deleteRule: .cascade, inverse: \TicketAttempt.plan)
+    var ticketAttempts: [TicketAttempt]? = []
+
+    init(
+        id: UUID = UUID(),
+        title: String = "",
+        subtitle: String = "",
+        planKindKey: String = "performance",
+        stateKey: String = "planned",
+        startsAt: Date = Date(),
+        endsAt: Date = Date(),
+        opensAt: Date = Date(),
+        venueNameSnapshot: String = "",
+        organizerNameSnapshot: String = "",
+        officialURL: String = "",
+        sourceURL: String = "",
+        memo: String = "",
+        notificationLeadTimeKey: String = "previousDay",
+        externalCalendarEventIdentifier: String = "",
+        unitFieldsRaw: String = "",
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        category: RecordCategory? = nil,
+        event: ExperienceEvent? = nil,
+        placeMaster: PlaceMaster? = nil,
+        visit: Visit? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.planKindKey = planKindKey
+        self.stateKey = stateKey
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.opensAt = opensAt
+        self.venueNameSnapshot = venueNameSnapshot
+        self.organizerNameSnapshot = organizerNameSnapshot
+        self.officialURL = officialURL
+        self.sourceURL = sourceURL
+        self.memo = memo
+        self.notificationLeadTimeKey = notificationLeadTimeKey
+        self.externalCalendarEventIdentifier = externalCalendarEventIdentifier
+        self.unitFieldsRaw = unitFieldsRaw
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.category = category
+        self.event = event
+        self.placeMaster = placeMaster
+        self.visit = visit
+    }
+}
+
+@Model
+final class TicketAccount {
+    var id: UUID = UUID()
+    var serviceName: String = ""
+    var accountTypeKey: String = "other"
+    var siteURL: String = ""
+    var loginID: String = ""
+    var email: String = ""
+    var memberNumber: String = ""
+    var accountName: String = ""
+    var membershipRank: String = ""
+    var expiryDate: Date = Date.distantPast
+    var annualFee: Int = 0
+    var renewalNotify: Bool = false
+    var note: String = ""
+    var colorHex: String = "#6F8F7A"
+    var keychainPasswordRef: String = ""
+    var normalizedServiceName: String = ""
+    var normalizedMemberNumber: String = ""
+    var isArchived: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    @Relationship(deleteRule: .nullify, inverse: \TicketAttempt.account)
+    var ticketAttempts: [TicketAttempt]? = []
+
+    init(
+        id: UUID = UUID(),
+        serviceName: String = "",
+        accountTypeKey: String = "other",
+        siteURL: String = "",
+        loginID: String = "",
+        email: String = "",
+        memberNumber: String = "",
+        accountName: String = "",
+        membershipRank: String = "",
+        expiryDate: Date = Date.distantPast,
+        annualFee: Int = 0,
+        renewalNotify: Bool = false,
+        note: String = "",
+        colorHex: String = "#6F8F7A",
+        keychainPasswordRef: String = "",
+        normalizedServiceName: String = "",
+        normalizedMemberNumber: String = "",
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.serviceName = serviceName
+        self.accountTypeKey = accountTypeKey
+        self.siteURL = siteURL
+        self.loginID = loginID
+        self.email = email
+        self.memberNumber = memberNumber
+        self.accountName = accountName
+        self.membershipRank = membershipRank
+        self.expiryDate = expiryDate
+        self.annualFee = annualFee
+        self.renewalNotify = renewalNotify
+        self.note = note
+        self.colorHex = colorHex
+        self.keychainPasswordRef = keychainPasswordRef
+        self.normalizedServiceName = normalizedServiceName
+        self.normalizedMemberNumber = normalizedMemberNumber
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+@Model
+final class TicketAttempt {
+    var id: UUID = UUID()
+    var statusKey: String = "interested"
+    var entryRouteKey: String = ""
+    var ticketSite: String = ""
+    var holderName: String = ""
+    var saleStartAt: Date = Date.distantPast
+    var applyDeadlineAt: Date = Date.distantPast
+    var resultAnnounceAt: Date = Date.distantPast
+    var paymentDeadlineAt: Date = Date.distantPast
+    var issueStartAt: Date = Date.distantPast
+    var paidAt: Date = Date.distantPast
+    var issuedAt: Date = Date.distantPast
+    var price: Decimal = Decimal(0)
+    var fee: Decimal = Decimal(0)
+    var quantity: Int = 1
+    var purchaseURL: String = ""
+    var seatText: String = ""
+    var notificationSettingsRaw: String = ""
+    var unitFieldsRaw: String = ""
+    var memo: String = ""
+    var isArchived: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var plan: Plan?
+    var account: TicketAccount?
+
+    init(
+        id: UUID = UUID(),
+        statusKey: String = "interested",
+        entryRouteKey: String = "",
+        ticketSite: String = "",
+        holderName: String = "",
+        saleStartAt: Date = Date.distantPast,
+        applyDeadlineAt: Date = Date.distantPast,
+        resultAnnounceAt: Date = Date.distantPast,
+        paymentDeadlineAt: Date = Date.distantPast,
+        issueStartAt: Date = Date.distantPast,
+        paidAt: Date = Date.distantPast,
+        issuedAt: Date = Date.distantPast,
+        price: Decimal = Decimal(0),
+        fee: Decimal = Decimal(0),
+        quantity: Int = 1,
+        purchaseURL: String = "",
+        seatText: String = "",
+        notificationSettingsRaw: String = "",
+        unitFieldsRaw: String = "",
+        memo: String = "",
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        plan: Plan? = nil,
+        account: TicketAccount? = nil
+    ) {
+        self.id = id
+        self.statusKey = statusKey
+        self.entryRouteKey = entryRouteKey
+        self.ticketSite = ticketSite
+        self.holderName = holderName
+        self.saleStartAt = saleStartAt
+        self.applyDeadlineAt = applyDeadlineAt
+        self.resultAnnounceAt = resultAnnounceAt
+        self.paymentDeadlineAt = paymentDeadlineAt
+        self.issueStartAt = issueStartAt
+        self.paidAt = paidAt
+        self.issuedAt = issuedAt
+        self.price = price
+        self.fee = fee
+        self.quantity = quantity
+        self.purchaseURL = purchaseURL
+        self.seatText = seatText
+        self.notificationSettingsRaw = notificationSettingsRaw
+        self.unitFieldsRaw = unitFieldsRaw
+        self.memo = memo
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.plan = plan
+        self.account = account
     }
 }
 

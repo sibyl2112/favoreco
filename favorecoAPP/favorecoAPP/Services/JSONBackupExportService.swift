@@ -21,7 +21,10 @@ enum JSONBackupExportService {
         socialAccounts: [SocialAccount],
         people: [PersonMaster],
         personLinks: [EventPersonLink],
-        places: [PlaceMaster]
+        places: [PlaceMaster],
+        plans: [Plan],
+        ticketAccounts: [TicketAccount],
+        ticketAttempts: [TicketAttempt]
     ) throws -> String {
         let envelope = FavorecoBackupEnvelope(
             appName: "favoreco",
@@ -36,7 +39,10 @@ enum JSONBackupExportService {
             socialAccounts: socialAccounts.sorted { $0.sortOrder < $1.sortOrder }.map(BackupSocialAccount.init),
             people: people.sorted { $0.displayName < $1.displayName }.map(BackupPerson.init),
             personLinks: personLinks.sorted { $0.sortOrder < $1.sortOrder }.map(BackupPersonLink.init),
-            places: places.sorted { $0.name < $1.name }.map(BackupPlace.init)
+            places: places.sorted { $0.name < $1.name }.map(BackupPlace.init),
+            plans: plans.sorted { $0.startsAt > $1.startsAt }.map(BackupPlan.init),
+            ticketAccounts: ticketAccounts.sorted { $0.serviceName < $1.serviceName }.map(BackupTicketAccount.init),
+            ticketAttempts: ticketAttempts.sorted { $0.updatedAt > $1.updatedAt }.map(BackupTicketAttempt.init)
         )
 
         let encoder = JSONEncoder()
@@ -61,6 +67,9 @@ struct FavorecoBackupEnvelope: Codable {
     var people: [BackupPerson]
     var personLinks: [BackupPersonLink]
     var places: [BackupPlace]
+    var plans: [BackupPlan]
+    var ticketAccounts: [BackupTicketAccount]
+    var ticketAttempts: [BackupTicketAttempt]
 }
 
 struct BackupCategory: Codable {
@@ -368,6 +377,160 @@ struct BackupPlace: Codable {
         isArchived = place.isArchived
         createdAt = place.createdAt
         updatedAt = place.updatedAt
+    }
+}
+
+struct BackupPlan: Codable {
+    var id: UUID
+    var categoryID: UUID?
+    var eventID: UUID?
+    var placeID: UUID?
+    var visitID: UUID?
+    var title: String
+    var subtitle: String
+    var planKindKey: String
+    var stateKey: String
+    var startsAt: Date
+    var endsAt: Date
+    var opensAt: Date
+    var venueNameSnapshot: String
+    var organizerNameSnapshot: String
+    var officialURL: String
+    var sourceURL: String
+    var memo: String
+    var notificationLeadTimeKey: String
+    var externalCalendarEventIdentifier: String
+    var unitFieldsRaw: String
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ plan: Plan) {
+        id = plan.id
+        categoryID = plan.category?.id
+        eventID = plan.event?.id
+        placeID = plan.placeMaster?.id
+        visitID = plan.visit?.id
+        title = plan.title
+        subtitle = plan.subtitle
+        planKindKey = plan.planKindKey
+        stateKey = plan.stateKey
+        startsAt = plan.startsAt
+        endsAt = plan.endsAt
+        opensAt = plan.opensAt
+        venueNameSnapshot = plan.venueNameSnapshot
+        organizerNameSnapshot = plan.organizerNameSnapshot
+        officialURL = plan.officialURL
+        sourceURL = plan.sourceURL
+        memo = plan.memo
+        notificationLeadTimeKey = plan.notificationLeadTimeKey
+        externalCalendarEventIdentifier = plan.externalCalendarEventIdentifier
+        unitFieldsRaw = plan.unitFieldsRaw
+        isArchived = plan.isArchived
+        createdAt = plan.createdAt
+        updatedAt = plan.updatedAt
+    }
+}
+
+struct BackupTicketAccount: Codable {
+    var id: UUID
+    var serviceName: String
+    var accountTypeKey: String
+    var siteURL: String
+    var loginID: String
+    var email: String
+    var memberNumber: String
+    var accountName: String
+    var membershipRank: String
+    var expiryDate: Date
+    var annualFee: Int
+    var renewalNotify: Bool
+    var note: String
+    var colorHex: String
+    var hasKeychainPasswordRef: Bool
+    var normalizedServiceName: String
+    var normalizedMemberNumber: String
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ account: TicketAccount) {
+        id = account.id
+        serviceName = account.serviceName
+        accountTypeKey = account.accountTypeKey
+        siteURL = account.siteURL
+        loginID = account.loginID
+        email = account.email
+        memberNumber = account.memberNumber
+        accountName = account.accountName
+        membershipRank = account.membershipRank
+        expiryDate = account.expiryDate
+        annualFee = account.annualFee
+        renewalNotify = account.renewalNotify
+        note = account.note
+        colorHex = account.colorHex
+        hasKeychainPasswordRef = !account.keychainPasswordRef.isEmpty
+        normalizedServiceName = account.normalizedServiceName
+        normalizedMemberNumber = account.normalizedMemberNumber
+        isArchived = account.isArchived
+        createdAt = account.createdAt
+        updatedAt = account.updatedAt
+    }
+}
+
+struct BackupTicketAttempt: Codable {
+    var id: UUID
+    var planID: UUID?
+    var accountID: UUID?
+    var statusKey: String
+    var entryRouteKey: String
+    var ticketSite: String
+    var holderName: String
+    var saleStartAt: Date
+    var applyDeadlineAt: Date
+    var resultAnnounceAt: Date
+    var paymentDeadlineAt: Date
+    var issueStartAt: Date
+    var paidAt: Date
+    var issuedAt: Date
+    var price: Decimal
+    var fee: Decimal
+    var quantity: Int
+    var purchaseURL: String
+    var seatText: String
+    var notificationSettingsRaw: String
+    var unitFieldsRaw: String
+    var memo: String
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ attempt: TicketAttempt) {
+        id = attempt.id
+        planID = attempt.plan?.id
+        accountID = attempt.account?.id
+        statusKey = attempt.statusKey
+        entryRouteKey = attempt.entryRouteKey
+        ticketSite = attempt.ticketSite
+        holderName = attempt.holderName
+        saleStartAt = attempt.saleStartAt
+        applyDeadlineAt = attempt.applyDeadlineAt
+        resultAnnounceAt = attempt.resultAnnounceAt
+        paymentDeadlineAt = attempt.paymentDeadlineAt
+        issueStartAt = attempt.issueStartAt
+        paidAt = attempt.paidAt
+        issuedAt = attempt.issuedAt
+        price = attempt.price
+        fee = attempt.fee
+        quantity = attempt.quantity
+        purchaseURL = attempt.purchaseURL
+        seatText = attempt.seatText
+        notificationSettingsRaw = attempt.notificationSettingsRaw
+        unitFieldsRaw = attempt.unitFieldsRaw
+        memo = attempt.memo
+        isArchived = attempt.isArchived
+        createdAt = attempt.createdAt
+        updatedAt = attempt.updatedAt
     }
 }
 

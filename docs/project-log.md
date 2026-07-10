@@ -5,6 +5,39 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: チケット予定モデルと登録情報ハブを追加
+
+### 変更概要
+- `Plan` / `TicketAttempt` / `TicketAccount` のSwiftDataモデルを追加し、アプリSchemaへ登録した。
+- `Plan` を予定/公演回、`TicketAttempt` を申込1件、`TicketAccount` をFC/プレイガイド/劇場会員/カード枠などの登録情報として分離した。
+- `TicketDefinitions` を追加し、チケット状態、先行区分、アカウント種別のキー/表示名を定義した。
+- 設定 > マイ に「登録情報・連携」ハブを追加し、`TicketAccount` を登録/編集できるようにした。
+- JSONバックアップに `Plan` / `TicketAccount` / `TicketAttempt` のDTOを追加した。Keychainパスワード本体は書き出さず、参照キーの有無だけを出す。
+- `Color+Hex` にColorPicker保存用のHEX変換を追加した。
+
+### 変更意図
+チケット/予定管理をVisit直持ちから分離し、複数先行、落選履歴、名義別集計、通知更新に耐える土台を作るため。次に申込入力UIと通知予約を実装する前に、予定・申込・登録情報の責務境界を先に固定した。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Models/CoreModels.swift（Plan / TicketAccount / TicketAttempt追加）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（Schema登録）
+- favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift（チケット定義）
+- favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift（HEX変換追加）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（登録情報・連携ハブ、JSONエクスポート追従）
+- favorecoAPP/favorecoAPP/Services/JSONBackupExportService.swift（バックアップDTO追加）
+- favorecoAPP/favorecoAPP/Services/ExternalCalendarOverlayService.swift（EventKit警告対策）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketModelsNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- `Plan` / `TicketAttempt` の追加・編集UIを作る。
+- 申込開始/締切、当落、入金、発券、公演前日/当日の通知予約を `TicketAttempt` / `Plan` の日付へ接続する。
+- Homeアテンション、Calendar、Statsを未来日Visit中心からPlan/TicketAttempt中心へ切り替える。
+- 既存 `Visit.outcomeKey` / `seatText` からTicketAttemptへ移行する導線を検討する。
+
 ## 2026-07-10: カレンダー重ね表示と通知設定を接続
 
 ### 変更概要

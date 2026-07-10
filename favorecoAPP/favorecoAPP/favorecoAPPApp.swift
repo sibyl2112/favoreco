@@ -25,6 +25,9 @@ struct favorecoAPPApp: App {
             PersonMaster.self,
             EventPersonLink.self,
             PlaceMaster.self,
+            Plan.self,
+            TicketAccount.self,
+            TicketAttempt.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

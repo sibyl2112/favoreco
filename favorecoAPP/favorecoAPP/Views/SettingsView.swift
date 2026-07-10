@@ -25,6 +25,12 @@ struct SettingsView: View {
                     } label: {
                         Label("プロフィール", systemImage: "person.crop.circle")
                     }
+
+                    NavigationLink {
+                        RegistrationIntegrationSettingsView()
+                    } label: {
+                        Label("登録情報・連携", systemImage: "person.text.rectangle")
+                    }
                 }
 
                 Section("表示") {
@@ -208,6 +214,249 @@ struct RecordInputAssistSettingsView: View {
         }
         .navigationTitle("記録・入力補助")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct RegistrationIntegrationSettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
+    @State private var isShowingAccountEditor = false
+    @State private var editingAccount: TicketAccount?
+
+    private var activeAccounts: [TicketAccount] {
+        accounts.filter { !$0.isArchived }
+    }
+
+    var body: some View {
+        List {
+            Section("FC・チケットアカウント") {
+                if activeAccounts.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("登録情報はまだありません", systemImage: "person.crop.circle.badge.plus")
+                            .font(FavorecoTypography.bodyStrong)
+                        Text("FC、プレイガイド、劇場会員、カード枠などをここにまとめます。チケット申込ではここから名義を選ぶだけにします。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 6)
+                } else {
+                    ForEach(activeAccounts) { account in
+                        Button {
+                            editingAccount = account
+                        } label: {
+                            TicketAccountRow(account: account)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Button {
+                    isShowingAccountEditor = true
+                } label: {
+                    Label("登録情報を追加", systemImage: "plus.circle")
+                }
+            }
+
+            Section("外部カレンダー") {
+                LabeledContent("連携方式", value: "iOSカレンダー経由")
+                Text("GoogleカレンダーもiOS標準カレンダーに登録されていれば、カレンダー画面に読み取り重ね表示できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("セキュリティ") {
+                Text("パスワード本体はSwiftData/CloudKitに保存しません。必要になった場合のみKeychain参照キーを使い、Face ID/Touch ID/端末パスコードで表示・コピーします。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("登録情報・連携")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $isShowingAccountEditor) {
+            NavigationStack {
+                EditTicketAccountView(account: nil)
+            }
+        }
+        .sheet(item: $editingAccount) { account in
+            NavigationStack {
+                EditTicketAccountView(account: account)
+            }
+        }
+    }
+}
+
+private struct TicketAccountRow: View {
+    let account: TicketAccount
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color(hex: account.colorHex))
+                .frame(width: 12, height: 12)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(account.serviceName.isEmpty ? "未名称" : account.serviceName)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var subtitle: String {
+        let typeName = TicketAccountTypeDefinition.name(for: account.accountTypeKey)
+        let holder = account.accountName.isEmpty ? "名義未設定" : account.accountName
+        return "\(typeName) ・ \(holder)"
+    }
+}
+
+private struct EditTicketAccountView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    let account: TicketAccount?
+
+    @State private var serviceName = ""
+    @State private var accountTypeKey = "other"
+    @State private var siteURL = ""
+    @State private var loginID = ""
+    @State private var email = ""
+    @State private var memberNumber = ""
+    @State private var accountName = ""
+    @State private var membershipRank = ""
+    @State private var expiryDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+    @State private var annualFeeText = ""
+    @State private var renewalNotify = false
+    @State private var note = ""
+    @State private var colorHex = "#6F8F7A"
+
+    private var canSave: Bool {
+        !serviceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        Form {
+            Section("基本") {
+                TextField("サービス名（例: ぴあ / FC名）", text: $serviceName)
+
+                Picker("種別", selection: $accountTypeKey) {
+                    ForEach(TicketAccountTypeDefinition.all) { type in
+                        Text(type.name).tag(type.key)
+                    }
+                }
+
+                TextField("名義", text: $accountName)
+                TextField("会員番号", text: $memberNumber)
+                TextField("会員種別・ランク", text: $membershipRank)
+            }
+
+            Section("ログイン・リンク") {
+                TextField("サイトURL", text: $siteURL)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                TextField("ログインID", text: $loginID)
+                    .textInputAutocapitalization(.never)
+                TextField("メール", text: $email)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+            }
+
+            Section("期限・費用") {
+                DatePicker("有効期限", selection: $expiryDate, displayedComponents: .date)
+                Toggle("期限通知", isOn: $renewalNotify)
+                TextField("年会費", text: $annualFeeText)
+                    .keyboardType(.numberPad)
+            }
+
+            Section("表示") {
+                ColorPicker("識別色", selection: colorBinding, supportsOpacity: false)
+            }
+
+            Section("メモ") {
+                TextField("備考", text: $note, axis: .vertical)
+                    .lineLimit(3...6)
+            }
+        }
+        .navigationTitle(account == nil ? "登録情報を追加" : "登録情報を編集")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("キャンセル") {
+                    dismiss()
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") {
+                    save()
+                }
+                .disabled(!canSave)
+            }
+        }
+        .onAppear(perform: loadAccount)
+    }
+
+    private var colorBinding: Binding<Color> {
+        Binding(
+            get: { Color(hex: colorHex) },
+            set: { colorHex = $0.hexString() ?? "#6F8F7A" }
+        )
+    }
+
+    private func loadAccount() {
+        guard let account else { return }
+        serviceName = account.serviceName
+        accountTypeKey = account.accountTypeKey
+        siteURL = account.siteURL
+        loginID = account.loginID
+        email = account.email
+        memberNumber = account.memberNumber
+        accountName = account.accountName
+        membershipRank = account.membershipRank
+        if account.expiryDate != Date.distantPast {
+            expiryDate = account.expiryDate
+        }
+        annualFeeText = account.annualFee > 0 ? "\(account.annualFee)" : ""
+        renewalNotify = account.renewalNotify
+        note = account.note
+        colorHex = account.colorHex
+    }
+
+    private func save() {
+        let target = account ?? TicketAccount()
+        let now = Date()
+        target.serviceName = serviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.accountTypeKey = accountTypeKey
+        target.siteURL = siteURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.loginID = loginID.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.email = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.memberNumber = memberNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.accountName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.membershipRank = membershipRank.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.expiryDate = expiryDate
+        target.annualFee = Int(annualFeeText.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        target.renewalNotify = renewalNotify
+        target.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.colorHex = colorHex
+        target.normalizedServiceName = target.serviceName.lowercased()
+        target.normalizedMemberNumber = target.memberNumber.lowercased()
+        target.updatedAt = now
+
+        if account == nil {
+            target.createdAt = now
+            modelContext.insert(target)
+        }
+
+        try? modelContext.save()
+        dismiss()
     }
 }
 
@@ -503,6 +752,9 @@ struct JSONExportView: View {
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Query(sort: \PlaceMaster.name) private var places: [PlaceMaster]
+    @Query(sort: \Plan.startsAt, order: .reverse) private var plans: [Plan]
+    @Query(sort: \TicketAccount.serviceName) private var ticketAccounts: [TicketAccount]
+    @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
 
     @State private var isExporterPresented = false
     @State private var exportDocument = JSONBackupDocument()
@@ -513,7 +765,7 @@ struct JSONExportView: View {
     }
 
     private var totalRecordCount: Int {
-        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + personLinks.count + places.count
+        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
     }
 
     var body: some View {
@@ -536,6 +788,9 @@ struct JSONExportView: View {
                 LabeledContent("人物・団体", value: "\(people.count)")
                 LabeledContent("人物リンク", value: "\(personLinks.count)")
                 LabeledContent("場所", value: "\(places.count)")
+                LabeledContent("予定", value: "\(plans.count)")
+                LabeledContent("登録情報・名義", value: "\(ticketAccounts.count)")
+                LabeledContent("チケット申込", value: "\(ticketAttempts.count)")
                 LabeledContent("あとで記録", value: "\(inboxItems.count)")
                 LabeledContent("SNS", value: "\(socialAccounts.count)")
                 LabeledContent("写真メタデータ", value: "\(photos.count)")
@@ -553,7 +808,10 @@ struct JSONExportView: View {
                             socialAccounts: socialAccounts,
                             people: people,
                             personLinks: personLinks,
-                            places: places
+                            places: places,
+                            plans: plans,
+                            ticketAccounts: ticketAccounts,
+                            ticketAttempts: ticketAttempts
                         )
                         exportDocument = JSONBackupDocument(text: text)
                         exportErrorMessage = ""
