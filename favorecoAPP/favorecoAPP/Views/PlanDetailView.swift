@@ -11,6 +11,7 @@ import SwiftData
 struct PlanDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openURL) private var openURL
     let plan: Plan
     @State private var isShowingEditPlan = false
     @State private var isShowingAddAttempt = false
@@ -35,6 +36,40 @@ struct PlanDetailView: View {
             return "\(plan.startsAt.formatted(date: .long, time: .shortened)) - \(plan.endsAt.formatted(date: .omitted, time: .shortened))"
         }
         return "\(plan.startsAt.formatted(date: .long, time: .shortened)) - \(plan.endsAt.formatted(date: .long, time: .shortened))"
+    }
+
+    private var preferredOpenDestination: TicketOpenDestination? {
+        let attempt = attempts.first
+
+        if let purchaseURL = attempt?.purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+           !purchaseURL.isEmpty,
+           let url = URL(string: purchaseURL) {
+            return TicketOpenDestination(label: "申込・購入ページを開く", url: url)
+        }
+
+        if let attempt,
+           let guide = TicketGuideDefinition.guide(for: TicketGuideDefinition.inferredKey(
+            siteName: attempt.ticketSite,
+            urlString: attempt.purchaseURL
+           )),
+           !guide.urlString.isEmpty,
+           let url = URL(string: guide.urlString) {
+            return TicketOpenDestination(label: "プレイガイドを開く", url: url)
+        }
+
+        let officialURLString = plan.officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !officialURLString.isEmpty,
+           let url = URL(string: officialURLString) {
+            return TicketOpenDestination(label: "公式URLを開く", url: url)
+        }
+
+        let sourceURLString = plan.sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !sourceURLString.isEmpty,
+           let url = URL(string: sourceURLString) {
+            return TicketOpenDestination(label: "公式URLを開く", url: url)
+        }
+
+        return nil
     }
 
     var body: some View {
@@ -70,6 +105,14 @@ struct PlanDetailView: View {
                         calendarDraft = makeCalendarDraft()
                     } label: {
                         Label("カレンダーに追加", systemImage: "calendar.badge.plus")
+                    }
+
+                    if let destination = preferredOpenDestination {
+                        Button {
+                            openURL(destination.url)
+                        } label: {
+                            Label(destination.label, systemImage: "safari")
+                        }
                     }
 
                     Button {
@@ -364,6 +407,11 @@ struct PlanDetailView: View {
         guard let attempt else { return Decimal(0) }
         return (attempt.price + attempt.fee) * Decimal(attempt.quantity)
     }
+}
+
+private struct TicketOpenDestination {
+    let label: String
+    let url: URL
 }
 
 private struct TicketAttemptDetailCard: View {

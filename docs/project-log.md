@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 予定詳細の開く先を優先順位つきにした
+
+### 変更概要
+- `PlanDetailView` のメニューに、状況に応じた「申込・購入ページを開く / プレイガイドを開く / 公式URLを開く」を追加した。
+- 開く先は `TicketAttempt.purchaseURL`、`TicketGuideDefinition` から推定したプレイガイドURL、`Plan.officialURL/sourceURL` の順に決めるようにした。
+- プレイガイド未選択・申込URL未入力でも、公式URLがあれば公式サイトへ戻れるようにした。
+
+### 変更意図
+チケット登録後に、購入ページや公式サイトへ戻る導線を迷わせないため。申込・購入URLが未入力でも、プレイガイドや公式URLへフォールバックすることで、登録の手間と再検索を減らす。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/PlanDetailView.swift（優先開き先メニュー）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketOpenNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機でUniversal Links対応サービスがアプリへ遷移するか確認する。
+- プレイガイドトップURLではなく個別公演URLを保存した場合、最優先で個別ページが開くことを確認する。
+
 ## 2026-07-10: プレイガイド標準DBと購入URL自動入力を追加
 
 ### 変更概要
