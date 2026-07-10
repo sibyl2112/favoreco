@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 思い出レポートのカードプレビューを追加
+
+### 変更概要
+- `月刊Favoreco` / `年間Favoreco` 下書き画面にカードプレビューを追加した。
+- カード内に、レポート名、対象期間、記録数、写真数、ジャンル数、最多ジャンル、よく出てきた場所、カード候補を表示した。
+- 画像書き出し前の見た目確認として、アクセントカラーの薄いグラデーションを使った。
+
+### 変更意図
+共有テキストだけではレポートの完成形が見えにくいため、まず画面内で「思い出カードっぽい」見た目を確認できるようにするため。次の画像化/保存/共有に進む前のUI土台にする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（カードプレビュー追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedReportCardPreviewNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機でカードの情報量、Dynamic Type、長い会場名/タイトルの折り返しを確認する。
+- 画像として書き出す処理、保存、SNS向けテンプレは未実装。
+
 ## 2026-07-10: 思い出レポートを共有シートから送れるようにした
 
 ### 変更概要

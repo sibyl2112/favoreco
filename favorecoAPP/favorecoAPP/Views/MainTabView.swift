@@ -666,6 +666,7 @@ private struct StatsReportDraftView: View {
                     .padding(16)
                     .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
+                    reportCardPreview
                     reportMetrics
                     reportHighlights
                     reportCategories
@@ -700,6 +701,60 @@ private struct StatsReportDraftView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var reportCardPreview: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("カードプレビュー")
+                .font(FavorecoTypography.sectionTitle)
+
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(kind.title)
+                            .font(FavorecoTypography.jpSerif(28, weight: .bold, relativeTo: .largeTitle))
+                        Text(kind.subtitle)
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: kind == .monthly ? "sparkles" : "calendar.badge.star")
+                        .font(.title2)
+                        .foregroundStyle(Color.accentColor)
+                }
+
+                Divider()
+
+                HStack(spacing: 12) {
+                    StatsReportMiniMetric(title: "記録", value: "\(visits.count)")
+                    StatsReportMiniMetric(title: "写真", value: "\(photoCount)")
+                    StatsReportMiniMetric(title: "ジャンル", value: "\(categoryStats.count)")
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(topCategoryName, systemImage: "square.grid.2x2")
+                    Label(topVenueName, systemImage: "mappin.and.ellipse")
+                    if let firstVisit = sortedVisits.first {
+                        Label(firstVisit.event?.title ?? "無題", systemImage: "sparkles")
+                    }
+                }
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.secondary)
+            }
+            .padding(18)
+            .background(
+                LinearGradient(
+                    colors: [Color.accentColor.opacity(0.16), Color(.systemBackground)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
+            }
+        }
     }
 
     private var reportMetrics: some View {
@@ -839,6 +894,22 @@ private struct StatsReportDraftView: View {
         formatter.currencyCode = "JPY"
         formatter.maximumFractionDigits = 0
         return formatter.string(from: number) ?? "¥\(number.stringValue)"
+    }
+}
+
+private struct StatsReportMiniMetric: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(FavorecoTypography.jpSerif(24, weight: .bold, relativeTo: .title2))
+            Text(title)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
