@@ -381,17 +381,224 @@ private extension Date {
 }
 
 private struct StatsView: View {
+    @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
+    @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+
+    private var calendar: Calendar {
+        Calendar.current
+    }
+
+    private var thisYearVisits: [Visit] {
+        visits.filter { calendar.isDate($0.visitedAt, equalTo: Date(), toGranularity: .year) }
+    }
+
+    private var thisMonthVisits: [Visit] {
+        visits.filter { calendar.isDate($0.visitedAt, equalTo: Date(), toGranularity: .month) }
+    }
+
+    private var totalAmount: Decimal {
+        visits.reduce(Decimal(0)) { $0 + $1.amount }
+    }
+
+    private var averageRating: Double {
+        let ratedVisits = visits.filter { $0.overallRating > 0 }
+        guard !ratedVisits.isEmpty else { return 0 }
+        return ratedVisits.reduce(0) { $0 + $1.overallRating } / Double(ratedVisits.count)
+    }
+
+    private var categoryStats: [CategoryStat] {
+        categories
+            .filter { !$0.isArchived }
+            .map { category in
+                let count = visits.filter { $0.event?.category?.id == category.id }.count
+                return CategoryStat(category: category, count: count)
+            }
+            .filter { $0.count > 0 }
+            .sorted { $0.count > $1.count }
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                PlaceholderRow(
-                    icon: "chart.bar",
-                    title: "統計は準備中です",
-                    message: "ジャンル別回数、年間まとめ、支出、評価などを集計します。"
-                )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    summaryGrid
+                    categoryStatsSection
+                    spendingSection
+                    ratingSection
+                }
+                .padding(20)
             }
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("統計")
         }
+    }
+
+    private var summaryGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            StatsMetricCard(title: "総記録数", value: "\(visits.count)", icon: "rectangle.stack")
+            StatsMetricCard(title: "今年", value: "\(thisYearVisits.count)", icon: "calendar")
+            StatsMetricCard(title: "今月", value: "\(thisMonthVisits.count)", icon: "calendar.badge.clock")
+            StatsMetricCard(title: "平均評価", value: averageRating == 0 ? "-" : String(format: "%.1f", averageRating), icon: "star.fill")
+        }
+    }
+
+    private var categoryStatsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("ジャンル別")
+                .font(FavorecoTypography.sectionTitle)
+
+            if categoryStats.isEmpty {
+                PlaceholderRow(
+                    icon: "square.grid.2x2",
+                    title: "ジャンル別統計はまだありません",
+                    message: "記録を追加すると、ジャンルごとの回数が表示されます。"
+                )
+                .padding(14)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(categoryStats) { stat in
+                        CategoryStatRow(stat: stat, maxCount: categoryStats.first?.count ?? 1)
+                    }
+                }
+            }
+        }
+    }
+
+    private var spendingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("支出")
+                .font(FavorecoTypography.sectionTitle)
+
+            StatsWideCard(
+                title: "記録済み金額",
+                value: formattedAmount(totalAmount),
+                caption: "チケット代、購入額、遠征費など、金額ユニットに入力された合計です。",
+                icon: "yensign.circle"
+            )
+        }
+    }
+
+    private var ratingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("評価")
+                .font(FavorecoTypography.sectionTitle)
+
+            StatsWideCard(
+                title: "平均評価",
+                value: averageRating == 0 ? "未評価" : String(format: "%.1f", averageRating),
+                caption: "評価が入力された記録だけを平均しています。",
+                icon: "star.fill"
+            )
+        }
+    }
+
+    private func formattedAmount(_ amount: Decimal) -> String {
+        let number = NSDecimalNumber(decimal: amount)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "JPY"
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: number) ?? "¥\(number.stringValue)"
+    }
+}
+
+private struct CategoryStat: Identifiable {
+    let category: RecordCategory
+    let count: Int
+
+    var id: UUID {
+        category.id
+    }
+}
+
+private struct StatsMetricCard: View {
+    let title: String
+    let value: String
+    let icon: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(FavorecoTypography.jpSerif(30, weight: .bold, relativeTo: .largeTitle))
+                Text(title)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct CategoryStatRow: View {
+    let stat: CategoryStat
+    let maxCount: Int
+
+    private var ratio: Double {
+        guard maxCount > 0 else { return 0 }
+        return Double(stat.count) / Double(maxCount)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(stat.category.name, systemImage: stat.category.iconSymbol)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(Color(hex: stat.category.colorHex))
+                Spacer()
+                Text("\(stat.count)")
+                    .font(FavorecoTypography.bodyStrong)
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(.secondarySystemGroupedBackground))
+                    Capsule()
+                        .fill(Color(hex: stat.category.colorHex))
+                        .frame(width: proxy.size.width * ratio)
+                }
+            }
+            .frame(height: 8)
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct StatsWideCard: View {
+    let title: String
+    let value: String
+    let caption: String
+    let icon: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 32)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(FavorecoTypography.bodyStrong)
+                Text(value)
+                    .font(FavorecoTypography.jpSerif(28, weight: .bold, relativeTo: .title))
+                Text(caption)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 統計タブに簡易集計を実装
+
+### 変更概要
+- `StatsView` を準備中表示から、保存済みVisitを集計する簡易統計画面へ変更した。
+- 総記録数、今年の記録、今月の記録、平均評価のサマリーカードを追加した。
+- ジャンル別回数、記録済み金額、評価概要を表示するセクションを追加した。
+
+### 変更意図
+Home横断ミニ統計に続いて、下部タブの「統計」も空の入口ではなく、記録が増えた時にすぐ価値が出る最低限の集計画面にするため。詳細統計や年間まとめは後続で拡張し、まず無料で見られる基本統計を先に固める。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（StatsView実装）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedStatsTabNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で0件、1件、多件、金額未入力、評価未入力、Dynamic Type時の見え方を確認する。
+- 詳細統計、期間切替、年間まとめ、グラフ、Plan/TicketAttempt追加後の予定/申込統計は未実装。
+
 ## 2026-07-10: カレンダータブを月表示にした
 
 ### 変更概要
