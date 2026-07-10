@@ -383,6 +383,7 @@ private extension Date {
 private struct StatsView: View {
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @State private var showsAmount = false
 
     private var calendar: Calendar {
         Calendar.current
@@ -470,11 +471,17 @@ private struct StatsView: View {
             Text("支出")
                 .font(FavorecoTypography.sectionTitle)
 
-            StatsWideCard(
+            StatsPrivateAmountCard(
                 title: "記録済み金額",
                 value: formattedAmount(totalAmount),
+                isRevealed: showsAmount,
                 caption: "チケット代、購入額、遠征費など、金額ユニットに入力された合計です。",
-                icon: "yensign.circle"
+                icon: "yensign.circle",
+                onToggle: {
+                    withAnimation(.snappy) {
+                        showsAmount.toggle()
+                    }
+                }
             )
         }
     }
@@ -590,6 +597,57 @@ private struct StatsWideCard: View {
                     .font(FavorecoTypography.bodyStrong)
                 Text(value)
                     .font(FavorecoTypography.jpSerif(28, weight: .bold, relativeTo: .title))
+                Text(caption)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct StatsPrivateAmountCard: View {
+    let title: String
+    let value: String
+    let isRevealed: Bool
+    let caption: String
+    let icon: String
+    let onToggle: () -> Void
+
+    private var displayValue: String {
+        isRevealed ? value : "••••••"
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 32)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                        .font(FavorecoTypography.bodyStrong)
+                    Spacer()
+                    Button(action: onToggle) {
+                        Image(systemName: isRevealed ? "eye.slash" : "eye")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isRevealed ? "金額を隠す" : "金額を表示")
+                }
+
+                Text(displayValue)
+                    .font(FavorecoTypography.jpSerif(28, weight: .bold, relativeTo: .title))
+                    .contentTransition(.numericText())
+                    .privacySensitive(!isRevealed)
+
                 Text(caption)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)

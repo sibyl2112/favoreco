@@ -5,6 +5,27 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 統計の金額を初期非表示にした
+
+### 変更概要
+- 統計タブの `記録済み金額` カードを、初期状態では伏せ字表示に変更した。
+- 目アイコンで金額の表示/非表示を切り替えられるようにした。
+- 金額表示に `privacySensitive` を付け、プライバシー情報として扱う意図をコード上にも反映した。
+
+### 変更意図
+金額はチケット代、遠征費、購入額など生活情報に近いプライバシー情報なので、統計画面を開いた瞬間に見えないよう配慮するため。無料/有料に関係なく、金額系の統計はユーザー操作で明示的に見る方針にする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（支出カードの非表示/表示切替）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedStatsPrivacyNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で目アイコンのタップ領域、Dynamic Type時の金額伏せ字表示、スクリーンショット/画面共有時の見え方を確認する。
+
 ## 2026-07-10: 統計タブに簡易集計を実装
 
 ### 変更概要
