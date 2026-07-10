@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: チケット通知予約を予定・申込日付へ接続
+
+### 変更概要
+- `TicketNotificationScheduler` を追加し、`Plan` / `TicketAttempt` の日付からiOS通知を予約できるようにした。
+- `AddTicketPlanView` の保存後に、通知設定とiOS通知許可状態を確認して、申込開始、申込締切、当落、入金締切、発券開始、公演前日/当日通知を予約するようにした。
+- 通知予約IDを `TicketAttempt.notificationSettingsRaw` に保存し、再予約時は古い候補IDを削除してから追加するようにした。
+- 締切系通知は前日と1時間前、公演通知は前日20:00と当日9:00を初期仕様にした。
+
+### 変更意図
+通知設定とチケット日付モデルをつなぎ、予定・申込を保存した時点で実際にリマインドできる状態へ進めるため。Homeアテンションやチケット編集画面へ進む前に、通知IDの命名と再予約の基本動作を先に固めた。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/TicketNotificationScheduler.swift（予定・申込通知予約サービス）
+- favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift（保存後の通知予約接続）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketNotificationsNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で通知許可、予定保存後の通知予約、実通知到達を確認する。
+- 予定・チケット編集画面で日付変更時の再予約/キャンセルを接続する。
+- 通知設定を後からONにした時、既存予定へ一括再予約する導線を作る。
+- Homeアテンションを `Plan` / `TicketAttempt` の締切・当落中心へ切り替える。
+
 ## 2026-07-10: 予定・チケット追加UIとカレンダー表示を接続
 
 ### 変更概要

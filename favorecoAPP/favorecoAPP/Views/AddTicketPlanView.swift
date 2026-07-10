@@ -163,6 +163,7 @@ struct AddTicketPlanView: View {
         )
         modelContext.insert(plan)
 
+        var attemptForScheduling: TicketAttempt?
         if draft.createsTicketAttempt {
             let attempt = TicketAttempt(
                 statusKey: draft.statusKey,
@@ -185,11 +186,19 @@ struct AddTicketPlanView: View {
                 plan: plan,
                 account: selectedAccount
             )
+            attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
+                plan: plan,
+                attempt: attempt
+            ).joined(separator: ",")
             modelContext.insert(attempt)
+            attemptForScheduling = attempt
         }
 
         do {
             try modelContext.save()
+            Task {
+                await TicketNotificationScheduler.reschedule(plan: plan, attempt: attemptForScheduling)
+            }
             dismiss()
         } catch {
             assertionFailure("Failed to save ticket plan: \(error)")

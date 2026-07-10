@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-10（予定・チケット入力UI実装）
+> **最終更新**: 2026-07-10（チケット通知予約接続）
 
 ---
 
@@ -47,7 +47,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `RegistrationIntegrationSettingsView`: マイ配下の登録情報・連携ハブ。FC、プレイガイド、劇場会員、カード枠などを `TicketAccount` として登録/編集できる。外部カレンダー連携の説明も同じハブに置く。パスワード本体は保存せず、必要になった場合はKeychain参照キーだけを使う方針。
 - `DisplaySettingsView`: 表示設定。Home各セクションのON/OFFと、将来の文字サイズ/外観モード設定入口を持つ。
 - `RecordInputAssistSettingsView`: 記録・入力補助設定。デフォルト記録日、デフォルトジャンル、記録追加後の動き、写真追加初期動作、写真圧縮、URL/OCR/Map/天気/入力補助辞書のON/OFFを持つ。Apple Music連携はV2以降で検討。
-- `NotificationSettingsView`: 通知設定。通知全体、申込開始/締切、当落、入金、発券、公演前日/当日、FC・会員期限、思い出リマインダーのON/OFFを `AppStorage` に保存する。通知全体をONにした時だけiOS通知許可を求める。公演前日/当日だけ初期ON、それ以外は初期OFFでユーザーが必要なものを選ぶ。実際の通知予約はチケット/予定モデル追加後に各日付へ接続する。
+- `NotificationSettingsView`: 通知設定。通知全体、申込開始/締切、当落、入金、発券、公演前日/当日、FC・会員期限、思い出リマインダーのON/OFFを `AppStorage` に保存する。通知全体をONにした時だけiOS通知許可を求める。公演前日/当日だけ初期ON、それ以外は初期OFFでユーザーが必要なものを選ぶ。予定・チケット保存時は `TicketNotificationScheduler` が設定値を読み、申込開始/締切、当落、入金、発券、公演前日/当日の通知を実予約する。
 - `DataManagementView`: データ管理。保存データ件数、JSON/CSVエクスポート、JSON/CSVインポート入口、バックアップ説明、キャッシュ削除/写真キャッシュ削除/全データ削除/アーカイブデータ削除の危険操作入口を持つ。JSONエクスポートは `JSONExportView` で復元前提の手動バックアップJSONを書き出し、CSVエクスポートは `CSVExportView` で全VisitをUTF-8 CSVとして手動書き出しできる。どちらも現時点では写真バイナリは含めない。
 - `SyncBackupSettingsView`: 同期・バックアップ設定。iCloud同期、自動バックアップ、復元、同期トラブル診断の入口を持つ。JSON/CSVなどローカルへの手動書き出しバックアップは無料、iCloud同期/自動バックアップは有料寄りで扱う。
 - `BillingPlanSettingsView`: 課金・プラン設定。現在のプラン、無料で使えること、Pro買い切り候補、同期サブスク候補、フル買い切り候補、アップグレード/購入復元、創設メンバー特典、DBパック管理の入口を持つ。StoreKitは未接続で、まず無料/有料境界の表示だけを行う。
@@ -62,7 +62,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `GenreDetailSettingsView`: ジャンル詳細設定。表示名、SF Symbolアイコン、テーマカラー、テンプレタイプ、呼び名、紐付けSNS一覧、有効ユニット、表示/非表示を確認・編集する。
 - `CategoryTopView`: カテゴリ単位の簡易トップ。対象数・記録数・対象一覧・最近の記録を表示。見出しのジャンル名は `映画 ▼` 形式のスイッチャーで、他の有効ジャンルへ切り替えられる。対象一覧から対象詳細へ遷移でき、同じ対象に回を追加できる。最近の記録は `VisitSummaryRow` をカテゴリ名なしで表示する。
 - `AddInboxItemView`: 気になるもの・あとで記録したいものを、タイトル / URL / カテゴリ候補 / メモで `InboxItem` として保存する手動追加フォーム。
-- `AddTicketPlanView`: 予定・チケット追加フォーム。ジャンル、公演/イベント名、日時、開場、会場、公式URLを `Plan` として保存し、必要に応じて状態、区分、名義/アカウント、申込開始/締切、当落、入金、発券、金額、枚数、座席を `TicketAttempt` として同時作成する。名義/アカウントは `RegistrationIntegrationSettingsView` で登録した `TicketAccount` から選ぶ。
+- `AddTicketPlanView`: 予定・チケット追加フォーム。ジャンル、公演/イベント名、日時、開場、会場、公式URLを `Plan` として保存し、必要に応じて状態、区分、名義/アカウント、申込開始/締切、当落、入金、発券、金額、枚数、座席を `TicketAttempt` として同時作成する。名義/アカウントは `RegistrationIntegrationSettingsView` で登録した `TicketAccount` から選ぶ。保存後は通知設定とiOS通知許可に応じて `TicketNotificationScheduler` で通知予約し、予約IDを `TicketAttempt.notificationSettingsRaw` に保持する。
 - `InboxDetailView`: InboxItemの詳細表示。カテゴリ候補を選び、InboxItemのタイトル / URL / メモを下書きにして本記録へ変換できる。変換済みのInboxItemは `resolved` にする。
 - `AddExperienceView`: 記録追加フォーム。入力中は `AddExperienceDraft`、人物/団体リンク用の一時状態、写真用の一時状態に保持し、保存時だけ `ExperienceEvent` + `Visit` + `EventPersonLink` + `PhotoBlob` を作成する。`RecordCategory.enabledUnitsRaw` に応じてユニット単位アコーディオンを表示し、現時点では `basic`（対象名/日付/場所/評価）、`people`（人物・団体名/役割）、`ticketPlan`（チケット状態/座席メモ）、`photos`（写真ライブラリから追加・10枚上限・カバー比率指定）、`goshuinBook`（御朱印帳サイズ指定）、`importOCR`（画像からのVision OCR/手入力テキスト）、`money`（合計金額）、`officialInfo`（公式URL）、`memo`（メモ）、`advanced`（自由項目）を実入力する。
 - `AddVisitView`: 既存 `ExperienceEvent` に新しい `Visit` だけを追加するフォーム。ユニット単位アコーディオンを表示し、`basic`、`people`、`ticketPlan`、`photos`、`importOCR`、`money`、`memo`、`advanced` を実入力する。人物・団体はその回だけのゲスト等として `Visit` 側に紐付ける。
@@ -84,7 +84,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - 既存対象への再訪/再鑑賞/再飲は `AddVisitView` で `Visit` のみ追加し、`ExperienceEvent` を重複作成しない。
 - 主要ナビは4タブ + 中央 `+` + 右上プロフィール入口。下部タブに設定は置かず、設定/マイ領域はプロフィールアイコンから開く。
 - 設定画面は `マイ / 表示 / ジャンル / 記録・入力補助 / 通知 / データ管理 / 同期・バックアップ / 課金・プラン / リンク・サポート / 開発` のセクションで整理する。Home表示ON/OFFは `SettingsView` 直下ではなく `DisplaySettingsView` に置く。
-- 通知は、体験直前のリマインドとして公演前日/当日だけ初期ONにする。申込開始/締切、当落、入金、発券、FC・会員期限、思い出リマインダーは初期OFFでユーザーが選ぶ。通知タイプ別ON/OFFは `AppStorageKeys.notification...` 系に保存する。iOS通知許可は起動直後には求めず、通知を有効化する操作やチケット/予定作成時に、用途を説明してから求める。
+- 通知は、体験直前のリマインドとして公演前日/当日だけ初期ONにする。申込開始/締切、当落、入金、発券、FC・会員期限、思い出リマインダーは初期OFFでユーザーが選ぶ。通知タイプ別ON/OFFは `AppStorageKeys.notification...` 系に保存する。iOS通知許可は起動直後には求めず、通知を有効化する操作やチケット/予定作成時に、用途を説明してから求める。予定通知IDは `plan.<planID>.performance.previousDay/sameDay`、チケット通知IDは `ticket.<attemptID>...` 形式で管理し、再予約時は古い候補IDを削除してから追加する。締切系は前日と1時間前を予約する。
 - 記録・入力補助の初期値は、デフォルト記録日=今日、デフォルトジャンル=最後に使ったジャンル、記録追加後=詳細を開く、写真追加=カメラを開く、写真圧縮=85%、URL/OCR/Map/天気/入力補助辞書=ONとする。現時点では設定保存までで、各入力画面への実接続は段階的に行う。
 - 写真メタデータ削除はON固定とする。保存時に写真ファイル内のGPS、撮影端末、Exif等のメタデータを削除し、訪問日・会場・天気などは写真ファイルではなく `Visit` 側の記録データとして管理する。
 - 無料制限は広めに設計する。1記録あたり写真10枚までは無料、URL保存、YouTube/PV/個人動画などの外部リンク保存、`カレンダーに追加` からの手動追加は無料とする。URLからタイトル/日時/人物/会場を自動抽出する高度取込、詳細統計、年間まとめ、同期/自動バックアップ、外部候補補助、追加テーマ/フォントなどは有料候補にする。OCR高度化はPro買い切り側に寄せ、基本OCRだけ無料で扱う。統計は、基本集計を無料、ユーザーが自分で作る詳細統計/年間まとめをPro、同期・自動生成・外部データ補助込みで毎月/毎年届く思い出レポートをPremium候補にする。
@@ -137,7 +137,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - 自作ジャンルの記録フォーム文言は `CategoryRecordTemplate` が `targetNameLabel`、`recordUnitName`、`dateLabel` から生成する。標準ジャンルは従来どおり `templateKey` 別の固定文言を優先する。
 - ジャンルの有効ユニットは `RecordCategory.enabledUnitsRaw` を正本とし、`RecordUnitDefinition` で表示名/説明に変換する。採用ユニットIDは `basic`（基本情報）、`people`（人物・団体）、`ticketPlan`（チケット・予定）、`photos`（写真）、`goshuinBook`（御朱印帳）、`importOCR`（OCR・取込）、`money`（金額）、`officialInfo`（公式情報）、`memo`（メモ）、`advanced`（詳細オプション）。`basic` と `memo` は必須で、詳細画面/自作ジャンル作成画面では外せない。旧 `U1` / `U3` などは読み取り時だけ互換変換する。実入力接続済みは `basic`、`people`、`ticketPlan`、`photos`、`goshuinBook`、`importOCR`、`money`、`officialInfo`、`memo`、`advanced`。
 - デバッグ用の仮データ投入/削除は `DebugDataSeeder` に閉じ込める。挿入時は既存仮データを削除してから、全ジャンルを有効化し、各ジャンル1件以上の `ExperienceEvent` / `Visit` / `PhotoBlob` を通常のSwiftData経路で保存する。写真はジャンル色のPNGを生成して `PhotoBlob.data` に入れる。削除時は `https://example.com/favoreco/` と `debug/sample-` に紐付く仮データだけを削除する。
-- 同期・バックアップ、課金・プラン、JSONインポート、CSVインポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。通知設定はタイプ別ON/OFFとiOS通知許可まで接続済みで、実予約はチケット/予定モデル追加後。JSONエクスポートとCSVエクスポートは手動書き出しまで接続済み。
+- 同期・バックアップ、課金・プラン、JSONインポート、CSVインポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。通知設定はタイプ別ON/OFF、iOS通知許可、予定・チケット追加時の実予約まで接続済み。JSONエクスポートとCSVエクスポートは手動書き出しまで接続済み。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る
 - **Mystorium再発防止の性能・構造ルールを最初から守る**（詳細: `docs/14-実装アーキテクチャ・性能ルール.md`）。最重要4原則は **①入力中にDBを書かない ②一覧で原寸画像を使わない ③bodyで全件処理しない ④巨大Viewを作らない**。全登録/編集画面はDraftState→Save→Model、Home/GenreTop/Calendar/Statsは軽量Snapshot/DTO経由、画像はthumbnail/detail/originalの3段階、I/O/画像処理/import/export/migrationはMainActor禁止＋background＋batch save。
 - **ライフサイクル状態・予定・申込・記録を混ぜない**。クイック登録は `InboxItem`、対象は `Event`、予定/公演回は `Plan`、申込1件は `TicketAttempt`、実体験は `Visit`、記録下書きは `MemoryDraft`/`VisitDraft` として責務分離する。既存の `Visit.outcomeKey` / `seatText` は暫定互換として残すが、複数先行・落選履歴・名義別当選率・通知更新の正本は `TicketAttempt` に移す。
