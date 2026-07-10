@@ -5,6 +5,29 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: JSONバックアップを書き出せるようにした
+
+### 変更概要
+- `JSONBackupExportService` を追加し、復元前提の手動バックアップJSONを生成できるようにした。
+- データ管理の `JSONエクスポート` を準備中ページから実際の書き出し画面へ差し替えた。
+- JSON書き出し画面で、ジャンル/対象/Visit/人物/人物リンク/場所/Inbox/SNS/写真メタデータの件数を確認できるようにした。
+
+### 変更意図
+CSVは表計算向けの見返し用なので、アプリへ戻す将来復元に備えた構造化バックアップも無料の安全網として早めに置くため。写真バイナリは容量と復元設計が重いため、今回は記録本体と紐付けID、写真メタデータまでに限定した。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/JSONBackupExportService.swift（バックアップDTOとJSON FileDocument追加）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（JSONエクスポート画面追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedJSONExportNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- JSONインポート/復元、写真/動画バイナリを含む完全バックアップ、バックアップ互換性チェックは未実装。
+- 将来の復元時は既存データを壊さないマージ方式と、ID衝突時の扱いを設計する。
+
 ## 2026-07-10: CSVエクスポートを実装
 
 ### 変更概要

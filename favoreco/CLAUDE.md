@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-07-10（CSVエクスポート実装）
+> **最終更新**: 2026-07-10（JSONバックアップ実装）
 
 ---
 
@@ -47,11 +47,12 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `DisplaySettingsView`: 表示設定。Home各セクションのON/OFFと、将来の文字サイズ/外観モード設定入口を持つ。
 - `RecordInputAssistSettingsView`: 記録・入力補助設定。デフォルト記録日、デフォルトジャンル、記録追加後の動き、写真追加初期動作、写真圧縮、URL/OCR/Map/天気/入力補助辞書のON/OFFを持つ。Apple Music連携はV2以降で検討。
 - `NotificationSettingsView`: 通知設定。通知全体、申込開始/締切、当落、入金、発券、公演前日/当日、FC・会員期限、思い出リマインダーの入口を持つ。公演前日/当日だけ初期ON、それ以外は初期OFFでユーザーが必要なものを選ぶ。
-- `DataManagementView`: データ管理。保存データ件数、CSVエクスポート、JSON/CSVインポート入口、バックアップ説明、キャッシュ削除/写真キャッシュ削除/全データ削除/アーカイブデータ削除の危険操作入口を持つ。CSVエクスポートは `CSVExportView` で全VisitをUTF-8 CSVとして手動書き出しでき、写真バイナリは含めない。
+- `DataManagementView`: データ管理。保存データ件数、JSON/CSVエクスポート、JSON/CSVインポート入口、バックアップ説明、キャッシュ削除/写真キャッシュ削除/全データ削除/アーカイブデータ削除の危険操作入口を持つ。JSONエクスポートは `JSONExportView` で復元前提の手動バックアップJSONを書き出し、CSVエクスポートは `CSVExportView` で全VisitをUTF-8 CSVとして手動書き出しできる。どちらも現時点では写真バイナリは含めない。
 - `SyncBackupSettingsView`: 同期・バックアップ設定。iCloud同期、自動バックアップ、復元、同期トラブル診断の入口を持つ。JSON/CSVなどローカルへの手動書き出しバックアップは無料、iCloud同期/自動バックアップは有料寄りで扱う。
 - `BillingPlanSettingsView`: 課金・プラン設定。現在のプラン、無料で使えること、Pro買い切り候補、同期サブスク候補、フル買い切り候補、アップグレード/購入復元、創設メンバー特典、DBパック管理の入口を持つ。StoreKitは未接続で、まず無料/有料境界の表示だけを行う。
 - `SupportLinksView`: リンク・サポート。公式サイト、利用規約、プライバシーポリシー、お問い合わせ、レビュー、シェア、公式SNSの入口を持つ。規約/プライバシー/問い合わせの正本はRANOVIQO公式ドメイン配下に置き、アプリ内はWeb/外部リンク入口とする。
 - `SettingsDocumentView`: 利用規約、プライバシーポリシー、お問い合わせ、インポート/エクスポート説明などの暫定本文表示に使う共通プレースホルダー。
+- `JSONExportView`: 手動バックアップJSONを書き出す画面。RecordCategory / ExperienceEvent / Visit / InboxItem / PhotoBlobメタデータ / SocialAccount / PersonMaster / EventPersonLink / PlaceMaster をID付きDTOとして出力する。写真/動画バイナリ、同期状態、通知予約、外部カレンダー側イベントは含めない。
 - `CSVExportView`: Visit一覧をCSVとして書き出す画面。列は visit_id / event_id / date / category / title / series / venue / rating / status / seat / amount / official_url / tags / companions / note / created_at / updated_at。写真データは含めず、表計算で見返せる無料の手動エクスポートとして扱う。
 - `ProfileSettingsView`: プロフィール設定。SNSアカウントを複数登録・編集でき、登録済みアカウントはタップで外部URLを開く。マイ領域には将来、FC・プレイガイド・劇場会員・カード枠・外部カレンダー連携をまとめる「登録情報・連携」ハブを置く。
 - `EditSocialAccountView`: SNS追加/編集フォーム。SNS種別、メモ/名前、IDまたはURL、ジャンル紐付け、用途メモを保存する。
@@ -130,7 +131,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - 自作ジャンルの記録フォーム文言は `CategoryRecordTemplate` が `targetNameLabel`、`recordUnitName`、`dateLabel` から生成する。標準ジャンルは従来どおり `templateKey` 別の固定文言を優先する。
 - ジャンルの有効ユニットは `RecordCategory.enabledUnitsRaw` を正本とし、`RecordUnitDefinition` で表示名/説明に変換する。採用ユニットIDは `basic`（基本情報）、`people`（人物・団体）、`ticketPlan`（チケット・予定）、`photos`（写真）、`importOCR`（OCR・取込）、`money`（金額）、`officialInfo`（公式情報）、`memo`（メモ）、`advanced`（詳細オプション）。`basic` と `memo` は必須で、詳細画面/自作ジャンル作成画面では外せない。旧 `U1` / `U3` などは読み取り時だけ互換変換する。実入力接続済みは `basic`、`people`、`ticketPlan`、`photos`、`importOCR`、`money`、`officialInfo`、`memo`、`advanced`。
 - デバッグ用の仮データ投入/削除は `DebugDataSeeder` に閉じ込める。挿入時は既存仮データを削除してから、全ジャンルを有効化し、各ジャンル1件以上の `ExperienceEvent` / `Visit` / `PhotoBlob` を通常のSwiftData経路で保存する。写真はジャンル色のPNGを生成して `PhotoBlob.data` に入れる。削除時は `https://example.com/favoreco/` と `debug/sample-` に紐付く仮データだけを削除する。
-- 通知、同期・バックアップ、課金・プラン、JSONインポート/エクスポート、CSVインポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。CSVエクスポートだけは全Visitの手動書き出しまで接続済み。
+- 通知、同期・バックアップ、課金・プラン、JSONインポート、CSVインポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。JSONエクスポートとCSVエクスポートは手動書き出しまで接続済み。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る
 - **Mystorium再発防止の性能・構造ルールを最初から守る**（詳細: `docs/14-実装アーキテクチャ・性能ルール.md`）。最重要4原則は **①入力中にDBを書かない ②一覧で原寸画像を使わない ③bodyで全件処理しない ④巨大Viewを作らない**。全登録/編集画面はDraftState→Save→Model、Home/GenreTop/Calendar/Statsは軽量Snapshot/DTO経由、画像はthumbnail/detail/originalの3段階、I/O/画像処理/import/export/migrationはMainActor禁止＋background＋batch save。
 - **ライフサイクル状態・予定・申込・記録を混ぜない**。クイック登録は `InboxItem`、対象は `Event`、予定/公演回は `Plan`/`Performance`、申込1件は `TicketAttempt`、実体験は `Visit`、記録下書きは `MemoryDraft`/`VisitDraft` として責務分離する。`Visit` にチケット状態を直持ちしない。複数先行・落選履歴・名義別当選率・通知更新のため `TicketAttempt` を独立モデルにする。

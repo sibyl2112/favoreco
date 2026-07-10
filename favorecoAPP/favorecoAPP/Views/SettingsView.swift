@@ -303,7 +303,7 @@ struct DataManagementView: View {
 
             Section("インポート・エクスポート") {
                 NavigationLink {
-                    SettingsDocumentView(title: "JSONエクスポート", bodyText: "アプリに戻せるバックアップ形式として準備予定です。写真データは別扱いにします。")
+                    JSONExportView()
                 } label: {
                     Label("JSONエクスポート", systemImage: "square.and.arrow.up")
                 }
@@ -406,6 +406,113 @@ struct CSVExportView: View {
             isPresented: $isExporterPresented,
             document: exportDocument,
             contentType: .commaSeparatedText,
+            defaultFilename: fileName
+        ) { result in
+            if case .failure(let error) = result {
+                exportErrorMessage = error.localizedDescription
+            }
+        }
+    }
+}
+
+struct JSONExportView: View {
+    @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
+    @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
+    @Query(sort: \InboxItem.updatedAt, order: .reverse) private var inboxItems: [InboxItem]
+    @Query(sort: \PhotoBlob.createdAt, order: .reverse) private var photos: [PhotoBlob]
+    @Query(sort: \SocialAccount.sortOrder) private var socialAccounts: [SocialAccount]
+    @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
+    @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
+    @Query(sort: \PlaceMaster.name) private var places: [PlaceMaster]
+
+    @State private var isExporterPresented = false
+    @State private var exportDocument = JSONBackupDocument()
+    @State private var exportErrorMessage = ""
+
+    private var fileName: String {
+        "favoreco-backup-\(Date().formatted(.iso8601.year().month().day()))"
+    }
+
+    private var totalRecordCount: Int {
+        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + personLinks.count + places.count
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("JSONバックアップ")
+                        .font(FavorecoTypography.sectionTitle)
+                    Text("アプリに戻せる形式を想定した手動バックアップです。現時点では写真のバイナリデータは含めず、記録本体と紐付け情報を書き出します。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+            }
+
+            Section("対象データ") {
+                LabeledContent("ジャンル", value: "\(categories.count)")
+                LabeledContent("対象", value: "\(events.count)")
+                LabeledContent("訪問/鑑賞記録", value: "\(visits.count)")
+                LabeledContent("人物・団体", value: "\(people.count)")
+                LabeledContent("人物リンク", value: "\(personLinks.count)")
+                LabeledContent("場所", value: "\(places.count)")
+                LabeledContent("あとで記録", value: "\(inboxItems.count)")
+                LabeledContent("SNS", value: "\(socialAccounts.count)")
+                LabeledContent("写真メタデータ", value: "\(photos.count)")
+            }
+
+            Section("書き出し") {
+                Button {
+                    do {
+                        let text = try JSONBackupExportService.makeBackupJSON(
+                            categories: categories,
+                            events: events,
+                            visits: visits,
+                            inboxItems: inboxItems,
+                            photos: photos,
+                            socialAccounts: socialAccounts,
+                            people: people,
+                            personLinks: personLinks,
+                            places: places
+                        )
+                        exportDocument = JSONBackupDocument(text: text)
+                        exportErrorMessage = ""
+                        isExporterPresented = true
+                    } catch {
+                        exportErrorMessage = error.localizedDescription
+                    }
+                } label: {
+                    Label("JSONファイルを書き出す", systemImage: "square.and.arrow.up")
+                }
+                .disabled(totalRecordCount == 0)
+
+                if totalRecordCount == 0 {
+                    Text("書き出せるデータがまだありません。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !exportErrorMessage.isEmpty {
+                    Text(exportErrorMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section("含まれないもの") {
+                Text("写真/動画の実データ、iCloud同期状態、通知予約、外部カレンダー側のイベントはまだ含めません。写真付き完全バックアップは後続で扱います。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .navigationTitle("JSONエクスポート")
+        .navigationBarTitleDisplayMode(.inline)
+        .fileExporter(
+            isPresented: $isExporterPresented,
+            document: exportDocument,
+            contentType: .json,
             defaultFilename: fileName
         ) { result in
             if case .failure(let error) = result {
