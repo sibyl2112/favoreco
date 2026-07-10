@@ -13,6 +13,8 @@ struct HomeView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var inboxItems: [InboxItem]
+    @Query(sort: \Plan.startsAt, order: .forward) private var plans: [Plan]
+    @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
     @AppStorage(AppStorageKeys.showsHomeAttention) private var showsAttention = true
     @AppStorage(AppStorageKeys.showsHomeExperienceGallery) private var showsExperienceGallery = true
     @AppStorage(AppStorageKeys.showsHomeInbox) private var showsInbox = true
@@ -41,6 +43,17 @@ struct HomeView: View {
             .sorted { $0.visitedAt < $1.visitedAt }
     }
 
+    private var upcomingPlans: [Plan] {
+        let now = Date()
+        return plans
+            .filter { !$0.isArchived && $0.endsAt >= now }
+            .sorted { $0.startsAt < $1.startsAt }
+    }
+
+    private var upcomingItemCount: Int {
+        upcomingPlans.count + upcomingVisits.count
+    }
+
     private var currentYearVisitCount: Int {
         let calendar = Calendar.current
         let year = calendar.component(.year, from: Date())
@@ -48,28 +61,164 @@ struct HomeView: View {
     }
 
     private var attentionItems: [HomeAttentionItem] {
-        var items = upcomingVisits.prefix(3).map { visit in
-            HomeAttentionItem(
-                icon: "calendar.badge.clock",
-                title: visit.event?.title.isEmpty == false ? visit.event?.title ?? "予定" : "予定",
-                subtitle: visit.visitedAt.formatted(date: .long, time: .omitted),
-                tint: Color(hex: visit.event?.category?.colorHex ?? "#147C88")
-            )
+        var items = ticketAttentionItems
+
+        if items.count < 5 {
+            let planItems = upcomingPlans.prefix(5 - items.count).map { plan in
+                HomeAttentionItem(
+                    icon: "calendar.badge.clock",
+                    title: plan.title.isEmpty ? "予定" : plan.title,
+                    subtitle: "公演 \(attentionDateFormatter.string(from: plan.startsAt))",
+                    dueDate: plan.startsAt,
+                    tint: Color(hex: plan.category?.colorHex ?? "#147C88"),
+                    priority: 20
+                )
+            }
+            items.append(contentsOf: planItems)
         }
 
-        if items.count < 3 {
-            let inboxAttention = unresolvedInboxItems.prefix(3 - items.count).map { item in
+        if items.count < 5 {
+            let visitItems = upcomingVisits.prefix(5 - items.count).map { visit in
+                HomeAttentionItem(
+                    icon: "calendar.badge.clock",
+                    title: visit.event?.title.isEmpty == false ? visit.event?.title ?? "予定" : "予定",
+                    subtitle: visit.visitedAt.formatted(date: .long, time: .omitted),
+                    dueDate: visit.visitedAt,
+                    tint: Color(hex: visit.event?.category?.colorHex ?? "#147C88"),
+                    priority: 30
+                )
+            }
+            items.append(contentsOf: visitItems)
+        }
+
+        if items.count < 5 {
+            let inboxAttention = unresolvedInboxItems.prefix(5 - items.count).map { item in
                 HomeAttentionItem(
                     icon: "tray",
                     title: item.title.isEmpty ? "あとで記録" : item.title,
                     subtitle: "未整理",
-                    tint: .secondary
+                    dueDate: item.createdAt,
+                    tint: .secondary,
+                    priority: 90
                 )
             }
             items.append(contentsOf: inboxAttention)
         }
 
-        return Array(items)
+        return Array(items.sorted { lhs, rhs in
+            if lhs.priority != rhs.priority {
+                return lhs.priority < rhs.priority
+            }
+            return lhs.dueDate < rhs.dueDate
+        }.prefix(5))
+    }
+
+    private var ticketAttentionItems: [HomeAttentionItem] {
+        ticketAttempts
+            .filter { attempt in
+                !attempt.isArchived
+                    && attempt.plan?.isArchived != true
+                    && !["lost", "attended", "skipped"].contains(attempt.statusKey)
+            }
+            .flatMap { ticketAttentionItems(for: $0) }
+            .sorted { lhs, rhs in
+                if lhs.priority != rhs.priority {
+                    return lhs.priority < rhs.priority
+                }
+                return lhs.dueDate < rhs.dueDate
+            }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    private func ticketAttentionItems(for attempt: TicketAttempt) -> [HomeAttentionItem] {
+        let now = Date()
+        let plan = attempt.plan
+        let title = plan?.title.isEmpty == false ? plan?.title ?? "予定" : "予定"
+        let tint = Color(hex: plan?.category?.colorHex ?? "#147C88")
+        var items: [HomeAttentionItem] = []
+
+        if attempt.saleStartAt > now {
+            items.append(ticketAttention(
+                icon: "ticket",
+                label: "申込開始",
+                title: title,
+                date: attempt.saleStartAt,
+                tint: tint,
+                priority: 12
+            ))
+        }
+
+        if attempt.applyDeadlineAt > now {
+            items.append(ticketAttention(
+                icon: "hourglass",
+                label: "申込締切",
+                title: title,
+                date: attempt.applyDeadlineAt,
+                tint: .red,
+                priority: 1
+            ))
+        }
+
+        if attempt.resultAnnounceAt > now {
+            items.append(ticketAttention(
+                icon: "checkmark.seal",
+                label: "当落発表",
+                title: title,
+                date: attempt.resultAnnounceAt,
+                tint: .purple,
+                priority: 5
+            ))
+        }
+
+        if attempt.paymentDeadlineAt > now {
+            items.append(ticketAttention(
+                icon: "yensign.circle",
+                label: "入金締切",
+                title: title,
+                date: attempt.paymentDeadlineAt,
+                tint: .orange,
+                priority: 2
+            ))
+        }
+
+        if attempt.issueStartAt > now {
+            items.append(ticketAttention(
+                icon: "ticket.fill",
+                label: "発券開始",
+                title: title,
+                date: attempt.issueStartAt,
+                tint: .teal,
+                priority: 10
+            ))
+        }
+
+        return items
+    }
+
+    private func ticketAttention(
+        icon: String,
+        label: String,
+        title: String,
+        date: Date,
+        tint: Color,
+        priority: Int
+    ) -> HomeAttentionItem {
+        HomeAttentionItem(
+            icon: icon,
+            title: title,
+            subtitle: "\(label) \(attentionDateFormatter.string(from: date))",
+            dueDate: date,
+            tint: tint,
+            priority: priority
+        )
+    }
+
+    private var attentionDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "M/d HH:mm"
+        return formatter
     }
 
     var body: some View {
@@ -141,7 +290,7 @@ struct HomeView: View {
     private var crossGenreMiniStats: some View {
         HStack(spacing: 10) {
             HomeMiniStatCell(
-                value: "\(upcomingVisits.count)",
+                value: "\(upcomingItemCount)",
                 label: "今後の予定",
                 icon: "calendar.badge.clock",
                 tint: Color(hex: "#147C88")
@@ -318,7 +467,9 @@ private struct HomeAttentionItem: Identifiable {
     let icon: String
     let title: String
     let subtitle: String
+    let dueDate: Date
     let tint: Color
+    let priority: Int
 }
 
 private struct HomeMiniStatCell: View {

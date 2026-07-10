@@ -5,6 +5,30 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: Homeアテンションを予定・チケット中心へ接続
+
+### 変更概要
+- `HomeView` に `Plan` / `TicketAttempt` のQueryを追加し、横断ミニ統計の「今後の予定」に未来日Planを含めるようにした。
+- Homeアテンションで、申込開始、申込締切、当落発表、入金締切、発券開始、公演予定を日付・優先度順に表示するようにした。
+- 落選、参加済み、見送り、アーカイブ済みのチケット/予定はアテンションに出さないようにした。
+- チケット系アテンションが足りない場合だけ、未来日Visitと未整理Inboxを補助表示するようにした。
+
+### 変更意図
+通知予約まで接続したチケット/予定情報を、アプリ起動直後に確認できる形へ進めるため。ユーザーがまず見るHomeのファーストビューに、締切・当落・入金・発券などの見落としたくない情報を集約する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（Plan/TicketAttemptアテンション接続）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedHomeAttentionNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- Homeアテンションから予定/チケット詳細へ遷移する画面を作る。
+- FC・会員期限、外部カレンダー予定、通知リマインダーを同じ枠へ追加する。
+- 予定・チケット編集画面を作り、日付変更時の通知再予約とHome表示更新をつなぐ。
+
 ## 2026-07-10: チケット通知予約を予定・申込日付へ接続
 
 ### 変更概要
