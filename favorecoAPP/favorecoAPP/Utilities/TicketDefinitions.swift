@@ -121,6 +121,58 @@ struct TicketEntryRouteDefinition: Identifiable, Hashable {
     }
 }
 
+struct TicketGuideDefinition: Identifiable, Hashable {
+    let key: String
+    let name: String
+    let urlString: String
+    let category: String
+
+    var id: String { key }
+
+    static let customKey = "custom"
+
+    static let all: [TicketGuideDefinition] = [
+        TicketGuideDefinition(key: "pia", name: "チケットぴあ", urlString: "https://t.pia.jp/", category: "総合"),
+        TicketGuideDefinition(key: "eplus", name: "イープラス", urlString: "https://eplus.jp/", category: "総合"),
+        TicketGuideDefinition(key: "lawson", name: "ローソンチケット", urlString: "https://l-tike.com/", category: "総合"),
+        TicketGuideDefinition(key: "rakuten", name: "楽天チケット", urlString: "https://ticket.rakuten.co.jp/", category: "総合"),
+        TicketGuideDefinition(key: "cnplayguide", name: "CNプレイガイド", urlString: "https://www.cnplayguide.com/", category: "総合"),
+        TicketGuideDefinition(key: "ticketboard", name: "ticket board", urlString: "https://ticket.tickebo.jp/", category: "総合"),
+        TicketGuideDefinition(key: "tixplus", name: "Tixplus", urlString: "https://tixplus.jp/", category: "総合"),
+        TicketGuideDefinition(key: "confetti", name: "カンフェティ", urlString: "https://www.confetti-web.com/", category: "演劇"),
+        TicketGuideDefinition(key: "stageGate", name: "Stage Gate", urlString: "https://stagegate.jp/", category: "演劇"),
+        TicketGuideDefinition(key: "teket", name: "teket", urlString: "https://teket.jp/", category: "クラシック/公演"),
+        TicketGuideDefinition(key: "livepocket", name: "LivePocket", urlString: "https://t.livepocket.jp/", category: "ライブ/イベント"),
+        TicketGuideDefinition(key: "tiget", name: "TIGET", urlString: "https://tiget.net/", category: "ライブ/イベント"),
+        TicketGuideDefinition(key: "zaiko", name: "ZAIKO", urlString: "https://zaiko.io/", category: "配信"),
+        TicketGuideDefinition(key: "streamingPlus", name: "Streaming+", urlString: "https://eplus.jp/sf/streamingplus", category: "配信"),
+        TicketGuideDefinition(key: "lawsonStreaming", name: "ローチケ LIVE STREAMING", urlString: "https://l-tike.com/livestreaming/", category: "配信"),
+        TicketGuideDefinition(key: "peatix", name: "Peatix", urlString: "https://peatix.com/", category: "イベント"),
+        TicketGuideDefinition(key: "passmarket", name: "PassMarket", urlString: "https://passmarket.yahoo.co.jp/", category: "イベント"),
+        TicketGuideDefinition(key: "eventRegist", name: "EventRegist", urlString: "https://eventregist.com/", category: "イベント"),
+        TicketGuideDefinition(key: "mubic", name: "ムビチケ", urlString: "https://mvtk.jp/", category: "映画"),
+        TicketGuideDefinition(key: "tohoCinemas", name: "TOHOシネマズ", urlString: "https://hlo.tohotheater.jp/net/movie/TNPI3090J01.do", category: "映画"),
+        TicketGuideDefinition(key: "aeonCinema", name: "イオンシネマ", urlString: "https://www.aeoncinema.com/", category: "映画"),
+        TicketGuideDefinition(key: "109cinemas", name: "109シネマズ", urlString: "https://109cinemas.net/", category: "映画"),
+        TicketGuideDefinition(key: "unitedCinemas", name: "ユナイテッド・シネマ", urlString: "https://www.unitedcinemas.jp/", category: "映画"),
+        TicketGuideDefinition(key: "custom", name: "カスタム", urlString: "", category: "手入力"),
+    ]
+
+    static func guide(for key: String) -> TicketGuideDefinition? {
+        all.first(where: { $0.key == key && $0.key != customKey })
+    }
+
+    static func inferredKey(siteName: String, urlString: String) -> String {
+        let site = siteName.lowercased()
+        let url = urlString.lowercased()
+        return all.first { guide in
+            guard guide.key != customKey else { return false }
+            return site == guide.name.lowercased()
+                || (!guide.urlString.isEmpty && url.hasPrefix(guide.urlString.lowercased()))
+        }?.key ?? customKey
+    }
+}
+
 struct TicketAccountTypeDefinition: Identifiable, Hashable {
     let key: String
     let name: String

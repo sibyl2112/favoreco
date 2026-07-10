@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: プレイガイド標準DBと購入URL自動入力を追加
+
+### 変更概要
+- `TicketGuideDefinition` を追加し、標準プレイガイド/チケットサイトのローカル辞書を持つようにした。
+- 予定・チケット追加/編集フォームと申込単体追加/編集フォームに「プレイガイド」選択を追加した。
+- 標準プレイガイドを選ぶと、`ticketSite` と `purchaseURL` にサイト名/URLを自動入力するようにした。
+- `カスタム` を選ぶと、購入先・サイト名と申込/購入URLを手入力できるようにした。
+- 購入URL入力を金額・座席セクションからチケット申込セクションへ移し、抽選応募予定/発売待ちでも使えるようにした。
+
+### 変更意図
+チケット登録時に毎回プレイガイド名やURLを手入力しなくてよいようにするため。標準DBで主要な購入先をワンタップ入力しつつ、FC独自サイトや小規模公演などはカスタム入力で逃がせるようにした。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift（TicketGuideDefinition追加）
+- favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift（プレイガイド選択/URL自動入力）
+- favorecoAPP/favorecoAPP/Views/EditTicketAttemptView.swift（プレイガイド選択/URL自動入力）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketGuideNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 標準プレイガイド一覧は実機確認後に不足分を追加する。
+- 各プレイガイドのURLはトップ/汎用入口であり、個別公演URLはカスタムで上書きする。
+- 将来、ユーザー作成のプレイガイド辞書やDBパック化を検討する。
+
 ## 2026-07-10: チケット入力を段階式フローに整理
 
 ### 変更概要

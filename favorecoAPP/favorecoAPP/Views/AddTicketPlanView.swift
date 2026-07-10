@@ -101,8 +101,28 @@ struct AddTicketPlanView: View {
                                 }
                             }
 
-                            TextField("購入先・サイト名", text: $draft.ticketSite)
                             TextField("名義メモ", text: $draft.holderName)
+                        }
+
+                        if draft.showsTicketGuide {
+                            Picker("プレイガイド", selection: $draft.ticketGuideKey) {
+                                ForEach(TicketGuideDefinition.all) { guide in
+                                    Text(guide.name).tag(guide.key)
+                                }
+                            }
+                            .onChange(of: draft.ticketGuideKey) { _, newValue in
+                                draft.applyTicketGuide(newValue)
+                            }
+
+                            if draft.ticketGuideKey == TicketGuideDefinition.customKey {
+                                TextField("購入先・サイト名", text: $draft.ticketSite)
+                                TextField("申込・購入URL", text: $draft.purchaseURL)
+                                    .keyboardType(.URL)
+                                    .textInputAutocapitalization(.never)
+                            } else {
+                                LabeledContent("申込・購入URL", value: draft.purchaseURL.isEmpty ? "未設定" : draft.purchaseURL)
+                                    .font(FavorecoTypography.caption)
+                            }
                         }
 
                         if draft.showsSaleStart {
@@ -132,9 +152,6 @@ struct AddTicketPlanView: View {
                         Stepper("枚数 \(draft.quantity)", value: $draft.quantity, in: 1...20)
                         TextField("座席・整理番号", text: $draft.seatText, axis: .vertical)
                             .lineLimit(2...4)
-                        TextField("購入URL", text: $draft.purchaseURL)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
                     }
                 }
 
@@ -363,6 +380,7 @@ private struct TicketPlanDraft {
     var statusKey = "beforeApply"
     var entryRouteKey = ""
     var accountID: UUID?
+    var ticketGuideKey = TicketGuideDefinition.customKey
     var ticketSite = ""
     var holderName = ""
     var hasSaleStart = false
@@ -407,6 +425,7 @@ private struct TicketPlanDraft {
         statusKey = attempt.statusKey
         entryRouteKey = attempt.entryRouteKey
         accountID = attempt.account?.id
+        ticketGuideKey = TicketGuideDefinition.inferredKey(siteName: attempt.ticketSite, urlString: attempt.purchaseURL)
         ticketSite = attempt.ticketSite
         holderName = attempt.holderName
         hasSaleStart = attempt.saleStartAt != Date.distantPast
@@ -450,6 +469,10 @@ private struct TicketPlanDraft {
     }
 
     var showsAccountFields: Bool {
+        flowKey != "interested"
+    }
+
+    var showsTicketGuide: Bool {
         flowKey != "interested"
     }
 
@@ -545,6 +568,15 @@ private struct TicketPlanDraft {
         default:
             break
         }
+    }
+
+    mutating func applyTicketGuide(_ key: String) {
+        guard let guide = TicketGuideDefinition.guide(for: key) else {
+            ticketGuideKey = TicketGuideDefinition.customKey
+            return
+        }
+        ticketSite = guide.name
+        purchaseURL = guide.urlString
     }
 
     private func decimalText(_ value: Decimal) -> String {
