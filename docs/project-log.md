@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 思い出レポートを共有シートから送れるようにした
+
+### 変更概要
+- `月刊Favoreco` / `年間Favoreco` 下書き画面に `共有する` ボタンを追加した。
+- 共有用テキストを `ShareLink` でiOS共有シートへ渡せるようにした。
+- コピー導線は `テキストをコピー` として残した。
+
+### 変更意図
+クリップボード経由だけでなく、標準共有シートから直接メッセージやSNSへ送れるようにするため。画像カード化の前に、共有文の内容と共有導線の手触りを確認できる状態にした。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（ShareLink追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedReportShareLinkNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で共有シートの表示、各アプリへの渡り方、共有文の長さを確認する。
+- 画像カード生成、保存、SNS向けテンプレは未実装。
+
 ## 2026-07-10: 思い出レポートの共有用テキストコピーを実装
 
 ### 変更概要

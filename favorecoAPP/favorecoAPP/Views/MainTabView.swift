@@ -787,15 +787,28 @@ private struct StatsReportDraftView: View {
             Text("共有")
                 .font(FavorecoTypography.sectionTitle)
 
-            Button {
-                UIPasteboard.general.string = shareText
-                showsCopyConfirmation = true
-            } label: {
-                Label("共有用テキストをコピー", systemImage: "doc.on.doc")
-                    .font(FavorecoTypography.bodyStrong)
-                    .frame(maxWidth: .infinity)
+            VStack(spacing: 10) {
+                ShareLink(
+                    item: shareText,
+                    subject: Text(kind.title),
+                    message: Text("Favorecoの思い出レポート")
+                ) {
+                    Label("共有する", systemImage: "square.and.arrow.up")
+                        .font(FavorecoTypography.bodyStrong)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button {
+                    UIPasteboard.general.string = shareText
+                    showsCopyConfirmation = true
+                } label: {
+                    Label("テキストをコピー", systemImage: "doc.on.doc")
+                        .font(FavorecoTypography.bodyStrong)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.borderedProminent)
 
             StatsWideCard(
                 title: "次に実装すること",
