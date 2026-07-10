@@ -455,12 +455,24 @@ private struct EditTicketAccountView: View {
             modelContext.insert(target)
         }
 
-        try? modelContext.save()
-        dismiss()
+        do {
+            try modelContext.save()
+            if target.renewalNotify {
+                Task {
+                    await TicketAccountNotificationScheduler.reschedule(account: target)
+                }
+            } else {
+                TicketAccountNotificationScheduler.cancel(account: target)
+            }
+            dismiss()
+        } catch {
+            assertionFailure("Failed to save ticket account: \(error)")
+        }
     }
 }
 
 struct NotificationSettingsView: View {
+    @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
     @AppStorage(AppStorageKeys.notificationMasterEnabled) private var masterEnabled = false
     @AppStorage(AppStorageKeys.notificationApplicationStartEnabled) private var applicationStartEnabled = false
     @AppStorage(AppStorageKeys.notificationApplicationDeadlineEnabled) private var applicationDeadlineEnabled = false
@@ -480,6 +492,9 @@ struct NotificationSettingsView: View {
                     .onChange(of: masterEnabled) { _, newValue in
                         if newValue {
                             requestNotificationAuthorization()
+                            rescheduleMembershipNotificationsIfNeeded()
+                        } else {
+                            cancelMembershipNotifications()
                         }
                     }
                 LabeledContent("iOS通知許可", value: authorizationStatusText)
@@ -505,6 +520,13 @@ struct NotificationSettingsView: View {
 
             Section("アカウント") {
                 Toggle("FC・会員期限", isOn: $membershipExpiryEnabled)
+                    .onChange(of: membershipExpiryEnabled) { _, newValue in
+                        if newValue {
+                            rescheduleMembershipNotificationsIfNeeded()
+                        } else {
+                            cancelMembershipNotifications()
+                        }
+                    }
             }
             .disabled(!masterEnabled)
 
@@ -514,7 +536,7 @@ struct NotificationSettingsView: View {
             .disabled(!masterEnabled)
 
             Section("現在の実装範囲") {
-                Text("この画面では通知タイプ別の設定保存とiOS通知許可まで接続しています。実際の予約は、チケット/予定モデル追加後に各日付へ紐付けます。")
+                Text("通知タイプ別の設定保存、iOS通知許可、予定・申込・FC/会員期限の予約まで接続しています。予定・申込は保存時、FC・会員期限は設定変更時にも反映します。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -537,11 +559,31 @@ struct NotificationSettingsView: View {
                     permissionMessage = "iOS側で通知が許可されていません。必要になったら設定アプリから許可できます。"
                 } else {
                     permissionMessage = "通知が許可されました。"
+                    rescheduleMembershipNotificationsIfNeeded()
                 }
             } catch {
                 masterEnabled = false
                 permissionMessage = "通知許可の取得に失敗しました。"
             }
+        }
+    }
+
+    private func rescheduleMembershipNotificationsIfNeeded() {
+        guard masterEnabled, membershipExpiryEnabled else {
+            cancelMembershipNotifications()
+            return
+        }
+
+        Task {
+            for account in ticketAccounts where !account.isArchived && account.renewalNotify {
+                await TicketAccountNotificationScheduler.reschedule(account: account)
+            }
+        }
+    }
+
+    private func cancelMembershipNotifications() {
+        for account in ticketAccounts {
+            TicketAccountNotificationScheduler.cancel(account: account)
         }
     }
 

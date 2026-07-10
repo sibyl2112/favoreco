@@ -5,6 +5,35 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: FC・会員期限アテンションと通知を接続
+
+### 変更概要
+- `TicketAccountNotificationScheduler` を追加し、FC・会員期限の30日前/7日前/当日朝通知を予約/キャンセルできるようにした。
+- 登録情報保存時に、期限通知ONならFC・会員期限通知を再予約し、OFFならキャンセルするようにした。
+- 通知設定で「通知を有効化」「FC・会員期限」を切り替えた時、既存登録情報の期限通知を予約/キャンセルするようにした。
+- Homeアテンションに、期限通知ONかつ45日以内に期限が来る `TicketAccount` を表示するようにした。
+- 実機確認は後回しにするため、確認項目を残課題に明記した。
+
+### 変更意図
+チケット周りの残りとして、申込や公演日だけでなく、FC・会員・カード枠などの更新期限を見落とさない導線を作るため。通知とHomeアテンションの両方に出すことで、通知許可をまだ出していないユーザーにも期限が見えるようにした。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/TicketAccountNotificationScheduler.swift（FC・会員期限通知）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（登録情報保存/通知設定変更時の予約・キャンセル）
+- favorecoAPP/favorecoAPP/Views/HomeView.swift（FC・会員期限アテンション）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedMembershipNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+- 実機通知の到達確認は後回し。
+
+### 残課題
+- 実機で通知許可ON後、登録情報の期限通知が30日前/7日前/当日朝に予約されることを確認する。
+- 通知設定OFF、登録情報の期限通知OFF、登録情報削除/アーカイブ時に通知が残らないことを確認する。
+- Homeアテンションに45日以内のFC・会員期限が表示され、期限切れ/通知OFF/アーカイブ済みは出ないことを確認する。
+- チケット予定詳細のカレンダー追加、予定削除後のHome/Calendar非表示、申込通知キャンセルも実機で合わせて確認する。
+
 ## 2026-07-10: チケット周りv1を仕上げ
 
 ### 変更概要

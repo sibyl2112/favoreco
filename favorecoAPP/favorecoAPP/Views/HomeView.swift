@@ -15,6 +15,7 @@ struct HomeView: View {
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var inboxItems: [InboxItem]
     @Query(sort: \Plan.startsAt, order: .forward) private var plans: [Plan]
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
+    @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
     @AppStorage(AppStorageKeys.showsHomeAttention) private var showsAttention = true
     @AppStorage(AppStorageKeys.showsHomeExperienceGallery) private var showsExperienceGallery = true
     @AppStorage(AppStorageKeys.showsHomeInbox) private var showsInbox = true
@@ -62,6 +63,10 @@ struct HomeView: View {
 
     private var attentionItems: [HomeAttentionItem] {
         var items = ticketAttentionItems
+
+        if items.count < 5 {
+            items.append(contentsOf: membershipAttentionItems.prefix(5 - items.count))
+        }
 
         if items.count < 5 {
             let planItems = upcomingPlans.prefix(5 - items.count).map { plan in
@@ -130,6 +135,36 @@ struct HomeView: View {
             }
             .prefix(5)
             .map { $0 }
+    }
+
+    private var membershipAttentionItems: [HomeAttentionItem] {
+        let now = Date()
+        let warningLimit = Calendar.current.date(byAdding: .day, value: 45, to: now) ?? now
+
+        return ticketAccounts
+            .filter { account in
+                !account.isArchived
+                    && account.renewalNotify
+                    && account.expiryDate != Date.distantPast
+                    && account.expiryDate >= now
+                    && account.expiryDate <= warningLimit
+            }
+            .map { account in
+                HomeAttentionItem(
+                    icon: "person.text.rectangle",
+                    title: account.serviceName.isEmpty ? "会員期限" : account.serviceName,
+                    subtitle: "期限 \(attentionDateFormatter.string(from: account.expiryDate))",
+                    dueDate: account.expiryDate,
+                    tint: Color(hex: account.colorHex),
+                    priority: 8
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.priority != rhs.priority {
+                    return lhs.priority < rhs.priority
+                }
+                return lhs.dueDate < rhs.dueDate
+            }
     }
 
     private func ticketAttentionItems(for attempt: TicketAttempt) -> [HomeAttentionItem] {
