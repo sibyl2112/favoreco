@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 登録情報の非表示と期限通知キャンセルを追加
+
+### 変更概要
+- 登録情報編集画面に、既存 `TicketAccount` を非表示にする管理ボタンを追加した。
+- 非表示時は `TicketAccount.isArchived = true`、`renewalNotify = false` にし、FC・会員期限通知をキャンセルするようにした。
+- 非表示にした登録情報は、既存申込履歴を残したまま、申込フォーム候補とHome期限アテンションから外れる。
+
+### 変更意図
+登録情報を間違って作った場合や使わなくなったFC/会員/カード枠を安全に整理できるようにするため。チケット申込履歴との参照を壊さず、通知だけ残る事故を避ける。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（登録情報非表示導線）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedAccountArchiveNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で非表示後に、登録情報一覧、申込フォーム候補、Home期限アテンションから消えることを確認する。
+- 既存の申込詳細では、履歴として名義/アカウント参照が壊れないことを確認する。
+
 ## 2026-07-10: FC・会員期限アテンションと通知を接続
 
 ### 変更概要

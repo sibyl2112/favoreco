@@ -338,6 +338,7 @@ private struct EditTicketAccountView: View {
     @State private var renewalNotify = false
     @State private var note = ""
     @State private var colorHex = "#6F8F7A"
+    @State private var isShowingArchiveConfirmation = false
 
     private var canSave: Bool {
         !serviceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -385,6 +386,18 @@ private struct EditTicketAccountView: View {
                 TextField("備考", text: $note, axis: .vertical)
                     .lineLimit(3...6)
             }
+
+            if account != nil {
+                Section {
+                    Button("この登録情報を非表示にする", role: .destructive) {
+                        isShowingArchiveConfirmation = true
+                    }
+                } header: {
+                    Text("管理")
+                } footer: {
+                    Text("非表示にすると、今後の申込フォームや期限アテンションには表示されません。既存の申込履歴は残ります。")
+                }
+            }
         }
         .navigationTitle(account == nil ? "登録情報を追加" : "登録情報を編集")
         .navigationBarTitleDisplayMode(.inline)
@@ -402,6 +415,14 @@ private struct EditTicketAccountView: View {
             }
         }
         .onAppear(perform: loadAccount)
+        .confirmationDialog("登録情報を非表示にしますか？", isPresented: $isShowingArchiveConfirmation, titleVisibility: .visible) {
+            Button("非表示にする", role: .destructive) {
+                archiveAccount()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("期限通知をキャンセルし、申込フォームの候補から外します。")
+        }
     }
 
     private var colorBinding: Binding<Color> {
@@ -467,6 +488,21 @@ private struct EditTicketAccountView: View {
             dismiss()
         } catch {
             assertionFailure("Failed to save ticket account: \(error)")
+        }
+    }
+
+    private func archiveAccount() {
+        guard let account else { return }
+        account.isArchived = true
+        account.renewalNotify = false
+        account.updatedAt = Date()
+        TicketAccountNotificationScheduler.cancel(account: account)
+
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            assertionFailure("Failed to archive ticket account: \(error)")
         }
     }
 }
