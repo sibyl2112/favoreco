@@ -304,7 +304,7 @@ struct AddTicketPlanView: View {
     }
 }
 
-private struct DateToggleRow: View {
+struct DateToggleRow: View {
     let title: String
     @Binding var isOn: Bool
     @Binding var date: Date

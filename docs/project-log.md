@@ -5,6 +5,34 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: チケット周りv1を仕上げ
+
+### 変更概要
+- `EditTicketAttemptView` を追加し、1つの予定に複数のチケット申込を追加/編集できるようにした。
+- `PlanDetailView` のメニューに、予定編集、申込追加、カレンダーに追加、予定削除を追加した。
+- 申込カードをタップすると、該当 `TicketAttempt` を編集できるようにした。
+- 申込削除は物理削除ではなくアーカイブ＋通知キャンセルにした。
+- 予定削除は `Plan` と紐づく申込をアーカイブし、予定/申込の予約済み通知をキャンセルするようにした。
+- 予定詳細から `CalendarEventEditSheet` を開き、外部カレンダーへ手動追加できるようにした。
+
+### 変更意図
+チケット管理v1として、予定作成、詳細確認、編集、複数申込、申込削除、予定削除、通知再予約/キャンセル、外部カレンダー手動追加まで一連の往復を成立させるため。ユーザーのデータを守るため、削除はまずアーカイブで扱う。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/EditTicketAttemptView.swift（申込単体の追加/編集）
+- favorecoAPP/favorecoAPP/Views/PlanDetailView.swift（申込追加/編集、予定削除、カレンダー追加）
+- favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift（共通日付行の可視性調整）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketFinishNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で通知到達、外部カレンダー追加、削除後のHome/Calendar非表示を確認する。
+- 外部カレンダーイベントID保存と自動更新/削除追従は未実装。
+- FC・会員期限通知は登録情報側の期限アテンション実装時に接続する。
+
 ## 2026-07-10: 予定・チケット編集と通知再予約を追加
 
 ### 変更概要
