@@ -5,6 +5,28 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 思い出レポートの共有用テキストコピーを実装
+
+### 変更概要
+- `月刊Favoreco` / `年間Favoreco` 下書き画面に、共有用テキストをコピーするボタンを追加した。
+- コピー内容は、記録数、写真数、ジャンル数、平均評価、最多ジャンル、よく出てきた場所、カード候補、`#Favoreco` を含む要約にした。
+- コピー後に確認アラートを表示するようにした。
+
+### 変更意図
+画像化の前段として、まずレポートの要約を外へ出せる軽い共有導線を作るため。将来の画像カード生成やShareLink接続に進む前に、どの情報を共有するかの形を固める。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（共有用テキストコピー追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedReportCopyNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機でクリップボードコピー、アラート、共有文言の長さを確認する。
+- 画像カード生成、ShareLink、保存、SNS向けテンプレは未実装。
+
 ## 2026-07-10: 月刊/年間Favorecoの下書き画面を実装
 
 ### 変更概要

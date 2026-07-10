@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct MainTabView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
@@ -590,6 +591,7 @@ private struct StatsReportDraftView: View {
     let visits: [Visit]
     let categories: [RecordCategory]
     @State private var showsAmount = false
+    @State private var showsCopyConfirmation = false
 
     private var sortedVisits: [Visit] {
         visits.sorted { $0.visitedAt > $1.visitedAt }
@@ -631,6 +633,25 @@ private struct StatsReportDraftView: View {
         categoryStats.first?.category.name ?? "未記録"
     }
 
+    private var shareText: String {
+        var lines = [
+            "\(kind.title) \(kind.subtitle)",
+            "記録: \(visits.count)",
+            "写真: \(photoCount)",
+            "ジャンル: \(categoryStats.count)",
+            "平均評価: \(averageRating == 0 ? "-" : String(format: "%.1f", averageRating))",
+            "最多ジャンル: \(topCategoryName)",
+            "よく出てきた場所: \(topVenueName)"
+        ]
+
+        if let firstVisit = sortedVisits.first {
+            lines.append("カード候補: \(firstVisit.event?.title ?? "無題")")
+        }
+
+        lines.append("#Favoreco")
+        return lines.joined(separator: "\n")
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -657,6 +678,11 @@ private struct StatsReportDraftView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.inline)
+        .alert("共有用テキストをコピーしました", isPresented: $showsCopyConfirmation) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("画像化の前段として、レポートの要約をテキストで共有できます。")
+        }
     }
 
     private var reportHero: some View {
@@ -757,12 +783,27 @@ private struct StatsReportDraftView: View {
     }
 
     private var reportNextStep: some View {
-        StatsWideCard(
-            title: "次に実装すること",
-            value: "画像化・共有",
-            caption: "この下書きを、月刊/年間のカード画像として保存・共有できる形へ育てます。",
-            icon: "square.and.arrow.up"
-        )
+        VStack(alignment: .leading, spacing: 12) {
+            Text("共有")
+                .font(FavorecoTypography.sectionTitle)
+
+            Button {
+                UIPasteboard.general.string = shareText
+                showsCopyConfirmation = true
+            } label: {
+                Label("共有用テキストをコピー", systemImage: "doc.on.doc")
+                    .font(FavorecoTypography.bodyStrong)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+
+            StatsWideCard(
+                title: "次に実装すること",
+                value: "画像化・共有",
+                caption: "この下書きを、月刊/年間のカード画像として保存・共有できる形へ育てます。",
+                icon: "square.and.arrow.up"
+            )
+        }
     }
 
     private func mostFrequentValue(in values: [String]) -> String? {
