@@ -204,6 +204,64 @@ struct TicketNextActionDefinition {
     }
 }
 
+struct TicketStatusTransitionDefinition: Identifiable, Hashable {
+    let targetStatusKey: String
+    let title: String
+    let systemImage: String
+
+    var id: String { targetStatusKey }
+
+    static func transitions(for attempt: TicketAttempt) -> [TicketStatusTransitionDefinition] {
+        switch attempt.statusKey {
+        case "interested":
+            return [
+                TicketStatusTransitionDefinition(targetStatusKey: "beforeApply", title: "抽選応募予定にする", systemImage: "hourglass"),
+                TicketStatusTransitionDefinition(targetStatusKey: "onSaleSoon", title: "発売待ちにする", systemImage: "ticket"),
+            ]
+        case "beforeApply":
+            return [
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingResult", title: "申込済みにする", systemImage: "paperplane"),
+                TicketStatusTransitionDefinition(targetStatusKey: "skipped", title: "見送りにする", systemImage: "xmark.circle"),
+            ]
+        case "onSaleSoon":
+            return [
+                TicketStatusTransitionDefinition(targetStatusKey: "won", title: "取得済みにする", systemImage: "checkmark.circle"),
+                TicketStatusTransitionDefinition(targetStatusKey: "skipped", title: "見送りにする", systemImage: "xmark.circle"),
+            ]
+        case "waitingResult":
+            return [
+                TicketStatusTransitionDefinition(targetStatusKey: "won", title: "当選にする", systemImage: "checkmark.seal"),
+                TicketStatusTransitionDefinition(targetStatusKey: "lost", title: "落選にする", systemImage: "xmark.seal"),
+            ]
+        case "won":
+            return [
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingPayment", title: "入金待ちにする", systemImage: "yensign.circle"),
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingIssue", title: "発券待ちにする", systemImage: "ticket"),
+                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "発券済みにする", systemImage: "ticket.fill"),
+            ]
+        case "waitingPayment":
+            return [
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingIssue", title: "入金済み・発券待ちにする", systemImage: "ticket"),
+                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "発券済みにする", systemImage: "ticket.fill"),
+            ]
+        case "waitingIssue":
+            return [
+                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "発券済みにする", systemImage: "ticket.fill"),
+            ]
+        case "issued":
+            return [
+                TicketStatusTransitionDefinition(targetStatusKey: "attended", title: "参加済みにする", systemImage: "checkmark.seal.fill"),
+            ]
+        case "lost", "skipped":
+            return [
+                TicketStatusTransitionDefinition(targetStatusKey: "beforeApply", title: "再度申込予定にする", systemImage: "arrow.uturn.left"),
+            ]
+        default:
+            return []
+        }
+    }
+}
+
 struct TicketAccountTypeDefinition: Identifiable, Hashable {
     let key: String
     let name: String

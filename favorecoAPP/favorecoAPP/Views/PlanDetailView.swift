@@ -287,6 +287,25 @@ struct PlanDetailView: View {
                         TicketAttemptDetailCard(attempt: attempt, accentColor: categoryColor)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            editingAttempt = attempt
+                        } label: {
+                            Label("申込を編集", systemImage: "pencil")
+                        }
+
+                        let transitions = TicketStatusTransitionDefinition.transitions(for: attempt)
+                        if !transitions.isEmpty {
+                            Divider()
+                            ForEach(transitions) { transition in
+                                Button {
+                                    updateAttemptStatus(attempt, to: transition.targetStatusKey)
+                                } label: {
+                                    Label(transition.title, systemImage: transition.systemImage)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             .planSectionCard()
@@ -428,6 +447,29 @@ struct PlanDetailView: View {
             navigatingVisit = visit
         } catch {
             assertionFailure("Failed to create visit from plan: \(error)")
+        }
+    }
+
+    private func updateAttemptStatus(_ attempt: TicketAttempt, to statusKey: String) {
+        let now = Date()
+        attempt.statusKey = statusKey
+        attempt.updatedAt = now
+        plan.stateKey = statusKey
+        plan.updatedAt = now
+
+        if statusKey == "lost" || statusKey == "skipped" || statusKey == "attended" {
+            TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+        }
+
+        do {
+            try modelContext.save()
+            if statusKey != "lost" && statusKey != "skipped" && statusKey != "attended" {
+                Task {
+                    await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
+                }
+            }
+        } catch {
+            assertionFailure("Failed to update ticket status: \(error)")
         }
     }
 

@@ -5,6 +5,29 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: チケット申込のクイック状態更新を追加
+
+### 変更概要
+- `TicketStatusTransitionDefinition` を追加し、チケット状態ごとの次に進める状態を定義した。
+- 予定詳細の申込カードにコンテキストメニューを追加し、申込済み、当選/落選、入金待ち、発券待ち、発券済み、参加済みなどへクイック更新できるようにした。
+- クイック更新時に `Plan.stateKey` と `TicketAttempt.statusKey` を更新し、落選/見送り/参加済みでは該当通知をキャンセル、それ以外では通知を再予約するようにした。
+
+### 変更意図
+チケットは登録して終わりではなく、申込、当落、入金、発券、参加済みへ何度も状態が進むため。毎回編集フォームを開かずに、予定詳細から状態だけ素早く更新できるようにして、実運用での入力負荷を下げる。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift（状態遷移定義）
+- favorecoAPP/favorecoAPP/Views/PlanDetailView.swift（申込カードのクイック更新メニュー）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedTicketQuickStatus CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で申込カード長押し時の見え方と、各状態更新後の通知再予約/キャンセルを確認する。
+- 状態遷移の文言は、実際に使いながら「申込済み」「取得済み」などのニュアンスを調整する。
+
 ## 2026-07-10: チケットの次アクション表示を共通化
 
 ### 変更概要
