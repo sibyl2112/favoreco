@@ -105,6 +105,12 @@ struct SettingsView: View {
                 }
 
                 Section("開発") {
+                    NavigationLink {
+                        NotificationDebugView()
+                    } label: {
+                        Label("チケット・通知診断", systemImage: "bell.badge")
+                    }
+
                     Button {
                         insertDebugData()
                     } label: {
