@@ -136,6 +136,8 @@ private struct RecordsView: View {
 
 private struct CalendarView: View {
     @Query(sort: \Visit.visitedAt, order: .forward) private var visits: [Visit]
+    @AppStorage(AppStorageKeys.showsExternalCalendarEvents) private var showsExternalCalendarEvents = true
+    @StateObject private var externalCalendarStore = ExternalCalendarOverlayStore()
     @State private var displayedMonth = Date().startOfMonth
     @State private var selectedDate = Date()
 
@@ -151,8 +153,18 @@ private struct CalendarView: View {
         }
     }
 
+    private var externalEventsByDay: [Date: [ExternalCalendarEvent]] {
+        Dictionary(grouping: externalCalendarStore.events) { event in
+            calendar.startOfDay(for: event.startDate)
+        }
+    }
+
     private var selectedDayVisits: [Visit] {
         visitsByDay[calendar.startOfDay(for: selectedDate)] ?? []
+    }
+
+    private var selectedDayExternalEvents: [ExternalCalendarEvent] {
+        externalEventsByDay[calendar.startOfDay(for: selectedDate)] ?? []
     }
 
     private var upcomingVisits: [Visit] {
@@ -161,6 +173,22 @@ private struct CalendarView: View {
             .filter { calendar.startOfDay(for: $0.visitedAt) >= today }
             .prefix(5)
             .map { $0 }
+    }
+
+    private var upcomingExternalEvents: [ExternalCalendarEvent] {
+        let now = Date()
+        return externalCalendarStore.events
+            .filter { $0.endDate >= now }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    private var calendarFetchInterval: DateInterval {
+        let days = daysInDisplayedMonth
+        let start = days.first?.date ?? displayedMonth
+        let lastDay = days.last?.date ?? displayedMonth
+        let end = calendar.date(byAdding: .day, value: 1, to: lastDay) ?? lastDay
+        return DateInterval(start: start, end: end)
     }
 
     private var weekdaySymbols: [String] {
@@ -174,6 +202,7 @@ private struct CalendarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     monthHeader
+                    externalCalendarControl
                     weekdayHeader
                     monthGrid
                     selectedDaySection
@@ -183,6 +212,23 @@ private struct CalendarView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("カレンダー")
+            .task {
+                await refreshExternalCalendarIfNeeded()
+            }
+            .onChange(of: displayedMonth) { _, _ in
+                Task {
+                    await refreshExternalCalendarIfNeeded()
+                }
+            }
+            .onChange(of: showsExternalCalendarEvents) { _, newValue in
+                Task {
+                    if newValue {
+                        await refreshExternalCalendarIfNeeded()
+                    } else {
+                        externalCalendarStore.updateAuthorizationStatus()
+                    }
+                }
+            }
         }
     }
 
@@ -213,6 +259,53 @@ private struct CalendarView: View {
         }
     }
 
+    private var externalCalendarControl: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle("外部カレンダーを重ねる", isOn: $showsExternalCalendarEvents)
+                .font(FavorecoTypography.bodyStrong)
+
+            HStack(spacing: 10) {
+                Label(externalCalendarStore.authorizationStatusText, systemImage: "calendar.badge.clock")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+
+                if externalCalendarStore.isLoading {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+
+                Spacer()
+
+                if showsExternalCalendarEvents && !externalCalendarStore.canReadEvents {
+                    Button("許可する") {
+                        Task {
+                            await externalCalendarStore.requestAccessAndRefresh(interval: calendarFetchInterval)
+                        }
+                    }
+                    .font(FavorecoTypography.captionStrong)
+                } else if showsExternalCalendarEvents {
+                    Button {
+                        Task {
+                            await refreshExternalCalendarIfNeeded()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("外部カレンダーを再読み込み")
+                }
+            }
+
+            if !externalCalendarStore.errorMessage.isEmpty {
+                Text(externalCalendarStore.errorMessage)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(12)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
     private var weekdayHeader: some View {
         HStack {
             ForEach(weekdaySymbols, id: \.self) { symbol in
@@ -228,11 +321,13 @@ private struct CalendarView: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
             ForEach(daysInDisplayedMonth) { day in
                 let dayVisits = visitsByDay[calendar.startOfDay(for: day.date)] ?? []
+                let dayExternalEvents = externalEventsByDay[calendar.startOfDay(for: day.date)] ?? []
                 CalendarDayCell(
                     day: day,
                     isSelected: calendar.isDate(day.date, inSameDayAs: selectedDate),
                     isToday: calendar.isDateInToday(day.date),
-                    visitCount: dayVisits.count
+                    visitCount: dayVisits.count,
+                    externalEventCount: showsExternalCalendarEvents ? dayExternalEvents.count : 0
                 ) {
                     selectedDate = day.date
                     if !calendar.isDate(day.date, equalTo: displayedMonth, toGranularity: .month) {
@@ -250,7 +345,7 @@ private struct CalendarView: View {
             Text(selectedDate.formatted(date: .long, time: .omitted))
                 .font(FavorecoTypography.sectionTitle)
 
-            if selectedDayVisits.isEmpty {
+            if selectedDayVisits.isEmpty && (!showsExternalCalendarEvents || selectedDayExternalEvents.isEmpty) {
                 PlaceholderRow(
                     icon: "calendar.badge.exclamationmark",
                     title: "この日の記録はありません",
@@ -259,14 +354,27 @@ private struct CalendarView: View {
                 .padding(14)
                 .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else {
-                VStack(spacing: 10) {
-                    ForEach(selectedDayVisits) { visit in
-                        NavigationLink {
-                            ExperienceDetailView(visit: visit)
-                        } label: {
-                            VisitSummaryRow(visit: visit)
+                VStack(alignment: .leading, spacing: 10) {
+                    if !selectedDayVisits.isEmpty {
+                        ForEach(selectedDayVisits) { visit in
+                            NavigationLink {
+                                ExperienceDetailView(visit: visit)
+                            } label: {
+                                VisitSummaryRow(visit: visit)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                    }
+
+                    if showsExternalCalendarEvents && !selectedDayExternalEvents.isEmpty {
+                        Text("外部カレンダー")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, selectedDayVisits.isEmpty ? 0 : 4)
+
+                        ForEach(selectedDayExternalEvents) { event in
+                            ExternalCalendarEventRow(event: event)
+                        }
                     }
                 }
             }
@@ -275,23 +383,42 @@ private struct CalendarView: View {
 
     @ViewBuilder
     private var upcomingSection: some View {
-        if !upcomingVisits.isEmpty {
+        if !upcomingVisits.isEmpty || (showsExternalCalendarEvents && !upcomingExternalEvents.isEmpty) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("直近の予定")
                     .font(FavorecoTypography.sectionTitle)
 
-                VStack(spacing: 10) {
-                    ForEach(upcomingVisits) { visit in
-                        NavigationLink {
-                            ExperienceDetailView(visit: visit)
-                        } label: {
-                            VisitSummaryRow(visit: visit)
+                VStack(alignment: .leading, spacing: 10) {
+                    if !upcomingVisits.isEmpty {
+                        ForEach(upcomingVisits) { visit in
+                            NavigationLink {
+                                ExperienceDetailView(visit: visit)
+                            } label: {
+                                VisitSummaryRow(visit: visit)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                    }
+
+                    if showsExternalCalendarEvents && !upcomingExternalEvents.isEmpty {
+                        Text("外部カレンダー")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, upcomingVisits.isEmpty ? 0 : 4)
+
+                        ForEach(upcomingExternalEvents) { event in
+                            ExternalCalendarEventRow(event: event)
+                        }
                     }
                 }
             }
         }
+    }
+
+    private func refreshExternalCalendarIfNeeded() async {
+        externalCalendarStore.updateAuthorizationStatus()
+        guard showsExternalCalendarEvents else { return }
+        await externalCalendarStore.refresh(interval: calendarFetchInterval)
     }
 }
 
@@ -334,6 +461,7 @@ private struct CalendarDayCell: View {
     let isSelected: Bool
     let isToday: Bool
     let visitCount: Int
+    let externalEventCount: Int
     let action: () -> Void
 
     var body: some View {
@@ -347,6 +475,11 @@ private struct CalendarDayCell: View {
                     ForEach(0..<min(visitCount, 3), id: \.self) { _ in
                         Circle()
                             .fill(isSelected ? .white : Color.accentColor)
+                            .frame(width: 4, height: 4)
+                    }
+                    ForEach(0..<min(externalEventCount, 2), id: \.self) { _ in
+                        Circle()
+                            .stroke(isSelected ? .white : Color.secondary, lineWidth: 1)
                             .frame(width: 4, height: 4)
                     }
                 }
@@ -371,7 +504,47 @@ private struct CalendarDayCell: View {
         if visitCount > 0 {
             return AnyShapeStyle(Color.accentColor.opacity(0.10))
         }
+        if externalEventCount > 0 {
+            return AnyShapeStyle(Color(.tertiarySystemGroupedBackground))
+        }
         return AnyShapeStyle(Color(.secondarySystemGroupedBackground))
+    }
+}
+
+private struct ExternalCalendarEventRow: View {
+    let event: ExternalCalendarEvent
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(Color(uiColor: event.color))
+                .frame(width: 5)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.title)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                HStack(spacing: 8) {
+                    Label(timeLabel, systemImage: event.isAllDay ? "sun.max" : "clock")
+                    Text(event.calendarTitle)
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var timeLabel: String {
+        if event.isAllDay {
+            return "終日"
+        }
+        return "\(event.startDate.formatted(date: .omitted, time: .shortened)) - \(event.endDate.formatted(date: .omitted, time: .shortened))"
     }
 }
 

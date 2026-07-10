@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import UserNotifications
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -211,33 +212,110 @@ struct RecordInputAssistSettingsView: View {
 }
 
 struct NotificationSettingsView: View {
+    @AppStorage(AppStorageKeys.notificationMasterEnabled) private var masterEnabled = false
+    @AppStorage(AppStorageKeys.notificationApplicationStartEnabled) private var applicationStartEnabled = false
+    @AppStorage(AppStorageKeys.notificationApplicationDeadlineEnabled) private var applicationDeadlineEnabled = false
+    @AppStorage(AppStorageKeys.notificationLotteryResultEnabled) private var lotteryResultEnabled = false
+    @AppStorage(AppStorageKeys.notificationPaymentDeadlineEnabled) private var paymentDeadlineEnabled = false
+    @AppStorage(AppStorageKeys.notificationTicketIssueEnabled) private var ticketIssueEnabled = false
+    @AppStorage(AppStorageKeys.notificationPerformanceReminderEnabled) private var performanceReminderEnabled = true
+    @AppStorage(AppStorageKeys.notificationMembershipExpiryEnabled) private var membershipExpiryEnabled = false
+    @AppStorage(AppStorageKeys.notificationMemoryReminderEnabled) private var memoryReminderEnabled = false
+    @State private var authorizationStatusText = "確認中"
+    @State private var permissionMessage = ""
+
     var body: some View {
         Form {
             Section("通知") {
-                Toggle("通知を有効化", isOn: .constant(false))
-                    .disabled(true)
-                LabeledContent("状態", value: "準備中")
+                Toggle("通知を有効化", isOn: $masterEnabled)
+                    .onChange(of: masterEnabled) { _, newValue in
+                        if newValue {
+                            requestNotificationAuthorization()
+                        }
+                    }
+                LabeledContent("iOS通知許可", value: authorizationStatusText)
+                if !permissionMessage.isEmpty {
+                    Text(permissionMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("予定・チケット") {
-                LabeledContent("申込開始", value: "準備中")
-                LabeledContent("申込締切", value: "準備中")
-                LabeledContent("当落発表", value: "準備中")
-                LabeledContent("入金締切", value: "準備中")
-                LabeledContent("発券開始", value: "準備中")
-                LabeledContent("公演前日/当日", value: "準備中")
+                Toggle("申込開始", isOn: $applicationStartEnabled)
+                Toggle("申込締切", isOn: $applicationDeadlineEnabled)
+                Toggle("当落発表", isOn: $lotteryResultEnabled)
+                Toggle("入金締切", isOn: $paymentDeadlineEnabled)
+                Toggle("発券開始", isOn: $ticketIssueEnabled)
+                Toggle("公演前日/当日", isOn: $performanceReminderEnabled)
+                Text("公演前日/当日だけ初期ONです。申込、当落、入金、発券は必要なものだけ選びます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
             }
+            .disabled(!masterEnabled)
 
             Section("アカウント") {
-                LabeledContent("FC・会員期限", value: "準備中")
+                Toggle("FC・会員期限", isOn: $membershipExpiryEnabled)
             }
+            .disabled(!masterEnabled)
 
             Section("思い出") {
-                LabeledContent("思い出リマインダー", value: "準備中")
+                Toggle("思い出リマインダー", isOn: $memoryReminderEnabled)
+            }
+            .disabled(!masterEnabled)
+
+            Section("現在の実装範囲") {
+                Text("この画面では通知タイプ別の設定保存とiOS通知許可まで接続しています。実際の予約は、チケット/予定モデル追加後に各日付へ紐付けます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("通知設定")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await refreshNotificationAuthorizationStatus()
+        }
+    }
+
+    private func requestNotificationAuthorization() {
+        Task {
+            let center = UNUserNotificationCenter.current()
+            do {
+                let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
+                await refreshNotificationAuthorizationStatus()
+                if !granted {
+                    masterEnabled = false
+                    permissionMessage = "iOS側で通知が許可されていません。必要になったら設定アプリから許可できます。"
+                } else {
+                    permissionMessage = "通知が許可されました。"
+                }
+            } catch {
+                masterEnabled = false
+                permissionMessage = "通知許可の取得に失敗しました。"
+            }
+        }
+    }
+
+    private func refreshNotificationAuthorizationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        authorizationStatusText = notificationStatusText(settings.authorizationStatus)
+    }
+
+    private func notificationStatusText(_ status: UNAuthorizationStatus) -> String {
+        switch status {
+        case .notDetermined:
+            return "未確認"
+        case .denied:
+            return "拒否"
+        case .authorized:
+            return "許可済み"
+        case .provisional:
+            return "仮許可"
+        case .ephemeral:
+            return "一時許可"
+        @unknown default:
+            return "不明"
+        }
     }
 }
 

@@ -5,6 +5,35 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: カレンダー重ね表示と通知設定を接続
+
+### 変更概要
+- EventKit読み取り用の `ExternalCalendarOverlayStore` を追加し、iOSカレンダーに登録済みの外部予定をDTOとして取得できるようにした。
+- `CalendarView` に「外部カレンダーを重ねる」トグル、権限表示、許可ボタン、再読み込みボタンを追加した。
+- 月カレンダーではFavoreco記録の点と外部予定の点を分け、選択日/直近予定に外部カレンダー行を薄く表示するようにした。
+- `NotificationSettingsView` をプレースホルダーから、通知全体と通知タイプ別ON/OFFを保存する画面に変更した。
+- 通知全体ON時に `UNUserNotificationCenter` の通知許可を求め、iOS通知許可状態を表示するようにした。
+- 写真ユニット内のサムネイルプレビューへ選択中のカバー比率を反映し、御朱印ジャンルでは未設定時に標準御朱印帳サイズを補完するようにした。
+
+### 変更意図
+チケット/予定モデルに進む前に、カレンダーと通知のOS連携の入口を固めるため。外部カレンダーはFavorecoの正本データに混ぜず、予定把握用の読み取りレイヤーとして扱う。通知は予約対象の日付モデルが揃う前に、まずユーザーが必要な通知タイプを選べる設定を実データとして保持する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/ExternalCalendarOverlayService.swift（EventKit読み取りサービス）
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（外部カレンダー重ね表示）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（通知設定の保存/許可接続）
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（写真比率プレビュー/御朱印帳サイズ補完）
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift（通知/外部カレンダー設定キー追加）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedCalendarNotificationNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で外部カレンダー権限ダイアログ、Googleカレンダー予定の表示、外部予定の色/件数表示を確認する。
+- 通知の実予約は、次の `Plan` / `TicketAttempt` / 公演日モデル追加後に接続する。
+
 ## 2026-07-10: 写真カバー比率と御朱印帳ユニットを接続
 
 ### 変更概要

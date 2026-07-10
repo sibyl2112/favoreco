@@ -875,7 +875,7 @@ struct AddExperienceDraft {
         VisitUnitFields(
             ocrText: trimmedOCRText,
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.recommended(for: category).key : eyecatchAspectRatioKey,
-            goshuinBookSizeKey: goshuinBookSizeKey,
+            goshuinBookSizeKey: category?.templateKey == "goshuin" && goshuinBookSizeKey.isEmpty ? GoshuinBookSize.standard.key : goshuinBookSizeKey,
             advancedEntries: trimmedAdvancedEntries
         )
     }
@@ -939,7 +939,7 @@ private struct VisitDraft {
         VisitUnitFields(
             ocrText: trimmedOCRText,
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.recommended(for: category).key : eyecatchAspectRatioKey,
-            goshuinBookSizeKey: goshuinBookSizeKey,
+            goshuinBookSizeKey: category?.templateKey == "goshuin" && goshuinBookSizeKey.isEmpty ? GoshuinBookSize.standard.key : goshuinBookSizeKey,
             advancedEntries: trimmedAdvancedEntries
         )
     }
@@ -1102,25 +1102,35 @@ private func moneyFields(amountText: Binding<String>) -> some View {
 private func goshuinBookFields(sizeKey: Binding<String>, aspectRatioKey: Binding<String>) -> some View {
     VStack(alignment: .leading, spacing: 12) {
         Picker("御朱印帳サイズ", selection: sizeKey) {
-            Text("未設定").tag("")
             ForEach(GoshuinBookSize.all) { size in
                 Text("\(size.name)（\(size.displaySize)）").tag(size.key)
             }
         }
 
         let selectedSize = GoshuinBookSize.option(for: sizeKey.wrappedValue)
-        Text(selectedSize.note)
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-        Button {
-            aspectRatioKey.wrappedValue = EyecatchAspectRatio.goshuinStandard.key
-        } label: {
-            Label("カバー比率を御朱印帳に合わせる", systemImage: "aspectratio")
-                .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(selectedSize.note)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+            Text("御朱印写真はこのサイズ比に合わせて表示します。見開きや横向きの場合は、ここでサイズを変えてから写真を追加してください。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .buttonStyle(.bordered)
+    }
+    .onAppear {
+        if sizeKey.wrappedValue.isEmpty {
+            sizeKey.wrappedValue = GoshuinBookSize.standard.key
+        }
+        if aspectRatioKey.wrappedValue.isEmpty {
+            aspectRatioKey.wrappedValue = EyecatchAspectRatio.goshuinStandard.key
+        }
+    }
+    .onChange(of: sizeKey.wrappedValue) { _, newValue in
+        let size = GoshuinBookSize.option(for: newValue)
+        aspectRatioKey.wrappedValue = size.key == GoshuinBookSize.wide.key
+            ? EyecatchAspectRatio.labelLandscape.key
+            : EyecatchAspectRatio.goshuinStandard.key
     }
 }
 
@@ -1542,6 +1552,7 @@ private struct PhotoUnitEditor: View {
                 PhotoThumbnail(
                     image: UIImage(data: photo.data),
                     title: "保存済み",
+                    aspectRatio: selectedAspectRatio.value,
                     onDelete: {
                         deletedPhotoIDs.insert(photo.id)
                     }
@@ -1552,6 +1563,7 @@ private struct PhotoUnitEditor: View {
                 PhotoThumbnail(
                     image: photo.image,
                     title: "追加予定",
+                    aspectRatio: selectedAspectRatio.value,
                     onDelete: {
                         pendingPhotos.removeAll { $0.id == photo.id }
                     }
@@ -1577,6 +1589,7 @@ private struct PhotoUnitEditor: View {
 private struct PhotoThumbnail: View {
     let image: UIImage?
     let title: String
+    let aspectRatio: Double
     let onDelete: () -> Void
 
     var body: some View {
@@ -1594,7 +1607,7 @@ private struct PhotoThumbnail: View {
                         .background(Color(.secondarySystemGroupedBackground))
                 }
             }
-            .frame(height: 96)
+            .aspectRatio(aspectRatio, contentMode: .fill)
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
