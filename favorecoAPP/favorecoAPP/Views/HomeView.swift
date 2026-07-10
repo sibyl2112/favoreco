@@ -37,6 +37,11 @@ struct HomeView: View {
         Array(visits.prefix(8))
     }
 
+    /// 記録・予定・締切・Inbox がいずれも無い＝Homeに出す中身が無い状態。
+    private var isHomeContentEmpty: Bool {
+        visits.isEmpty && attentionItems.isEmpty && unresolvedInboxItems.isEmpty
+    }
+
     private var upcomingVisits: [Visit] {
         let now = Calendar.current.startOfDay(for: Date())
         return visits
@@ -270,26 +275,37 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     hero
                     crossGenreMiniStats
-                    if showsAttention {
+
+                    // 1. 次の予定・締切
+                    if showsAttention && !attentionItems.isEmpty {
                         attentionSection
                     }
-                    if showsExperienceGallery {
-                        experienceGallerySection
-                    }
-                    if showsInbox {
-                        inboxSection
-                    }
-                    if showsRecentRecords {
+                    // 2. 最近の記録
+                    if showsRecentRecords && !visits.isEmpty {
                         recentSection
                     }
-                    if showsCategories {
-                        categorySection
+                    // 3. 体験ギャラリー
+                    if showsExperienceGallery && !recentVisits.isEmpty {
+                        experienceGallerySection
                     }
-                    if showsStatsSummary {
-                        statsSummarySection
-                    }
+                    // 4. お気に入り・統計（任意表示）
                     if showsFavorites {
                         favoritesSection
+                    }
+                    if showsStatsSummary && !visits.isEmpty {
+                        statsSummarySection
+                    }
+                    // 5. その他
+                    if showsInbox && !unresolvedInboxItems.isEmpty {
+                        inboxSection
+                    }
+                    if showsCategories && !visibleCategories.isEmpty {
+                        categorySection
+                    }
+
+                    // すべて空のときだけ、単一のプレースホルダーで導線を示す
+                    if isHomeContentEmpty {
+                        homeEmptyState
                     }
                 }
                 .padding(.horizontal, 20)
@@ -321,9 +337,11 @@ struct HomeView: View {
                 .font(FavorecoTypography.heroLead)
             Text("美しく一生残す。")
                 .font(FavorecoTypography.heroTitle)
-            Text("まずは体験ジャンルを選んで、記録の器を育てていきます。")
-                .font(FavorecoTypography.body)
-                .foregroundStyle(.secondary)
+            if isHomeContentEmpty {
+                Text("まずは体験ジャンルを選んで、記録の器を育てていきます。")
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
@@ -418,7 +436,7 @@ struct HomeView: View {
                 )
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                    LazyHStack(spacing: 12) {
                         ForEach(recentVisits) { visit in
                             NavigationLink {
                                 ExperienceDetailView(visit: visit)
@@ -500,6 +518,14 @@ struct HomeView: View {
                 message: "評価やお気に入り機能が入ると、年間ベスト候補をここに表示します。"
             )
         }
+    }
+
+    private var homeEmptyState: some View {
+        EmptyStateRow(
+            icon: "sparkles",
+            title: "最初の記録を始めましょう",
+            message: "予定・締切や最近の思い出がここにまとまります。下のカテゴリから体験を記録してみましょう。"
+        )
     }
 
     private func sectionHeader(_ title: String, count: Int) -> some View {
