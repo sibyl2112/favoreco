@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: チケットワークフローv1 静的監査＋不具合修正（outcomeKey体系不一致）
+
+### 前提（正直な範囲）
+- 依頼は「実機検証と不具合修正」だが、**開発環境がLinux（Xcode/実機なし）のため実機操作は不可**。代わりに9シナリオ（予定作成→表示→状態遷移→複数申込→当選〜発券→参加記録作成→申込削除→予定削除→通知再予約）を**コードで静的トレースして監査**した（データモデル整合／Home・Calendar反映の2観点で並行レビュー）。
+
+### 見つけた不具合と修正
+- **[修正] 参加記録の成果キーが別体系だった（PlanDetailView.createVisitFromPlan）**：`outcomeKey` に**チケット状態キー**（`issued`/`waitingPayment` 等）を入れていたが、Visitの成果は `planned/applied/won/paid/ticketed/attended/canceled` 系（成果ピッカー・ExperienceDetailView が期待）。→ 別体系のキーは詳細で生キー表示・ピッカーで「未設定」・再保存で消失し得た。参加記録作成＝出席なので **`outcomeKey = "attended"`（両表示系で有効）** に修正。データモデル・通知IDは不変・最小差分。
+
+### 監査で「正常」と確認した点
+- Plan↔TicketAttempt は `.cascade`＋inverse で孤立なし。Event↔Visit/Plan も cascade 正常。全リレーション optional・配列は `?? []`／optional chaining でnil追記クラッシュなし。状態enumは文字列rawで安定・強制アンラップなし。
+- 削除は**ソフト削除（isArchived）**方式：予定削除=`archivePlan`（全attempt＋plan通知cancel）、申込削除=`archiveAttempt`（当該attempt通知cancel）。一覧（Home/Calendar/CategoryTop/PlanDetail）は `!isArchived` で除外＝削除後に消える。
+- 状態遷移（updateAttemptStatus）：終端(lost/skipped/attended)で通知cancel・それ以外でreschedule＋save。Home/Calendarは@Queryで自動反映（onAppearスナップショットなし）。
+
+### 未修正・要実機確認（低〜中確度・今回は変更せず）
+- Calendar の状態バッジ／次アクションが、TicketAttempt単体のstatusKey変更で更新されるか（Observationで追随する見込みだが未実測）。
+- 複数日にまたぐ予定はカレンダー上 `startsAt` の日のみ配置（期間バーは将来仕様）。
+- Plan↔Visit は inverse 未定義の単方向to-one（CloudKit inverse要件・将来の同期時に要検討）。**「既存データモデルは変更しない」指示によりモデル改修は今回見送り**。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/PlanDetailView.swift（outcomeKey修正・1箇所）
+
+### 確認結果（実機 / ビルド）
+静的監査＋コード整合確認のみ。**xcodebuild／9シナリオの実機通し確認はMac側で必須**。
+
+### 残課題
+- Mac側で9シナリオを通し検証。上記「要実機確認」3点の挙動確認。
+
 ## 2026-07-10: 通知デバッグ画面に集中モード注意書き等を追加
 
 ### 変更概要（NotificationDebugView のみ）

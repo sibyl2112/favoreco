@@ -421,7 +421,9 @@ struct PlanDetailView: View {
             visitedAt: plan.startsAt,
             endedAt: plan.endsAt,
             venueNameSnapshot: plan.venueNameSnapshot,
-            outcomeKey: attempt?.statusKey ?? plan.stateKey,
+            // Visitのoutcomeは planned/applied/won/paid/ticketed/attended/canceled 系。
+            // チケット状態キー（issued/waitingPayment 等）とは別体系のため、参加記録＝「参加済み」を明示する。
+            outcomeKey: "attended",
             seatText: attempt?.seatText ?? "",
             note: visitNote(from: attempt),
             amount: visitAmount(from: attempt),
