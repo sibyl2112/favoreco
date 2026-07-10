@@ -13,6 +13,13 @@ enum TicketNotificationScheduler {
         notificationSpecs(plan: plan, attempt: attempt).map(\.identifier)
     }
 
+    static func cancel(plan: Plan, attempt: TicketAttempt?) {
+        let center = UNUserNotificationCenter.current()
+        let staleIdentifiers = staleIdentifierCandidates(planID: plan.id, attemptID: attempt?.id)
+        center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
+        center.removeDeliveredNotifications(withIdentifiers: staleIdentifiers)
+    }
+
     static func reschedule(plan: Plan, attempt: TicketAttempt?) async {
         let center = UNUserNotificationCenter.current()
         let identifiers = scheduledIdentifiers(plan: plan, attempt: attempt)

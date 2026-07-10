@@ -9,6 +9,7 @@ import SwiftUI
 
 struct PlanDetailView: View {
     let plan: Plan
+    @State private var isShowingEditPlan = false
 
     private var categoryColor: Color {
         Color(hex: plan.category?.colorHex ?? "#147C88")
@@ -41,6 +42,16 @@ struct PlanDetailView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle("予定・チケット")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("編集") {
+                    isShowingEditPlan = true
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingEditPlan) {
+            AddTicketPlanView(plan: plan)
+        }
     }
 
     private var headerSection: some View {

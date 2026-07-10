@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-10: 予定・チケット編集と通知再予約を追加
+
+### 変更概要
+- `AddTicketPlanView` を追加/編集兼用にし、既存 `Plan` と最新 `TicketAttempt` からDraftへ読み込めるようにした。
+- `PlanDetailView` に編集ボタンを追加し、予定・チケット詳細から編集シートを開けるようにした。
+- 編集保存時に `Plan` / 最新 `TicketAttempt` を更新し、通知予約IDを更新して再予約するようにした。
+- 編集時に申込情報をOFFにした場合、既存の最新 `TicketAttempt` を削除せずアーカイブし、該当通知をキャンセルするようにした。
+- `TicketNotificationScheduler.cancel` を追加し、予定/チケット通知の明示キャンセルをできるようにした。
+
+### 変更意図
+Homeアテンション/Calendar/詳細画面で確認できる予定・チケットを、実際に修正できる状態へ進めるため。通知日時の変更や申込情報の取り消しに合わせて、古い通知が残らないよう再予約/キャンセルの基本動作も同時に接続した。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift（編集モード、既存Plan読み込み、更新保存）
+- favorecoAPP/favorecoAPP/Views/PlanDetailView.swift（編集導線）
+- favorecoAPP/favorecoAPP/Services/TicketNotificationScheduler.swift（通知キャンセル）
+- favoreco/CLAUDE.md（正本仕様更新）
+- docs/project-log.md（本記録）
+
+### 確認結果（実機 / ビルド）
+- `xcodebuild -quiet -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination generic/platform=iOS -derivedDataPath /tmp/favorecoDerivedPlanEditNoSign CODE_SIGNING_ALLOWED=NO build` 成功。
+
+### 残課題
+- 実機で編集後の通知再予約/キャンセルを確認する。
+- 複数TicketAttemptの編集・追加・履歴表示を作る。
+- 予定/チケット削除と、外部カレンダー連携済みイベントの扱いを決める。
+
 ## 2026-07-10: 予定・チケット詳細画面を追加
 
 ### 変更概要

@@ -14,6 +14,12 @@ struct AddTicketPlanView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
     @State private var draft = TicketPlanDraft()
+    private let editingPlan: Plan?
+
+    init(plan: Plan? = nil) {
+        self.editingPlan = plan
+        _draft = State(initialValue: TicketPlanDraft(plan: plan))
+    }
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -108,7 +114,7 @@ struct AddTicketPlanView: View {
                         .lineLimit(3...8)
                 }
             }
-            .navigationTitle("予定・チケット")
+            .navigationTitle(editingPlan == nil ? "予定・チケット" : "予定を編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -125,7 +131,9 @@ struct AddTicketPlanView: View {
                 }
             }
             .onAppear {
-                draft.setInitialCategoryIfNeeded(visibleCategories)
+                if editingPlan == nil {
+                    draft.setInitialCategoryIfNeeded(visibleCategories)
+                }
             }
             .onChange(of: draft.startsAt) { _, newValue in
                 if draft.endsAt < newValue {
@@ -145,6 +153,14 @@ struct AddTicketPlanView: View {
 
     private func save() {
         let now = Date()
+        if let editingPlan {
+            update(plan: editingPlan, now: now)
+        } else {
+            create(now: now)
+        }
+    }
+
+    private func create(now: Date) {
         let plan = Plan(
             title: draft.trimmedTitle,
             subtitle: draft.trimmedSubtitle,
@@ -205,6 +221,83 @@ struct AddTicketPlanView: View {
         }
     }
 
+    private func update(plan: Plan, now: Date) {
+        let existingAttempt = latestAttempt(for: plan)
+
+        plan.title = draft.trimmedTitle
+        plan.subtitle = draft.trimmedSubtitle
+        plan.stateKey = draft.createsTicketAttempt ? draft.statusKey : "planned"
+        plan.startsAt = draft.startsAt
+        plan.endsAt = draft.endsAt
+        plan.opensAt = draft.opensAt
+        plan.venueNameSnapshot = draft.trimmedVenueName
+        plan.officialURL = draft.trimmedOfficialURL
+        plan.sourceURL = draft.trimmedOfficialURL
+        plan.memo = draft.trimmedMemo
+        plan.updatedAt = now
+        plan.category = selectedCategory
+
+        let attemptForScheduling: TicketAttempt?
+        if draft.createsTicketAttempt {
+            let attempt = existingAttempt ?? TicketAttempt(createdAt: now, plan: plan)
+            applyDraft(to: attempt, plan: plan, now: now)
+            if existingAttempt == nil {
+                modelContext.insert(attempt)
+            }
+            attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
+                plan: plan,
+                attempt: attempt
+            ).joined(separator: ",")
+            attemptForScheduling = attempt
+        } else {
+            existingAttempt?.isArchived = true
+            existingAttempt?.updatedAt = now
+            attemptForScheduling = nil
+        }
+
+        do {
+            try modelContext.save()
+            if let existingAttempt, !draft.createsTicketAttempt {
+                TicketNotificationScheduler.cancel(plan: plan, attempt: existingAttempt)
+            }
+            Task {
+                await TicketNotificationScheduler.reschedule(plan: plan, attempt: attemptForScheduling)
+            }
+            dismiss()
+        } catch {
+            assertionFailure("Failed to update ticket plan: \(error)")
+        }
+    }
+
+    private func latestAttempt(for plan: Plan) -> TicketAttempt? {
+        plan.ticketAttempts?
+            .filter { !$0.isArchived }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+    }
+
+    private func applyDraft(to attempt: TicketAttempt, plan: Plan, now: Date) {
+        attempt.statusKey = draft.statusKey
+        attempt.entryRouteKey = draft.entryRouteKey
+        attempt.ticketSite = draft.trimmedTicketSite
+        attempt.holderName = draft.trimmedHolderName
+        attempt.saleStartAt = draft.hasSaleStart ? draft.saleStartAt : Date.distantPast
+        attempt.applyDeadlineAt = draft.hasApplyDeadline ? draft.applyDeadlineAt : Date.distantPast
+        attempt.resultAnnounceAt = draft.hasResultAnnounce ? draft.resultAnnounceAt : Date.distantPast
+        attempt.paymentDeadlineAt = draft.hasPaymentDeadline ? draft.paymentDeadlineAt : Date.distantPast
+        attempt.issueStartAt = draft.hasIssueStart ? draft.issueStartAt : Date.distantPast
+        attempt.price = decimal(from: draft.priceText)
+        attempt.fee = decimal(from: draft.feeText)
+        attempt.quantity = draft.quantity
+        attempt.purchaseURL = draft.trimmedPurchaseURL
+        attempt.seatText = draft.trimmedSeatText
+        attempt.memo = draft.trimmedMemo
+        attempt.updatedAt = now
+        attempt.isArchived = false
+        attempt.plan = plan
+        attempt.account = selectedAccount
+    }
+
     private func decimal(from text: String) -> Decimal {
         let digits = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return Decimal(string: digits) ?? Decimal(0)
@@ -259,6 +352,50 @@ private struct TicketPlanDraft {
     var purchaseURL = ""
     var memo = ""
 
+    init() {}
+
+    init(plan: Plan?) {
+        guard let plan else { return }
+        let attempt = plan.ticketAttempts?
+            .filter { !$0.isArchived }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+
+        categoryID = plan.category?.id
+        title = plan.title
+        subtitle = plan.subtitle
+        startsAt = plan.startsAt
+        endsAt = plan.endsAt
+        opensAt = plan.opensAt
+        venueName = plan.venueNameSnapshot
+        officialURL = plan.officialURL
+        createsTicketAttempt = attempt != nil
+        memo = plan.memo
+
+        guard let attempt else { return }
+        statusKey = attempt.statusKey
+        entryRouteKey = attempt.entryRouteKey
+        accountID = attempt.account?.id
+        ticketSite = attempt.ticketSite
+        holderName = attempt.holderName
+        hasSaleStart = attempt.saleStartAt != Date.distantPast
+        saleStartAt = hasSaleStart ? attempt.saleStartAt : Date()
+        hasApplyDeadline = attempt.applyDeadlineAt != Date.distantPast
+        applyDeadlineAt = hasApplyDeadline ? attempt.applyDeadlineAt : Date()
+        hasResultAnnounce = attempt.resultAnnounceAt != Date.distantPast
+        resultAnnounceAt = hasResultAnnounce ? attempt.resultAnnounceAt : Date()
+        hasPaymentDeadline = attempt.paymentDeadlineAt != Date.distantPast
+        paymentDeadlineAt = hasPaymentDeadline ? attempt.paymentDeadlineAt : Date()
+        hasIssueStart = attempt.issueStartAt != Date.distantPast
+        issueStartAt = hasIssueStart ? attempt.issueStartAt : Date()
+        priceText = decimalText(attempt.price)
+        feeText = decimalText(attempt.fee)
+        quantity = attempt.quantity
+        seatText = attempt.seatText
+        purchaseURL = attempt.purchaseURL
+        memo = attempt.memo.isEmpty ? plan.memo : attempt.memo
+    }
+
     var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedSubtitle: String { subtitle.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedVenueName: String { venueName.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -278,6 +415,11 @@ private struct TicketPlanDraft {
         categoryID = categories.first { category in
             category.enabledUnitsRaw.components(separatedBy: ",").contains("ticketPlan")
         }?.id ?? categories.first?.id
+    }
+
+    private func decimalText(_ value: Decimal) -> String {
+        guard value != Decimal(0) else { return "" }
+        return NSDecimalNumber(decimal: value).stringValue
     }
 }
 
