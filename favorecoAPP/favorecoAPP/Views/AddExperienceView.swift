@@ -24,6 +24,7 @@ struct AddExperienceView: View {
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
+    @State private var coverPhotoPath = ""
     @State private var pendingPeople: [PendingPersonLink] = []
 
     private var template: CategoryRecordTemplate {
@@ -137,7 +138,8 @@ struct AddExperienceView: View {
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems,
                 category: category,
-                aspectRatioKey: $draft.eyecatchAspectRatioKey
+                aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                coverPhotoPath: $coverPhotoPath
             )
         case "goshuinBook":
             goshuinBookFields(
@@ -214,6 +216,7 @@ struct AddExperienceView: View {
             overallRating: draft.overallRating,
             outcomeKey: draft.outcomeKey,
             seatText: draft.trimmedSeatText,
+            eyecatchPath: coverPhotoPath,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
             unitFieldsRaw: draft.makeUnitFields(for: category).encodedRawValue,
@@ -223,6 +226,7 @@ struct AddExperienceView: View {
         )
 
         modelContext.insert(event)
+        event.representativeEyecatchPath = coverPhotoPath
         modelContext.insert(visit)
         insertPendingPeople(for: event, visit: nil)
         insertPendingPhotos(for: visit)
@@ -281,6 +285,7 @@ struct EditExperienceView: View {
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
+    @State private var coverPhotoPath: String
     @State private var deletedPhotoIDs: Set<UUID> = []
     @State private var pendingPeople: [PendingPersonLink] = []
     @State private var deletedPersonLinkIDs: Set<UUID> = []
@@ -300,6 +305,7 @@ struct EditExperienceView: View {
     init(visit: Visit) {
         self.visit = visit
         _draft = State(initialValue: AddExperienceDraft(visit: visit))
+        _coverPhotoPath = State(initialValue: visit.eyecatchPath)
     }
 
     var body: some View {
@@ -399,7 +405,8 @@ struct EditExperienceView: View {
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems,
                 category: event?.category,
-                aspectRatioKey: $draft.eyecatchAspectRatioKey
+                aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                coverPhotoPath: $coverPhotoPath
             )
         case "goshuinBook":
             goshuinBookFields(
@@ -475,6 +482,7 @@ struct EditExperienceView: View {
         visit.overallRating = draft.overallRating
         visit.outcomeKey = draft.outcomeKey
         visit.seatText = draft.trimmedSeatText
+        visit.eyecatchPath = coverPhotoPath
         visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
         visit.unitFieldsRaw = draft.makeUnitFields(for: event?.category).encodedRawValue
@@ -566,6 +574,7 @@ struct AddVisitView: View {
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
+    @State private var coverPhotoPath = ""
     @State private var pendingPeople: [PendingPersonLink] = []
 
     private var template: CategoryRecordTemplate {
@@ -657,7 +666,8 @@ struct AddVisitView: View {
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems,
                 category: event.category,
-                aspectRatioKey: $draft.eyecatchAspectRatioKey
+                aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                coverPhotoPath: $coverPhotoPath
             )
         case "goshuinBook":
             goshuinBookFields(
@@ -733,6 +743,7 @@ struct AddVisitView: View {
             overallRating: draft.overallRating,
             outcomeKey: draft.outcomeKey,
             seatText: draft.trimmedSeatText,
+            eyecatchPath: coverPhotoPath,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
             unitFieldsRaw: draft.makeUnitFields(for: event.category).encodedRawValue,
@@ -963,9 +974,13 @@ private struct PendingPhoto: Identifiable {
         UIImage(data: data)
     }
 
+    var relativePath: String {
+        "local/\(id.uuidString).jpg"
+    }
+
     func makePhotoBlob(visit: Visit) -> PhotoBlob {
         PhotoBlob(
-            relativePath: "local/\(id.uuidString).jpg",
+            relativePath: relativePath,
             originalFilename: originalFilename,
             mediaKind: "photo",
             purpose: "memory",
@@ -1471,6 +1486,7 @@ private struct PhotoUnitEditor: View {
     @Binding var selectedItems: [PhotosPickerItem]
     let category: RecordCategory?
     @Binding var aspectRatioKey: String
+    @Binding var coverPhotoPath: String
 
     private let maxPhotoCount = 10
 
@@ -1553,8 +1569,13 @@ private struct PhotoUnitEditor: View {
                     image: UIImage(data: photo.data),
                     title: "保存済み",
                     aspectRatio: selectedAspectRatio.value,
+                    isCover: coverPhotoPath == photo.relativePath,
+                    onSetCover: {
+                        coverPhotoPath = photo.relativePath
+                    },
                     onDelete: {
                         deletedPhotoIDs.insert(photo.id)
+                        selectFallbackCover(excluding: photo.relativePath)
                     }
                 )
             }
@@ -1564,8 +1585,13 @@ private struct PhotoUnitEditor: View {
                     image: photo.image,
                     title: "追加予定",
                     aspectRatio: selectedAspectRatio.value,
+                    isCover: coverPhotoPath == photo.relativePath,
+                    onSetCover: {
+                        coverPhotoPath = photo.relativePath
+                    },
                     onDelete: {
                         pendingPhotos.removeAll { $0.id == photo.id }
+                        selectFallbackCover(excluding: photo.relativePath)
                     }
                 )
             }
@@ -1582,7 +1608,19 @@ private struct PhotoUnitEditor: View {
                 continue
             }
             pendingPhotos.append(pendingPhoto)
+            if coverPhotoPath.isEmpty {
+                coverPhotoPath = pendingPhoto.relativePath
+            }
         }
+    }
+
+    private func selectFallbackCover(excluding path: String) {
+        guard coverPhotoPath == path else { return }
+        coverPhotoPath = existingPhotos
+            .first(where: { $0.relativePath != path })?
+            .relativePath
+            ?? pendingPhotos.first(where: { $0.relativePath != path })?.relativePath
+            ?? ""
     }
 }
 
@@ -1590,6 +1628,8 @@ private struct PhotoThumbnail: View {
     let image: UIImage?
     let title: String
     let aspectRatio: Double
+    let isCover: Bool
+    let onSetCover: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -1620,6 +1660,23 @@ private struct PhotoThumbnail: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(title)の写真を削除")
+
+            VStack {
+                Spacer()
+                HStack {
+                    Button(action: onSetCover) {
+                        Image(systemName: isCover ? "star.fill" : "star")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(isCover ? Color.yellow : Color.white)
+                            .padding(7)
+                            .background(.black.opacity(0.55), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isCover ? "カバー写真に設定済み" : "カバー写真に設定")
+                    Spacer()
+                }
+            }
+            .padding(5)
         }
     }
 }

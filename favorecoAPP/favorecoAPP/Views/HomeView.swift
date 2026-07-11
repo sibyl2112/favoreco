@@ -624,7 +624,13 @@ private struct ExperienceGalleryCard: View {
     }
 
     private var firstPhoto: PhotoBlob? {
-        visit.photos?.first(where: { $0.mediaKind == "photo" && !$0.data.isEmpty })
+        let photos = (visit.photos ?? [])
+            .filter { $0.mediaKind == "photo" && !$0.data.isEmpty }
+        if !visit.eyecatchPath.isEmpty,
+           let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
+            return cover
+        }
+        return photos.min { $0.createdAt < $1.createdAt }
     }
 
     // 190pt幅カード。scale過剰を避けるため上限クランプ。

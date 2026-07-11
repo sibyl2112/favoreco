@@ -30,7 +30,13 @@ struct VisitSummaryRow: View {
     }
 
     private var firstPhoto: PhotoBlob? {
-        visit.photos?.first(where: { $0.mediaKind == "photo" && !$0.data.isEmpty })
+        let photos = (visit.photos ?? [])
+            .filter { $0.mediaKind == "photo" && !$0.data.isEmpty }
+        if !visit.eyecatchPath.isEmpty,
+           let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
+            return cover
+        }
+        return photos.min { $0.createdAt < $1.createdAt }
     }
 
     // 64pt幅サムネ。scale過剰を避けるため上限クランプ。
