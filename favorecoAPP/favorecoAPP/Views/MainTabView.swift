@@ -862,7 +862,7 @@ private struct StatsView: View {
 
             VStack(spacing: 10) {
                 NavigationLink {
-                    StatsReportDraftView(kind: .monthly, visits: thisMonthVisits, categories: categories)
+                    StatsReportDraftView(kind: .monthly, allVisits: visits, categories: categories)
                 } label: {
                     StatsReportPreviewCard(
                         title: "月刊Favoreco",
@@ -874,7 +874,7 @@ private struct StatsView: View {
                 .buttonStyle(.plain)
 
                 NavigationLink {
-                    StatsReportDraftView(kind: .yearly, visits: thisYearVisits, categories: categories)
+                    StatsReportDraftView(kind: .yearly, allVisits: visits, categories: categories)
                 } label: {
                     StatsReportPreviewCard(
                         title: "年間Favoreco",
@@ -911,43 +911,75 @@ private enum StatsReportKind {
         }
     }
 
-    var subtitle: String {
+    func periodStart(containing date: Date) -> Date {
         switch self {
         case .monthly:
-            return Date().formatted(.dateTime.year().month(.wide))
+            return date.startOfMonth
         case .yearly:
-            return Date().formatted(.dateTime.year())
+            return Calendar.current.date(
+                from: Calendar.current.dateComponents([.year], from: date)
+            ) ?? date
         }
     }
 
-    var emptyTitle: String {
+    func periodLabel(for date: Date) -> String {
         switch self {
         case .monthly:
-            return "今月の記録はまだありません"
+            return date.formatted(.dateTime.year().month(.wide))
         case .yearly:
-            return "今年の記録はまだありません"
+            return date.formatted(.dateTime.year())
         }
     }
 
-    var emptyMessage: String {
+    func moved(_ date: Date, by value: Int) -> Date {
+        let component: Calendar.Component = self == .monthly ? .month : .year
+        return Calendar.current.date(byAdding: component, value: value, to: date) ?? date
+    }
+
+    func contains(_ date: Date, in periodStart: Date) -> Bool {
+        let granularity: Calendar.Component = self == .monthly ? .month : .year
+        return Calendar.current.isDate(date, equalTo: periodStart, toGranularity: granularity)
+    }
+
+    func emptyMessage(for periodLabel: String) -> String {
         switch self {
         case .monthly:
-            return "記録が入ると、今月の思い出カード候補がここに表示されます。"
+            return "\(periodLabel)に記録が入ると、思い出カード候補がここに表示されます。"
         case .yearly:
-            return "記録が入ると、年間まとめや今年のベスト候補がここに表示されます。"
+            return "\(periodLabel)に記録が入ると、年間まとめやベスト候補がここに表示されます。"
         }
     }
 }
 
 private struct StatsReportDraftView: View {
     let kind: StatsReportKind
-    let visits: [Visit]
+    let allVisits: [Visit]
     let categories: [RecordCategory]
+    @State private var selectedPeriodStart: Date
     @State private var showsAmount = false
     @State private var showsCopyConfirmation = false
     @State private var shareImage: UIImage?
     @State private var isShowingImageShare = false
     @State private var imageGenerationError = ""
+
+    init(kind: StatsReportKind, allVisits: [Visit], categories: [RecordCategory]) {
+        self.kind = kind
+        self.allVisits = allVisits
+        self.categories = categories
+        _selectedPeriodStart = State(initialValue: kind.periodStart(containing: Date()))
+    }
+
+    private var visits: [Visit] {
+        allVisits.filter { kind.contains($0.visitedAt, in: selectedPeriodStart) }
+    }
+
+    private var periodLabel: String {
+        kind.periodLabel(for: selectedPeriodStart)
+    }
+
+    private var canMoveForward: Bool {
+        selectedPeriodStart < kind.periodStart(containing: Date())
+    }
 
     private var sortedVisits: [Visit] {
         visits.sorted { $0.visitedAt > $1.visitedAt }
@@ -991,7 +1023,7 @@ private struct StatsReportDraftView: View {
 
     private var shareText: String {
         var lines = [
-            "\(kind.title) \(kind.subtitle)",
+            "\(kind.title) \(periodLabel)",
             "記録: \(visits.count)",
             "写真: \(photoCount)",
             "ジャンル: \(categoryStats.count)",
@@ -1016,8 +1048,8 @@ private struct StatsReportDraftView: View {
                 if visits.isEmpty {
                     PlaceholderRow(
                         icon: "sparkles",
-                        title: kind.emptyTitle,
-                        message: kind.emptyMessage
+                        title: "\(periodLabel)の記録はまだありません",
+                        message: kind.emptyMessage(for: periodLabel)
                     )
                     .padding(16)
                     .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1057,9 +1089,31 @@ private struct StatsReportDraftView: View {
 
     private var reportHero: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(kind.subtitle)
-                .font(FavorecoTypography.captionStrong)
-                .foregroundStyle(.secondary)
+            HStack {
+                Button {
+                    movePeriod(by: -1)
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(kind == .monthly ? "前の月" : "前の年")
+
+                Spacer()
+                Text(periodLabel)
+                    .font(FavorecoTypography.bodyStrong)
+                Spacer()
+
+                Button {
+                    movePeriod(by: 1)
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!canMoveForward)
+                .accessibilityLabel(kind == .monthly ? "次の月" : "次の年")
+            }
             Text(kind.title)
                 .font(FavorecoTypography.jpSerif(32, weight: .bold, relativeTo: .largeTitle))
             Text("端末内の記録から集計した思い出レポートです。カード画像として保存・共有できます。")
@@ -1082,7 +1136,7 @@ private struct StatsReportDraftView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(kind.title)
                             .font(FavorecoTypography.jpSerif(28, weight: .bold, relativeTo: .largeTitle))
-                        Text(kind.subtitle)
+                        Text(periodLabel)
                             .font(FavorecoTypography.captionStrong)
                             .foregroundStyle(.secondary)
                     }
@@ -1263,7 +1317,7 @@ private struct StatsReportDraftView: View {
         }
         let snapshot = StatsReportImageSnapshot(
             title: kind.title,
-            period: kind.subtitle,
+            period: periodLabel,
             recordCount: visits.count,
             photoCount: photoCount,
             categoryCount: categoryStats.count,
@@ -1282,6 +1336,14 @@ private struct StatsReportDraftView: View {
         }
         shareImage = image
         isShowingImageShare = true
+    }
+
+    private func movePeriod(by value: Int) {
+        withAnimation(.snappy) {
+            selectedPeriodStart = kind.moved(selectedPeriodStart, by: value)
+            showsAmount = false
+            shareImage = nil
+        }
     }
 
     private func mostFrequentValue(in values: [String]) -> String? {
