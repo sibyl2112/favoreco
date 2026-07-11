@@ -199,11 +199,14 @@ struct RecordInputAssistSettingsView: View {
                 }
 
                 Picker("写真圧縮", selection: $photoCompressionQuality) {
-                    Text("85%").tag(0.85)
-                    Text("65%").tag(0.65)
+                    Text("85%（画質優先）").tag(0.85)
+                    Text("65%（容量優先）").tag(0.65)
                 }
 
                 LabeledContent("メタデータ削除", value: "ON")
+                Text("追加時に長辺1600pxへ縮小し、選択した品質で保存します。位置情報や撮影日時などの元画像メタデータは引き継ぎません。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("入力補助") {

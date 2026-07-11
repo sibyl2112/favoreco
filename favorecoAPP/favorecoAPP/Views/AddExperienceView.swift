@@ -1480,6 +1480,7 @@ private struct PeopleLinkRow: View {
 }
 
 private struct PhotoUnitEditor: View {
+    @AppStorage(AppStorageKeys.photoCompressionQuality) private var compressionQuality = 0.85
     let existingPhotos: [PhotoBlob]
     @Binding var deletedPhotoIDs: Set<UUID>
     @Binding var pendingPhotos: [PendingPhoto]
@@ -1604,7 +1605,11 @@ private struct PhotoUnitEditor: View {
 
         for item in items.prefix(remainingPhotoSlots) {
             guard let data = try? await item.loadTransferable(type: Data.self),
-                  let pendingPhoto = PendingPhoto.make(from: data, filename: item.itemIdentifier ?? "photo.jpg") else {
+                  let pendingPhoto = PendingPhoto.make(
+                    from: data,
+                    filename: item.itemIdentifier ?? "photo.jpg",
+                    compressionQuality: compressionQuality
+                  ) else {
                 continue
             }
             pendingPhotos.append(pendingPhoto)
@@ -1682,7 +1687,7 @@ private struct PhotoThumbnail: View {
 }
 
 private extension PendingPhoto {
-    static func make(from data: Data, filename: String) -> PendingPhoto? {
+    static func make(from data: Data, filename: String, compressionQuality: Double) -> PendingPhoto? {
         guard let image = UIImage(data: data) else { return nil }
         let targetWidth: CGFloat = 1600
         let scale = min(1, targetWidth / max(image.size.width, 1))
@@ -1691,7 +1696,8 @@ private extension PendingPhoto {
         let redrawnImage = renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: targetSize))
         }
-        let compressedData = redrawnImage.jpegData(compressionQuality: 0.85) ?? data
+        let safeQuality = min(max(compressionQuality, 0.5), 0.95)
+        let compressedData = redrawnImage.jpegData(compressionQuality: safeQuality) ?? data
 
         return PendingPhoto(
             data: compressedData,
