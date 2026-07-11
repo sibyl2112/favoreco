@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-11: 状態未更新の期限超過チケットを要対応に保持
+
+### 変更概要
+- 未来日の次アクションがなくなった後も、状態に応じた未処理アクションを要対応として表示するようにした。
+- 申込前は申込締切超過、発売前は発売開始済み、当落待ちは当落確認、当選/入金待ちは入金期限超過、発券待ちは発券可能を表示する。
+- 期限超過/確認待ちはCalendar、予定詳細、チケット一覧で赤く表示する。
+
+### 変更意図
+期限を過ぎた直後に一覧から消えると、状態更新や入金・発券確認を忘れるため。状態が次へ進むまで要対応として残す。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift`
+- `favorecoAPP/favorecoAPP/Views/MainTabView.swift`
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 確認結果
+- 未来日、期限超過、日付未設定、終端状態の分岐をコード確認。
+- `swiftc -frontend -parse` で変更したSwiftファイルの構文チェック成功。
+- iOS向け署名なしビルドは、CoreSimulatorService停止によりAsset Catalog処理で失敗。環境復旧後に全体ビルドが必要。
+
+### 残課題
+- 実機で赤い要確認表示と、長押し状態更新後に要対応から外れることを確認する。
+
 ## 2026-07-11: チケット一覧からのクイック状態更新を追加
 
 ### 変更概要

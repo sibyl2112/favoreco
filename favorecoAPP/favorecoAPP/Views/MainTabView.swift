@@ -669,7 +669,7 @@ private struct PlanSummaryRow: View {
                         systemImage: nextTicketAction.systemImage
                     )
                     .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(nextTicketAction.isOverdue ? .red : .orange)
                     .lineLimit(1)
                 }
             }

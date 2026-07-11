@@ -223,7 +223,7 @@ struct PlanDetailView: View {
                     PlanStatusChip(
                         icon: nextPlanAction.systemImage,
                         text: "\(nextPlanAction.title) \(nextPlanAction.date.formatted(date: .numeric, time: .shortened))",
-                        tint: .orange
+                        tint: nextPlanAction.isOverdue ? .red : .orange
                     )
                 }
 
@@ -583,11 +583,15 @@ private struct TicketAttemptDetailCard: View {
             date: action.date,
             icon: action.systemImage,
             tint: tint(for: action),
-            priority: action.priority
+            priority: action.priority,
+            isOverdue: action.isOverdue
         )
     }
 
     private func tint(for action: TicketNextActionDefinition) -> Color {
+        if action.isOverdue {
+            return .red
+        }
         switch action.title {
         case "申込締切":
             return .red
@@ -609,6 +613,7 @@ private struct TicketAttemptNextAction {
     let icon: String
     let tint: Color
     let priority: Int
+    let isOverdue: Bool
 }
 
 private struct TicketNextActionCallout: View {
@@ -618,7 +623,7 @@ private struct TicketNextActionCallout: View {
         HStack(spacing: 8) {
             Image(systemName: action.icon)
                 .font(FavorecoTypography.captionStrong)
-            Text("次のアクション")
+            Text(action.isOverdue ? "要確認" : "次のアクション")
                 .font(FavorecoTypography.caption)
             Text(action.title)
                 .font(FavorecoTypography.captionStrong)

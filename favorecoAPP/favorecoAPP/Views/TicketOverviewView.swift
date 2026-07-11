@@ -270,7 +270,7 @@ private struct TicketOverviewRow: View {
                         systemImage: nextAction.systemImage
                     )
                     .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(nextAction.isOverdue ? .red : .orange)
                     .lineLimit(1)
                 }
             }

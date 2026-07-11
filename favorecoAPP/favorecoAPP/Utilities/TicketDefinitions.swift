@@ -178,6 +178,21 @@ struct TicketNextActionDefinition {
     let date: Date
     let systemImage: String
     let priority: Int
+    let isOverdue: Bool
+
+    init(
+        title: String,
+        date: Date,
+        systemImage: String,
+        priority: Int,
+        isOverdue: Bool = false
+    ) {
+        self.title = title
+        self.date = date
+        self.systemImage = systemImage
+        self.priority = priority
+        self.isOverdue = isOverdue
+    }
 
     static func nextAction(for attempt: TicketAttempt, now: Date = Date()) -> TicketNextActionDefinition? {
         guard !["lost", "attended", "skipped"].contains(attempt.statusKey) else {
@@ -192,7 +207,11 @@ struct TicketNextActionDefinition {
             TicketNextActionDefinition(title: "発券開始", date: attempt.issueStartAt, systemImage: "ticket.fill", priority: 3),
         ]
 
-        return candidates
+        if let overdueAction = overdueAction(for: attempt, now: now) {
+            return overdueAction
+        }
+
+        let futureAction = candidates
             .filter { $0.date != Date.distantPast && $0.date >= now }
             .sorted {
                 if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
@@ -201,6 +220,79 @@ struct TicketNextActionDefinition {
                 return $0.date < $1.date
             }
             .first
+
+        if let futureAction {
+            return futureAction
+        }
+        return nil
+    }
+
+    private static func overdueAction(for attempt: TicketAttempt, now: Date) -> TicketNextActionDefinition? {
+        let action: TicketNextActionDefinition?
+
+        switch attempt.statusKey {
+        case "beforeApply":
+            action = overdueCandidate(
+                title: "申込締切超過",
+                date: attempt.applyDeadlineAt,
+                systemImage: "exclamationmark.hourglass",
+                priority: 0,
+                now: now
+            )
+        case "onSaleSoon":
+            action = overdueCandidate(
+                title: "発売開始済み",
+                date: attempt.saleStartAt,
+                systemImage: "ticket",
+                priority: 4,
+                now: now
+            )
+        case "waitingResult":
+            action = overdueCandidate(
+                title: "当落を確認",
+                date: attempt.resultAnnounceAt,
+                systemImage: "exclamationmark.bubble",
+                priority: 2,
+                now: now
+            )
+        case "waitingPayment", "won":
+            action = overdueCandidate(
+                title: "入金期限超過",
+                date: attempt.paymentDeadlineAt,
+                systemImage: "exclamationmark.circle",
+                priority: 1,
+                now: now
+            )
+        case "waitingIssue":
+            action = overdueCandidate(
+                title: "発券可能",
+                date: attempt.issueStartAt,
+                systemImage: "ticket.fill",
+                priority: 3,
+                now: now
+            )
+        default:
+            action = nil
+        }
+
+        return action
+    }
+
+    private static func overdueCandidate(
+        title: String,
+        date: Date,
+        systemImage: String,
+        priority: Int,
+        now: Date
+    ) -> TicketNextActionDefinition? {
+        guard date != Date.distantPast, date < now else { return nil }
+        return TicketNextActionDefinition(
+            title: title,
+            date: date,
+            systemImage: systemImage,
+            priority: priority,
+            isOverdue: true
+        )
     }
 }
 
