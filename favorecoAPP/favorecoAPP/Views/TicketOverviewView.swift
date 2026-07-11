@@ -54,6 +54,7 @@ struct TicketOverviewView: View {
                 account?.accountName ?? "",
                 TicketStatusDefinition.name(for: attempt.statusKey),
                 TicketEntryRouteDefinition.name(for: attempt.entryRouteKey),
+                TicketInputIssueDefinition.issue(for: attempt)?.title ?? "",
                 attempt.memo,
             ].joined(separator: " ")
             return searchableText.localizedCaseInsensitiveContains(query)
@@ -243,6 +244,21 @@ struct TicketOverviewView: View {
     private func ticketAttemptOrder(_ lhs: TicketAttempt, _ rhs: TicketAttempt) -> Bool {
         let leftAction = TicketNextActionDefinition.nextAction(for: lhs)
         let rightAction = TicketNextActionDefinition.nextAction(for: rhs)
+        let leftIssue = TicketInputIssueDefinition.issue(for: lhs)
+        let rightIssue = TicketInputIssueDefinition.issue(for: rhs)
+
+        if leftAction == nil, rightAction == nil {
+            switch (leftIssue, rightIssue) {
+            case let (.some(left), .some(right)):
+                if left.priority != right.priority { return left.priority < right.priority }
+            case (.some(_), .none):
+                return true
+            case (.none, .some(_)):
+                return false
+            case (.none, .none):
+                break
+            }
+        }
 
         switch (leftAction, rightAction) {
         case let (.some(left), .some(right)):
@@ -319,6 +335,7 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
             return true
         case .needsAction:
             return TicketNextActionDefinition.nextAction(for: attempt) != nil
+                || TicketInputIssueDefinition.issue(for: attempt) != nil
         case .planning:
             return ["interested", "beforeApply", "onSaleSoon", "waitingResult"].contains(attempt.statusKey)
         case .acquired:
@@ -335,7 +352,10 @@ private struct TicketOverviewCounts: View {
     let attempts: [TicketAttempt]
 
     private var needsActionCount: Int {
-        attempts.filter { TicketNextActionDefinition.nextAction(for: $0) != nil }.count
+        attempts.filter {
+            TicketNextActionDefinition.nextAction(for: $0) != nil
+                || TicketInputIssueDefinition.issue(for: $0) != nil
+        }.count
     }
 
     private var acquiredCount: Int {
@@ -371,6 +391,9 @@ private struct TicketOverviewRow: View {
     private var plan: Plan? { attempt.plan }
     private var nextAction: TicketNextActionDefinition? {
         TicketNextActionDefinition.nextAction(for: attempt)
+    }
+    private var inputIssue: TicketInputIssueDefinition? {
+        TicketInputIssueDefinition.issue(for: attempt)
     }
     private var categoryColor: Color {
         Color(hex: plan?.category?.colorHex ?? "#147C88")
@@ -421,6 +444,13 @@ private struct TicketOverviewRow: View {
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(nextAction.isOverdue ? .red : .orange)
                     .lineLimit(1)
+                }
+
+                if let inputIssue {
+                    Label(inputIssue.title, systemImage: inputIssue.systemImage)
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
                 }
             }
         }

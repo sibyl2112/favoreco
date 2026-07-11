@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-11: チケット状態に応じた必要日付の入力漏れ検知を追加
+
+### 変更概要
+- 抽選応募予定/発売待ち/当落待ち/入金待ち/発券待ちで、状態に必要な日付が未設定の場合に入力確認を表示するようにした。
+- 入力漏れ申込をチケット一覧の「要対応」と件数へ含めた。
+- Calendar予定行、予定詳細の申込カード、チケット一覧で確認文を表示した。
+- 検索語にも入力確認文を含め、一覧では日付付きアクションがない場合に入力漏れを優先して並べる。
+
+### 変更意図
+実機テスト前にデータ不足を見つけやすくし、通知されない原因を実装不具合と取り違えないようにするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift`
+- `favorecoAPP/favorecoAPP/Views/MainTabView.swift`
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 確認結果
+- 状態別の必要日付、未設定日付、終端状態、要対応件数の分岐をコード確認。
+- `swiftc -frontend -parse` で変更したSwiftファイルの構文チェック成功。
+- iOS向け署名なしビルドは、CoreSimulatorService停止によりAsset Catalog処理で失敗。環境復旧後に全体ビルドが必要。
+
+### 残課題
+- 実機で入力確認表示、編集後の解消、通知予約への反映を確認する。
+
 ## 2026-07-11: 個別に非表示にした申込の復元を追加
 
 ### 変更概要

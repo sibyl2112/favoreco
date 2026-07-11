@@ -621,6 +621,13 @@ private struct PlanSummaryRow: View {
             .first
     }
 
+    private var ticketInputIssue: TicketInputIssueDefinition? {
+        activeAttempts
+            .compactMap { TicketInputIssueDefinition.issue(for: $0) }
+            .sorted { $0.priority < $1.priority }
+            .first
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: plan.category?.iconSymbol ?? "ticket")
@@ -663,7 +670,12 @@ private struct PlanSummaryRow: View {
                         .lineLimit(1)
                 }
 
-                if let nextTicketAction {
+                if let ticketInputIssue {
+                    Label(ticketInputIssue.title, systemImage: ticketInputIssue.systemImage)
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                } else if let nextTicketAction {
                     Label(
                         "\(nextTicketAction.title) \(nextTicketAction.date.formatted(date: .numeric, time: .shortened))",
                         systemImage: nextTicketAction.systemImage

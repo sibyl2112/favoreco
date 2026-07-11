@@ -296,6 +296,29 @@ struct TicketNextActionDefinition {
     }
 }
 
+struct TicketInputIssueDefinition {
+    let title: String
+    let systemImage: String
+    let priority: Int
+
+    static func issue(for attempt: TicketAttempt) -> TicketInputIssueDefinition? {
+        switch attempt.statusKey {
+        case "beforeApply" where attempt.applyDeadlineAt == Date.distantPast:
+            TicketInputIssueDefinition(title: "申込締切を設定", systemImage: "calendar.badge.exclamationmark", priority: 0)
+        case "onSaleSoon" where attempt.saleStartAt == Date.distantPast:
+            TicketInputIssueDefinition(title: "発売開始を設定", systemImage: "calendar.badge.exclamationmark", priority: 1)
+        case "waitingResult" where attempt.resultAnnounceAt == Date.distantPast:
+            TicketInputIssueDefinition(title: "当落発表日を設定", systemImage: "calendar.badge.exclamationmark", priority: 2)
+        case "waitingPayment" where attempt.paymentDeadlineAt == Date.distantPast:
+            TicketInputIssueDefinition(title: "入金締切を設定", systemImage: "calendar.badge.exclamationmark", priority: 3)
+        case "waitingIssue" where attempt.issueStartAt == Date.distantPast:
+            TicketInputIssueDefinition(title: "発券開始日を設定", systemImage: "calendar.badge.exclamationmark", priority: 4)
+        default:
+            nil
+        }
+    }
+}
+
 struct TicketStatusTransitionDefinition: Identifiable, Hashable {
     let targetStatusKey: String
     let title: String

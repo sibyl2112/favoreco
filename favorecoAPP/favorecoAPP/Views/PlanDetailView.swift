@@ -511,6 +511,16 @@ private struct TicketAttemptDetailCard: View {
                 TicketNextActionCallout(action: nextAction)
             }
 
+            if let inputIssue {
+                Label(inputIssue.title, systemImage: inputIssue.systemImage)
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
             if let accountName {
                 PlanInfoRow(icon: "person.crop.circle", title: "名義", value: accountName)
             }
@@ -586,6 +596,10 @@ private struct TicketAttemptDetailCard: View {
             priority: action.priority,
             isOverdue: action.isOverdue
         )
+    }
+
+    private var inputIssue: TicketInputIssueDefinition? {
+        TicketInputIssueDefinition.issue(for: attempt)
     }
 
     private func tint(for action: TicketNextActionDefinition) -> Color {
