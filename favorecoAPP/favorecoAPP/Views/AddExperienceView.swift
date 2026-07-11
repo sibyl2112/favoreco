@@ -76,7 +76,8 @@ struct AddExperienceView: View {
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
                 PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
-                    draft.apply(place: candidate)
+                    let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
+                    draft.apply(place: candidate, preservingVenueName: preservesVenueName)
                 }
             }
         }
@@ -377,7 +378,8 @@ struct EditExperienceView: View {
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
                 PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
-                    draft.apply(place: candidate)
+                    let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
+                    draft.apply(place: candidate, preservingVenueName: preservesVenueName)
                 }
             }
         }
@@ -683,7 +685,8 @@ struct AddVisitView: View {
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
                 PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
-                    draft.apply(place: candidate)
+                    let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
+                    draft.apply(place: candidate, preservingVenueName: preservesVenueName)
                 }
             }
         }
@@ -973,9 +976,17 @@ struct AddExperienceDraft {
         return address.isEmpty ? trimmedVenueName : address
     }
 
-    mutating func apply(place: PlaceSearchCandidate) {
-        venueName = place.name
-        venueAddress = place.address
+    var shouldPreserveVenueNameForAddressSearch: Bool {
+        !trimmedVenueName.isEmpty && !venueAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    mutating func apply(place: PlaceSearchCandidate, preservingVenueName: Bool) {
+        if !preservingVenueName {
+            venueName = place.name
+        }
+        if !place.address.isEmpty {
+            venueAddress = place.address
+        }
         latitude = place.latitude
         longitude = place.longitude
     }
@@ -1067,9 +1078,17 @@ private struct VisitDraft {
         return address.isEmpty ? trimmedVenueName : address
     }
 
-    mutating func apply(place: PlaceSearchCandidate) {
-        venueName = place.name
-        venueAddress = place.address
+    var shouldPreserveVenueNameForAddressSearch: Bool {
+        !trimmedVenueName.isEmpty && !venueAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    mutating func apply(place: PlaceSearchCandidate, preservingVenueName: Bool) {
+        if !preservingVenueName {
+            venueName = place.name
+        }
+        if !place.address.isEmpty {
+            venueAddress = place.address
+        }
         latitude = place.latitude
         longitude = place.longitude
     }
