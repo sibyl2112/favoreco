@@ -15,7 +15,7 @@ enum ThumbnailLoader {
     /// NSCache はスレッドセーフ（複数スレッドからの set/object/remove を内部で同期）。
     /// そのため本ローダは actor でなくても競合しない。static let の初期化も一度だけ（スレッド安全）。
     /// メモリ警告時は NSCache が自動で退避するが、明示的にも全消去する。
-    private static let cache: NSCache<NSString, UIImage> = {
+    nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
         cache.countLimit = 240
         NotificationCenter.default.addObserver(
@@ -29,18 +29,18 @@ enum ThumbnailLoader {
     }()
 
     /// キャッシュを全消去する（メモリ警告時などに呼ぶ）。
-    static func purge() {
+    nonisolated static func purge() {
         cache.removeAllObjects()
     }
 
     /// キャッシュ済みサムネイルを即時取得（どのスレッドからも安全）。
-    static func cached(forKey key: String) -> UIImage? {
+    nonisolated static func cached(forKey key: String) -> UIImage? {
         cache.object(forKey: key as NSString)
     }
 
     /// `maxPixelSize`（ピクセル）に収まるサムネイルを生成する。メインスレッド外での呼び出しを想定。
     /// `data` は値型（Sendable）で渡すこと（SwiftData モデルをスレッドを跨いで触らないため）。
-    static func makeThumbnail(from data: Data, maxPixelSize: CGFloat, cacheKey: String) -> UIImage? {
+    nonisolated static func makeThumbnail(from data: Data, maxPixelSize: CGFloat, cacheKey: String) -> UIImage? {
         if let cached = cache.object(forKey: cacheKey as NSString) {
             return cached
         }

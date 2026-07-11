@@ -5,6 +5,27 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-11: ThumbnailLoaderのSwift 6隔離警告を解消
+
+### 変更概要
+- スレッドセーフなNSCache共有値を `nonisolated(unsafe)` で明示した。
+- purge / cached / makeThumbnailを `nonisolated` にし、Task.detachedからMainActor越境なしで呼べるようにした。
+- SwiftDataモデルはメイン側でDataへ切り出してから渡す既存境界を維持した。
+
+### 変更意図
+バックグラウンドサムネイル生成がMainActor扱いになる警告を解消し、Swift 6言語モードでエラー化するのを防ぐため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/ThumbnailLoader.swift`
+- `docs/project-log.md`
+
+### 確認結果
+- `swiftc -frontend -parse` で変更したSwiftファイルの構文チェック成功。
+- iOS向け署名なし全体ビルドが警告ゼロで成功し、HomeView / VisitSummaryRowに出ていたMainActor隔離警告2件の解消を確認した。
+
+### 残課題
+- 実機で一覧/Homeのサムネイル表示、スクロール、メモリ警告後の再生成を確認する。
+
 ## 2026-07-11: 月刊・年間Favorecoの画像カード共有を実装
 
 ### 変更概要
