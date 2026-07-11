@@ -192,12 +192,11 @@ struct EditTicketAttemptView: View {
 
     private func archiveAttempt() {
         guard let editingAttempt else { return }
-        editingAttempt.isArchived = true
-        editingAttempt.updatedAt = Date()
-        plan.updatedAt = Date()
         do {
-            try modelContext.save()
-            TicketNotificationScheduler.cancel(plan: plan, attempt: editingAttempt)
+            try TicketAttemptStatusUpdater.archive(
+                attempt: editingAttempt,
+                in: modelContext
+            )
             dismiss()
         } catch {
             assertionFailure("Failed to archive ticket attempt: \(error)")

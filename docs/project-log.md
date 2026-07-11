@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-11: チケット一覧に申込編集・非表示スワイプを追加
+
+### 変更概要
+- チケット一覧の左スワイプから申込編集を直接開けるようにした。
+- 右スワイプから確認後、対象申込だけをアーカイブできるようにした。予定本体と他の申込は残す。
+- アーカイブ処理を共通サービスへ移し、申込編集画面と一覧で同じ保存・通知取消処理を使うようにした。
+- 一覧で保存失敗した場合は既存のエラーアラートへ表示する。
+
+### 変更意図
+複数先行・複数名義を管理する際、予定詳細へ移動せず個別申込を編集・整理できるようにするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Services/TicketAttemptStatusUpdater.swift`
+- `favorecoAPP/favorecoAPP/Views/EditTicketAttemptView.swift`
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 確認結果
+- 対象申込のみのアーカイブ、予定/他申込の保持、通知取消、編集シート導線をコード確認。
+- `swiftc -frontend -parse` で変更したSwiftファイルの構文チェック成功。
+- iOS向け署名なしビルドは、CoreSimulatorService停止によりAsset Catalog処理で失敗。環境復旧後に全体ビルドが必要。
+
+### 残課題
+- 実機で左右スワイプ、確認ダイアログ、編集保存、非表示後の件数更新を確認する。
+
 ## 2026-07-11: チケット一覧に横断検索・直接追加を追加
 
 ### 変更概要

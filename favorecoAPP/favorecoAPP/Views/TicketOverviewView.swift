@@ -15,6 +15,8 @@ struct TicketOverviewView: View {
     @State private var statusUpdateError = ""
     @State private var searchText = ""
     @State private var isShowingAddTicketPlan = false
+    @State private var editingAttempt: TicketAttempt?
+    @State private var attemptPendingArchive: TicketAttempt?
 
     private var activeAttempts: [TicketAttempt] {
         attempts.filter { !$0.isArchived && $0.plan?.isArchived != true }
@@ -85,6 +87,21 @@ struct TicketOverviewView: View {
                             .contextMenu {
                                 statusTransitionMenu(for: attempt)
                             }
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                Button {
+                                    editingAttempt = attempt
+                                } label: {
+                                    Label("編集", systemImage: "pencil")
+                                }
+                                .tint(.accentColor)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    attemptPendingArchive = attempt
+                                } label: {
+                                    Label("非表示", systemImage: "archivebox")
+                                }
+                            }
                         } else {
                             TicketOverviewRow(attempt: attempt)
                         }
@@ -107,6 +124,28 @@ struct TicketOverviewView: View {
         }
         .sheet(isPresented: $isShowingAddTicketPlan) {
             AddTicketPlanView()
+        }
+        .sheet(item: $editingAttempt) { attempt in
+            if let plan = attempt.plan {
+                EditTicketAttemptView(plan: plan, attempt: attempt)
+            }
+        }
+        .confirmationDialog(
+            "この申込を非表示にしますか？",
+            isPresented: Binding(
+                get: { attemptPendingArchive != nil },
+                set: { if !$0 { attemptPendingArchive = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("申込を非表示", role: .destructive) {
+                archivePendingAttempt()
+            }
+            Button("キャンセル", role: .cancel) {
+                attemptPendingArchive = nil
+            }
+        } message: {
+            Text("予定本体と他の申込は残り、この申込の予約済み通知だけを解除します。")
         }
         .alert("状態を更新できませんでした", isPresented: Binding(
             get: { !statusUpdateError.isEmpty },
@@ -142,6 +181,20 @@ struct TicketOverviewView: View {
                 in: modelContext
             )
         } catch {
+            statusUpdateError = error.localizedDescription
+        }
+    }
+
+    private func archivePendingAttempt() {
+        guard let attempt = attemptPendingArchive else { return }
+        do {
+            try TicketAttemptStatusUpdater.archive(
+                attempt: attempt,
+                in: modelContext
+            )
+            attemptPendingArchive = nil
+        } catch {
+            attemptPendingArchive = nil
             statusUpdateError = error.localizedDescription
         }
     }

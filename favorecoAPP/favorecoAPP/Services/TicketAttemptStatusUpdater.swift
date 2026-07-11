@@ -37,4 +37,19 @@ enum TicketAttemptStatusUpdater {
             }
         }
     }
+
+    static func archive(
+        attempt: TicketAttempt,
+        in modelContext: ModelContext
+    ) throws {
+        guard !attempt.isArchived, let plan = attempt.plan else { return }
+
+        let now = Date()
+        attempt.isArchived = true
+        attempt.updatedAt = now
+        plan.updatedAt = now
+
+        try modelContext.save()
+        TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+    }
 }
