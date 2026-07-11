@@ -17,6 +17,8 @@ struct AddExperienceView: View {
     let onSave: (() -> Void)?
 
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
+    @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
+    @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
@@ -26,6 +28,7 @@ struct AddExperienceView: View {
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var coverPhotoPath = ""
     @State private var pendingPeople: [PendingPersonLink] = []
+    @State private var isShowingPlaceSearch = false
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: category)
@@ -69,6 +72,11 @@ struct AddExperienceView: View {
                         save()
                     }
                     .disabled(!draft.canSave)
+                }
+            }
+            .sheet(isPresented: $isShowingPlaceSearch) {
+                PlaceSearchView(initialQuery: draft.venueName) { candidate in
+                    draft.apply(place: candidate)
                 }
             }
         }
@@ -175,7 +183,12 @@ struct AddExperienceView: View {
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
             DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
-            TextField(template.venuePlaceholder, text: $draft.venueName)
+            TextField(template.venuePlaceholder, text: venueNameBinding)
+            placeSearchAssist(
+                isEnabled: usesMapSearchAssist,
+                address: draft.venueAddress,
+                action: { isShowingPlaceSearch = true }
+            )
             ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
         }
     }
@@ -184,6 +197,15 @@ struct AddExperienceView: View {
         TextField("公式URL（任意）", text: $draft.officialURL)
             .textInputAutocapitalization(.never)
             .keyboardType(.URL)
+    }
+
+    private var venueNameBinding: Binding<String> {
+        Binding {
+            draft.venueName
+        } set: { value in
+            draft.venueName = value
+            draft.clearPlaceSelection()
+        }
     }
 
     private var memoEditor: some View {
@@ -219,10 +241,13 @@ struct AddExperienceView: View {
             eyecatchPath: coverPhotoPath,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
+            latitude: draft.latitude,
+            longitude: draft.longitude,
             unitFieldsRaw: draft.makeUnitFields(for: category).encodedRawValue,
             createdAt: now,
             updatedAt: now,
-            event: event
+            event: event,
+            placeMaster: resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
         )
 
         modelContext.insert(event)
@@ -278,6 +303,8 @@ struct EditExperienceView: View {
 
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
+    @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
+    @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
@@ -289,6 +316,7 @@ struct EditExperienceView: View {
     @State private var deletedPhotoIDs: Set<UUID> = []
     @State private var pendingPeople: [PendingPersonLink] = []
     @State private var deletedPersonLinkIDs: Set<UUID> = []
+    @State private var isShowingPlaceSearch = false
 
     private var event: ExperienceEvent? {
         visit.event
@@ -336,6 +364,11 @@ struct EditExperienceView: View {
                         save()
                     }
                     .disabled(!draft.canSave)
+                }
+            }
+            .sheet(isPresented: $isShowingPlaceSearch) {
+                PlaceSearchView(initialQuery: draft.venueName) { candidate in
+                    draft.apply(place: candidate)
                 }
             }
         }
@@ -442,7 +475,12 @@ struct EditExperienceView: View {
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
             DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
-            TextField(template.venuePlaceholder, text: $draft.venueName)
+            TextField(template.venuePlaceholder, text: venueNameBinding)
+            placeSearchAssist(
+                isEnabled: usesMapSearchAssist,
+                address: draft.venueAddress,
+                action: { isShowingPlaceSearch = true }
+            )
             ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
         }
     }
@@ -451,6 +489,15 @@ struct EditExperienceView: View {
         TextField("公式URL（任意）", text: $draft.officialURL)
             .textInputAutocapitalization(.never)
             .keyboardType(.URL)
+    }
+
+    private var venueNameBinding: Binding<String> {
+        Binding {
+            draft.venueName
+        } set: { value in
+            draft.venueName = value
+            draft.clearPlaceSelection()
+        }
     }
 
     private var memoEditor: some View {
@@ -479,6 +526,9 @@ struct EditExperienceView: View {
         visit.visitedAt = draft.visitedAt
         visit.endedAt = draft.visitedAt
         visit.venueNameSnapshot = draft.trimmedVenueName
+        visit.latitude = draft.latitude
+        visit.longitude = draft.longitude
+        visit.placeMaster = resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
         visit.overallRating = draft.overallRating
         visit.outcomeKey = draft.outcomeKey
         visit.seatText = draft.trimmedSeatText
@@ -567,6 +617,8 @@ struct AddVisitView: View {
     let event: ExperienceEvent
 
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
+    @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
+    @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft = VisitDraft()
@@ -576,6 +628,7 @@ struct AddVisitView: View {
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var coverPhotoPath = ""
     @State private var pendingPeople: [PendingPersonLink] = []
+    @State private var isShowingPlaceSearch = false
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: event.category)
@@ -608,6 +661,11 @@ struct AddVisitView: View {
                     Button("保存") {
                         save()
                     }
+                }
+            }
+            .sheet(isPresented: $isShowingPlaceSearch) {
+                PlaceSearchView(initialQuery: draft.venueName) { candidate in
+                    draft.apply(place: candidate)
                 }
             }
         }
@@ -716,7 +774,12 @@ struct AddVisitView: View {
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
             DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
-            TextField(template.venuePlaceholder, text: $draft.venueName)
+            TextField(template.venuePlaceholder, text: venueNameBinding)
+            placeSearchAssist(
+                isEnabled: usesMapSearchAssist,
+                address: draft.venueAddress,
+                action: { isShowingPlaceSearch = true }
+            )
             ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
         }
     }
@@ -734,6 +797,15 @@ struct AddVisitView: View {
         }
     }
 
+    private var venueNameBinding: Binding<String> {
+        Binding {
+            draft.venueName
+        } set: { value in
+            draft.venueName = value
+            draft.clearPlaceSelection()
+        }
+    }
+
     private func save() {
         let now = Date()
         let visit = Visit(
@@ -746,10 +818,13 @@ struct AddVisitView: View {
             eyecatchPath: coverPhotoPath,
             note: draft.trimmedNote,
             amount: parsedCurrencyAmount(from: draft.amountText),
+            latitude: draft.latitude,
+            longitude: draft.longitude,
             unitFieldsRaw: draft.makeUnitFields(for: event.category).encodedRawValue,
             createdAt: now,
             updatedAt: now,
-            event: event
+            event: event,
+            placeMaster: resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
         )
 
         event.updatedAt = now
@@ -804,6 +879,9 @@ struct AddExperienceDraft {
     var officialURL: String = ""
     var visitedAt: Date = Date()
     var venueName: String = ""
+    var venueAddress: String = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
     var overallRating: Double = 0
     var outcomeKey: String = ""
     var seatText: String = ""
@@ -822,6 +900,9 @@ struct AddExperienceDraft {
         officialURL = visit.event?.officialURL ?? ""
         visitedAt = visit.visitedAt
         venueName = visit.venueNameSnapshot
+        venueAddress = visit.placeMaster?.address ?? ""
+        latitude = visit.latitude
+        longitude = visit.longitude
         overallRating = visit.overallRating
         outcomeKey = visit.outcomeKey
         seatText = visit.seatText
@@ -854,6 +935,23 @@ struct AddExperienceDraft {
 
     var trimmedVenueName: String {
         venueName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    fileprivate var placeSnapshot: PlaceSnapshot {
+        PlaceSnapshot(name: trimmedVenueName, address: venueAddress, latitude: latitude, longitude: longitude)
+    }
+
+    mutating func apply(place: PlaceSearchCandidate) {
+        venueName = place.name
+        venueAddress = place.address
+        latitude = place.latitude
+        longitude = place.longitude
+    }
+
+    mutating func clearPlaceSelection() {
+        venueAddress = ""
+        latitude = 0
+        longitude = 0
     }
 
     var trimmedNote: String {
@@ -906,6 +1004,9 @@ struct AddExperienceDraft {
 private struct VisitDraft {
     var visitedAt: Date = Date()
     var venueName: String = ""
+    var venueAddress: String = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
     var overallRating: Double = 0
     var outcomeKey: String = ""
     var seatText: String = ""
@@ -918,6 +1019,23 @@ private struct VisitDraft {
 
     var trimmedVenueName: String {
         venueName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var placeSnapshot: PlaceSnapshot {
+        PlaceSnapshot(name: trimmedVenueName, address: venueAddress, latitude: latitude, longitude: longitude)
+    }
+
+    mutating func apply(place: PlaceSearchCandidate) {
+        venueName = place.name
+        venueAddress = place.address
+        latitude = place.latitude
+        longitude = place.longitude
+    }
+
+    mutating func clearPlaceSelection() {
+        venueAddress = ""
+        latitude = 0
+        longitude = 0
     }
 
     var trimmedNote: String {
@@ -960,6 +1078,170 @@ private struct VisitDraft {
             return "未評価"
         }
         return String(format: "%.1f", overallRating)
+    }
+}
+
+private struct PlaceSnapshot {
+    let name: String
+    let address: String
+    let latitude: Double
+    let longitude: Double
+}
+
+@MainActor
+private func resolvePlaceMaster(
+    for snapshot: PlaceSnapshot,
+    from placeMasters: [PlaceMaster],
+    in modelContext: ModelContext
+) -> PlaceMaster? {
+    let name = snapshot.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty else { return nil }
+
+    let address = snapshot.address.trimmingCharacters(in: .whitespacesAndNewlines)
+    let normalizedName = normalizedPlaceText(name)
+    let normalizedAddress = normalizedPlaceText(address)
+    let matchedPlace = placeMasters.first { place in
+        let sameName = place.normalizedName == normalizedName || normalizedPlaceText(place.name) == normalizedName
+        let sameAddress = !normalizedAddress.isEmpty && (
+            place.normalizedAddress == normalizedAddress || normalizedPlaceText(place.address) == normalizedAddress
+        )
+        let sameCoordinate = snapshot.latitude != 0 && snapshot.longitude != 0
+            && abs(place.latitude - snapshot.latitude) < 0.00001
+            && abs(place.longitude - snapshot.longitude) < 0.00001
+        return sameCoordinate || (sameName && (normalizedAddress.isEmpty || sameAddress))
+    }
+
+    let now = Date()
+    if let matchedPlace {
+        if !address.isEmpty { matchedPlace.address = address }
+        if snapshot.latitude != 0 || snapshot.longitude != 0 {
+            matchedPlace.latitude = snapshot.latitude
+            matchedPlace.longitude = snapshot.longitude
+        }
+        matchedPlace.normalizedName = normalizedName
+        matchedPlace.normalizedAddress = normalizedAddress
+        matchedPlace.updatedAt = now
+        return matchedPlace
+    }
+
+    let place = PlaceMaster(
+        name: name,
+        address: address,
+        latitude: snapshot.latitude,
+        longitude: snapshot.longitude,
+        normalizedName: normalizedName,
+        normalizedAddress: normalizedAddress,
+        createdAt: now,
+        updatedAt: now
+    )
+    modelContext.insert(place)
+    return place
+}
+
+private func normalizedPlaceText(_ value: String) -> String {
+    value
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+        .replacingOccurrences(of: " ", with: "")
+        .replacingOccurrences(of: "　", with: "")
+}
+
+@ViewBuilder
+private func placeSearchAssist(isEnabled: Bool, address: String, action: @escaping () -> Void) -> some View {
+    if isEnabled {
+        Button(action: action) {
+            Label("Apple Mapsから会場を選択", systemImage: "map")
+        }
+        if !address.isEmpty {
+            Text(address)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct PlaceSearchView: View {
+    let initialQuery: String
+    let onSelect: (PlaceSearchCandidate) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var query: String
+    @State private var results: [PlaceSearchCandidate] = []
+    @State private var isSearching = false
+    @State private var errorMessage = ""
+
+    init(initialQuery: String, onSelect: @escaping (PlaceSearchCandidate) -> Void) {
+        self.initialQuery = initialQuery
+        self.onSelect = onSelect
+        _query = State(initialValue: initialQuery)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isSearching {
+                    ProgressView("検索中")
+                } else if !errorMessage.isEmpty {
+                    ContentUnavailableView(
+                        "検索できませんでした",
+                        systemImage: "wifi.exclamationmark",
+                        description: Text(errorMessage)
+                    )
+                } else if results.isEmpty {
+                    ContentUnavailableView(
+                        "会場を検索",
+                        systemImage: "map",
+                        description: Text("会場名や住所を入力してください")
+                    )
+                } else {
+                    List(results) { candidate in
+                        Button {
+                            onSelect(candidate)
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(candidate.name)
+                                    .font(FavorecoTypography.bodyStrong)
+                                    .foregroundStyle(.primary)
+                                if !candidate.address.isEmpty {
+                                    Text(candidate.address)
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("会場を選択")
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $query, prompt: "会場名・住所")
+            .onSubmit(of: .search) {
+                Task { await search() }
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+            .task {
+                guard !initialQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                await search()
+            }
+        }
+    }
+
+    @MainActor
+    private func search() async {
+        isSearching = true
+        errorMessage = ""
+        defer { isSearching = false }
+        do {
+            results = try await PlaceSearchService.search(query: query)
+        } catch {
+            results = []
+            errorMessage = "通信状態を確認して、もう一度お試しください。"
+        }
     }
 }
 
