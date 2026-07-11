@@ -5,6 +5,34 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-11: JSONインポートのファイル検証・内容プレビューを実装
+
+### 変更概要
+- データ管理のJSONインポート入口をプレースホルダーから実画面へ置き換えた。
+- FilesからJSONを選択し、Favoreco用ファイルか、schemaVersionが対応範囲かを検証するようにした。
+- 書き出し日時、総モデル数、ジャンル/対象/記録/人物/場所/予定/チケット等の件数を復元前に表示する。
+- 壊れたJSON、別アプリ用JSON、新しい未対応schemaは具体的なエラーで拒否する。
+- 写真メタデータ件数と、写真/動画本体がJSONに含まれず復元できない制約を明示した。
+
+### 変更意図
+復元処理へ渡す前にファイルの正当性と内容をユーザーが確認できる安全な入口を作り、既存データを壊すリスクを下げるため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Services/JSONBackupImportService.swift`（新規）
+- `favorecoAPP/favorecoAPP/Views/JSONImportView.swift`（新規）
+- `favorecoAPP/favorecoAPP/Views/SettingsView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 確認結果
+- 正常schema、壊れたJSON、別appName、schema 0、未来schema、写真0件/複数件の分岐をコード確認。
+- `swiftc -frontend -parse` で変更したSwiftファイルの構文チェック成功。
+- iOS向け署名なしビルドは、CoreSimulatorService停止によりAsset Catalog処理で失敗。環境復旧後に全体ビルドが必要。
+
+### 残課題
+- UUID基準の追加/更新、関係再構築、結果サマリーを次段階で接続する。
+- 実機でFiles選択、セキュリティスコープ、件数表示を確認する。
+
 ## 2026-07-11: 予定・チケット保存前の日付順検証を追加
 
 ### 変更概要

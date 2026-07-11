@@ -726,7 +726,7 @@ struct DataManagementView: View {
                 }
 
                 NavigationLink {
-                    SettingsDocumentView(title: "JSONインポート", bodyText: "バックアップから復元する入口として準備予定です。既存データを壊さない取り込み方式にします。")
+                    JSONImportView()
                 } label: {
                     Label("JSONインポート", systemImage: "square.and.arrow.down")
                 }

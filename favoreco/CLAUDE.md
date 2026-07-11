@@ -55,6 +55,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `SupportLinksView`: リンク・サポート。公式サイト、利用規約、プライバシーポリシー、お問い合わせ、レビュー、シェア、公式SNSの入口を持つ。規約/プライバシー/問い合わせの正本はRANOVIQO公式ドメイン配下に置き、アプリ内はWeb/外部リンク入口とする。
 - `SettingsDocumentView`: 利用規約、プライバシーポリシー、お問い合わせ、インポート/エクスポート説明などの暫定本文表示に使う共通プレースホルダー。
 - `JSONExportView`: 手動バックアップJSONを書き出す画面。RecordCategory / ExperienceEvent / Visit / InboxItem / PhotoBlobメタデータ / SocialAccount / PersonMaster / EventPersonLink / PlaceMaster / Plan / TicketAccount / TicketAttempt をID付きDTOとして出力する。写真/動画バイナリ、Keychainパスワード本体、同期状態、通知予約、外部カレンダー側イベントは含めない。
+- `JSONImportView`: JSONファイルを選択し、Favorecoバックアップか、対応schemaかを検証して、書き出し日時とモデル別件数を復元前にプレビューする。検証中は端末内データを変更しない。写真メタデータ件数と、写真/動画バイナリ本体は復元できない制約を明示する。UUID基準の追加/更新と関係再構築は次段階で接続する。
 - `CSVExportView`: Visit一覧をCSVとして書き出す画面。列は visit_id / event_id / date / category / title / series / venue / rating / status / seat / amount / official_url / tags / companions / note / created_at / updated_at。写真データは含めず、表計算で見返せる無料の手動エクスポートとして扱う。
 - `ProfileSettingsView`: プロフィール設定。SNSアカウントを複数登録・編集でき、登録済みアカウントはタップで外部URLを開く。マイ領域には将来、FC・プレイガイド・劇場会員・カード枠・外部カレンダー連携をまとめる「登録情報・連携」ハブを置く。
 - `EditSocialAccountView`: SNS追加/編集フォーム。SNS種別、メモ/名前、IDまたはURL、ジャンル紐付け、用途メモを保存する。
