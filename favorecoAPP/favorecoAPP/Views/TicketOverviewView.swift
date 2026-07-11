@@ -9,8 +9,10 @@ import SwiftUI
 import SwiftData
 
 struct TicketOverviewView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var attempts: [TicketAttempt]
     @State private var selectedFilter: TicketOverviewFilter = .needsAction
+    @State private var statusUpdateError = ""
 
     private var activeAttempts: [TicketAttempt] {
         attempts.filter { !$0.isArchived && $0.plan?.isArchived != true }
@@ -50,6 +52,9 @@ struct TicketOverviewView: View {
                             } label: {
                                 TicketOverviewRow(attempt: attempt)
                             }
+                            .contextMenu {
+                                statusTransitionMenu(for: attempt)
+                            }
                         } else {
                             TicketOverviewRow(attempt: attempt)
                         }
@@ -59,6 +64,42 @@ struct TicketOverviewView: View {
         }
         .navigationTitle("チケット")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("状態を更新できませんでした", isPresented: Binding(
+            get: { !statusUpdateError.isEmpty },
+            set: { if !$0 { statusUpdateError = "" } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(statusUpdateError)
+        }
+    }
+
+    @ViewBuilder
+    private func statusTransitionMenu(for attempt: TicketAttempt) -> some View {
+        let transitions = TicketStatusTransitionDefinition.transitions(for: attempt)
+        if transitions.isEmpty {
+            Text("変更できる状態はありません")
+        } else {
+            ForEach(transitions) { transition in
+                Button {
+                    updateStatus(attempt, to: transition.targetStatusKey)
+                } label: {
+                    Label(transition.title, systemImage: transition.systemImage)
+                }
+            }
+        }
+    }
+
+    private func updateStatus(_ attempt: TicketAttempt, to statusKey: String) {
+        do {
+            try TicketAttemptStatusUpdater.update(
+                attempt: attempt,
+                to: statusKey,
+                in: modelContext
+            )
+        } catch {
+            statusUpdateError = error.localizedDescription
+        }
     }
 
     private func ticketAttemptOrder(_ lhs: TicketAttempt, _ rhs: TicketAttempt) -> Bool {

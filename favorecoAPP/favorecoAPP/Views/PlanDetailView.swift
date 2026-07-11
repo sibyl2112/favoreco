@@ -453,23 +453,12 @@ struct PlanDetailView: View {
     }
 
     private func updateAttemptStatus(_ attempt: TicketAttempt, to statusKey: String) {
-        let now = Date()
-        attempt.statusKey = statusKey
-        attempt.updatedAt = now
-        plan.stateKey = statusKey
-        plan.updatedAt = now
-
-        if statusKey == "lost" || statusKey == "skipped" || statusKey == "attended" {
-            TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
-        }
-
         do {
-            try modelContext.save()
-            if statusKey != "lost" && statusKey != "skipped" && statusKey != "attended" {
-                Task {
-                    await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
-                }
-            }
+            try TicketAttemptStatusUpdater.update(
+                attempt: attempt,
+                to: statusKey,
+                in: modelContext
+            )
         } catch {
             assertionFailure("Failed to update ticket status: \(error)")
         }

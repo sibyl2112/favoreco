@@ -5,6 +5,32 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-11: チケット一覧からのクイック状態更新を追加
+
+### 変更概要
+- チケット一覧の行を長押しし、現在状態に応じた次の状態へ直接更新できるようにした。
+- 状態更新処理を `TicketAttemptStatusUpdater` へ集約し、予定詳細とチケット一覧で共用した。
+- 落選・見送り・参加済みでは通知を取消し、それ以外では保存後に通知を再予約する既存挙動を維持した。
+- 一覧側で保存失敗時のアラートを追加した。
+
+### 変更意図
+チケット一覧を確認だけでなく日常の状態管理にも使えるようにし、複数画面で通知処理が食い違うことを防ぐため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Services/TicketAttemptStatusUpdater.swift`（新規）
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 確認結果
+- 共通処理の状態更新、保存、通知取消/再予約条件をコード確認。
+- `swiftc -frontend -parse` で変更したSwiftファイルの構文チェック成功。
+- iOS向け署名なしビルドは、CoreSimulatorService停止によりAsset Catalog処理で失敗。環境復旧後に全体ビルドが必要。
+
+### 残課題
+- 実機で長押しメニュー、一覧フィルターからの即時移動、通知予約の変化を確認する。
+
 ## 2026-07-11: チケット横断一覧・要対応フィルターを追加
 
 ### 変更概要
