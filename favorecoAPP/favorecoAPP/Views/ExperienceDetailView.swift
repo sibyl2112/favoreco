@@ -129,6 +129,9 @@ struct ExperienceDetailView: View {
         } message: {
             Text(deletionErrorMessage ?? "")
         }
+        .task(id: weatherTaskID) {
+            await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext)
+        }
     }
 
     private func deleteThisVisit() {
@@ -276,6 +279,20 @@ struct ExperienceDetailView: View {
             sectionTitle(template.visitSectionTitle)
             DetailInfoRow(icon: "calendar", title: template.dateLabel, value: visit.visitedAt.formatted(date: .long, time: .omitted))
 
+            if !unitFields.weatherSymbolName.isEmpty {
+                DetailInfoRow(
+                    icon: unitFields.weatherSymbolName,
+                    title: "天気",
+                    value: weatherTemperatureText
+                )
+                if let weatherAttributionURL {
+                    Link(destination: weatherAttributionURL) {
+                        Label("Apple Weather", systemImage: "apple.logo")
+                            .font(FavorecoTypography.caption)
+                    }
+                }
+            }
+
             if !visit.venueNameSnapshot.isEmpty {
                 DetailInfoRow(icon: "mappin.and.ellipse", title: "場所", value: visit.venueNameSnapshot)
             }
@@ -383,6 +400,22 @@ struct ExperienceDetailView: View {
 
     private var unitFields: VisitUnitFields {
         VisitUnitFields(rawValue: visit.unitFieldsRaw)
+    }
+
+    private var weatherTaskID: String {
+        "\(visit.visitedAt.timeIntervalSinceReferenceDate)-\(visit.latitude)-\(visit.longitude)-\(unitFields.weatherSymbolName)"
+    }
+
+    private var weatherTemperatureText: String {
+        guard let high = unitFields.weatherHighCelsius,
+              let low = unitFields.weatherLowCelsius else {
+            return "記録済み"
+        }
+        return "最高 \(Int(high.rounded()))° / 最低 \(Int(low.rounded()))°"
+    }
+
+    private var weatherAttributionURL: URL? {
+        URL(string: unitFields.weatherAttributionURL)
     }
 
     private var ticketStatusText: String {

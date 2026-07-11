@@ -287,6 +287,7 @@ struct AddExperienceView: View {
 
         do {
             try modelContext.save()
+            Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
             lastUsedCategoryTemplateKey = category.templateKey
             if afterSaveRecordAction == "openDetail" {
                 savedVisit = visit
@@ -566,6 +567,10 @@ struct EditExperienceView: View {
 
     private func save() {
         let now = Date()
+        let preservesWeather = visit.visitedAt == draft.visitedAt
+            && visit.latitude == draft.latitude
+            && visit.longitude == draft.longitude
+        let existingUnitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
 
         if let event {
             event.title = draft.trimmedTitle
@@ -586,7 +591,11 @@ struct EditExperienceView: View {
         visit.eyecatchPath = coverPhotoPath
         visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
-        visit.unitFieldsRaw = draft.makeUnitFields(for: event?.category).encodedRawValue
+        var updatedUnitFields = draft.makeUnitFields(for: event?.category)
+        if preservesWeather {
+            updatedUnitFields.copyWeather(from: existingUnitFields)
+        }
+        visit.unitFieldsRaw = updatedUnitFields.encodedRawValue
         visit.updatedAt = now
         deleteMarkedPersonLinks()
         insertPendingPeople(for: event, visit: nil)
@@ -595,6 +604,7 @@ struct EditExperienceView: View {
 
         do {
             try modelContext.save()
+            Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
             dismiss()
         } catch {
             assertionFailure("Failed to update experience: \(error)")
@@ -911,6 +921,7 @@ struct AddVisitView: View {
 
         do {
             try modelContext.save()
+            Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
             lastUsedCategoryTemplateKey = event.category?.templateKey ?? lastUsedCategoryTemplateKey
             if afterSaveRecordAction == "openDetail" {
                 savedVisit = visit

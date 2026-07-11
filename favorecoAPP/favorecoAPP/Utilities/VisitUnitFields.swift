@@ -11,18 +11,58 @@ struct VisitUnitFields: Codable {
     var ocrText: String = ""
     var eyecatchAspectRatioKey: String = ""
     var goshuinBookSizeKey: String = ""
+    var weatherSymbolName: String = ""
+    var weatherHighCelsius: Double?
+    var weatherLowCelsius: Double?
+    var weatherFetchedAt: Date?
+    var weatherAttributionURL: String = ""
     var advancedEntries: [AdvancedFieldEntry] = []
 
     init(
         ocrText: String = "",
         eyecatchAspectRatioKey: String = "",
         goshuinBookSizeKey: String = "",
+        weatherSymbolName: String = "",
+        weatherHighCelsius: Double? = nil,
+        weatherLowCelsius: Double? = nil,
+        weatherFetchedAt: Date? = nil,
+        weatherAttributionURL: String = "",
         advancedEntries: [AdvancedFieldEntry] = []
     ) {
         self.ocrText = ocrText
         self.eyecatchAspectRatioKey = eyecatchAspectRatioKey
         self.goshuinBookSizeKey = goshuinBookSizeKey
+        self.weatherSymbolName = weatherSymbolName
+        self.weatherHighCelsius = weatherHighCelsius
+        self.weatherLowCelsius = weatherLowCelsius
+        self.weatherFetchedAt = weatherFetchedAt
+        self.weatherAttributionURL = weatherAttributionURL
         self.advancedEntries = advancedEntries
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case ocrText
+        case eyecatchAspectRatioKey
+        case goshuinBookSizeKey
+        case weatherSymbolName
+        case weatherHighCelsius
+        case weatherLowCelsius
+        case weatherFetchedAt
+        case weatherAttributionURL
+        case advancedEntries
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ocrText = try container.decodeIfPresent(String.self, forKey: .ocrText) ?? ""
+        eyecatchAspectRatioKey = try container.decodeIfPresent(String.self, forKey: .eyecatchAspectRatioKey) ?? ""
+        goshuinBookSizeKey = try container.decodeIfPresent(String.self, forKey: .goshuinBookSizeKey) ?? ""
+        weatherSymbolName = try container.decodeIfPresent(String.self, forKey: .weatherSymbolName) ?? ""
+        weatherHighCelsius = try container.decodeIfPresent(Double.self, forKey: .weatherHighCelsius)
+        weatherLowCelsius = try container.decodeIfPresent(Double.self, forKey: .weatherLowCelsius)
+        weatherFetchedAt = try container.decodeIfPresent(Date.self, forKey: .weatherFetchedAt)
+        weatherAttributionURL = try container.decodeIfPresent(String.self, forKey: .weatherAttributionURL) ?? ""
+        advancedEntries = try container.decodeIfPresent([AdvancedFieldEntry].self, forKey: .advancedEntries) ?? []
     }
 
     init(rawValue: String) {
@@ -35,12 +75,28 @@ struct VisitUnitFields: Codable {
     }
 
     var encodedRawValue: String {
-        guard !ocrText.isEmpty || !eyecatchAspectRatioKey.isEmpty || !goshuinBookSizeKey.isEmpty || !advancedEntries.isEmpty,
+        guard !ocrText.isEmpty
+                || !eyecatchAspectRatioKey.isEmpty
+                || !goshuinBookSizeKey.isEmpty
+                || !weatherSymbolName.isEmpty
+                || weatherHighCelsius != nil
+                || weatherLowCelsius != nil
+                || weatherFetchedAt != nil
+                || !weatherAttributionURL.isEmpty
+                || !advancedEntries.isEmpty,
               let data = try? JSONEncoder().encode(self),
               let string = String(data: data, encoding: .utf8) else {
             return ""
         }
         return string
+    }
+
+    mutating func copyWeather(from other: VisitUnitFields) {
+        weatherSymbolName = other.weatherSymbolName
+        weatherHighCelsius = other.weatherHighCelsius
+        weatherLowCelsius = other.weatherLowCelsius
+        weatherFetchedAt = other.weatherFetchedAt
+        weatherAttributionURL = other.weatherAttributionURL
     }
 }
 

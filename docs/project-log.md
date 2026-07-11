@@ -4460,3 +4460,32 @@ favorecoの初期値として決めた「保存後は編集画面ではなく情
 ### 残課題
 - 実機で初回カメラ権限、撮影、キャンセル、ライブラリ複数選択を確認する
 - カメラ/ライブラリ両方から追加した写真が設定品質とカバー比率で表示されることを確認する
+
+## 2026-07-12: WeatherKit履歴天気の自動付与を接続
+
+### 変更概要
+- 観劇、美術展、ライブ、おでかけ施設の過去記録へWeatherKitの日別履歴天気を自動取得
+- 天気SF Symbols名、最高/最低気温、取得日時、Apple Weather法的情報URLをVisit補助フィールドへキャッシュ
+- 保存時と詳細表示時に未取得データを補完し、一覧の日付アイコンと詳細の天気欄へ反映
+- 日付/座標を変更した編集では古い天気を破棄し、変更がない編集では保持
+- アプリターゲットへWeatherKit entitlementを追加
+
+### 変更意図
+出かけた日の記憶を、利用者の手入力を増やさず天気と一緒に残すため。WeatherKitや通信の失敗は補助情報の欠落に留め、記録そのものの保存を止めないため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/VisitWeatherService.swift（対象判定、WeatherKit境界、自動補完）
+- favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift（天気キャッシュと旧JSON互換）
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（保存/編集/回追加からの補完）
+- favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift（天気、気温、帰属リンク表示）
+- favorecoAPP/favorecoAPP/Views/VisitSummaryRow.swift（日付横の天気アイコン）
+- favorecoAPP/favorecoAPP/favorecoAPP.entitlements / project.pbxproj（WeatherKit capability）
+- favoreco/CLAUDE.md（現在仕様）
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルの構文解析が成功
+- xcodebuildによるiPhoneOS向け署名なしビルドが成功
+
+### 残課題
+- Apple DeveloperのApp IDでWeatherKit capabilityを有効化し、実機で2021年8月以降の対象/対象外ジャンル、設定OFF、座標なし、日付/場所変更を確認する
+- Apple Weather帰属表示の最終デザインは配布前にWeatherKit利用要件と照合する
