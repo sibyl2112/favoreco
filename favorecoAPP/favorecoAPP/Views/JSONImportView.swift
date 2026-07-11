@@ -6,13 +6,18 @@
 //
 
 import SwiftUI
+import SwiftData
 import UniformTypeIdentifiers
 
 struct JSONImportView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var isImporterPresented = false
     @State private var preview: JSONBackupPreview?
+    @State private var selectedData: Data?
+    @State private var restoreResult: JSONBackupRestoreResult?
     @State private var selectedFileName = ""
     @State private var errorMessage = ""
+    @State private var isConfirmingRestore = false
 
     var body: some View {
         Form {
@@ -78,10 +83,28 @@ struct JSONImportView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("次の段階") {
-                    Text("形式確認済みのデータを既存データへUUID基準で追加・更新し、人物・場所・予定・チケットなどの関係を再構築する復元処理を次に接続します。")
+                Section("復元") {
+                    Button {
+                        isConfirmingRestore = true
+                    } label: {
+                        Label("既存データへ追加・更新", systemImage: "arrow.trianglehead.merge")
+                    }
+                    .disabled(selectedData == nil)
+
+                    Text("同じUUIDのデータは更新し、存在しないデータは追加します。現在のデータを一括削除することはありません。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                if let restoreResult {
+                    Section("復元結果") {
+                        Label("復元が完了しました", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        LabeledContent("追加", value: "\(restoreResult.insertedCount)件")
+                        LabeledContent("更新", value: "\(restoreResult.updatedCount)件")
+                        LabeledContent("写真本体なしでスキップ", value: "\(restoreResult.skippedPhotoCount)件")
+                        LabeledContent("端末固有参照を解除", value: "\(restoreResult.clearedDeviceReferenceCount)件")
+                    }
                 }
             }
         }
@@ -93,6 +116,18 @@ struct JSONImportView: View {
             allowsMultipleSelection: false
         ) { result in
             handleImportResult(result)
+        }
+        .confirmationDialog(
+            "バックアップを追加・更新しますか？",
+            isPresented: $isConfirmingRestore,
+            titleVisibility: .visible
+        ) {
+            Button("復元を実行") {
+                restoreSelectedBackup()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("同じUUIDのデータはバックアップ内容で更新されます。写真本体、通知予約、Keychain、外部カレンダーIDは復元されません。")
         }
     }
 
@@ -112,12 +147,31 @@ struct JSONImportView: View {
 
             let data = try Data(contentsOf: url)
             preview = try JSONBackupImportService.inspect(data: data)
+            selectedData = data
+            restoreResult = nil
             selectedFileName = url.lastPathComponent
             errorMessage = ""
         } catch {
             preview = nil
+            selectedData = nil
+            restoreResult = nil
             selectedFileName = ""
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func restoreSelectedBackup() {
+        guard let selectedData else { return }
+        do {
+            restoreResult = try JSONBackupImportService.restore(
+                data: selectedData,
+                in: modelContext
+            )
+            errorMessage = ""
+        } catch {
+            modelContext.rollback()
+            restoreResult = nil
+            errorMessage = "復元に失敗しました: \(error.localizedDescription)"
         }
     }
 }

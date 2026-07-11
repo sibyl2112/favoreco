@@ -55,7 +55,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `SupportLinksView`: リンク・サポート。公式サイト、利用規約、プライバシーポリシー、お問い合わせ、レビュー、シェア、公式SNSの入口を持つ。規約/プライバシー/問い合わせの正本はRANOVIQO公式ドメイン配下に置き、アプリ内はWeb/外部リンク入口とする。
 - `SettingsDocumentView`: 利用規約、プライバシーポリシー、お問い合わせ、インポート/エクスポート説明などの暫定本文表示に使う共通プレースホルダー。
 - `JSONExportView`: 手動バックアップJSONを書き出す画面。RecordCategory / ExperienceEvent / Visit / InboxItem / PhotoBlobメタデータ / SocialAccount / PersonMaster / EventPersonLink / PlaceMaster / Plan / TicketAccount / TicketAttempt をID付きDTOとして出力する。写真/動画バイナリ、Keychainパスワード本体、同期状態、通知予約、外部カレンダー側イベントは含めない。
-- `JSONImportView`: JSONファイルを選択し、Favorecoバックアップか、対応schemaかを検証して、書き出し日時とモデル別件数を復元前にプレビューする。検証中は端末内データを変更しない。写真メタデータ件数と、写真/動画バイナリ本体は復元できない制約を明示する。UUID基準の追加/更新と関係再構築は次段階で接続する。
+- `JSONImportView`: JSONファイルを選択し、Favorecoバックアップか、対応schemaかを検証して、書き出し日時とモデル別件数を復元前にプレビューする。確認後はUUID基準で既存モデルを更新し、存在しないモデルを追加して、カテゴリ/対象/記録/人物/場所/予定/チケット等の関係を再構築する。既存データの一括削除は行わない。写真/動画バイナリは空のPhotoBlobを作らずスキップし、Keychain参照、外部カレンダーID、通知予約IDは端末固有情報としてクリアする。復元結果に追加/更新/写真スキップ/端末固有参照解除の件数を表示する。
 - `CSVExportView`: Visit一覧をCSVとして書き出す画面。列は visit_id / event_id / date / category / title / series / venue / rating / status / seat / amount / official_url / tags / companions / note / created_at / updated_at。写真データは含めず、表計算で見返せる無料の手動エクスポートとして扱う。
 - `ProfileSettingsView`: プロフィール設定。SNSアカウントを複数登録・編集でき、登録済みアカウントはタップで外部URLを開く。マイ領域には将来、FC・プレイガイド・劇場会員・カード枠・外部カレンダー連携をまとめる「登録情報・連携」ハブを置く。
 - `EditSocialAccountView`: SNS追加/編集フォーム。SNS種別、メモ/名前、IDまたはURL、ジャンル紐付け、用途メモを保存する。
@@ -131,7 +131,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - リンク・サポートはRANOVIQO公式ドメインを正本置き場にする。利用規約/プライバシーポリシー/問い合わせページは、favorecoだけでなく今後のアプリ・デザイン・写真活動をRANOVIQO屋号に集約できる構成にする。問い合わせは公式Xを主導線にしてよいが、App Store審査、削除依頼、プライバシー問い合わせ、法務連絡のために、メールまたはフォームの恒久窓口もRANOVIQOドメイン側に置く。公式SNSはXを置き、InstagramはFacebookログイン制約があるため現時点では置かない。
 - 規約/プライバシーポリシー草案では、写真メタデータ削除、位置情報、同期/iCloud、手動バックアップ、Apple Music連携、MapKit、WeatherKit、参照DB、課金/サブスク/DBパック、問い合わせ/削除依頼の扱いを明記する。
 - Homeのセクション順は固定で、並び替えは実装しない。表示ON/OFFは `AppStorageKeys.showsHome...` で管理する。初期ONはアテンション、体験ギャラリー、あとで記録、最近の記録、ジャンル一覧。初期OFFは統計サマリ、お気に入り/ベスト。
-- 現在の実装優先順位は、チケットワークフローv1の仕上げと実機確認項目の整理を先に行い、その次の大型タスクをJSONインポート/復元とする。初回オンボーディングの追加改善は後回しとする。
+- 現在の実装優先順位は、チケットワークフローv1の実機確認を後でまとめて行える状態に保ちつつ、チケット以外の未実装を順次進める。JSONインポート/復元はUUIDマージ復元まで実装済み。初回オンボーディングの追加改善は後回しとする。
 - 月刊/年間Favorecoは、ローカル集計、下書き画面、カード候補、共有テキスト、クリップボードコピーまで実装済み。未実装範囲は画像書き出し、自動生成/通知、期間切替、グラフ、予定/申込統計、Premium向け同期込み自動レポート。
 - JSON手動バックアップは写真/動画のメタデータを出力するが、`PhotoBlob.data` のバイナリ本体は含めない。JSON復元を実装しても、それだけでは写真付き完全復元にならないため、画面と復元結果で制約を明示する。
 - Home横断ミニ統計は常設表示とし、設定ON/OFF対象にはしない。「今後の予定」は未アーカイブの未来日Planと未来日Visitの合計、「今年の記録」は今年のVisit数、「総記録数」は全Visit数。
@@ -145,7 +145,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - 自作ジャンルの記録フォーム文言は `CategoryRecordTemplate` が `targetNameLabel`、`recordUnitName`、`dateLabel` から生成する。標準ジャンルは従来どおり `templateKey` 別の固定文言を優先する。
 - ジャンルの有効ユニットは `RecordCategory.enabledUnitsRaw` を正本とし、`RecordUnitDefinition` で表示名/説明に変換する。採用ユニットIDは `basic`（基本情報）、`people`（人物・団体）、`ticketPlan`（チケット・予定）、`photos`（写真）、`goshuinBook`（御朱印帳）、`importOCR`（OCR・取込）、`money`（金額）、`officialInfo`（公式情報）、`memo`（メモ）、`advanced`（詳細オプション）。`basic` と `memo` は必須で、詳細画面/自作ジャンル作成画面では外せない。旧 `U1` / `U3` などは読み取り時だけ互換変換する。実入力接続済みは `basic`、`people`、`ticketPlan`、`photos`、`goshuinBook`、`importOCR`、`money`、`officialInfo`、`memo`、`advanced`。
 - デバッグ用の仮データ投入/削除は `DebugDataSeeder` に閉じ込める。挿入時は既存仮データを削除してから、全ジャンルを有効化し、各ジャンル1件以上の `ExperienceEvent` / `Visit` / `PhotoBlob` を通常のSwiftData経路で保存する。写真はジャンル色のPNGを生成して `PhotoBlob.data` に入れる。削除時は `https://example.com/favoreco/` と `debug/sample-` に紐付く仮データだけを削除する。
-- 同期・バックアップ、課金・プラン、JSONインポート、CSVインポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。通知設定はタイプ別ON/OFF、iOS通知許可、予定・チケット追加時の実予約まで接続済み。JSONエクスポートとCSVエクスポートは手動書き出しまで接続済み。
+- 同期・バックアップ、課金・プラン、CSVインポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。通知設定はタイプ別ON/OFF、iOS通知許可、予定・チケット追加時の実予約まで接続済み。JSONエクスポートとCSVエクスポートは手動書き出しまで接続済みで、JSONインポートは形式確認、内容プレビュー、UUIDマージ復元、関係再構築まで接続済み。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る
 - **Mystorium再発防止の性能・構造ルールを最初から守る**（詳細: `docs/14-実装アーキテクチャ・性能ルール.md`）。最重要4原則は **①入力中にDBを書かない ②一覧で原寸画像を使わない ③bodyで全件処理しない ④巨大Viewを作らない**。全登録/編集画面はDraftState→Save→Model、Home/GenreTop/Calendar/Statsは軽量Snapshot/DTO経由、画像はthumbnail/detail/originalの3段階、I/O/画像処理/import/export/migrationはMainActor禁止＋background＋batch save。
 - **ライフサイクル状態・予定・申込・記録を混ぜない**。クイック登録は `InboxItem`、対象は `Event`、予定/公演回は `Plan`、申込1件は `TicketAttempt`、実体験は `Visit`、記録下書きは `MemoryDraft`/`VisitDraft` として責務分離する。既存の `Visit.outcomeKey` / `seatText` は暫定互換として残すが、複数先行・落選履歴・名義別当選率・通知更新の正本は `TicketAttempt` に移す。
