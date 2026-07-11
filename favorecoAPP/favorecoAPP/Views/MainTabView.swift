@@ -945,6 +945,9 @@ private struct StatsReportDraftView: View {
     let categories: [RecordCategory]
     @State private var showsAmount = false
     @State private var showsCopyConfirmation = false
+    @State private var shareImage: UIImage?
+    @State private var isShowingImageShare = false
+    @State private var imageGenerationError = ""
 
     private var sortedVisits: [Visit] {
         visits.sorted { $0.visitedAt > $1.visitedAt }
@@ -1037,6 +1040,19 @@ private struct StatsReportDraftView: View {
         } message: {
             Text("画像化の前段として、レポートの要約をテキストで共有できます。")
         }
+        .alert("画像を作成できませんでした", isPresented: Binding(
+            get: { !imageGenerationError.isEmpty },
+            set: { if !$0 { imageGenerationError = "" } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(imageGenerationError)
+        }
+        .sheet(isPresented: $isShowingImageShare) {
+            if let shareImage {
+                StatsReportActivityView(activityItems: [shareImage])
+            }
+        }
     }
 
     private var reportHero: some View {
@@ -1046,7 +1062,7 @@ private struct StatsReportDraftView: View {
                 .foregroundStyle(.secondary)
             Text(kind.title)
                 .font(FavorecoTypography.jpSerif(32, weight: .bold, relativeTo: .largeTitle))
-            Text("今はローカル集計の下書きです。将来は写真、天気、場所、人物、去年同月比較を組み合わせて、自動で思い出カード化します。")
+            Text("端末内の記録から集計した思い出レポートです。カード画像として保存・共有できます。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1196,16 +1212,25 @@ private struct StatsReportDraftView: View {
                 .font(FavorecoTypography.sectionTitle)
 
             VStack(spacing: 10) {
+                Button {
+                    generateAndShareImage()
+                } label: {
+                    Label("カード画像を共有", systemImage: "photo.on.rectangle.angled")
+                        .font(FavorecoTypography.bodyStrong)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
                 ShareLink(
                     item: shareText,
                     subject: Text(kind.title),
                     message: Text("Favorecoの思い出レポート")
                 ) {
-                    Label("共有する", systemImage: "square.and.arrow.up")
+                    Label("テキストで共有", systemImage: "square.and.arrow.up")
                         .font(FavorecoTypography.bodyStrong)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
 
                 Button {
                     UIPasteboard.general.string = shareText
@@ -1219,12 +1244,44 @@ private struct StatsReportDraftView: View {
             }
 
             StatsWideCard(
-                title: "次に実装すること",
-                value: "画像化・共有",
-                caption: "この下書きを、月刊/年間のカード画像として保存・共有できる形へ育てます。",
-                icon: "square.and.arrow.up"
+                title: "カード画像",
+                value: "手動生成",
+                caption: "共有シートから画像保存やSNSへの共有ができます。金額はカード画像に含めません。",
+                icon: "photo.on.rectangle"
             )
         }
+    }
+
+    @MainActor
+    private func generateAndShareImage() {
+        let rows = categoryStats.prefix(4).map {
+            StatsReportImageCategory(
+                name: $0.category.name,
+                count: $0.count,
+                colorHex: $0.category.colorHex
+            )
+        }
+        let snapshot = StatsReportImageSnapshot(
+            title: kind.title,
+            period: kind.subtitle,
+            recordCount: visits.count,
+            photoCount: photoCount,
+            categoryCount: categoryStats.count,
+            averageRating: averageRating == 0 ? "-" : String(format: "%.1f", averageRating),
+            topCategory: topCategoryName,
+            topVenue: topVenueName,
+            highlight: sortedVisits.first?.event?.title ?? "記録を重ねた時間",
+            categories: rows
+        )
+        let renderer = ImageRenderer(content: StatsReportShareCard(snapshot: snapshot))
+        renderer.proposedSize = ProposedViewSize(width: 360, height: 450)
+        renderer.scale = 3
+        guard let image = renderer.uiImage else {
+            imageGenerationError = "画面を閉じてから、もう一度お試しください。"
+            return
+        }
+        shareImage = image
+        isShowingImageShare = true
     }
 
     private func mostFrequentValue(in values: [String]) -> String? {
@@ -1248,6 +1305,132 @@ private struct StatsReportDraftView: View {
         formatter.maximumFractionDigits = 0
         return formatter.string(from: number) ?? "¥\(number.stringValue)"
     }
+}
+
+private struct StatsReportImageSnapshot {
+    let title: String
+    let period: String
+    let recordCount: Int
+    let photoCount: Int
+    let categoryCount: Int
+    let averageRating: String
+    let topCategory: String
+    let topVenue: String
+    let highlight: String
+    let categories: [StatsReportImageCategory]
+}
+
+private struct StatsReportImageCategory: Identifiable {
+    let name: String
+    let count: Int
+    let colorHex: String
+
+    var id: String { "\(name)-\(colorHex)" }
+}
+
+private struct StatsReportShareCard: View {
+    let snapshot: StatsReportImageSnapshot
+
+    private var accent: Color {
+        Color(hex: snapshot.categories.first?.colorHex ?? "#147C88")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(snapshot.period)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(snapshot.title)
+                    .font(FavorecoTypography.jpSerif(30, weight: .bold, relativeTo: .largeTitle))
+                Rectangle()
+                    .fill(accent)
+                    .frame(width: 56, height: 4)
+            }
+            .padding(.bottom, 20)
+
+            HStack(spacing: 8) {
+                imageMetric("記録", "\(snapshot.recordCount)")
+                imageMetric("写真", "\(snapshot.photoCount)")
+                imageMetric("ジャンル", "\(snapshot.categoryCount)")
+                imageMetric("平均評価", snapshot.averageRating)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("HIGHLIGHT")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(accent)
+                Text(snapshot.highlight)
+                    .font(FavorecoTypography.jpSerif(24, weight: .bold, relativeTo: .title2))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                Label(snapshot.topCategory, systemImage: "square.grid.2x2")
+                Label(snapshot.topVenue, systemImage: "mappin.and.ellipse")
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 20)
+
+            VStack(spacing: 9) {
+                ForEach(snapshot.categories) { category in
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color(hex: category.colorHex))
+                            .frame(width: 9, height: 9)
+                        Text(category.name)
+                            .font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                        Text("\(category.count)")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                    }
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            HStack {
+                Text("Favoreco")
+                    .font(.system(size: 14, weight: .bold, design: .serif))
+                Spacer()
+                Text("MY EXPERIENCE ARCHIVE")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 12)
+            .overlay(alignment: .top) {
+                Divider()
+            }
+        }
+        .padding(24)
+        .frame(width: 360, height: 450)
+        .background(Color(red: 0.97, green: 0.97, blue: 0.95))
+        .foregroundStyle(Color(red: 0.08, green: 0.09, blue: 0.10))
+    }
+
+    private func imageMetric(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(size: 21, weight: .bold, design: .serif))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(title)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(9)
+        .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private struct StatsReportActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 private struct StatsReportMiniMetric: View {
