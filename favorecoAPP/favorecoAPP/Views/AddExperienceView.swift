@@ -19,6 +19,7 @@ struct AddExperienceView: View {
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
+    @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
@@ -185,6 +186,10 @@ struct AddExperienceView: View {
                 .foregroundStyle(.secondary)
             DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
             TextField(template.venuePlaceholder, text: venueNameBinding)
+            placeSuggestionList(
+                suggestions: usesInputSuggestionDictionary ? placeSuggestions(for: draft.venueName, from: placeMasters) : [],
+                onSelect: { draft.apply(placeMaster: $0) }
+            )
             placeSearchAssist(
                 isEnabled: usesMapSearchAssist,
                 address: venueAddressBinding,
@@ -315,6 +320,7 @@ struct EditExperienceView: View {
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
+    @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
@@ -487,6 +493,10 @@ struct EditExperienceView: View {
                 .foregroundStyle(.secondary)
             DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
             TextField(template.venuePlaceholder, text: venueNameBinding)
+            placeSuggestionList(
+                suggestions: usesInputSuggestionDictionary ? placeSuggestions(for: draft.venueName, from: placeMasters) : [],
+                onSelect: { draft.apply(placeMaster: $0) }
+            )
             placeSearchAssist(
                 isEnabled: usesMapSearchAssist,
                 address: venueAddressBinding,
@@ -639,6 +649,7 @@ struct AddVisitView: View {
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
+    @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft = VisitDraft()
@@ -796,6 +807,10 @@ struct AddVisitView: View {
                 .foregroundStyle(.secondary)
             DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
             TextField(template.venuePlaceholder, text: venueNameBinding)
+            placeSuggestionList(
+                suggestions: usesInputSuggestionDictionary ? placeSuggestions(for: draft.venueName, from: placeMasters) : [],
+                onSelect: { draft.apply(placeMaster: $0) }
+            )
             placeSearchAssist(
                 isEnabled: usesMapSearchAssist,
                 address: venueAddressBinding,
@@ -991,6 +1006,13 @@ struct AddExperienceDraft {
         longitude = place.longitude
     }
 
+    mutating func apply(placeMaster: PlaceMaster) {
+        venueName = placeMaster.name
+        venueAddress = placeMaster.address
+        latitude = placeMaster.latitude
+        longitude = placeMaster.longitude
+    }
+
     mutating func clearPlaceSelection() {
         venueAddress = ""
         latitude = 0
@@ -1091,6 +1113,13 @@ private struct VisitDraft {
         }
         latitude = place.latitude
         longitude = place.longitude
+    }
+
+    mutating func apply(placeMaster: PlaceMaster) {
+        venueName = placeMaster.name
+        venueAddress = placeMaster.address
+        latitude = placeMaster.latitude
+        longitude = placeMaster.longitude
     }
 
     mutating func clearPlaceSelection() {
@@ -1210,6 +1239,58 @@ private func normalizedPlaceText(_ value: String) -> String {
         .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
         .replacingOccurrences(of: " ", with: "")
         .replacingOccurrences(of: "　", with: "")
+}
+
+private func placeSuggestions(for query: String, from placeMasters: [PlaceMaster]) -> [PlaceMaster] {
+    let normalizedQuery = normalizedPlaceText(query)
+    guard !normalizedQuery.isEmpty else { return [] }
+    return placeMasters
+        .filter { !$0.isArchived }
+        .filter { place in
+            normalizedPlaceText(place.name).contains(normalizedQuery)
+                || place.normalizedName.contains(normalizedQuery)
+                || normalizedPlaceText(place.reading).contains(normalizedQuery)
+                || normalizedPlaceText(place.aliasesRaw).contains(normalizedQuery)
+        }
+        .prefix(4)
+        .map { $0 }
+}
+
+@ViewBuilder
+private func placeSuggestionList(
+    suggestions: [PlaceMaster],
+    onSelect: @escaping (PlaceMaster) -> Void
+) -> some View {
+    if !suggestions.isEmpty {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("登録済みの場所")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+            ForEach(suggestions) { place in
+                Button {
+                    onSelect(place)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(place.name)
+                                .foregroundStyle(.primary)
+                            if !place.address.isEmpty {
+                                Text(place.address)
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.up.left")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
 }
 
 @ViewBuilder
@@ -1694,6 +1775,8 @@ private struct PeopleUnitEditor: View {
     @Binding var pendingLinks: [PendingPersonLink]
     let personMasters: [PersonMaster]
 
+    @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
+
     @State private var name = ""
     @State private var selectedRole = PersonRoleOption.defaultOption
 
@@ -1702,7 +1785,7 @@ private struct PeopleUnitEditor: View {
     }
 
     private var suggestions: [PersonMaster] {
-        guard !trimmedName.isEmpty else { return [] }
+        guard usesInputSuggestionDictionary, !trimmedName.isEmpty else { return [] }
         let normalizedInput = normalizedPersonName(trimmedName)
         return personMasters
             .filter { !$0.isArchived }
