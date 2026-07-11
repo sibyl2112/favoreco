@@ -22,6 +22,14 @@ struct TicketOverviewView: View {
         attempts.filter { !$0.isArchived && $0.plan?.isArchived != true }
     }
 
+    private var individuallyArchivedAttempts: [TicketAttempt] {
+        attempts.filter { $0.isArchived && $0.plan?.isArchived == false }
+    }
+
+    private var scopedAttempts: [TicketAttempt] {
+        selectedFilter == .archived ? individuallyArchivedAttempts : activeAttempts
+    }
+
     private var filteredAttempts: [TicketAttempt] {
         searchedAttempts
             .filter(selectedFilter.includes)
@@ -30,9 +38,9 @@ struct TicketOverviewView: View {
 
     private var searchedAttempts: [TicketAttempt] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return activeAttempts }
+        guard !query.isEmpty else { return scopedAttempts }
 
-        return activeAttempts.filter { attempt in
+        return scopedAttempts.filter { attempt in
             let plan = attempt.plan
             let account = attempt.account
             let searchableText = [
@@ -62,7 +70,12 @@ struct TicketOverviewView: View {
                 }
                 .pickerStyle(.menu)
 
-                TicketOverviewCounts(attempts: searchedAttempts)
+                if selectedFilter == .archived {
+                    LabeledContent("非表示の申込", value: "\(searchedAttempts.count)件")
+                        .font(FavorecoTypography.bodyStrong)
+                } else {
+                    TicketOverviewCounts(attempts: searchedAttempts)
+                }
             }
 
             Section(selectedFilter.title) {
@@ -78,7 +91,24 @@ struct TicketOverviewView: View {
                     }
                 } else {
                     ForEach(filteredAttempts) { attempt in
-                        if let plan = attempt.plan {
+                        if attempt.isArchived {
+                            TicketOverviewRow(attempt: attempt)
+                            .contextMenu {
+                                Button {
+                                    restore(attempt)
+                                } label: {
+                                    Label("申込を再表示", systemImage: "arrow.uturn.left.circle")
+                                }
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button {
+                                    restore(attempt)
+                                } label: {
+                                    Label("再表示", systemImage: "arrow.uturn.left.circle")
+                                }
+                                .tint(.green)
+                            }
+                        } else if let plan = attempt.plan {
                             NavigationLink {
                                 PlanDetailView(plan: plan)
                             } label: {
@@ -199,6 +229,17 @@ struct TicketOverviewView: View {
         }
     }
 
+    private func restore(_ attempt: TicketAttempt) {
+        do {
+            try TicketAttemptStatusUpdater.restore(
+                attempt: attempt,
+                in: modelContext
+            )
+        } catch {
+            statusUpdateError = error.localizedDescription
+        }
+    }
+
     private func ticketAttemptOrder(_ lhs: TicketAttempt, _ rhs: TicketAttempt) -> Bool {
         let leftAction = TicketNextActionDefinition.nextAction(for: lhs)
         let rightAction = TicketNextActionDefinition.nextAction(for: rhs)
@@ -224,6 +265,7 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
     case planning
     case acquired
     case completed
+    case archived
 
     var id: String { rawValue }
 
@@ -234,6 +276,7 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         case .planning: "検討・申込"
         case .acquired: "取得済み"
         case .completed: "終了"
+        case .archived: "非表示"
         }
     }
 
@@ -244,6 +287,7 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         case .planning: "hourglass"
         case .acquired: "ticket.fill"
         case .completed: "checkmark.circle"
+        case .archived: "archivebox"
         }
     }
 
@@ -254,13 +298,19 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         case .planning: "検討・申込中のチケットはありません"
         case .acquired: "取得済みのチケットはありません"
         case .completed: "終了したチケットはありません"
+        case .archived: "非表示のチケットはありません"
         }
     }
 
     var emptyMessage: String {
-        self == .needsAction
-            ? "申込締切、当落発表、入金締切、発券開始が近づくとここに表示されます。"
-            : "中央の＋から予定・チケットを追加できます。"
+        switch self {
+        case .needsAction:
+            "申込締切、当落発表、入金締切、発券開始が近づくとここに表示されます。"
+        case .archived:
+            "個別に非表示にした申込を、ここから再表示できます。"
+        default:
+            "中央の＋から予定・チケットを追加できます。"
+        }
     }
 
     func includes(_ attempt: TicketAttempt) -> Bool {
@@ -275,6 +325,8 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
             return ["won", "waitingPayment", "waitingIssue", "issued"].contains(attempt.statusKey)
         case .completed:
             return ["lost", "attended", "skipped"].contains(attempt.statusKey)
+        case .archived:
+            return attempt.isArchived
         }
     }
 }
