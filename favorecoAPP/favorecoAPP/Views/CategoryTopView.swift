@@ -13,6 +13,7 @@ struct CategoryTopView: View {
 
     @Query(sort: \RecordCategory.sortOrder) private var allCategories: [RecordCategory]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var allVisits: [Visit]
+    @AppStorage(AppStorageKeys.homeSelectedCategoryTemplateKey) private var homeSelectedCategoryTemplateKey = ""
     @State private var isShowingAddExperience = false
     @State private var isShowingAddVisit = false
     @State private var selectedEventForNewVisit: ExperienceEvent?
@@ -65,6 +66,9 @@ struct CategoryTopView: View {
             if let selectedEventForNewVisit {
                 AddVisitView(event: selectedEventForNewVisit)
             }
+        }
+        .onAppear {
+            homeSelectedCategoryTemplateKey = category.templateKey
         }
     }
 

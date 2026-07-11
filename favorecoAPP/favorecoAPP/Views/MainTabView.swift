@@ -11,6 +11,9 @@ import UIKit
 
 struct MainTabView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @AppStorage(AppStorageKeys.defaultGenreMode) private var defaultGenreMode = "lastUsed"
+    @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
+    @AppStorage(AppStorageKeys.homeSelectedCategoryTemplateKey) private var homeSelectedCategoryTemplateKey = ""
     @State private var selectedTab: MainTab = .home
     @State private var isShowingCreateMenu = false
     @State private var isShowingAddInboxItem = false
@@ -19,6 +22,18 @@ struct MainTabView: View {
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
+    }
+
+    private var preferredCategory: RecordCategory? {
+        let preferredKey = defaultGenreMode == "homeSelected"
+            ? homeSelectedCategoryTemplateKey
+            : lastUsedCategoryTemplateKey
+        return visibleCategories.first(where: { $0.templateKey == preferredKey }) ?? visibleCategories.first
+    }
+
+    private var createMenuCategories: [RecordCategory] {
+        guard let preferredCategory else { return visibleCategories }
+        return [preferredCategory] + visibleCategories.filter { $0.id != preferredCategory.id }
     }
 
     var body: some View {
@@ -58,8 +73,11 @@ struct MainTabView: View {
                 Button("記録を追加") {}
                     .disabled(true)
             } else {
-                ForEach(visibleCategories) { category in
-                    Button("\(category.name)に記録を追加") {
+                ForEach(createMenuCategories) { category in
+                    Button(category.id == preferredCategory?.id
+                        ? "\(category.name)に記録を追加（デフォルト）"
+                        : "\(category.name)に記録を追加"
+                    ) {
                         selectedCategoryForRecord = category
                     }
                 }

@@ -4406,3 +4406,29 @@ favorecoの初期値として決めた「保存後は編集画面ではなく情
 ### 残課題
 - 実機で「詳細を開く」「一覧に戻る」の両設定を、新規記録と回追加から確認する
 - 保存後詳細から編集、カレンダー追加、削除を行った際のシート挙動を実機確認する
+
+## 2026-07-11: デフォルトジャンル設定を中央＋へ接続
+
+### 変更概要
+- 記録保存成功時に「最後に使ったジャンル」を保存
+- Homeから開いたジャンル画面とジャンル切替先を「Homeで選択中のジャンル」として保存
+- 中央＋のジャンル候補で、設定に応じた既定ジャンルを先頭に「デフォルト」と明示
+- 保存済みジャンルが非表示/不在の場合は、先頭の有効ジャンルへフォールバック
+
+### 変更意図
+中央＋から記録するたびにジャンル一覧を探し直さず、利用状況または現在見ているジャンルへ1タップで記録を追加できるようにするため。Inboxや予定・チケットの入口は残し、中央＋から自動遷移しない構成を維持するため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift（最終使用/選択中ジャンルキー）
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（保存成功時の最終使用ジャンル更新）
+- favorecoAPP/favorecoAPP/Views/CategoryTopView.swift（表示中ジャンル更新）
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift（既定ジャンルの解決・並び替え・フォールバック）
+- favoreco/CLAUDE.md（デフォルトジャンルの現在仕様を更新）
+
+### 確認結果（実機 / ビルド）
+- `xcrun swiftc -frontend -parse` による変更Swiftファイル4件の構文確認が成功
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath /tmp/favoreco_default_genre_build CODE_SIGNING_ALLOWED=NO build` が成功
+
+### 残課題
+- 実機で両設定を切り替え、中央＋の先頭ジャンルが切り替わることを確認する
+- 既定ジャンルを非表示にした後、別の有効ジャンルへ安全にフォールバックすることを確認する

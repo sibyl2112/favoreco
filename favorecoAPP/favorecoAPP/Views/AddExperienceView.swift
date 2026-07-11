@@ -21,6 +21,7 @@ struct AddExperienceView: View {
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
     @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
+    @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
@@ -286,6 +287,7 @@ struct AddExperienceView: View {
 
         do {
             try modelContext.save()
+            lastUsedCategoryTemplateKey = category.templateKey
             if afterSaveRecordAction == "openDetail" {
                 savedVisit = visit
                 isShowingSavedDetail = true
@@ -670,6 +672,7 @@ struct AddVisitView: View {
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
     @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
+    @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft = VisitDraft()
@@ -908,6 +911,7 @@ struct AddVisitView: View {
 
         do {
             try modelContext.save()
+            lastUsedCategoryTemplateKey = event.category?.templateKey ?? lastUsedCategoryTemplateKey
             if afterSaveRecordAction == "openDetail" {
                 savedVisit = visit
                 isShowingSavedDetail = true
