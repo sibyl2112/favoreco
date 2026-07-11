@@ -12,6 +12,19 @@ import Foundation
 import SwiftData
 
 enum RecordDeletionService {
+    struct ArchivedDeletionResult {
+        let eventCount: Int
+        let visitCount: Int
+        let planCount: Int
+        let attemptCount: Int
+        let masterCount: Int
+        let linkCount: Int
+
+        var totalCount: Int {
+            eventCount + visitCount + planCount + attemptCount + masterCount + linkCount
+        }
+    }
+
     /// この記録（Visit）だけを削除する。Event は残す（配下の Visit が 0 件になっても自動削除しない）。
     /// PhotoBlob は cascade で削除。Plan.visit 参照は nil 解除、EventPersonLink の visit 参照は削除。
     @MainActor
@@ -42,6 +55,92 @@ enum RecordDeletionService {
 
         context.delete(event) // Visit / Plan は Event の .cascade、PhotoBlob / TicketAttempt はさらに cascade
         try context.save()
+    }
+
+    /// 非表示済みのモデルだけを完全削除する。ジャンルは非表示設定として保持する。
+    /// Archived Event/Plan の配下は cascade 対象なので、子を重ねて delete しない。
+    @MainActor
+    static func deleteArchivedData(in context: ModelContext) throws -> ArchivedDeletionResult {
+        let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        let plans = try context.fetch(FetchDescriptor<Plan>())
+        let attempts = try context.fetch(FetchDescriptor<TicketAttempt>())
+        let accounts = try context.fetch(FetchDescriptor<TicketAccount>())
+        let socialAccounts = try context.fetch(FetchDescriptor<SocialAccount>())
+        let people = try context.fetch(FetchDescriptor<PersonMaster>())
+        let places = try context.fetch(FetchDescriptor<PlaceMaster>())
+        let links = try context.fetch(FetchDescriptor<EventPersonLink>())
+
+        let archivedEvents = events.filter(\.isArchived)
+        let archivedEventIDs = Set(archivedEvents.map(\.id))
+        let archivedVisits = archivedEvents.flatMap { $0.visits ?? [] }
+        let archivedVisitIDs = Set(archivedVisits.map(\.id))
+        let archivedPlans = plans.filter { plan in
+            plan.isArchived || plan.event.map { archivedEventIDs.contains($0.id) } == true
+        }
+        let archivedPlanIDs = Set(archivedPlans.map(\.id))
+        let archivedAttempts = attempts.filter { attempt in
+            attempt.isArchived || attempt.plan.map { archivedPlanIDs.contains($0.id) } == true
+        }
+        let archivedAccounts = accounts.filter(\.isArchived)
+        let archivedPeople = people.filter(\.isArchived)
+        let archivedPersonIDs = Set(archivedPeople.map(\.id))
+        let archivedPlaces = places.filter(\.isArchived)
+        let archivedSocialAccounts = socialAccounts.filter(\.isArchived)
+
+        for plan in archivedPlans {
+            for attempt in plan.ticketAttempts ?? [] {
+                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+            }
+            TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
+        }
+        for attempt in archivedAttempts where attempt.plan.map({ !archivedPlanIDs.contains($0.id) }) == true {
+            if let plan = attempt.plan {
+                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+            }
+        }
+        for account in archivedAccounts {
+            TicketAccountNotificationScheduler.cancel(account: account)
+        }
+
+        let archivedLinks = links.filter { link in
+            link.isArchived
+            || link.event.map({ archivedEventIDs.contains($0.id) }) == true
+            || link.visit.map({ archivedVisitIDs.contains($0.id) }) == true
+            || link.person.map({ archivedPersonIDs.contains($0.id) }) == true
+        }
+        for link in archivedLinks {
+            context.delete(link)
+        }
+        for attempt in archivedAttempts {
+            if let plan = attempt.plan, archivedPlanIDs.contains(plan.id) { continue }
+            context.delete(attempt)
+        }
+        for plan in archivedPlans {
+            if let event = plan.event, archivedEventIDs.contains(event.id) { continue }
+            context.delete(plan)
+        }
+        for event in archivedEvents {
+            context.delete(event)
+        }
+        for account in archivedAccounts { context.delete(account) }
+        for account in archivedSocialAccounts { context.delete(account) }
+        for person in archivedPeople { context.delete(person) }
+        for place in archivedPlaces { context.delete(place) }
+
+        try context.save()
+        ThumbnailLoader.purge()
+
+        return ArchivedDeletionResult(
+            eventCount: archivedEvents.count,
+            visitCount: archivedVisits.count,
+            planCount: archivedPlans.count,
+            attemptCount: archivedAttempts.count,
+            masterCount: archivedAccounts.count
+                + archivedSocialAccounts.count
+                + archivedPeople.count
+                + archivedPlaces.count,
+            linkCount: archivedLinks.count
+        )
     }
 
     /// 指定 Visit を参照する関連（Plan.visit / EventPersonLink.visit）を安全に解除・削除する。

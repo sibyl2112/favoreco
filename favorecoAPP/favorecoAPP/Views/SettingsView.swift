@@ -684,11 +684,30 @@ struct DisplaySettingsView: View {
 }
 
 struct DataManagementView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query private var categories: [RecordCategory]
     @Query private var events: [ExperienceEvent]
     @Query private var visits: [Visit]
     @Query private var inboxItems: [InboxItem]
     @Query private var photos: [PhotoBlob]
+    @Query private var plans: [Plan]
+    @Query private var ticketAttempts: [TicketAttempt]
+    @Query private var ticketAccounts: [TicketAccount]
+    @Query private var socialAccounts: [SocialAccount]
+    @Query private var people: [PersonMaster]
+    @Query private var places: [PlaceMaster]
+    @State private var isConfirmingArchivedDeletion = false
+    @State private var maintenanceMessage = ""
+
+    private var archivedItemCount: Int {
+        events.filter(\.isArchived).count
+            + plans.filter(\.isArchived).count
+            + ticketAttempts.filter(\.isArchived).count
+            + ticketAccounts.filter(\.isArchived).count
+            + socialAccounts.filter(\.isArchived).count
+            + people.filter(\.isArchived).count
+            + places.filter(\.isArchived).count
+    }
 
     var body: some View {
         Form {
@@ -739,13 +758,87 @@ struct DataManagementView: View {
             }
 
             Section("バックアップについて") {
-                Text("記録はこの端末に保存されています。アプリを削除すると端末内のデータも削除されるため、将来はJSONエクスポートでバックアップできるようにします。")
+                Text("記録はこの端末に保存されています。アプリを削除する前やデータ整理の前に、無料のJSONエクスポートで手動バックアップしてください。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("キャッシュ") {
+                Button {
+                    URLCache.shared.removeAllCachedResponses()
+                    maintenanceMessage = "Webキャッシュを削除しました。記録データは変更していません。"
+                } label: {
+                    Label("Webキャッシュを削除", systemImage: "network.slash")
+                }
+
+                Button {
+                    ThumbnailLoader.purge()
+                    maintenanceMessage = "写真サムネイルのキャッシュを削除しました。写真本体は残っています。"
+                } label: {
+                    Label("写真キャッシュを削除", systemImage: "photo.badge.arrow.down")
+                }
+
+                Text("キャッシュは表示を速くする一時データです。削除しても記録や写真本体は消えません。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("データ整理") {
+                Button(role: .destructive) {
+                    isConfirmingArchivedDeletion = true
+                } label: {
+                    Label("アーカイブ済みデータを完全削除", systemImage: "archivebox.fill")
+                }
+                .disabled(archivedItemCount == 0)
+
+                Text(archivedItemCount == 0
+                     ? "完全削除できるアーカイブ済み項目はありません。"
+                     : "非表示にした対象・予定・申込・マスターなどが\(archivedItemCount)件あります。関連する記録や写真も削除される場合があります。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+
+                NavigationLink {
+                    SettingsDocumentView(
+                        title: "全データ削除",
+                        bodyText: "全データ削除は次段階で、確認文言の入力と二段階確認を備えた専用画面として実装します。"
+                    )
+                } label: {
+                    Label("全データ削除", systemImage: "trash.fill")
+                        .foregroundStyle(.red)
+                }
+            }
+
+            if !maintenanceMessage.isEmpty {
+                Section("処理結果") {
+                    Text(maintenanceMessage)
+                        .font(FavorecoTypography.caption)
+                }
             }
         }
         .navigationTitle("データ管理")
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(
+            "アーカイブ済みデータを完全削除しますか？",
+            isPresented: $isConfirmingArchivedDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("完全削除する", role: .destructive) {
+                deleteArchivedData()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("この操作は取り消せません。非表示の対象に紐づく記録・写真、非表示の予定・申込なども削除されます。先にJSONバックアップを推奨します。")
+        }
+    }
+
+    private func deleteArchivedData() {
+        do {
+            let result = try RecordDeletionService.deleteArchivedData(in: modelContext)
+            maintenanceMessage = "アーカイブ済みデータを\(result.totalCount)件削除しました（対象\(result.eventCount)、記録\(result.visitCount)、予定\(result.planCount)、申込\(result.attemptCount)、マスター\(result.masterCount)、人物リンク\(result.linkCount)）。"
+        } catch {
+            modelContext.rollback()
+            maintenanceMessage = "削除に失敗しました: \(error.localizedDescription)"
+        }
     }
 }
 
