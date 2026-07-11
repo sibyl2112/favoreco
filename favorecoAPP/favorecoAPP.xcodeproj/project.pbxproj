@@ -256,6 +256,7 @@
 				DEVELOPMENT_TEAM = GDXKVW7W5X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "記録へ写真を追加するためにカメラを使用します。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Add favoreco records to your selected calendar.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Add favoreco records to your selected calendar.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -290,6 +291,7 @@
 				DEVELOPMENT_TEAM = GDXKVW7W5X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "記録へ写真を追加するためにカメラを使用します。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Add favoreco records to your selected calendar.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Add favoreco records to your selected calendar.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

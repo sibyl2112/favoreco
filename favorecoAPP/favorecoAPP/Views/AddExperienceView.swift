@@ -2055,6 +2055,7 @@ private struct PeopleLinkRow: View {
 
 private struct PhotoUnitEditor: View {
     @AppStorage(AppStorageKeys.photoCompressionQuality) private var compressionQuality = 0.85
+    @AppStorage(AppStorageKeys.photoAddStartMode) private var photoAddStartMode = "camera"
     let existingPhotos: [PhotoBlob]
     @Binding var deletedPhotoIDs: Set<UUID>
     @Binding var pendingPhotos: [PendingPhoto]
@@ -2062,6 +2063,8 @@ private struct PhotoUnitEditor: View {
     let category: RecordCategory?
     @Binding var aspectRatioKey: String
     @Binding var coverPhotoPath: String
+    @State private var isShowingCamera = false
+    @State private var isShowingCameraUnavailableAlert = false
 
     private let maxPhotoCount = 10
 
@@ -2109,21 +2112,7 @@ private struct PhotoUnitEditor: View {
             }
 
             if remainingPhotoSlots > 0 {
-                PhotosPicker(
-                    selection: $selectedItems,
-                    maxSelectionCount: remainingPhotoSlots,
-                    matching: .images
-                ) {
-                    Label("写真を追加", systemImage: "photo.badge.plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .onChange(of: selectedItems) { _, newItems in
-                    Task {
-                        await appendPhotos(from: newItems)
-                        selectedItems.removeAll()
-                    }
-                }
+                photoAddControls
             } else {
                 Label("無料枠の10枚に達しています", systemImage: "checkmark.circle")
                     .font(FavorecoTypography.caption)
@@ -2134,6 +2123,76 @@ private struct PhotoUnitEditor: View {
             if aspectRatioKey.isEmpty {
                 aspectRatioKey = EyecatchAspectRatio.recommended(for: category).key
             }
+        }
+        .fullScreenCover(isPresented: $isShowingCamera) {
+            CameraImagePicker(
+                onCapture: { image in
+                    appendCapturedPhoto(image)
+                    isShowingCamera = false
+                },
+                onCancel: {
+                    isShowingCamera = false
+                }
+            )
+            .ignoresSafeArea()
+        }
+        .alert("カメラを使用できません", isPresented: $isShowingCameraUnavailableAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("この端末ではカメラを起動できません。写真ライブラリから追加してください。")
+        }
+    }
+
+    @ViewBuilder
+    private var photoAddControls: some View {
+        if photoAddStartMode == "library" {
+            libraryPicker(label: "写真ライブラリから追加", prominent: true)
+            cameraButton(label: "カメラで撮影", prominent: false)
+        } else {
+            cameraButton(label: "カメラで撮影", prominent: true)
+            libraryPicker(label: "写真ライブラリから選ぶ", prominent: false)
+        }
+    }
+
+    @ViewBuilder
+    private func libraryPicker(label: String, prominent: Bool) -> some View {
+        let picker = PhotosPicker(
+            selection: $selectedItems,
+            maxSelectionCount: remainingPhotoSlots,
+            matching: .images
+        ) {
+            Label(label, systemImage: "photo.on.rectangle.angled")
+                .frame(maxWidth: .infinity)
+        }
+        .onChange(of: selectedItems) { _, newItems in
+            Task {
+                await appendPhotos(from: newItems)
+                selectedItems.removeAll()
+            }
+        }
+        if prominent {
+            picker.buttonStyle(.borderedProminent)
+        } else {
+            picker.buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private func cameraButton(label: String, prominent: Bool) -> some View {
+        let button = Button {
+            guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+                isShowingCameraUnavailableAlert = true
+                return
+            }
+            isShowingCamera = true
+        } label: {
+            Label(label, systemImage: "camera")
+                .frame(maxWidth: .infinity)
+        }
+        if prominent {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
         }
     }
 
@@ -2200,6 +2259,22 @@ private struct PhotoUnitEditor: View {
             .relativePath
             ?? pendingPhotos.first(where: { $0.relativePath != path })?.relativePath
             ?? ""
+    }
+
+    private func appendCapturedPhoto(_ image: UIImage) {
+        guard remainingPhotoSlots > 0,
+              let data = image.jpegData(compressionQuality: 1),
+              let pendingPhoto = PendingPhoto.make(
+                from: data,
+                filename: "camera-\(UUID().uuidString).jpg",
+                compressionQuality: compressionQuality
+              ) else {
+            return
+        }
+        pendingPhotos.append(pendingPhoto)
+        if coverPhotoPath.isEmpty {
+            coverPhotoPath = pendingPhoto.relativePath
+        }
     }
 }
 

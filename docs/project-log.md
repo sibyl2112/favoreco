@@ -4432,3 +4432,31 @@ favorecoの初期値として決めた「保存後は編集画面ではなく情
 ### 残課題
 - 実機で両設定を切り替え、中央＋の先頭ジャンルが切り替わることを確認する
 - 既定ジャンルを非表示にした後、別の有効ジャンルへ安全にフォールバックすることを確認する
+
+## 2026-07-12: 写真追加の初期動作をカメラ/ライブラリへ接続
+
+### 変更概要
+- 設定 > 記録・入力補助の「写真追加」に応じ、カメラまたは写真ライブラリを主要ボタンとして表示
+- 主要設定と異なる追加元も補助ボタンから常に選択可能
+- UIImagePickerControllerをSwiftUIへ閉じ込めるカメラ撮影ラッパーを追加
+- 撮影画像を既存の圧縮、メタデータ除去、10枚上限、カバー設定へ接続
+- カメラ非搭載環境ではクラッシュせず、写真ライブラリ利用を案内
+- Debug/Release両構成へカメラ利用目的文言を追加
+
+### 変更意図
+設定で決めた初期動作を写真ユニットへ反映しつつ、撮影と既存写真選択を状況に応じて切り替えられるようにするため。追加元によって保存品質やプライバシー処理が変わらないよう共通経路へ通すため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/CameraImagePicker.swift（カメラ撮影のUIKit境界）
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift（追加元ボタン、撮影画像の共通保存処理）
+- favorecoAPP/favorecoAPP.xcodeproj/project.pbxproj（カメラ利用目的）
+- favoreco/CLAUDE.md（写真追加設定の現在仕様を更新）
+
+### 確認結果（実機 / ビルド）
+- `xcrun swiftc -frontend -parse favorecoAPP/favorecoAPP/Services/CameraImagePicker.swift favorecoAPP/favorecoAPP/Views/AddExperienceView.swift` が成功
+- `xcodebuild -project favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath /tmp/favoreco_photo_source_build CODE_SIGNING_ALLOWED=NO build` が成功
+- 生成されたInfo.plistに `NSCameraUsageDescription` が含まれることを確認
+
+### 残課題
+- 実機で初回カメラ権限、撮影、キャンセル、ライブラリ複数選択を確認する
+- カメラ/ライブラリ両方から追加した写真が設定品質とカバー比率で表示されることを確認する
