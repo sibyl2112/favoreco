@@ -276,31 +276,34 @@ struct HomeView: View {
                     hero
                     crossGenreMiniStats
 
+                    // 正本で確定した固定順。空セクションは表示しない。
                     // 1. 次の予定・締切
                     if showsAttention && !attentionItems.isEmpty {
                         attentionSection
                     }
-                    // 2. 最近の記録
-                    if showsRecentRecords && !visits.isEmpty {
-                        recentSection
-                    }
-                    // 3. 体験ギャラリー
+                    // 2. 体験ギャラリー
                     if showsExperienceGallery && !recentVisits.isEmpty {
                         experienceGallerySection
                     }
-                    // 4. お気に入り・統計（任意表示）
-                    if showsFavorites {
-                        favoritesSection
-                    }
-                    if showsStatsSummary && !visits.isEmpty {
-                        statsSummarySection
-                    }
-                    // 5. その他
+                    // 3. あとで記録
                     if showsInbox && !unresolvedInboxItems.isEmpty {
                         inboxSection
                     }
+                    // 4. 最近の記録
+                    if showsRecentRecords && !visits.isEmpty {
+                        recentSection
+                    }
+                    // 5. ジャンル一覧
                     if showsCategories && !visibleCategories.isEmpty {
                         categorySection
+                    }
+                    // 6. 統計サマリ（任意表示）
+                    if showsStatsSummary && !visits.isEmpty {
+                        statsSummarySection
+                    }
+                    // 7. お気に入り・ベスト（任意表示）
+                    if showsFavorites {
+                        favoritesSection
                     }
 
                     // すべて空のときだけ、単一のプレースホルダーで導線を示す
