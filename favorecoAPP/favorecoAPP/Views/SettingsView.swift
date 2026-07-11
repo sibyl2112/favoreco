@@ -215,6 +215,9 @@ struct RecordInputAssistSettingsView: View {
                 Toggle("Map検索", isOn: $usesMapSearchAssist)
                 Toggle("天気自動付与", isOn: $usesWeatherAutoFill)
                 Toggle("入力補助辞書", isOn: $usesInputSuggestionDictionary)
+                Text("OCR取込をOFFにしても、保存済みの読み取りテキストと手入力欄は残ります。項目への自動振り分けなどの高度OCRはPro候補です。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("後日検討") {

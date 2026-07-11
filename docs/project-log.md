@@ -5,6 +5,34 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-11: OCR取込設定を入力画面へ接続
+
+### 変更概要
+- 記録・入力補助のOCR取込ON/OFFを全記録フォームのOCRユニットへ反映した。
+- OFF時はPhotosPickerとVision文字認識を停止し、設定OFFの状態を表示する。
+- 保存済みOCRテキストと手入力TextEditorはOFF時も残し、設定変更でデータを失わないようにした。
+- 認識開始時にも設定値を再確認し、切替直後の不要な解析を防ぐ。
+- 基本OCRは無料、高度な項目自動振り分けはPro候補であることを設定画面に明記した。
+
+### 変更意図
+表示だけだったOCR設定を実挙動へ反映しつつ、OFF操作で既存記録が消える誤解やデータ損失を防ぐため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`
+- `favorecoAPP/favorecoAPP/Views/SettingsView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 確認結果
+- OCRUnitEditorがAppStorageを直接参照するため、新規記録/編集/回追加の全導線へ反映されることを確認した。
+- OFF時もTextEditorとocrText bindingを維持し、PhotosPicker/Vision解析だけを停止することをコード確認した。
+- `swiftc -frontend -parse` で変更したSwiftファイルの構文チェック成功。
+- iOS向け署名なし全体ビルド成功、警告なし。
+
+### 残課題
+- 実機で設定切替後のフォーム更新、画像選択、OCR結果追記を確認する。
+- タイトル/日時/会場/金額への候補振り分けは高度OCRとして後続。
+
 ## 2026-07-11: 写真圧縮設定を実保存へ接続
 
 ### 変更概要

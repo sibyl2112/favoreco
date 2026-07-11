@@ -1164,6 +1164,7 @@ private func formattedCurrencyAmount(_ amount: Decimal) -> String {
 }
 
 private struct OCRUnitEditor: View {
+    @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
     @Binding var ocrText: String
     @Binding var selectedItems: [PhotosPickerItem]
     @State private var isRecognizing = false
@@ -1171,17 +1172,23 @@ private struct OCRUnitEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            PhotosPicker(selection: $selectedItems, maxSelectionCount: 1, matching: .images) {
-                Label(isRecognizing ? "読み取り中" : "画像から読み取る", systemImage: "text.viewfinder")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .disabled(isRecognizing)
-            .onChange(of: selectedItems) { _, newItems in
-                Task {
-                    await recognize(from: newItems)
-                    selectedItems.removeAll()
+            if usesOCRImportAssist {
+                PhotosPicker(selection: $selectedItems, maxSelectionCount: 1, matching: .images) {
+                    Label(isRecognizing ? "読み取り中" : "画像から読み取る", systemImage: "text.viewfinder")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.bordered)
+                .disabled(isRecognizing)
+                .onChange(of: selectedItems) { _, newItems in
+                    Task {
+                        await recognize(from: newItems)
+                        selectedItems.removeAll()
+                    }
+                }
+            } else {
+                Label("画像OCRは設定でOFFになっています", systemImage: "text.viewfinder")
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.secondary)
             }
 
             if !statusText.isEmpty {
@@ -1210,7 +1217,7 @@ private struct OCRUnitEditor: View {
 
     @MainActor
     private func recognize(from items: [PhotosPickerItem]) async {
-        guard let item = items.first else { return }
+        guard usesOCRImportAssist, let item = items.first else { return }
         isRecognizing = true
         statusText = ""
         defer { isRecognizing = false }
