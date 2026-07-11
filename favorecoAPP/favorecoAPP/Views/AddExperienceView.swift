@@ -75,7 +75,7 @@ struct AddExperienceView: View {
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
-                PlaceSearchView(initialQuery: draft.venueName) { candidate in
+                PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
                     draft.apply(place: candidate)
                 }
             }
@@ -186,7 +186,7 @@ struct AddExperienceView: View {
             TextField(template.venuePlaceholder, text: venueNameBinding)
             placeSearchAssist(
                 isEnabled: usesMapSearchAssist,
-                address: draft.venueAddress,
+                address: venueAddressBinding,
                 action: { isShowingPlaceSearch = true }
             )
             ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
@@ -205,6 +205,15 @@ struct AddExperienceView: View {
         } set: { value in
             draft.venueName = value
             draft.clearPlaceSelection()
+        }
+    }
+
+    private var venueAddressBinding: Binding<String> {
+        Binding {
+            draft.venueAddress
+        } set: { value in
+            draft.venueAddress = value
+            draft.clearPlaceCoordinates()
         }
     }
 
@@ -367,7 +376,7 @@ struct EditExperienceView: View {
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
-                PlaceSearchView(initialQuery: draft.venueName) { candidate in
+                PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
                     draft.apply(place: candidate)
                 }
             }
@@ -478,7 +487,7 @@ struct EditExperienceView: View {
             TextField(template.venuePlaceholder, text: venueNameBinding)
             placeSearchAssist(
                 isEnabled: usesMapSearchAssist,
-                address: draft.venueAddress,
+                address: venueAddressBinding,
                 action: { isShowingPlaceSearch = true }
             )
             ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
@@ -497,6 +506,15 @@ struct EditExperienceView: View {
         } set: { value in
             draft.venueName = value
             draft.clearPlaceSelection()
+        }
+    }
+
+    private var venueAddressBinding: Binding<String> {
+        Binding {
+            draft.venueAddress
+        } set: { value in
+            draft.venueAddress = value
+            draft.clearPlaceCoordinates()
         }
     }
 
@@ -664,7 +682,7 @@ struct AddVisitView: View {
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
-                PlaceSearchView(initialQuery: draft.venueName) { candidate in
+                PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
                     draft.apply(place: candidate)
                 }
             }
@@ -777,7 +795,7 @@ struct AddVisitView: View {
             TextField(template.venuePlaceholder, text: venueNameBinding)
             placeSearchAssist(
                 isEnabled: usesMapSearchAssist,
-                address: draft.venueAddress,
+                address: venueAddressBinding,
                 action: { isShowingPlaceSearch = true }
             )
             ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
@@ -803,6 +821,15 @@ struct AddVisitView: View {
         } set: { value in
             draft.venueName = value
             draft.clearPlaceSelection()
+        }
+    }
+
+    private var venueAddressBinding: Binding<String> {
+        Binding {
+            draft.venueAddress
+        } set: { value in
+            draft.venueAddress = value
+            draft.clearPlaceCoordinates()
         }
     }
 
@@ -941,6 +968,11 @@ struct AddExperienceDraft {
         PlaceSnapshot(name: trimmedVenueName, address: venueAddress, latitude: latitude, longitude: longitude)
     }
 
+    var mapSearchQuery: String {
+        let address = venueAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty ? trimmedVenueName : address
+    }
+
     mutating func apply(place: PlaceSearchCandidate) {
         venueName = place.name
         venueAddress = place.address
@@ -950,6 +982,11 @@ struct AddExperienceDraft {
 
     mutating func clearPlaceSelection() {
         venueAddress = ""
+        latitude = 0
+        longitude = 0
+    }
+
+    mutating func clearPlaceCoordinates() {
         latitude = 0
         longitude = 0
     }
@@ -1025,6 +1062,11 @@ private struct VisitDraft {
         PlaceSnapshot(name: trimmedVenueName, address: venueAddress, latitude: latitude, longitude: longitude)
     }
 
+    var mapSearchQuery: String {
+        let address = venueAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty ? trimmedVenueName : address
+    }
+
     mutating func apply(place: PlaceSearchCandidate) {
         venueName = place.name
         venueAddress = place.address
@@ -1034,6 +1076,11 @@ private struct VisitDraft {
 
     mutating func clearPlaceSelection() {
         venueAddress = ""
+        latitude = 0
+        longitude = 0
+    }
+
+    mutating func clearPlaceCoordinates() {
         latitude = 0
         longitude = 0
     }
@@ -1147,15 +1194,12 @@ private func normalizedPlaceText(_ value: String) -> String {
 }
 
 @ViewBuilder
-private func placeSearchAssist(isEnabled: Bool, address: String, action: @escaping () -> Void) -> some View {
+private func placeSearchAssist(isEnabled: Bool, address: Binding<String>, action: @escaping () -> Void) -> some View {
     if isEnabled {
+        TextField("住所（地図では住所を優先）", text: address)
+            .textContentType(.fullStreetAddress)
         Button(action: action) {
             Label("Apple Mapsから会場を選択", systemImage: "map")
-        }
-        if !address.isEmpty {
-            Text(address)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
         }
     }
 }

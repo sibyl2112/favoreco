@@ -35,4 +35,29 @@ enum PlaceSearchService {
         }
         .filter { !$0.name.isEmpty }
     }
+
+    nonisolated static func appleMapsURL(
+        name: String,
+        address: String,
+        latitude: Double,
+        longitude: Double
+    ) -> URL? {
+        let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        var components = URLComponents(string: "https://maps.apple.com/")
+
+        if !trimmedAddress.isEmpty {
+            components?.queryItems = [URLQueryItem(name: "q", value: trimmedAddress)]
+        } else if latitude != 0 || longitude != 0 {
+            components?.queryItems = [
+                URLQueryItem(name: "ll", value: "\(latitude),\(longitude)"),
+                URLQueryItem(name: "q", value: trimmedName.isEmpty ? nil : trimmedName)
+            ].filter { $0.value != nil }
+        } else if !trimmedName.isEmpty {
+            components?.queryItems = [URLQueryItem(name: "q", value: trimmedName)]
+        } else {
+            return nil
+        }
+        return components?.url
+    }
 }

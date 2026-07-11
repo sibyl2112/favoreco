@@ -13,6 +13,7 @@ struct ExperienceDetailView: View {
     let visit: Visit
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openURL) private var openURL
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var isShowingEdit = false
     @State private var calendarDraft: CalendarEventDraft?
@@ -279,6 +280,19 @@ struct ExperienceDetailView: View {
                 DetailInfoRow(icon: "mappin.and.ellipse", title: "場所", value: visit.venueNameSnapshot)
             }
 
+            if let address = visit.placeMaster?.address, !address.isEmpty {
+                DetailInfoRow(icon: "signpost.right", title: "住所", value: address)
+            }
+
+            if let mapURL {
+                Button {
+                    openURL(mapURL)
+                } label: {
+                    Label("地図で見る", systemImage: "map")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
             DetailInfoRow(icon: "star.fill", title: template.ratingLabel, value: ratingText)
 
             if !visit.outcomeKey.isEmpty {
@@ -302,6 +316,15 @@ struct ExperienceDetailView: View {
             .buttonStyle(.bordered)
         }
         .sectionCard()
+    }
+
+    private var mapURL: URL? {
+        PlaceSearchService.appleMapsURL(
+            name: visit.venueNameSnapshot,
+            address: visit.placeMaster?.address ?? "",
+            latitude: visit.latitude,
+            longitude: visit.longitude
+        )
     }
 
     @ViewBuilder
@@ -409,11 +432,16 @@ struct ExperienceDetailView: View {
 
         return CalendarEventDraft(
             title: eventTitle,
-            location: visit.venueNameSnapshot,
+            location: preferredLocationText,
             notes: notes.joined(separator: "\n"),
             startDate: visit.visitedAt,
             endDate: endDate
         )
+    }
+
+    private var preferredLocationText: String {
+        let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return address.isEmpty ? visit.venueNameSnapshot : address
     }
 
     private func roleName(for roleKey: String) -> String {
