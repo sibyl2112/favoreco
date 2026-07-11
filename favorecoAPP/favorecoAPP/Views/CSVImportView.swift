@@ -6,13 +6,27 @@
 //
 
 import SwiftUI
+import SwiftData
 import UniformTypeIdentifiers
 
 struct CSVImportView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var isImporterPresented = false
     @State private var preview: CSVImportPreview?
+    @State private var restoreResult: CSVImportRestoreResult?
+    @State private var defaultCategoryID: UUID?
     @State private var selectedFileName = ""
     @State private var errorMessage = ""
+    @State private var isConfirmingRestore = false
+
+    private var activeCategories: [RecordCategory] {
+        categories.filter { !$0.isArchived }
+    }
+
+    private var defaultCategory: RecordCategory? {
+        activeCategories.first { $0.id == defaultCategoryID } ?? activeCategories.first
+    }
 
     var body: some View {
         Form {
@@ -91,9 +105,39 @@ struct CSVImportView: View {
                 }
 
                 Section("取り込み") {
-                    Text("ジャンル照合、重複判定、保存は次段階で接続します。要修正行がある場合は保存前に除外または修正できるようにします。")
+                    Picker("空欄時のジャンル", selection: Binding(
+                        get: { defaultCategory?.id },
+                        set: { defaultCategoryID = $0 }
+                    )) {
+                        ForEach(activeCategories) { category in
+                            Label(category.name, systemImage: category.iconSymbol)
+                                .tag(Optional(category.id))
+                        }
+                    }
+
+                    Button {
+                        isConfirmingRestore = true
+                    } label: {
+                        Label("取り込み可能な行を保存", systemImage: "square.and.arrow.down")
+                    }
+                    .disabled(preview.validRows.isEmpty || defaultCategory == nil)
+
+                    Text("CSVにジャンル名がある行は既存ジャンルと照合します。未登録ジャンル、不正行、重複行は保存せず結果に表示します。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                if let restoreResult {
+                    Section("保存結果") {
+                        Label("CSVの保存が完了しました", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        LabeledContent("記録を追加", value: "\(restoreResult.insertedVisitCount)件")
+                        LabeledContent("記録を更新", value: "\(restoreResult.updatedVisitCount)件")
+                        LabeledContent("対象を追加", value: "\(restoreResult.insertedEventCount)件")
+                        LabeledContent("重複をスキップ", value: "\(restoreResult.duplicateCount)件")
+                        LabeledContent("不正行をスキップ", value: "\(restoreResult.invalidRowCount)件")
+                        LabeledContent("未知ジャンルをスキップ", value: "\(restoreResult.unknownCategoryCount)件")
+                    }
                 }
             }
         }
@@ -106,6 +150,21 @@ struct CSVImportView: View {
         ) { result in
             inspect(result)
         }
+        .confirmationDialog(
+            "CSVの記録を保存しますか？",
+            isPresented: $isConfirmingRestore,
+            titleVisibility: .visible
+        ) {
+            Button("保存を実行") { restore() }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("同じvisit_idは更新します。IDがない同一日・同一タイトル・同一会場の行は重複として保存しません。")
+        }
+        .onAppear {
+            if defaultCategoryID == nil {
+                defaultCategoryID = activeCategories.first?.id
+            }
+        }
     }
 
     private func inspect(_ result: Result<[URL], Error>) {
@@ -116,12 +175,30 @@ struct CSVImportView: View {
                 if hasAccess { url.stopAccessingSecurityScopedResource() }
             }
             preview = try CSVImportService.inspect(data: Data(contentsOf: url))
+            restoreResult = nil
             selectedFileName = url.lastPathComponent
             errorMessage = ""
         } catch {
             preview = nil
+            restoreResult = nil
             selectedFileName = ""
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func restore() {
+        guard let preview, let defaultCategory else { return }
+        do {
+            restoreResult = try CSVImportService.restore(
+                preview: preview,
+                defaultCategory: defaultCategory,
+                in: modelContext
+            )
+            errorMessage = ""
+        } catch {
+            modelContext.rollback()
+            restoreResult = nil
+            errorMessage = "保存に失敗しました: \(error.localizedDescription)"
         }
     }
 }
