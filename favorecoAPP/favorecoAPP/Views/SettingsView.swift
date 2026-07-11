@@ -798,10 +798,7 @@ struct DataManagementView: View {
                     .foregroundStyle(.secondary)
 
                 NavigationLink {
-                    SettingsDocumentView(
-                        title: "全データ削除",
-                        bodyText: "全データ削除は次段階で、確認文言の入力と二段階確認を備えた専用画面として実装します。"
-                    )
+                    FullDataDeletionView()
                 } label: {
                     Label("全データ削除", systemImage: "trash.fill")
                         .foregroundStyle(.red)
@@ -838,6 +835,121 @@ struct DataManagementView: View {
         } catch {
             modelContext.rollback()
             maintenanceMessage = "削除に失敗しました: \(error.localizedDescription)"
+        }
+    }
+}
+
+struct FullDataDeletionView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var categories: [RecordCategory]
+    @Query private var events: [ExperienceEvent]
+    @Query private var visits: [Visit]
+    @Query private var inboxItems: [InboxItem]
+    @Query private var photos: [PhotoBlob]
+    @Query private var socialAccounts: [SocialAccount]
+    @Query private var people: [PersonMaster]
+    @Query private var personLinks: [EventPersonLink]
+    @Query private var places: [PlaceMaster]
+    @Query private var plans: [Plan]
+    @Query private var ticketAccounts: [TicketAccount]
+    @Query private var ticketAttempts: [TicketAttempt]
+    @State private var confirmationText = ""
+    @State private var isShowingFinalConfirmation = false
+    @State private var isDeleting = false
+    @State private var errorMessage = ""
+
+    private let requiredText = "削除する"
+
+    private var totalModelCount: Int {
+        categories.count + events.count + visits.count + inboxItems.count + photos.count
+            + socialAccounts.count + people.count + personLinks.count + places.count
+            + plans.count + ticketAccounts.count + ticketAttempts.count
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Label("すべての記録データが失われます", systemImage: "exclamationmark.triangle.fill")
+                    .font(FavorecoTypography.sectionTitle)
+                    .foregroundStyle(.red)
+                Text("この操作は取り消せません。実行前にデータ管理からJSONバックアップを書き出してください。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("削除されるもの") {
+                LabeledContent("保存モデル", value: "\(totalModelCount)件")
+                LabeledContent("対象", value: "\(events.count)件")
+                LabeledContent("記録", value: "\(visits.count)件")
+                LabeledContent("写真", value: "\(photos.count)件")
+                LabeledContent("予定・申込", value: "\(plans.count + ticketAttempts.count)件")
+                Text("自作ジャンル、人物、場所、SNS、登録情報、あとで記録も削除されます。通知予約とキャッシュも消去します。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("保持されるもの") {
+                Text("Home表示、入力補助、通知タイプなどの設定値は保持します。削除後は標準ジャンルを再生成し、初回ジャンル選択へ戻ります。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("確認") {
+                Text("続けるには「\(requiredText)」と入力してください。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                TextField(requiredText, text: $confirmationText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                Button(role: .destructive) {
+                    isShowingFinalConfirmation = true
+                } label: {
+                    if isDeleting {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Label("全データ削除へ進む", systemImage: "trash.fill")
+                    }
+                }
+                .disabled(confirmationText != requiredText || isDeleting || totalModelCount == 0)
+            }
+
+            if !errorMessage.isEmpty {
+                Section("エラー") {
+                    Text(errorMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .navigationTitle("全データ削除")
+        .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(
+            "本当に全データを削除しますか？",
+            isPresented: $isShowingFinalConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("すべて削除する", role: .destructive) {
+                deleteAllData()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("\(totalModelCount)件の保存モデルを削除します。この操作は取り消せません。")
+        }
+    }
+
+    private func deleteAllData() {
+        isDeleting = true
+        errorMessage = ""
+        Task { @MainActor in
+            do {
+                _ = try RecordDeletionService.deleteAllData(in: modelContext)
+            } catch {
+                modelContext.rollback()
+                errorMessage = "全データ削除に失敗しました: \(error.localizedDescription)"
+                isDeleting = false
+            }
         }
     }
 }

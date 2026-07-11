@@ -25,6 +25,10 @@ enum RecordDeletionService {
         }
     }
 
+    struct AllDataDeletionResult {
+        let deletedModelCount: Int
+    }
+
     /// この記録（Visit）だけを削除する。Event は残す（配下の Visit が 0 件になっても自動削除しない）。
     /// PhotoBlob は cascade で削除。Plan.visit 参照は nil 解除、EventPersonLink の visit 参照は削除。
     @MainActor
@@ -141,6 +145,81 @@ enum RecordDeletionService {
                 + archivedPlaces.count,
             linkCount: archivedLinks.count
         )
+    }
+
+    /// 記録コンテンツをすべて削除し、標準ジャンルを再生成して初回選択へ戻す。
+    /// 表示・入力補助などのUserDefaults設定は利用者の好みとして保持する。
+    @MainActor
+    static func deleteAllData(in context: ModelContext) throws -> AllDataDeletionResult {
+        let categories = try context.fetch(FetchDescriptor<RecordCategory>())
+        let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        let visits = try context.fetch(FetchDescriptor<Visit>())
+        let inboxItems = try context.fetch(FetchDescriptor<InboxItem>())
+        let photos = try context.fetch(FetchDescriptor<PhotoBlob>())
+        let socialAccounts = try context.fetch(FetchDescriptor<SocialAccount>())
+        let people = try context.fetch(FetchDescriptor<PersonMaster>())
+        let links = try context.fetch(FetchDescriptor<EventPersonLink>())
+        let places = try context.fetch(FetchDescriptor<PlaceMaster>())
+        let plans = try context.fetch(FetchDescriptor<Plan>())
+        let accounts = try context.fetch(FetchDescriptor<TicketAccount>())
+        let attempts = try context.fetch(FetchDescriptor<TicketAttempt>())
+
+        let deletedModelCount = categories.count + events.count + visits.count
+            + inboxItems.count + photos.count + socialAccounts.count + people.count
+            + links.count + places.count + plans.count + accounts.count + attempts.count
+
+        for plan in plans {
+            for attempt in plan.ticketAttempts ?? [] {
+                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+            }
+            TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
+        }
+        for account in accounts {
+            TicketAccountNotificationScheduler.cancel(account: account)
+        }
+
+        // 親を先に削除し、親を持たない孤立モデルだけを個別削除する。
+        for link in links { context.delete(link) }
+        for event in events { context.delete(event) }
+        for plan in plans where plan.event == nil { context.delete(plan) }
+        for visit in visits where visit.event == nil { context.delete(visit) }
+        for attempt in attempts where attempt.plan == nil { context.delete(attempt) }
+        for photo in photos where photo.visit == nil { context.delete(photo) }
+        for item in inboxItems { context.delete(item) }
+        for account in socialAccounts { context.delete(account) }
+        for person in people { context.delete(person) }
+        for place in places { context.delete(place) }
+        for account in accounts { context.delete(account) }
+        for category in categories { context.delete(category) }
+
+        // ジャンル0件の状態を保存しない。削除と標準ジャンル再生成を同じsaveに含める。
+        let now = Date()
+        for preset in CategoryPresetSeeder.presets {
+            context.insert(RecordCategory(
+                name: preset.name,
+                iconSymbol: preset.iconSymbol,
+                colorHex: preset.colorHex,
+                sortOrder: preset.sortOrder,
+                isBuiltIn: true,
+                templateKey: preset.templateKey,
+                enabledUnitsRaw: preset.enabledUnitsRaw,
+                templateTypeKey: preset.templateTypeKey,
+                targetNameLabel: preset.targetNameLabel,
+                recordUnitName: preset.recordUnitName,
+                dateLabel: preset.dateLabel,
+                isArchived: false,
+                createdAt: now,
+                updatedAt: now
+            ))
+        }
+
+        try context.save()
+        URLCache.shared.removeAllCachedResponses()
+        ThumbnailLoader.purge()
+
+        UserDefaults.standard.set(false, forKey: AppStorageKeys.hasCompletedGenreOnboarding)
+
+        return AllDataDeletionResult(deletedModelCount: deletedModelCount)
     }
 
     /// 指定 Visit を参照する関連（Plan.visit / EventPersonLink.visit）を安全に解除・削除する。
