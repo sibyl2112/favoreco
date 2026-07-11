@@ -20,6 +20,7 @@ struct AddExperienceView: View {
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
+    @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
@@ -30,6 +31,8 @@ struct AddExperienceView: View {
     @State private var coverPhotoPath = ""
     @State private var pendingPeople: [PendingPersonLink] = []
     @State private var isShowingPlaceSearch = false
+    @State private var savedVisit: Visit?
+    @State private var isShowingSavedDetail = false
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: category)
@@ -79,6 +82,13 @@ struct AddExperienceView: View {
                 PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
                     let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
                     draft.apply(place: candidate, preservingVenueName: preservesVenueName)
+                }
+            }
+            .navigationDestination(isPresented: $isShowingSavedDetail) {
+                if let savedVisit {
+                    SavedExperienceDetailView(visit: savedVisit) {
+                        dismiss()
+                    }
                 }
             }
         }
@@ -276,7 +286,12 @@ struct AddExperienceView: View {
 
         do {
             try modelContext.save()
-            dismiss()
+            if afterSaveRecordAction == "openDetail" {
+                savedVisit = visit
+                isShowingSavedDetail = true
+            } else {
+                dismiss()
+            }
         } catch {
             assertionFailure("Failed to save experience: \(error)")
         }
@@ -654,6 +669,7 @@ struct AddVisitView: View {
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
+    @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft = VisitDraft()
@@ -664,6 +680,8 @@ struct AddVisitView: View {
     @State private var coverPhotoPath = ""
     @State private var pendingPeople: [PendingPersonLink] = []
     @State private var isShowingPlaceSearch = false
+    @State private var savedVisit: Visit?
+    @State private var isShowingSavedDetail = false
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: event.category)
@@ -702,6 +720,13 @@ struct AddVisitView: View {
                 PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
                     let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
                     draft.apply(place: candidate, preservingVenueName: preservesVenueName)
+                }
+            }
+            .navigationDestination(isPresented: $isShowingSavedDetail) {
+                if let savedVisit {
+                    SavedExperienceDetailView(visit: savedVisit) {
+                        dismiss()
+                    }
                 }
             }
         }
@@ -883,7 +908,12 @@ struct AddVisitView: View {
 
         do {
             try modelContext.save()
-            dismiss()
+            if afterSaveRecordAction == "openDetail" {
+                savedVisit = visit
+                isShowingSavedDetail = true
+            } else {
+                dismiss()
+            }
         } catch {
             assertionFailure("Failed to save visit: \(error)")
         }
@@ -919,6 +949,23 @@ struct AddVisitView: View {
         )
         modelContext.insert(person)
         return person
+    }
+}
+
+private struct SavedExperienceDetailView: View {
+    let visit: Visit
+    let onDone: () -> Void
+
+    var body: some View {
+        ExperienceDetailView(visit: visit)
+            .navigationBarBackButtonHidden()
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("完了") {
+                        onDone()
+                    }
+                }
+            }
     }
 }
 

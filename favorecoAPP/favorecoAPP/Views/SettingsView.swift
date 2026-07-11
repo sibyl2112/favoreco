@@ -189,6 +189,7 @@ struct RecordInputAssistSettingsView: View {
 
                 Picker("記録追加後", selection: $afterSaveRecordAction) {
                     Text("詳細を開く").tag("openDetail")
+                    Text("一覧に戻る").tag("returnToList")
                 }
             }
 
