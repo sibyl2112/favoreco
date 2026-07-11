@@ -16,6 +16,7 @@ struct EditTicketAttemptView: View {
     let plan: Plan
     private let editingAttempt: TicketAttempt?
     @State private var draft: TicketAttemptDraft
+    @State private var validationError = ""
 
     init(plan: Plan, attempt: TicketAttempt? = nil) {
         self.plan = plan
@@ -155,6 +156,14 @@ struct EditTicketAttemptView: View {
                     Button("保存") { save() }
                 }
             }
+            .alert("日付を確認してください", isPresented: Binding(
+                get: { !validationError.isEmpty },
+                set: { if !$0 { validationError = "" } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(validationError)
+            }
         }
     }
 
@@ -164,6 +173,11 @@ struct EditTicketAttemptView: View {
     }
 
     private func save() {
+        if let validationMessage = draft.validationMessage {
+            validationError = validationMessage
+            return
+        }
+
         let now = Date()
         let attempt = editingAttempt ?? TicketAttempt(createdAt: now, plan: plan)
         applyDraft(to: attempt, now: now)
@@ -289,6 +303,19 @@ private struct TicketAttemptDraft {
     var trimmedSeatText: String { seatText.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedPurchaseURL: String { purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var validationMessage: String? {
+        if hasSaleStart && hasApplyDeadline && saleStartAt > applyDeadlineAt {
+            return "申込開始は申込締切以前にしてください。"
+        }
+        if hasApplyDeadline && hasResultAnnounce && applyDeadlineAt > resultAnnounceAt {
+            return "当落発表は申込締切以降にしてください。"
+        }
+        if hasResultAnnounce && hasPaymentDeadline && resultAnnounceAt > paymentDeadlineAt {
+            return "入金締切は当落発表以降にしてください。"
+        }
+        return nil
+    }
 
     var showsDetailedStatus: Bool {
         flowKey == "acquired"

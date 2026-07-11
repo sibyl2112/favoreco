@@ -14,6 +14,7 @@ struct AddTicketPlanView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
     @State private var draft = TicketPlanDraft()
+    @State private var validationError = ""
     private let editingPlan: Plan?
 
     init(plan: Plan? = nil) {
@@ -189,6 +190,14 @@ struct AddTicketPlanView: View {
                     draft.opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: newValue) ?? newValue
                 }
             }
+            .alert("日付を確認してください", isPresented: Binding(
+                get: { !validationError.isEmpty },
+                set: { if !$0 { validationError = "" } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(validationError)
+            }
         }
     }
 
@@ -198,6 +207,11 @@ struct AddTicketPlanView: View {
     }
 
     private func save() {
+        if let validationMessage = draft.validationMessage {
+            validationError = validationMessage
+            return
+        }
+
         let now = Date()
         if let editingPlan {
             update(plan: editingPlan, now: now)
@@ -458,6 +472,26 @@ private struct TicketPlanDraft {
 
     var canSave: Bool {
         !trimmedTitle.isEmpty
+    }
+
+    var validationMessage: String? {
+        if endsAt < startsAt {
+            return "終了日時は開始日時以降にしてください。"
+        }
+        if opensAt > startsAt {
+            return "開場日時は開始日時以前にしてください。"
+        }
+        guard createsTicketAttempt else { return nil }
+        if hasSaleStart && hasApplyDeadline && saleStartAt > applyDeadlineAt {
+            return "申込開始は申込締切以前にしてください。"
+        }
+        if hasApplyDeadline && hasResultAnnounce && applyDeadlineAt > resultAnnounceAt {
+            return "当落発表は申込締切以降にしてください。"
+        }
+        if hasResultAnnounce && hasPaymentDeadline && resultAnnounceAt > paymentDeadlineAt {
+            return "入金締切は当落発表以降にしてください。"
+        }
+        return nil
     }
 
     var showsDetailedStatus: Bool {
