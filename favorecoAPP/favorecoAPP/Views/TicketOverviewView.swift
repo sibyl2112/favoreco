@@ -13,15 +13,41 @@ struct TicketOverviewView: View {
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var attempts: [TicketAttempt]
     @State private var selectedFilter: TicketOverviewFilter = .needsAction
     @State private var statusUpdateError = ""
+    @State private var searchText = ""
+    @State private var isShowingAddTicketPlan = false
 
     private var activeAttempts: [TicketAttempt] {
         attempts.filter { !$0.isArchived && $0.plan?.isArchived != true }
     }
 
     private var filteredAttempts: [TicketAttempt] {
-        activeAttempts
+        searchedAttempts
             .filter(selectedFilter.includes)
             .sorted(by: ticketAttemptOrder)
+    }
+
+    private var searchedAttempts: [TicketAttempt] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return activeAttempts }
+
+        return activeAttempts.filter { attempt in
+            let plan = attempt.plan
+            let account = attempt.account
+            let searchableText = [
+                plan?.title ?? "",
+                plan?.subtitle ?? "",
+                plan?.venueNameSnapshot ?? "",
+                plan?.organizerNameSnapshot ?? "",
+                attempt.ticketSite,
+                attempt.holderName,
+                account?.serviceName ?? "",
+                account?.accountName ?? "",
+                TicketStatusDefinition.name(for: attempt.statusKey),
+                TicketEntryRouteDefinition.name(for: attempt.entryRouteKey),
+                attempt.memo,
+            ].joined(separator: " ")
+            return searchableText.localizedCaseInsensitiveContains(query)
+        }
     }
 
     var body: some View {
@@ -34,16 +60,20 @@ struct TicketOverviewView: View {
                 }
                 .pickerStyle(.menu)
 
-                TicketOverviewCounts(attempts: activeAttempts)
+                TicketOverviewCounts(attempts: searchedAttempts)
             }
 
             Section(selectedFilter.title) {
                 if filteredAttempts.isEmpty {
-                    ContentUnavailableView(
-                        selectedFilter.emptyTitle,
-                        systemImage: selectedFilter.systemImage,
-                        description: Text(selectedFilter.emptyMessage)
-                    )
+                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        ContentUnavailableView(
+                            selectedFilter.emptyTitle,
+                            systemImage: selectedFilter.systemImage,
+                            description: Text(selectedFilter.emptyMessage)
+                        )
+                    } else {
+                        ContentUnavailableView.search(text: searchText)
+                    }
                 } else {
                     ForEach(filteredAttempts) { attempt in
                         if let plan = attempt.plan {
@@ -64,6 +94,20 @@ struct TicketOverviewView: View {
         }
         .navigationTitle("チケット")
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "予定名・会場・プレイガイド・名義")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingAddTicketPlan = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("予定・チケットを追加")
+            }
+        }
+        .sheet(isPresented: $isShowingAddTicketPlan) {
+            AddTicketPlanView()
+        }
         .alert("状態を更新できませんでした", isPresented: Binding(
             get: { !statusUpdateError.isEmpty },
             set: { if !$0 { statusUpdateError = "" } }
