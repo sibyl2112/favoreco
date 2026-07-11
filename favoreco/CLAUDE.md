@@ -57,6 +57,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - `JSONExportView`: 手動バックアップJSONを書き出す画面。RecordCategory / ExperienceEvent / Visit / InboxItem / PhotoBlobメタデータ / SocialAccount / PersonMaster / EventPersonLink / PlaceMaster / Plan / TicketAccount / TicketAttempt をID付きDTOとして出力する。写真/動画バイナリ、Keychainパスワード本体、同期状態、通知予約、外部カレンダー側イベントは含めない。
 - `JSONImportView`: JSONファイルを選択し、Favorecoバックアップか、対応schemaかを検証して、書き出し日時とモデル別件数を復元前にプレビューする。確認後はUUID基準で既存モデルを更新し、存在しないモデルを追加して、カテゴリ/対象/記録/人物/場所/予定/チケット等の関係を再構築する。既存データの一括削除は行わない。写真/動画バイナリは空のPhotoBlobを作らずスキップし、Keychain参照、外部カレンダーID、通知予約IDは端末固有情報としてクリアする。復元結果に追加/更新/写真スキップ/端末固有参照解除の件数を表示する。
 - `CSVExportView`: Visit一覧をCSVとして書き出す画面。列は visit_id / event_id / date / category / title / series / venue / rating / status / seat / amount / official_url / tags / companions / note / created_at / updated_at。写真データは含めず、表計算で見返せる無料の手動エクスポートとして扱う。
+- `CSVImportView`: UTF-8 CSVをFilesから選び、必須列 `date` / `title`、日付形式、空タイトル、余剰列を保存前に検証する。正常行/要修正行の件数と先頭20件をプレビューし、この段階ではSwiftDataを変更しない。引用符、カンマ、セル内改行、BOM付きヘッダーに対応する。ジャンル照合、重複判定、保存は次段階。
 - `ProfileSettingsView`: プロフィール設定。SNSアカウントを複数登録・編集でき、登録済みアカウントはタップで外部URLを開く。マイ領域には将来、FC・プレイガイド・劇場会員・カード枠・外部カレンダー連携をまとめる「登録情報・連携」ハブを置く。
 - `EditSocialAccountView`: SNS追加/編集フォーム。SNS種別、メモ/名前、IDまたはURL、ジャンル紐付け、用途メモを保存する。
 - `GenreManagementView`: ジャンル管理。ジャンル一覧の表示/非表示切り替え、並び替え、詳細設定への遷移、自作ジャンル追加を行う。最後の1ジャンルは非表示にできない。
@@ -145,7 +146,7 @@ CloudKit互換のため、全モデルで「デフォルト値あり」「unique
 - 自作ジャンルの記録フォーム文言は `CategoryRecordTemplate` が `targetNameLabel`、`recordUnitName`、`dateLabel` から生成する。標準ジャンルは従来どおり `templateKey` 別の固定文言を優先する。
 - ジャンルの有効ユニットは `RecordCategory.enabledUnitsRaw` を正本とし、`RecordUnitDefinition` で表示名/説明に変換する。採用ユニットIDは `basic`（基本情報）、`people`（人物・団体）、`ticketPlan`（チケット・予定）、`photos`（写真）、`goshuinBook`（御朱印帳）、`importOCR`（OCR・取込）、`money`（金額）、`officialInfo`（公式情報）、`memo`（メモ）、`advanced`（詳細オプション）。`basic` と `memo` は必須で、詳細画面/自作ジャンル作成画面では外せない。旧 `U1` / `U3` などは読み取り時だけ互換変換する。実入力接続済みは `basic`、`people`、`ticketPlan`、`photos`、`goshuinBook`、`importOCR`、`money`、`officialInfo`、`memo`、`advanced`。
 - デバッグ用の仮データ投入/削除は `DebugDataSeeder` に閉じ込める。挿入時は既存仮データを削除してから、全ジャンルを有効化し、各ジャンル1件以上の `ExperienceEvent` / `Visit` / `PhotoBlob` を通常のSwiftData経路で保存する。写真はジャンル色のPNGを生成して `PhotoBlob.data` に入れる。削除時は `https://example.com/favoreco/` と `debug/sample-` に紐付く仮データだけを削除する。
-- 同期・バックアップ、課金・プラン、CSVインポート、規約/プライバシー/問い合わせ本文は現時点では入口のみ。通知設定はタイプ別ON/OFF、iOS通知許可、予定・チケット追加時の実予約まで接続済み。JSONエクスポートとCSVエクスポートは手動書き出しまで接続済みで、JSONインポートは形式確認、内容プレビュー、UUIDマージ復元、関係再構築まで接続済み。
+- 同期・バックアップ、課金・プラン、規約/プライバシー/問い合わせ本文は現時点では入口のみ。通知設定はタイプ別ON/OFF、iOS通知許可、予定・チケット追加時の実予約まで接続済み。JSONエクスポートとCSVエクスポートは手動書き出しまで接続済みで、JSONインポートは形式確認、内容プレビュー、UUIDマージ復元、関係再構築まで接続済み。CSVインポートはファイル解析、行検証、内容プレビューまで接続済みで、保存は未接続。
 - Mystoriumで実証済みの設計原則・SwiftData/SwiftUIの罠は `docs/04-Mystorium構造リファレンス.md` §3設計原則・§6罠 を必ず読んでから触る
 - **Mystorium再発防止の性能・構造ルールを最初から守る**（詳細: `docs/14-実装アーキテクチャ・性能ルール.md`）。最重要4原則は **①入力中にDBを書かない ②一覧で原寸画像を使わない ③bodyで全件処理しない ④巨大Viewを作らない**。全登録/編集画面はDraftState→Save→Model、Home/GenreTop/Calendar/Statsは軽量Snapshot/DTO経由、画像はthumbnail/detail/originalの3段階、I/O/画像処理/import/export/migrationはMainActor禁止＋background＋batch save。
 - **ライフサイクル状態・予定・申込・記録を混ぜない**。クイック登録は `InboxItem`、対象は `Event`、予定/公演回は `Plan`、申込1件は `TicketAttempt`、実体験は `Visit`、記録下書きは `MemoryDraft`/`VisitDraft` として責務分離する。既存の `Visit.outcomeKey` / `seatText` は暫定互換として残すが、複数先行・落選履歴・名義別当選率・通知更新の正本は `TicketAttempt` に移す。

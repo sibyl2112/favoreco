@@ -732,7 +732,7 @@ struct DataManagementView: View {
                 }
 
                 NavigationLink {
-                    SettingsDocumentView(title: "CSVインポート", bodyText: "date, category, title, venue, memo などからまとめて取り込む入口として準備予定です。")
+                    CSVImportView()
                 } label: {
                     Label("CSVインポート", systemImage: "tray.and.arrow.down")
                 }

@@ -5,6 +5,34 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-11: CSVインポートの事前検証・プレビューを実装
+
+### 変更概要
+- UTF-8 CSVをFilesから選択し、保存前に解析する画面を追加した。
+- 必須列 `date` / `title`、YYYY-MM-DDの日付、空タイトル、余剰列を行単位で検証する。
+- 正常行/要修正行の件数と先頭20件を表示し、この段階ではSwiftDataを変更しない。
+- 引用符、エスケープされた引用符、セル内カンマ/改行、CRLF、BOM付きヘッダーに対応した。
+- 設定 > データ管理のCSVインポートを準備中ページから実画面へ接続した。
+
+### 変更意図
+外部CSVをいきなり保存せず、列不足や日付不正を利用者が確認できる安全な入口を先に完成させるため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Services/CSVImportService.swift`
+- `favorecoAPP/favorecoAPP/Views/CSVImportView.swift`
+- `favorecoAPP/favorecoAPP/Views/SettingsView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 確認結果
+- BOM、CRLF、引用符、セル内カンマ/改行、不正日付、空タイトルを含む単体入力で、正常2件/要修正1件に分かれることを確認した。
+- `swiftc -frontend -parse` で変更したSwiftファイルの構文チェック成功。
+- iOS向け署名なし全体ビルド成功。既存の `ThumbnailLoader` MainActor警告が2件あるが、今回変更によるエラーはなし。
+
+### 残課題
+- ジャンル名の照合/作成方針、UUIDまたは内容による重複判定、正常行だけの保存を次段階で接続する。
+- 実機でFiles選択、BOM/CRLF、引用符付き複数行、要修正表示を確認する。
+
 ## 2026-07-11: JSONバックアップのUUIDマージ復元を実装
 
 ### 変更概要
