@@ -238,6 +238,16 @@ private struct CalendarView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("カレンダー")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        TicketOverviewView()
+                    } label: {
+                        Image(systemName: "ticket")
+                    }
+                    .accessibilityLabel("チケット一覧")
+                }
+            }
             .task {
                 await refreshExternalCalendarIfNeeded()
             }

@@ -1,0 +1,249 @@
+//
+//  TicketOverviewView.swift
+//  favorecoAPP
+//
+//  Created by Codex on 2026/07/11.
+//
+
+import SwiftUI
+import SwiftData
+
+struct TicketOverviewView: View {
+    @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var attempts: [TicketAttempt]
+    @State private var selectedFilter: TicketOverviewFilter = .needsAction
+
+    private var activeAttempts: [TicketAttempt] {
+        attempts.filter { !$0.isArchived && $0.plan?.isArchived != true }
+    }
+
+    private var filteredAttempts: [TicketAttempt] {
+        activeAttempts
+            .filter(selectedFilter.includes)
+            .sorted(by: ticketAttemptOrder)
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Picker("表示", selection: $selectedFilter) {
+                    ForEach(TicketOverviewFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                TicketOverviewCounts(attempts: activeAttempts)
+            }
+
+            Section(selectedFilter.title) {
+                if filteredAttempts.isEmpty {
+                    ContentUnavailableView(
+                        selectedFilter.emptyTitle,
+                        systemImage: selectedFilter.systemImage,
+                        description: Text(selectedFilter.emptyMessage)
+                    )
+                } else {
+                    ForEach(filteredAttempts) { attempt in
+                        if let plan = attempt.plan {
+                            NavigationLink {
+                                PlanDetailView(plan: plan)
+                            } label: {
+                                TicketOverviewRow(attempt: attempt)
+                            }
+                        } else {
+                            TicketOverviewRow(attempt: attempt)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("チケット")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func ticketAttemptOrder(_ lhs: TicketAttempt, _ rhs: TicketAttempt) -> Bool {
+        let leftAction = TicketNextActionDefinition.nextAction(for: lhs)
+        let rightAction = TicketNextActionDefinition.nextAction(for: rhs)
+
+        switch (leftAction, rightAction) {
+        case let (.some(left), .some(right)):
+            return left.date == right.date ? left.priority < right.priority : left.date < right.date
+        case (.some(_), .none):
+            return true
+        case (.none, .some(_)):
+            return false
+        case (.none, .none):
+            let leftDate = lhs.plan?.startsAt ?? lhs.updatedAt
+            let rightDate = rhs.plan?.startsAt ?? rhs.updatedAt
+            return leftDate < rightDate
+        }
+    }
+}
+
+private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
+    case all
+    case needsAction
+    case planning
+    case acquired
+    case completed
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "すべて"
+        case .needsAction: "要対応"
+        case .planning: "検討・申込"
+        case .acquired: "取得済み"
+        case .completed: "終了"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .all: "ticket"
+        case .needsAction: "bell.badge"
+        case .planning: "hourglass"
+        case .acquired: "ticket.fill"
+        case .completed: "checkmark.circle"
+        }
+    }
+
+    var emptyTitle: String {
+        switch self {
+        case .all: "チケット情報はありません"
+        case .needsAction: "対応が必要なチケットはありません"
+        case .planning: "検討・申込中のチケットはありません"
+        case .acquired: "取得済みのチケットはありません"
+        case .completed: "終了したチケットはありません"
+        }
+    }
+
+    var emptyMessage: String {
+        self == .needsAction
+            ? "申込締切、当落発表、入金締切、発券開始が近づくとここに表示されます。"
+            : "中央の＋から予定・チケットを追加できます。"
+    }
+
+    func includes(_ attempt: TicketAttempt) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .needsAction:
+            return TicketNextActionDefinition.nextAction(for: attempt) != nil
+        case .planning:
+            return ["interested", "beforeApply", "onSaleSoon", "waitingResult"].contains(attempt.statusKey)
+        case .acquired:
+            return ["won", "waitingPayment", "waitingIssue", "issued"].contains(attempt.statusKey)
+        case .completed:
+            return ["lost", "attended", "skipped"].contains(attempt.statusKey)
+        }
+    }
+}
+
+private struct TicketOverviewCounts: View {
+    let attempts: [TicketAttempt]
+
+    private var needsActionCount: Int {
+        attempts.filter { TicketNextActionDefinition.nextAction(for: $0) != nil }.count
+    }
+
+    private var acquiredCount: Int {
+        attempts.filter { ["won", "waitingPayment", "waitingIssue", "issued"].contains($0.statusKey) }.count
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            countCell(value: attempts.count, label: "申込")
+            Divider().frame(height: 34)
+            countCell(value: needsActionCount, label: "要対応")
+            Divider().frame(height: 34)
+            countCell(value: acquiredCount, label: "取得済み")
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func countCell(value: Int, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text("\(value)")
+                .font(FavorecoTypography.bodyStrong)
+            Text(label)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct TicketOverviewRow: View {
+    let attempt: TicketAttempt
+
+    private var plan: Plan? { attempt.plan }
+    private var nextAction: TicketNextActionDefinition? {
+        TicketNextActionDefinition.nextAction(for: attempt)
+    }
+    private var categoryColor: Color {
+        Color(hex: plan?.category?.colorHex ?? "#147C88")
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: plan?.category?.iconSymbol ?? "ticket")
+                .font(.title3)
+                .foregroundStyle(categoryColor)
+                .frame(width: 42, height: 42)
+                .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(plan?.title.isEmpty == false ? plan?.title ?? "予定" : "予定")
+                        .font(FavorecoTypography.bodyStrong)
+                        .lineLimit(2)
+
+                    Spacer(minLength: 8)
+
+                    Text(TicketStatusDefinition.name(for: attempt.statusKey))
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(statusColor)
+                        .lineLimit(1)
+                }
+
+                if let plan {
+                    Label(plan.startsAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !attempt.ticketSite.isEmpty || !attempt.entryRouteKey.isEmpty {
+                    Text([attempt.ticketSite, TicketEntryRouteDefinition.name(for: attempt.entryRouteKey)]
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " / "))
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if let nextAction {
+                    Label(
+                        "\(nextAction.title)  \(nextAction.date.formatted(date: .numeric, time: .shortened))",
+                        systemImage: nextAction.systemImage
+                    )
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var statusColor: Color {
+        switch attempt.statusKey {
+        case "lost", "skipped": .secondary
+        case "attended": .green
+        case "waitingPayment": .red
+        case "won", "waitingIssue", "issued": categoryColor
+        default: .orange
+        }
+    }
+}
