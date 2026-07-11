@@ -200,9 +200,11 @@ struct AddExperienceView: View {
     }
 
     private var officialInfoFields: some View {
-        TextField("公式URL（任意）", text: $draft.officialURL)
-            .textInputAutocapitalization(.never)
-            .keyboardType(.URL)
+        URLImportAssistEditor(
+            officialURL: $draft.officialURL,
+            title: $draft.title,
+            seriesName: $draft.seriesName
+        )
     }
 
     private var venueNameBinding: Binding<String> {
@@ -507,9 +509,11 @@ struct EditExperienceView: View {
     }
 
     private var officialInfoFields: some View {
-        TextField("公式URL（任意）", text: $draft.officialURL)
-            .textInputAutocapitalization(.never)
-            .keyboardType(.URL)
+        URLImportAssistEditor(
+            officialURL: $draft.officialURL,
+            title: $draft.title,
+            seriesName: $draft.seriesName
+        )
     }
 
     private var venueNameBinding: Binding<String> {
@@ -1300,6 +1304,90 @@ private func placeSearchAssist(isEnabled: Bool, address: Binding<String>, action
             .textContentType(.fullStreetAddress)
         Button(action: action) {
             Label("Apple Mapsから会場を選択", systemImage: "map")
+        }
+    }
+}
+
+private struct URLImportAssistEditor: View {
+    @Binding var officialURL: String
+    @Binding var title: String
+    @Binding var seriesName: String
+
+    @AppStorage(AppStorageKeys.usesURLImportAssist) private var usesURLImportAssist = true
+    @State private var candidate: URLMetadataCandidate?
+    @State private var isLoading = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField("公式URL（任意）", text: $officialURL)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+
+            if usesURLImportAssist {
+                Button {
+                    Task { await fetchMetadata() }
+                } label: {
+                    if isLoading {
+                        Label("候補を取得中", systemImage: "hourglass")
+                    } else {
+                        Label("URLから候補を取得", systemImage: "link.badge.plus")
+                    }
+                }
+                .disabled(isLoading || officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                if let candidate {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("取得したタイトル")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                        Text(candidate.title)
+                            .font(FavorecoTypography.bodyStrong)
+                            .textSelection(.enabled)
+                        HStack {
+                            Button("タイトルに反映") {
+                                title = candidate.title
+                            }
+                            .buttonStyle(.bordered)
+                            Button("シリーズ名に反映") {
+                                seriesName = candidate.title
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
+
+                if !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .onChange(of: officialURL) { _, _ in
+            candidate = nil
+            errorMessage = ""
+        }
+        .onChange(of: usesURLImportAssist) { _, isEnabled in
+            if !isEnabled {
+                candidate = nil
+                errorMessage = ""
+            }
+        }
+    }
+
+    @MainActor
+    private func fetchMetadata() async {
+        isLoading = true
+        candidate = nil
+        errorMessage = ""
+        defer { isLoading = false }
+        do {
+            let result = try await URLMetadataService.fetch(from: officialURL)
+            candidate = result
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? "候補を取得できませんでした。"
         }
     }
 }
