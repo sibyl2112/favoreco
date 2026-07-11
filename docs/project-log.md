@@ -4489,3 +4489,30 @@ favorecoの初期値として決めた「保存後は編集画面ではなく情
 ### 残課題
 - Apple DeveloperのApp IDでWeatherKit capabilityを有効化し、実機で2021年8月以降の対象/対象外ジャンル、設定OFF、座標なし、日付/場所変更を確認する
 - Apple Weather帰属表示の最終デザインは配布前にWeatherKit利用要件と照合する
+
+## 2026-07-12: アプリ内文字サイズ設定を接続
+
+### 変更概要
+- 表示設定の文字サイズを専用画面へ接続
+- 初期値はiOSの文字サイズ・アクセシビリティ設定に追従
+- 追従をOFFにした場合は小さめ/標準/大きめ/特大の4段階を選択可能
+- Noto Sans JP、Noto Serif JP、Cormorantを確認できるプレビューを追加
+- ContentViewのDynamic Type環境からアプリ全体へ反映
+
+### 変更意図
+独自フォントの世界観を保ちながら、端末のアクセシビリティ設定と利用者が選ぶ読みやすさの両方へ対応するため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift（文字サイズ設定キー）
+- favorecoAPP/favorecoAPP/Utilities/FavorecoTypography.swift（サイズ定義と全体適用Modifier）
+- favorecoAPP/favorecoAPP/ContentView.swift（アプリルートへの適用）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（設定UIとプレビュー）
+- favoreco/CLAUDE.md（現在仕様）
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルの構文解析が成功
+- 既存DerivedDataを使ったiPhoneOS向け署名なしビルドが成功
+
+### 残課題
+- 実機で端末文字サイズ追従と4段階を切り替え、Home、設定、記録入力、詳細の折返しとボタン高さを確認する
+- 外観モードは引き続き端末設定追従のみ。ライト/ダーク固定は別作業で検討する

@@ -667,6 +667,8 @@ struct DisplaySettingsView: View {
     @AppStorage(AppStorageKeys.showsHomeCategories) private var showsHomeCategories = true
     @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsHomeStatsSummary = false
     @AppStorage(AppStorageKeys.showsHomeFavorites) private var showsHomeFavorites = false
+    @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
+    @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
 
     var body: some View {
         Form {
@@ -681,11 +683,59 @@ struct DisplaySettingsView: View {
             }
 
             Section("外観") {
-                LabeledContent("文字サイズ", value: "準備中")
+                NavigationLink {
+                    TextSizeSettingsView()
+                } label: {
+                    LabeledContent("文字サイズ", value: textSizeSummary)
+                }
                 LabeledContent("外観モード", value: "端末設定に従う")
             }
         }
         .navigationTitle("表示設定")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var textSizeSummary: String {
+        followsSystemTextSize
+            ? "端末設定に従う"
+            : (AppTextSize(rawValue: appTextSizeRaw) ?? .standard).name
+    }
+}
+
+private struct TextSizeSettingsView: View {
+    @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
+    @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("iOS設定に従う", isOn: $followsSystemTextSize)
+
+                if !followsSystemTextSize {
+                    Picker("アプリ内文字サイズ", selection: $appTextSizeRaw) {
+                        ForEach(AppTextSize.allCases) { option in
+                            Text(option.name).tag(option.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+            } footer: {
+                Text("iOS設定に従う場合は、端末の文字サイズとアクセシビリティ設定を反映します。")
+            }
+
+            Section("プレビュー") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("記録が、美しい思い出になる")
+                        .font(FavorecoTypography.jpSerif(24, weight: .bold, relativeTo: .title2))
+                    Text("観た作品や訪れた場所を、写真と一緒に残せます。")
+                        .font(FavorecoTypography.body)
+                    Text("Favoreco 2026")
+                        .font(FavorecoTypography.latinDisplay(20, weight: .semibold, relativeTo: .headline))
+                }
+                .padding(.vertical, 6)
+            }
+        }
+        .navigationTitle("文字サイズ")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

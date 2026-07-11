@@ -14,6 +14,8 @@ enum AppStorageKeys {
     static let showsHomeCategories = "showsHomeCategories"
     static let showsHomeStatsSummary = "showsHomeStatsSummary"
     static let showsHomeFavorites = "showsHomeFavorites"
+    static let followsSystemTextSize = "followsSystemTextSize"
+    static let appTextSize = "appTextSize"
     static let defaultRecordDateMode = "defaultRecordDateMode"
     static let defaultGenreMode = "defaultGenreMode"
     static let lastUsedCategoryTemplateKey = "lastUsedCategoryTemplateKey"

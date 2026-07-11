@@ -12,11 +12,14 @@ struct ContentView: View {
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
 
     var body: some View {
-        if hasCompletedGenreOnboarding {
-            MainTabView()
-        } else {
-            GenreOnboardingView()
+        Group {
+            if hasCompletedGenreOnboarding {
+                MainTabView()
+            } else {
+                GenreOnboardingView()
+            }
         }
+        .modifier(AppTextSizeModifier())
     }
 }
 

@@ -60,3 +60,48 @@ enum FavorecoTypography {
         jpSans(12, weight: .semibold, relativeTo: .caption)
     }
 }
+
+enum AppTextSize: String, CaseIterable, Identifiable {
+    case small
+    case standard
+    case large
+    case extraLarge
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .small: return "小さめ"
+        case .standard: return "標準"
+        case .large: return "大きめ"
+        case .extraLarge: return "特大"
+        }
+    }
+
+    var dynamicTypeSize: DynamicTypeSize {
+        switch self {
+        case .small: return .medium
+        case .standard: return .large
+        case .large: return .xLarge
+        case .extraLarge: return .xxLarge
+        }
+    }
+}
+
+struct AppTextSizeModifier: ViewModifier {
+    @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
+    @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if followsSystemTextSize {
+            content
+        } else {
+            content.dynamicTypeSize(appTextSize.dynamicTypeSize)
+        }
+    }
+
+    private var appTextSize: AppTextSize {
+        AppTextSize(rawValue: appTextSizeRaw) ?? .standard
+    }
+}
