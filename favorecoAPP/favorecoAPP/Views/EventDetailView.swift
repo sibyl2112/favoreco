@@ -12,6 +12,7 @@ struct EventDetailView: View {
     let event: ExperienceEvent
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.favorecoThemePalette) private var themePalette
     @State private var isShowingAddVisit = false
     @State private var isShowingEditEvent = false
     @State private var isShowingDeleteConfirmation = false
@@ -22,7 +23,7 @@ struct EventDetailView: View {
     }
 
     private var accentColor: Color {
-        Color(hex: category?.colorHex ?? "#6F8F7A")
+        themePalette.categoryColor(hex: category?.colorHex ?? "#6F8F7A")
     }
 
     private var template: CategoryRecordTemplate {

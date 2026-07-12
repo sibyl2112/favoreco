@@ -15,6 +15,7 @@ struct VisitSummaryRow: View {
 
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.favorecoThemePalette) private var themePalette
     @State private var thumbnailImage: UIImage?
 
     private var title: String {
@@ -26,7 +27,7 @@ struct VisitSummaryRow: View {
     }
 
     private var categoryColor: Color {
-        Color(hex: category?.colorHex ?? "#147C88")
+        themePalette.categoryColor(hex: category?.colorHex ?? "#147C88")
     }
 
     private var firstPhoto: PhotoBlob? {

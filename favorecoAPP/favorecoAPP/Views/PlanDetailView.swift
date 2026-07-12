@@ -12,6 +12,7 @@ struct PlanDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
+    @Environment(\.favorecoThemePalette) private var themePalette
     let plan: Plan
     @State private var isShowingEditPlan = false
     @State private var isShowingAddAttempt = false
@@ -22,7 +23,7 @@ struct PlanDetailView: View {
     @State private var navigatingVisit: Visit?
 
     private var categoryColor: Color {
-        Color(hex: plan.category?.colorHex ?? "#147C88")
+        themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88")
     }
 
     private var attempts: [TicketAttempt] {

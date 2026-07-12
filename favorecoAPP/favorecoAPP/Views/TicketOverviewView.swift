@@ -387,6 +387,7 @@ private struct TicketOverviewCounts: View {
 
 private struct TicketOverviewRow: View {
     let attempt: TicketAttempt
+    @Environment(\.favorecoThemePalette) private var themePalette
 
     private var plan: Plan? { attempt.plan }
     private var nextAction: TicketNextActionDefinition? {
@@ -396,7 +397,7 @@ private struct TicketOverviewRow: View {
         TicketInputIssueDefinition.issue(for: attempt)
     }
     private var categoryColor: Color {
-        Color(hex: plan?.category?.colorHex ?? "#147C88")
+        themePalette.categoryColor(hex: plan?.category?.colorHex ?? "#147C88")
     }
 
     var body: some View {

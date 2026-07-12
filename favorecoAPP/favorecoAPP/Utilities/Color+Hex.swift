@@ -53,7 +53,11 @@ struct FavorecoThemePalette {
     }
 
     func categoryColor(hex: String) -> Color {
-        Color(hex: mode == .unified ? unifiedColorHex : hex)
+        Color(hex: resolvedHex(categoryHex: hex))
+    }
+
+    func resolvedHex(categoryHex: String) -> String {
+        mode == .unified ? unifiedColorHex : categoryHex
     }
 }
 

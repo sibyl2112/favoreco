@@ -614,9 +614,10 @@ private struct CalendarDayCell: View {
 
 private struct PlanSummaryRow: View {
     let plan: Plan
+    @Environment(\.favorecoThemePalette) private var themePalette
 
     private var categoryColor: Color {
-        Color(hex: plan.category?.colorHex ?? "#147C88")
+        themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88")
     }
 
     private var activeAttempts: [TicketAttempt] {
@@ -1042,6 +1043,7 @@ private struct StatsReportDraftView: View {
     let kind: StatsReportKind
     let allVisits: [Visit]
     let categories: [RecordCategory]
+    @Environment(\.favorecoThemePalette) private var themePalette
     @State private var selectedPeriodStart: Date
     @State private var showsAmount = false
     @State private var showsCopyConfirmation = false
@@ -1399,7 +1401,7 @@ private struct StatsReportDraftView: View {
             StatsReportImageCategory(
                 name: $0.category.name,
                 count: $0.count,
-                colorHex: $0.category.colorHex
+                colorHex: themePalette.resolvedHex(categoryHex: $0.category.colorHex)
             )
         }
         let snapshot = StatsReportImageSnapshot(
@@ -1634,6 +1636,7 @@ private struct StatsMetricCard: View {
 private struct CategoryStatRow: View {
     let stat: CategoryStat
     let maxCount: Int
+    @Environment(\.favorecoThemePalette) private var themePalette
 
     private var ratio: Double {
         guard maxCount > 0 else { return 0 }
@@ -1645,7 +1648,7 @@ private struct CategoryStatRow: View {
             HStack {
                 Label(stat.category.name, systemImage: stat.category.iconSymbol)
                     .font(FavorecoTypography.bodyStrong)
-                    .foregroundStyle(Color(hex: stat.category.colorHex))
+                    .foregroundStyle(themePalette.categoryColor(hex: stat.category.colorHex))
                 Spacer()
                 Text("\(stat.count)")
                     .font(FavorecoTypography.bodyStrong)
@@ -1656,7 +1659,7 @@ private struct CategoryStatRow: View {
                     Capsule()
                         .fill(Color(.secondarySystemGroupedBackground))
                     Capsule()
-                        .fill(Color(hex: stat.category.colorHex))
+                        .fill(themePalette.categoryColor(hex: stat.category.colorHex))
                         .frame(width: proxy.size.width * ratio)
                 }
             }
