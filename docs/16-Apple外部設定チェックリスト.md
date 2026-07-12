@@ -123,8 +123,8 @@ Auto-Renewable Subscription Group: `Favoreco Sync`
 
 ## 7. リリース前の要判断
 
-- iOS 26.5を最低対応にするか。対象を広げる場合はDeployment Targetを下げ、全APIのavailabilityと旧OS実機を再確認する
-- iPad対応を初版から含めるか。含める場合は全主要画面をiPadで確認する
+- 最低対応OSはiOS 26.5で確定。Deployment Targetは変更しない
+- iPad対応はデザイン完成度を見て判断する。含める場合は全主要画面をiPadで確認し、見送る場合は提出前にTargeted Device FamilyをiPhoneのみに変更する
 - `com.nori.favoreco` と `iCloud.com.nori.favoreco` をRANOVIQOの恒久IDとして採用するか
 - 創設メンバー特典の対象、締切日、権利付与方法
 - 規約、プライバシー、問い合わせ、公式X、レビューURLの最終URL
@@ -150,4 +150,3 @@ Xcode Organizerから配布する場合:
 5. App Store ConnectでProcessing完了を待つ
 6. TestFlight内部テストへ追加
 7. 実機総合確認手順をTestFlightビルドでも再実施する
-
