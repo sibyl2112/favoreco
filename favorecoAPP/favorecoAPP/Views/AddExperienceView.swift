@@ -310,6 +310,7 @@ struct AddExperienceView: View {
                 dismiss()
             }
         } catch {
+            modelContext.rollback()
             assertionFailure("Failed to save experience: \(error)")
         }
     }
@@ -704,6 +705,7 @@ struct EditExperienceView: View {
 
 struct AddVisitView: View {
     let event: ExperienceEvent
+    let onSave: (() -> Void)?
 
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
@@ -713,7 +715,7 @@ struct AddVisitView: View {
     @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var draft = VisitDraft()
+    @State private var draft: VisitDraft
     @State private var expandedUnitIDs: Set<String> = ["basic", "people", "ticketPlan", "photos", "memo"]
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedOCRItems: [PhotosPickerItem] = []
@@ -723,9 +725,20 @@ struct AddVisitView: View {
     @State private var isShowingPlaceSearch = false
     @State private var savedVisit: Visit?
     @State private var isShowingSavedDetail = false
+    @State private var saveErrorMessage: String?
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: event.category)
+    }
+
+    init(
+        event: ExperienceEvent,
+        initialDraft: VisitDraft = VisitDraft(),
+        onSave: (() -> Void)? = nil
+    ) {
+        self.event = event
+        self.onSave = onSave
+        _draft = State(initialValue: initialDraft)
     }
 
     var body: some View {
@@ -769,6 +782,14 @@ struct AddVisitView: View {
                         dismiss()
                     }
                 }
+            }
+            .alert("保存に失敗しました", isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { saveErrorMessage = nil }
+            } message: {
+                Text(saveErrorMessage ?? "")
             }
         }
     }
@@ -959,6 +980,7 @@ struct AddVisitView: View {
         modelContext.insert(visit)
         insertPendingPeople(for: visit)
         insertPendingPhotos(for: visit)
+        onSave?()
 
         do {
             try modelContext.save()
@@ -971,6 +993,8 @@ struct AddVisitView: View {
                 dismiss()
             }
         } catch {
+            modelContext.rollback()
+            saveErrorMessage = "記録を保存できませんでした。入力内容を確認して、もう一度お試しください。"
             assertionFailure("Failed to save visit: \(error)")
         }
     }
@@ -1178,7 +1202,7 @@ struct AddExperienceDraft {
     }
 }
 
-private struct VisitDraft {
+struct VisitDraft {
     var visitedAt: Date = Date()
     var venueName: String = ""
     var venueAddress: String = ""
@@ -1194,11 +1218,19 @@ private struct VisitDraft {
     var amountText: String = ""
     var note: String = ""
 
+    init() {}
+
+    init(inboxItem: InboxItem) {
+        note = [inboxItem.body, inboxItem.sourceURL]
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: "\n")
+    }
+
     var trimmedVenueName: String {
         venueName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    var placeSnapshot: PlaceSnapshot {
+    fileprivate var placeSnapshot: PlaceSnapshot {
         PlaceSnapshot(name: trimmedVenueName, address: venueAddress, latitude: latitude, longitude: longitude)
     }
 
