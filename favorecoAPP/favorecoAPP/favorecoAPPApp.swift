@@ -23,6 +23,7 @@ struct favorecoAPPApp: App {
             ContentView()
                 .task {
                     await CategoryPresetSeeder.seedIfNeeded(in: sharedModelContainer.mainContext)
+                    _ = try? AutomaticBackupService.createIfDue(in: sharedModelContainer.mainContext)
                 }
         }
         .modelContainer(sharedModelContainer)

@@ -1195,7 +1195,7 @@ struct JSONExportView: View {
             }
 
             Section("含まれないもの") {
-                Text("写真/動画の実データ、iCloud同期状態、通知予約、外部カレンダー側のイベントはまだ含めません。写真付き完全バックアップは後続で扱います。")
+                Text("JSON単体には写真/動画の実データ、iCloud同期状態、通知予約、外部カレンダー側のイベントを含めません。写真本体を残す場合は「完全バックアップ」を使用してください。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1219,6 +1219,7 @@ struct SyncBackupSettingsView: View {
     @AppStorage(AppStorageKeys.iCloudSyncEnabled) private var iCloudSyncEnabled = false
     @AppStorage(AppStorageKeys.iCloudSyncActiveAtLaunch) private var iCloudSyncActiveAtLaunch = false
     @AppStorage(AppStorageKeys.iCloudSyncStartupError) private var iCloudSyncStartupError = ""
+    @AppStorage(AppStorageKeys.automaticBackupEnabled) private var automaticBackupEnabled = false
     @State private var diagnostic: CloudSyncDiagnostic?
     @State private var isRefreshingDiagnostic = false
 
@@ -1258,14 +1259,26 @@ struct SyncBackupSettingsView: View {
             }
 
             Section("バックアップ") {
+#if DEBUG
+                Toggle("自動バックアップ", isOn: $automaticBackupEnabled)
+#else
                 Toggle("自動バックアップ", isOn: .constant(false))
                     .disabled(true)
-                LabeledContent("バックアップ先", value: "準備中")
+#endif
+                LabeledContent("バックアップ先", value: "この端末 / 5世代")
+                NavigationLink {
+                    AutomaticBackupView()
+                } label: {
+                    Label("自動バックアップの管理", systemImage: "clock.arrow.2.circlepath")
+                }
                 NavigationLink {
                     FullBackupView()
                 } label: {
                     Label("完全バックアップ・復元", systemImage: "archivebox")
                 }
+                Text("24時間に1回、起動時に写真付きバックアップを作成します。製品版では同期プラン向け機能として提供予定です。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("同期トラブル診断") {

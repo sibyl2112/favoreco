@@ -25,13 +25,14 @@ enum JSONBackupExportService {
         plans: [Plan],
         ticketAccounts: [TicketAccount],
         ticketAttempts: [TicketAttempt],
-        includesPhotoBinaryData: Bool = false
+        includesPhotoBinaryData: Bool = false,
+        isFullBackupManifest: Bool = false
     ) throws -> String {
         let envelope = FavorecoBackupEnvelope(
             appName: "favoreco",
             schemaVersion: schemaVersion,
             exportedAt: Date(),
-            note: includesPhotoBinaryData
+            note: isFullBackupManifest
                 ? "Favoreco full backup manifest. Photo binary data is stored in the media directory."
                 : "Manual JSON backup. Photo binary data is not included.",
             categories: categories.sorted { $0.sortOrder < $1.sortOrder }.map(BackupCategory.init),

@@ -134,7 +134,8 @@ struct FullBackupView: View {
                 plans: plans,
                 ticketAccounts: ticketAccounts,
                 ticketAttempts: ticketAttempts,
-                includesPhotoBinaryData: true
+                includesPhotoBinaryData: false,
+                isFullBackupManifest: true
             )
             exportURL = try FullBackupService.makePackage(json: json, photos: photos)
             isShowingExporter = true
