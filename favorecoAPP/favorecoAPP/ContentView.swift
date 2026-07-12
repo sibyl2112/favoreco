@@ -25,19 +25,20 @@ struct ContentView: View {
         }
         .modifier(AppTextSizeModifier())
         .preferredColorScheme(appearanceMode.colorScheme)
-        .tint(effectiveTint)
+        .environment(\.favorecoThemePalette, effectiveThemePalette)
+        .tint(effectiveThemePalette.globalTint)
     }
 
     private var appearanceMode: AppAppearanceMode {
         AppAppearanceMode(rawValue: appearanceModeRaw) ?? .system
     }
 
-    private var effectiveTint: Color {
+    private var effectiveThemePalette: FavorecoThemePalette {
         let mode = FavorecoThemeMode(rawValue: themeModeRaw) ?? .categoryAccent
         guard purchaseManager.currentPlan.includesLocalFullFeatures, mode == .unified else {
-            return Color(hex: "#147C88")
+            return .standard
         }
-        return Color(hex: unifiedThemeColorHex)
+        return FavorecoThemePalette(mode: .unified, unifiedColorHex: unifiedThemeColorHex)
     }
 }
 

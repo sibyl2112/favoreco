@@ -10,6 +10,7 @@ import SwiftData
 import UIKit
 
 struct HomeView: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var inboxItems: [InboxItem]
@@ -82,7 +83,7 @@ struct HomeView: View {
                     subtitle: "公演 \(attentionDateFormatter.string(from: plan.startsAt))",
                     dueDate: plan.startsAt,
                     plan: plan,
-                    tint: Color(hex: plan.category?.colorHex ?? "#147C88"),
+                    tint: themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88"),
                     priority: 20
                 )
             }
@@ -96,7 +97,7 @@ struct HomeView: View {
                     title: visit.event?.title.isEmpty == false ? visit.event?.title ?? "予定" : "予定",
                     subtitle: visit.visitedAt.formatted(date: .long, time: .omitted),
                     dueDate: visit.visitedAt,
-                    tint: Color(hex: visit.event?.category?.colorHex ?? "#147C88"),
+                    tint: themePalette.categoryColor(hex: visit.event?.category?.colorHex ?? "#147C88"),
                     priority: 30
                 )
             }
@@ -177,7 +178,7 @@ struct HomeView: View {
         let now = Date()
         let plan = attempt.plan
         let title = plan?.title.isEmpty == false ? plan?.title ?? "予定" : "予定"
-        let tint = Color(hex: plan?.category?.colorHex ?? "#147C88")
+        let tint = themePalette.categoryColor(hex: plan?.category?.colorHex ?? "#147C88")
         var items: [HomeAttentionItem] = []
 
         if attempt.saleStartAt > now {
@@ -619,10 +620,11 @@ private struct ExperienceGalleryCard: View {
 
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.favorecoThemePalette) private var themePalette
     @State private var thumbnailImage: UIImage?
 
     private var categoryColor: Color {
-        Color(hex: visit.event?.category?.colorHex ?? "#147C88")
+        themePalette.categoryColor(hex: visit.event?.category?.colorHex ?? "#147C88")
     }
 
     private var firstPhoto: PhotoBlob? {
@@ -857,13 +859,14 @@ private struct InboxItemRow: View {
 
 private struct CategoryTile: View {
     let category: RecordCategory
+    @Environment(\.favorecoThemePalette) private var themePalette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 Image(systemName: category.iconSymbol)
                     .font(.title2)
-                    .foregroundStyle(Color(hex: category.colorHex))
+                    .foregroundStyle(themePalette.categoryColor(hex: category.colorHex))
                 Spacer(minLength: 8)
                 if category.isBuiltIn {
                     Text("標準")
@@ -890,7 +893,7 @@ private struct CategoryTile: View {
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(Color(hex: category.colorHex))
+                .fill(themePalette.categoryColor(hex: category.colorHex))
                 .frame(width: 4)
                 .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
         }

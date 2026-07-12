@@ -14,6 +14,7 @@ struct ExperienceDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var isShowingEdit = false
     @State private var calendarDraft: CalendarEventDraft?
@@ -29,7 +30,7 @@ struct ExperienceDetailView: View {
     }
 
     private var accentColor: Color {
-        Color(hex: category?.colorHex ?? "#6F8F7A")
+        themePalette.categoryColor(hex: category?.colorHex ?? "#6F8F7A")
     }
 
     private var template: CategoryRecordTemplate {

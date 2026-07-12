@@ -11,6 +11,7 @@ import SwiftData
 struct CategoryTopView: View {
     let category: RecordCategory
 
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \RecordCategory.sortOrder) private var allCategories: [RecordCategory]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var allVisits: [Visit]
     @AppStorage(AppStorageKeys.homeSelectedCategoryTemplateKey) private var homeSelectedCategoryTemplateKey = ""
@@ -77,9 +78,9 @@ struct CategoryTopView: View {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: category.iconSymbol)
                     .font(.title)
-                    .foregroundStyle(Color(hex: category.colorHex))
+                    .foregroundStyle(themePalette.categoryColor(hex: category.colorHex))
                     .frame(width: 44, height: 44)
-                    .background(Color(hex: category.colorHex).opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(themePalette.categoryColor(hex: category.colorHex).opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 6) {
                     GenreHeadingSwitcher(
@@ -100,7 +101,7 @@ struct CategoryTopView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .tint(Color(hex: category.colorHex))
+            .tint(themePalette.categoryColor(hex: category.colorHex))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
@@ -159,7 +160,7 @@ struct CategoryTopView: View {
                     icon: category.iconSymbol,
                     title: "まだ記録がありません",
                     message: "タイトル、日付、場所、評価、メモだけの軽い記録から始められます。",
-                    tint: Color(hex: category.colorHex)
+                    tint: themePalette.categoryColor(hex: category.colorHex)
                 )
             } else {
                 ForEach(visits.prefix(10)) { visit in

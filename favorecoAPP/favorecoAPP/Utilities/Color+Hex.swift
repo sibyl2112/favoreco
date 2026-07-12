@@ -39,6 +39,35 @@ struct FavorecoThemeColorPreset: Identifiable {
     ]
 }
 
+struct FavorecoThemePalette {
+    let mode: FavorecoThemeMode
+    let unifiedColorHex: String
+
+    static let standard = FavorecoThemePalette(
+        mode: .categoryAccent,
+        unifiedColorHex: "#147C88"
+    )
+
+    var globalTint: Color {
+        Color(hex: mode == .unified ? unifiedColorHex : "#147C88")
+    }
+
+    func categoryColor(hex: String) -> Color {
+        Color(hex: mode == .unified ? unifiedColorHex : hex)
+    }
+}
+
+private struct FavorecoThemePaletteKey: EnvironmentKey {
+    static let defaultValue = FavorecoThemePalette.standard
+}
+
+extension EnvironmentValues {
+    var favorecoThemePalette: FavorecoThemePalette {
+        get { self[FavorecoThemePaletteKey.self] }
+        set { self[FavorecoThemePaletteKey.self] = newValue }
+    }
+}
+
 extension Color {
     init(hex: String) {
         let sanitizedHex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
