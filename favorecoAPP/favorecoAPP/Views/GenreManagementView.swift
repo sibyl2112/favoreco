@@ -9,10 +9,12 @@ import SwiftUI
 import SwiftData
 
 struct GenreManagementView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var warningMessage = ""
     @State private var isShowingAddGenre = false
+    @State private var isShowingPlans = false
 
     private var sortedCategories: [RecordCategory] {
         categories.sorted { $0.sortOrder < $1.sortOrder }
@@ -63,15 +65,33 @@ struct GenreManagementView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    isShowingAddGenre = true
+                    if purchaseManager.currentPlan.includesLocalFullFeatures {
+                        isShowingAddGenre = true
+                    } else {
+                        isShowingPlans = true
+                    }
                 } label: {
-                    Image(systemName: "plus")
+                    Image(systemName: purchaseManager.currentPlan.includesLocalFullFeatures ? "plus" : "lock.fill")
                 }
-                .accessibilityLabel("自作ジャンルを追加")
+                .accessibilityLabel(
+                    purchaseManager.currentPlan.includesLocalFullFeatures
+                        ? "自作ジャンルを追加"
+                        : "自作ジャンルはライト以上"
+                )
             }
         }
         .sheet(isPresented: $isShowingAddGenre) {
             AddCustomGenreView()
+        }
+        .sheet(isPresented: $isShowingPlans) {
+            NavigationStack {
+                BillingPlanSettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("閉じる") { isShowingPlans = false }
+                        }
+                    }
+            }
         }
     }
 
@@ -142,12 +162,14 @@ private struct GenreManagementRow: View {
 struct GenreDetailSettingsView: View {
     let category: RecordCategory
 
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SocialAccount.sortOrder) private var socialAccounts: [SocialAccount]
     @State private var draft: GenreDetailDraft
     @State private var warningMessage = ""
     @State private var isShowingRemoveConfirmation = false
+    @State private var isShowingPlans = false
 
     private var linkedSocialAccounts: [SocialAccount] {
         socialAccounts
@@ -238,9 +260,16 @@ struct GenreDetailSettingsView: View {
 
             Section("ジャンル管理") {
                 Button {
-                    duplicateAsCustomGenre()
+                    if purchaseManager.currentPlan.includesLocalFullFeatures {
+                        duplicateAsCustomGenre()
+                    } else {
+                        isShowingPlans = true
+                    }
                 } label: {
-                    Label("この設定を複製", systemImage: "plus.square.on.square")
+                    Label(
+                        purchaseManager.currentPlan.includesLocalFullFeatures ? "この設定を複製" : "複製はライト以上",
+                        systemImage: purchaseManager.currentPlan.includesLocalFullFeatures ? "plus.square.on.square" : "lock.fill"
+                    )
                 }
 
                 if !category.isBuiltIn {
@@ -284,6 +313,16 @@ struct GenreDetailSettingsView: View {
                 Text("紐づくデータは削除されません。ジャンル管理から再表示できます。")
             }
         }
+        .sheet(isPresented: $isShowingPlans) {
+            NavigationStack {
+                BillingPlanSettingsView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("閉じる") { isShowingPlans = false }
+                        }
+                    }
+            }
+        }
     }
 
     private func save() {
@@ -322,6 +361,10 @@ struct GenreDetailSettingsView: View {
     }
 
     private func duplicateAsCustomGenre() {
+        guard purchaseManager.currentPlan.includesLocalFullFeatures else {
+            isShowingPlans = true
+            return
+        }
         warningMessage = ""
         let descriptor = FetchDescriptor<RecordCategory>()
         let allCategories = (try? modelContext.fetch(descriptor)) ?? []
@@ -554,6 +597,7 @@ private struct GenreThemeColorPreset: Identifiable {
 }
 
 struct AddCustomGenreView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
@@ -629,6 +673,10 @@ struct AddCustomGenreView: View {
     }
 
     private func save() {
+        guard purchaseManager.currentPlan.includesLocalFullFeatures else {
+            dismiss()
+            return
+        }
         let now = Date()
         let maxSortOrder = categories.map(\.sortOrder).max() ?? 0
         let category = RecordCategory(
@@ -747,5 +795,6 @@ private struct CustomGenreTemplateType: Identifiable {
     NavigationStack {
         GenreManagementView()
     }
+    .environmentObject(PurchaseManager.shared)
     .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self], inMemory: true)
 }
