@@ -1443,6 +1443,11 @@ struct BillingPlanSettingsView: View {
                     systemImage: "text.viewfinder"
                 )
                 PlanFeatureRow(
+                    title: "写真上限",
+                    detail: "1記録あたり30枚まで保存。無料枠は10枚まで。",
+                    systemImage: "photo.stack"
+                )
+                PlanFeatureRow(
                     title: "テーマ・フォント拡張",
                     detail: "追加テーマ、個別テーマ、高度なフォント変更候補。",
                     systemImage: "paintpalette"

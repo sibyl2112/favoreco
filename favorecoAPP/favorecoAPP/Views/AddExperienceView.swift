@@ -2285,6 +2285,7 @@ private struct PeopleLinkRow: View {
 }
 
 private struct PhotoUnitEditor: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.photoCompressionQuality) private var compressionQuality = 0.85
     @AppStorage(AppStorageKeys.photoAddStartMode) private var photoAddStartMode = "camera"
     let existingPhotos: [PhotoBlob]
@@ -2297,7 +2298,9 @@ private struct PhotoUnitEditor: View {
     @State private var isShowingCamera = false
     @State private var isShowingCameraUnavailableAlert = false
 
-    private let maxPhotoCount = 10
+    private var maxPhotoCount: Int {
+        purchaseManager.currentPlan.includesLocalFullFeatures ? 30 : 10
+    }
 
     private var selectedAspectRatio: EyecatchAspectRatio {
         EyecatchAspectRatio.option(for: aspectRatioKey, category: category)
@@ -2345,7 +2348,7 @@ private struct PhotoUnitEditor: View {
             if remainingPhotoSlots > 0 {
                 photoAddControls
             } else {
-                Label("無料枠の10枚に達しています", systemImage: "checkmark.circle")
+                Label(photoLimitMessage, systemImage: "checkmark.circle")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -2372,6 +2375,16 @@ private struct PhotoUnitEditor: View {
         } message: {
             Text("この端末ではカメラを起動できません。写真ライブラリから追加してください。")
         }
+    }
+
+    private var photoLimitMessage: String {
+        if purchaseManager.currentPlan.includesLocalFullFeatures {
+            return "写真上限の30枚に達しています"
+        }
+        if currentPhotoCount > maxPhotoCount {
+            return "既存写真は保持します。無料枠では新しい写真を追加できません"
+        }
+        return "無料枠の10枚に達しています"
     }
 
     @ViewBuilder
