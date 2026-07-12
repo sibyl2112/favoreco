@@ -1238,10 +1238,27 @@ private struct StatsView: View {
                         )
                     }
                     .buttonStyle(.plain)
+
+                    NavigationLink {
+                        StatsReportDraftView(
+                            kind: .yearly,
+                            allVisits: visibleVisits,
+                            categories: categories,
+                            initialPeriodStart: previousYearStart
+                        )
+                    } label: {
+                        StatsReportPreviewCard(
+                            title: "昨年の年間Favoreco",
+                            badge: "自動提案",
+                            detail: "昨年の記録を横断して、ジャンル、場所、写真、印象的な体験を振り返ります。",
+                            systemImage: "calendar.badge.star"
+                        )
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     StatsLockedFeatureCard(
-                        title: "毎月届く思い出レポート",
-                        message: "同期済みの記録から、前月の月刊Favorecoを自動で提案します。",
+                        title: "毎月・毎年届く思い出レポート",
+                        message: "同期済みの記録から、前月の月刊と前年の年間Favorecoを自動で提案します。",
                         systemImage: "wand.and.stars",
                         requirement: "同期プラン以上"
                     )
