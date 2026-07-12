@@ -15,6 +15,7 @@ struct EventDetailView: View {
     @Environment(\.favorecoThemePalette) private var themePalette
     @State private var isShowingAddVisit = false
     @State private var isShowingEditEvent = false
+    @State private var isShowingRepresentativePhotoPicker = false
     @State private var isShowingDeleteConfirmation = false
     @State private var deletionErrorMessage: String?
 
@@ -32,6 +33,10 @@ struct EventDetailView: View {
 
     private var visits: [Visit] {
         (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
+    }
+
+    private var representativePhoto: PhotoBlob? {
+        EventRepresentativePhotoResolver.photo(for: event)
     }
 
     var body: some View {
@@ -57,6 +62,14 @@ struct EventDetailView: View {
                         Label("対象を編集", systemImage: "pencil")
                     }
 
+                    if EventRepresentativePhotoResolver.hasPhotos(event) {
+                        Button {
+                            isShowingRepresentativePhotoPicker = true
+                        } label: {
+                            Label("代表写真を選ぶ", systemImage: "photo.badge.checkmark")
+                        }
+                    }
+
                     Button(role: .destructive) {
                         isShowingDeleteConfirmation = true
                     } label: {
@@ -79,6 +92,9 @@ struct EventDetailView: View {
         }
         .sheet(isPresented: $isShowingEditEvent) {
             EditEventView(event: event)
+        }
+        .sheet(isPresented: $isShowingRepresentativePhotoPicker) {
+            RepresentativePhotoPicker(event: event)
         }
         .confirmationDialog("この対象を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
             Button("この対象とすべての記録を削除", role: .destructive) {
@@ -110,6 +126,13 @@ struct EventDetailView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let representativePhoto {
+                RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 1200)
+                    .aspectRatio(16 / 9, contentMode: .fill)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: category?.iconSymbol ?? "rectangle.stack")
                     .font(.title2)
@@ -227,6 +250,157 @@ struct EventDetailView: View {
 
         let total = ratedVisits.reduce(0) { $0 + $1.overallRating }
         return String(format: "%.1f", total / Double(ratedVisits.count))
+    }
+}
+
+enum EventRepresentativePhotoResolver {
+    static func photo(for event: ExperienceEvent) -> PhotoBlob? {
+        let photos = allPhotos(in: event)
+        if !event.representativeEyecatchPath.isEmpty,
+           let selected = photos.first(where: { $0.relativePath == event.representativeEyecatchPath }) {
+            return selected
+        }
+        for visit in sortedVisits(event) {
+            let visitPhotos = photoItems(in: visit)
+            if !visit.eyecatchPath.isEmpty,
+               let cover = visitPhotos.first(where: { $0.relativePath == visit.eyecatchPath }) {
+                return cover
+            }
+            if let first = visitPhotos.first { return first }
+        }
+        return nil
+    }
+
+    static func hasPhotos(_ event: ExperienceEvent) -> Bool {
+        !allPhotos(in: event).isEmpty
+    }
+
+    static func allPhotos(in event: ExperienceEvent) -> [PhotoBlob] {
+        var photos: [PhotoBlob] = []
+        for visit in sortedVisits(event) {
+            photos.append(contentsOf: photoItems(in: visit))
+        }
+        return photos
+    }
+
+    private static func sortedVisits(_ event: ExperienceEvent) -> [Visit] {
+        (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
+    }
+
+    private static func photoItems(in visit: Visit) -> [PhotoBlob] {
+        (visit.photos ?? [])
+            .filter { $0.mediaKind == "photo" && !$0.data.isEmpty }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+}
+
+struct RepresentativePhotoImage: View {
+    let photo: PhotoBlob
+    let maxPixelSize: CGFloat
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Rectangle()
+                    .fill(Color(.secondarySystemFill))
+                    .overlay { ProgressView() }
+            }
+        }
+        .task(id: cacheKey) {
+            image = nil
+            if let cached = ThumbnailLoader.cached(forKey: cacheKey) {
+                image = cached
+                return
+            }
+            let data = photo.data
+            let key = cacheKey
+            image = await Task.detached(priority: .userInitiated) {
+                ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixelSize, cacheKey: key)
+            }.value
+        }
+    }
+
+    private var cacheKey: String {
+        "representative-\(photo.id.uuidString)-\(photo.byteCount)-\(Int(maxPixelSize))"
+    }
+}
+
+private struct RepresentativePhotoPicker: View {
+    let event: ExperienceEvent
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @State private var saveErrorMessage: String?
+
+    private var photos: [PhotoBlob] {
+        EventRepresentativePhotoResolver.allPhotos(in: event)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 10)], spacing: 10) {
+                    ForEach(photos) { photo in
+                        Button {
+                            save(photo.relativePath)
+                        } label: {
+                            ZStack(alignment: .bottomTrailing) {
+                                RepresentativePhotoImage(photo: photo, maxPixelSize: 360)
+                                    .aspectRatio(1, contentMode: .fill)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                if photo.relativePath == event.representativeEyecatchPath {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.title2)
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, Color.accentColor)
+                                        .padding(7)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(photo.relativePath == event.representativeEyecatchPath ? "選択中の代表写真" : "代表写真に設定")
+                    }
+                }
+                .padding(16)
+            }
+            .navigationTitle("代表写真")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("自動") { save("") }
+                        .disabled(event.representativeEyecatchPath.isEmpty)
+                }
+            }
+            .alert("保存に失敗しました", isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { saveErrorMessage = nil }
+            } message: {
+                Text(saveErrorMessage ?? "")
+            }
+        }
+    }
+
+    private func save(_ path: String) {
+        let previousPath = event.representativeEyecatchPath
+        event.representativeEyecatchPath = path
+        event.updatedAt = Date()
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            event.representativeEyecatchPath = previousPath
+            saveErrorMessage = "代表写真を保存できませんでした。もう一度お試しください。"
+        }
     }
 }
 

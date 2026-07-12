@@ -229,28 +229,40 @@ private struct EventRow: View {
         (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
     }
 
+    private var representativePhoto: PhotoBlob? {
+        EventRepresentativePhotoResolver.photo(for: event)
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             NavigationLink {
                 EventDetailView(event: event)
             } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(event.title.isEmpty ? "記録" : event.title)
-                        .font(FavorecoTypography.cardTitle)
-                        .lineLimit(2)
-
-                    HStack(spacing: 10) {
-                        if !event.seriesName.isEmpty {
-                            Label(event.seriesName, systemImage: "rectangle.stack")
-                                .lineLimit(1)
-                        }
-                        Label("\(visits.count)件", systemImage: "number")
-                        if let latestVisit = visits.first {
-                            Label(latestVisit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
-                        }
+                HStack(spacing: 12) {
+                    if let representativePhoto {
+                        RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 220)
+                            .frame(width: 68, height: 68)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(event.title.isEmpty ? "記録" : event.title)
+                            .font(FavorecoTypography.cardTitle)
+                            .lineLimit(2)
+
+                        HStack(spacing: 10) {
+                            if !event.seriesName.isEmpty {
+                                Label(event.seriesName, systemImage: "rectangle.stack")
+                                    .lineLimit(1)
+                            }
+                            Label("\(visits.count)件", systemImage: "number")
+                            if let latestVisit = visits.first {
+                                Label(latestVisit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+                            }
+                        }
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                    }
                 }
             }
             .buttonStyle(.plain)
