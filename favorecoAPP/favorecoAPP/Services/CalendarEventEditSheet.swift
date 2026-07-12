@@ -20,9 +20,10 @@ struct CalendarEventDraft: Identifiable {
 
 struct CalendarEventEditSheet: UIViewControllerRepresentable {
     let draft: CalendarEventDraft
+    var onSave: ((String) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(onSave: onSave)
     }
 
     func makeUIViewController(context: Context) -> EKEventEditViewController {
@@ -45,7 +46,16 @@ struct CalendarEventEditSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: EKEventEditViewController, context: Context) {}
 
     final class Coordinator: NSObject, EKEventEditViewDelegate {
+        let onSave: ((String) -> Void)?
+
+        init(onSave: ((String) -> Void)?) {
+            self.onSave = onSave
+        }
+
         func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+            if action == .saved, let identifier = controller.event?.eventIdentifier, !identifier.isEmpty {
+                onSave?(identifier)
+            }
             controller.dismiss(animated: true)
         }
     }

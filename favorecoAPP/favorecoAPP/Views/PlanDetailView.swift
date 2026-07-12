@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct PlanDetailView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
@@ -21,6 +22,7 @@ struct PlanDetailView: View {
     @State private var isShowingDeleteConfirmation = false
     @State private var isShowingCreateRecordConfirmation = false
     @State private var navigatingVisit: Visit?
+    @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
 
     private var categoryColor: Color {
         themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88")
@@ -158,7 +160,13 @@ struct PlanDetailView: View {
             EditTicketAttemptView(plan: plan, attempt: attempt)
         }
         .sheet(item: $calendarDraft) { draft in
-            CalendarEventEditSheet(draft: draft)
+            CalendarEventEditSheet(draft: draft) { identifier in
+                ExternalCalendarLinkStore.set(identifier: identifier, planID: plan.id)
+                if !plan.externalCalendarEventIdentifier.isEmpty {
+                    plan.externalCalendarEventIdentifier = ""
+                    try? modelContext.save()
+                }
+            }
         }
         .navigationDestination(item: $navigatingVisit) { visit in
             ExperienceDetailView(visit: visit)
@@ -368,7 +376,9 @@ struct PlanDetailView: View {
 
         return CalendarEventDraft(
             title: plan.title.isEmpty ? "予定" : plan.title,
-            location: plan.venueNameSnapshot,
+            location: plan.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? plan.placeMaster?.address ?? plan.venueNameSnapshot
+                : plan.venueNameSnapshot,
             notes: notes,
             startDate: plan.startsAt,
             endDate: plan.endsAt
@@ -376,6 +386,8 @@ struct PlanDetailView: View {
     }
 
     private func archivePlan() {
+        let hasExternalCalendarLink = !ExternalCalendarLinkStore.identifier(for: plan).isEmpty
+        plan.externalCalendarEventIdentifier = ""
         plan.isArchived = true
         plan.updatedAt = Date()
         let activeAttempts = attempts
@@ -386,8 +398,20 @@ struct PlanDetailView: View {
         }
         TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
 
+        let removesExternalEvent = purchaseManager.currentPlan.includesSync
+            && automaticallyUpdatesExternalCalendar
+            && hasExternalCalendarLink
+
         do {
             try modelContext.save()
+            if removesExternalEvent {
+                Task {
+                    _ = try? await ExternalCalendarSyncService.remove(plan: plan)
+                    try? modelContext.save()
+                }
+            } else {
+                ExternalCalendarLinkStore.clear(planID: plan.id)
+            }
             dismiss()
         } catch {
             assertionFailure("Failed to archive plan: \(error)")

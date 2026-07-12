@@ -9,12 +9,14 @@ import SwiftUI
 import SwiftData
 
 struct AddTicketPlanView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
     @State private var draft = TicketPlanDraft()
     @State private var validationError = ""
+    @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     private let editingPlan: Plan?
 
     init(plan: Plan? = nil) {
@@ -322,6 +324,12 @@ struct AddTicketPlanView: View {
             }
             Task {
                 await TicketNotificationScheduler.reschedule(plan: plan, attempt: attemptForScheduling)
+                if purchaseManager.currentPlan.includesSync,
+                   automaticallyUpdatesExternalCalendar,
+                   (ExternalCalendarLinkStore.hasLink(planID: plan.id) || !plan.externalCalendarEventIdentifier.isEmpty) {
+                    _ = try? await ExternalCalendarSyncService.update(plan: plan)
+                    try? modelContext.save()
+                }
             }
             dismiss()
         } catch {

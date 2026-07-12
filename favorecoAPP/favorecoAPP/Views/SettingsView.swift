@@ -1333,6 +1333,7 @@ struct SyncBackupSettingsView: View {
     @AppStorage(AppStorageKeys.automaticBackupEnabled) private var automaticBackupEnabled = false
     @AppStorage(AppStorageKeys.automaticBackupUsesICloudDrive) private var automaticBackupUsesICloudDrive = false
     @AppStorage(AppStorageKeys.automaticBackupICloudError) private var automaticBackupICloudError = ""
+    @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     @State private var diagnostic: CloudSyncDiagnostic?
     @State private var isRefreshingDiagnostic = false
 
@@ -1405,6 +1406,19 @@ struct SyncBackupSettingsView: View {
                 Text("24時間に1回、起動時に写真付きバックアップを作成します。製品版では同期プラン向け機能として提供予定です。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("外部カレンダー") {
+                Toggle("favorecoの予定変更を自動反映", isOn: $automaticallyUpdatesExternalCalendar)
+                    .disabled(!purchaseManager.currentPlan.includesSync)
+                Text("先に予定詳細の「カレンダーに追加」からApple/Googleなどの追加先を選びます。以後、favorecoで予定を編集・削除した時だけ同じ外部イベントへ片方向で反映します。外部側の編集はfavorecoへ戻しません。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                if !purchaseManager.currentPlan.includesSync {
+                    Label("自動更新は同期プラン以上", systemImage: "lock.fill")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("同期トラブル診断") {

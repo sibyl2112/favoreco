@@ -43,6 +43,7 @@ enum AppStorageKeys {
     static let usesWeatherAutoFill = "usesWeatherAutoFill"
     static let usesInputSuggestionDictionary = "usesInputSuggestionDictionary"
     static let showsExternalCalendarEvents = "showsExternalCalendarEvents"
+    static let automaticallyUpdatesExternalCalendar = "automaticallyUpdatesExternalCalendar"
     static let notificationMasterEnabled = "notificationMasterEnabled"
     static let notificationApplicationStartEnabled = "notificationApplicationStartEnabled"
     static let notificationApplicationDeadlineEnabled = "notificationApplicationDeadlineEnabled"
