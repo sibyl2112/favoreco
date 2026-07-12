@@ -780,6 +780,8 @@ private struct StatsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @Query(sort: \Plan.startsAt, order: .reverse) private var plans: [Plan]
+    @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
     @State private var showsAmount = false
     @AppStorage(AppStorageKeys.opensPreviousMonthlyReport) private var opensPreviousMonthlyReport = false
     @State private var isShowingAutomaticMonthlyReport = false
@@ -821,12 +823,51 @@ private struct StatsView: View {
             .sorted { $0.count > $1.count }
     }
 
+    private var activePlans: [Plan] {
+        plans.filter { !$0.isArchived }
+    }
+
+    private var activeAttempts: [TicketAttempt] {
+        ticketAttempts.filter { !$0.isArchived && $0.plan?.isArchived != true }
+    }
+
+    private var thisYearPlans: [Plan] {
+        activePlans.filter { calendar.isDate($0.startsAt, equalTo: Date(), toGranularity: .year) }
+    }
+
+    private var submittedAttempts: [TicketAttempt] {
+        let submittedKeys: Set<String> = [
+            "waitingResult", "won", "lost", "waitingPayment", "waitingIssue", "issued", "attended",
+        ]
+        return activeAttempts.filter { submittedKeys.contains($0.statusKey) }
+    }
+
+    private var wonAttempts: [TicketAttempt] {
+        let wonKeys: Set<String> = ["won", "waitingPayment", "waitingIssue", "issued", "attended"]
+        return activeAttempts.filter { wonKeys.contains($0.statusKey) }
+    }
+
+    private var lostAttempts: [TicketAttempt] {
+        activeAttempts.filter { $0.statusKey == "lost" }
+    }
+
+    private var attendedAttempts: [TicketAttempt] {
+        activeAttempts.filter { $0.statusKey == "attended" }
+    }
+
+    private var winRateText: String {
+        let decidedCount = wonAttempts.count + lostAttempts.count
+        guard decidedCount > 0 else { return "-" }
+        return String(format: "%.0f%%", Double(wonAttempts.count) / Double(decidedCount) * 100)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     summaryGrid
                     categoryStatsSection
+                    ticketStatsSection
                     spendingSection
                     ratingSection
                     reportPreviewSection
@@ -919,6 +960,43 @@ private struct StatsView: View {
                     }
                 }
             )
+        }
+    }
+
+    private var ticketStatsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("予定・チケット")
+                .font(FavorecoTypography.sectionTitle)
+
+            if !purchaseManager.currentPlan.includesLocalFullFeatures {
+                StatsLockedFeatureCard(
+                    title: "予定・申込の詳細統計",
+                    message: "今年の予定、申込済み、取得、参加、確定済み抽選の当選率をまとめます。",
+                    systemImage: "ticket",
+                    requirement: "ライト以上"
+                )
+            } else if activePlans.isEmpty && activeAttempts.isEmpty {
+                PlaceholderRow(
+                    icon: "ticket",
+                    title: "予定・チケット統計はまだありません",
+                    message: "予定や申込を追加すると、ここへ集計されます。"
+                )
+                .padding(14)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    StatsMetricCard(title: "今年の予定", value: "\(thisYearPlans.count)", icon: "calendar")
+                    StatsMetricCard(title: "申込済み", value: "\(submittedAttempts.count)", icon: "paperplane.fill")
+                    StatsMetricCard(title: "取得", value: "\(wonAttempts.count)", icon: "checkmark.seal.fill")
+                    StatsMetricCard(title: "参加済み", value: "\(attendedAttempts.count)", icon: "figure.walk")
+                }
+                StatsWideCard(
+                    title: "当選率",
+                    value: winRateText,
+                    caption: "当選または落選が確定した抽選だけを分母にしています。",
+                    icon: "percent"
+                )
+            }
         }
     }
 
