@@ -10,6 +10,7 @@ import SwiftData
 
 struct ContentView: View {
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
+    @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
 
     var body: some View {
         Group {
@@ -20,6 +21,11 @@ struct ContentView: View {
             }
         }
         .modifier(AppTextSizeModifier())
+        .preferredColorScheme(appearanceMode.colorScheme)
+    }
+
+    private var appearanceMode: AppAppearanceMode {
+        AppAppearanceMode(rawValue: appearanceModeRaw) ?? .system
     }
 }
 

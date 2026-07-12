@@ -669,6 +669,7 @@ struct DisplaySettingsView: View {
     @AppStorage(AppStorageKeys.showsHomeFavorites) private var showsHomeFavorites = false
     @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
     @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
+    @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
 
     var body: some View {
         Form {
@@ -688,7 +689,11 @@ struct DisplaySettingsView: View {
                 } label: {
                     LabeledContent("文字サイズ", value: textSizeSummary)
                 }
-                LabeledContent("外観モード", value: "端末設定に従う")
+                Picker("外観モード", selection: $appearanceModeRaw) {
+                    ForEach(AppAppearanceMode.allCases) { mode in
+                        Text(mode.name).tag(mode.rawValue)
+                    }
+                }
             }
         }
         .navigationTitle("表示設定")

@@ -4516,3 +4516,28 @@ favorecoの初期値として決めた「保存後は編集画面ではなく情
 ### 残課題
 - 実機で端末文字サイズ追従と4段階を切り替え、Home、設定、記録入力、詳細の折返しとボタン高さを確認する
 - 外観モードは引き続き端末設定追従のみ。ライト/ダーク固定は別作業で検討する
+
+## 2026-07-12: 外観モードをライト/ダークへ接続
+
+### 変更概要
+- 表示設定の外観モードを、端末設定に従う/ライト/ダークの選択UIへ変更
+- 選択したColorSchemeをContentViewからアプリ全体へ即時反映
+- 選択値をAppStorageへ保存し、再起動後も維持
+
+### 変更意図
+端末設定追従を標準に保ちつつ、写真やジャンル画面を明るい表示または暗い表示へ固定したい利用者へ選択肢を提供するため。ジャンルテーマ色とは役割を分け、外観モードは明暗だけを担う。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift（外観モード設定キー）
+- favorecoAPP/favorecoAPP/Utilities/FavorecoTypography.swift（外観モード定義）
+- favorecoAPP/favorecoAPP/ContentView.swift（ColorScheme全体適用）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（外観モードPicker）
+- favoreco/CLAUDE.md（現在仕様）
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルの構文解析が成功
+- iPhoneOS向け署名なしビルドが成功
+
+### 残課題
+- 実機で端末追従、ライト、ダークを切り替え、Home、写真、フォーム、モーダル、ジャンル色のコントラストを確認する
+- 全体テーマ/ジャンル別高度テーマと課金境界は別機能として後続検討する

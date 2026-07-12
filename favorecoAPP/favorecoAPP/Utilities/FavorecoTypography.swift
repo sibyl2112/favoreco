@@ -88,6 +88,30 @@ enum AppTextSize: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppAppearanceMode: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .system: return "端末設定に従う"
+        case .light: return "ライト"
+        case .dark: return "ダーク"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 struct AppTextSizeModifier: ViewModifier {
     @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
     @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
