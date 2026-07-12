@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import Charts
 
 struct MainTabView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
@@ -784,6 +785,7 @@ private extension Date {
 private struct StatsView: View {
     let isActive: Bool
     @EnvironmentObject private var purchaseManager: PurchaseManager
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \Plan.startsAt, order: .reverse) private var plans: [Plan]
@@ -831,6 +833,35 @@ private struct StatsView: View {
             .sorted { $0.count > $1.count }
     }
 
+    private var monthlyVisitStats: [MonthlyVisitStat] {
+        let currentMonth = Date().startOfMonth
+        return (0..<12).compactMap { offset in
+            guard let month = calendar.date(byAdding: .month, value: offset - 11, to: currentMonth) else {
+                return nil
+            }
+            let count = visibleVisits.lazy.filter {
+                calendar.isDate($0.visitedAt, equalTo: month, toGranularity: .month)
+            }.count
+            return MonthlyVisitStat(month: month, count: count)
+        }
+    }
+
+    private var categoryChartStats: [CategoryChartStat] {
+        let topStats = Array(categoryStats.prefix(5))
+        var result = topStats.map {
+            CategoryChartStat(
+                name: $0.category.name,
+                count: $0.count,
+                color: themePalette.categoryColor(hex: $0.category.colorHex)
+            )
+        }
+        let otherCount = categoryStats.dropFirst(5).reduce(0) { $0 + $1.count }
+        if otherCount > 0 {
+            result.append(CategoryChartStat(name: "その他", count: otherCount, color: .secondary))
+        }
+        return result
+    }
+
     private var activePlans: [Plan] {
         plans.filter { !$0.isArchived }
     }
@@ -875,6 +906,7 @@ private struct StatsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     summaryGrid
                     categoryStatsSection
+                    chartsSection
                     ticketStatsSection
                     spendingSection
                     ratingSection
@@ -989,6 +1021,104 @@ private struct StatsView: View {
                     }
                 }
             )
+        }
+    }
+
+    private var chartsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("記録の傾向")
+                .font(FavorecoTypography.sectionTitle)
+
+            if !purchaseManager.currentPlan.includesLocalFullFeatures {
+                StatsLockedFeatureCard(
+                    title: "推移・構成グラフ",
+                    message: "直近12か月の記録推移と、ジャンル構成を見返せます。",
+                    systemImage: "chart.xyaxis.line",
+                    requirement: "ライト以上"
+                )
+            } else if visibleVisits.isEmpty {
+                PlaceholderRow(
+                    icon: "chart.xyaxis.line",
+                    title: "記録の傾向はまだありません",
+                    message: "記録を追加すると、月ごとの推移とジャンル構成が表示されます。"
+                )
+                .padding(14)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("直近12か月")
+                        .font(FavorecoTypography.bodyStrong)
+                    Chart(monthlyVisitStats) { stat in
+                        AreaMark(
+                            x: .value("月", stat.month, unit: .month),
+                            y: .value("記録数", stat.count)
+                        )
+                        .foregroundStyle(Color.accentColor.opacity(0.12))
+                        LineMark(
+                            x: .value("月", stat.month, unit: .month),
+                            y: .value("記録数", stat.count)
+                        )
+                        .foregroundStyle(Color.accentColor)
+                        .interpolationMethod(.catmullRom)
+                        PointMark(
+                            x: .value("月", stat.month, unit: .month),
+                            y: .value("記録数", stat.count)
+                        )
+                        .foregroundStyle(Color.accentColor)
+                    }
+                    .chartYAxis {
+                        AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) {
+                            AxisGridLine()
+                            AxisValueLabel()
+                        }
+                    }
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: .month, count: 2)) { value in
+                            AxisValueLabel(format: .dateTime.month(.narrow))
+                        }
+                    }
+                    .frame(height: 190)
+                    .accessibilityLabel("直近12か月の記録数推移")
+
+                    if !categoryChartStats.isEmpty {
+                        Divider()
+                        Text("ジャンル構成")
+                            .font(FavorecoTypography.bodyStrong)
+                        HStack(alignment: .center, spacing: 18) {
+                            Chart(categoryChartStats) { stat in
+                                SectorMark(
+                                    angle: .value("記録数", stat.count),
+                                    innerRadius: .ratio(0.58),
+                                    angularInset: 1.5
+                                )
+                                .foregroundStyle(stat.color)
+                                .cornerRadius(2)
+                            }
+                            .frame(width: 150, height: 150)
+                            .accessibilityLabel("ジャンル別の記録構成")
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(categoryChartStats) { stat in
+                                    HStack(spacing: 7) {
+                                        Circle()
+                                            .fill(stat.color)
+                                            .frame(width: 9, height: 9)
+                                        Text(stat.name)
+                                            .lineLimit(1)
+                                        Spacer(minLength: 4)
+                                        Text("\(stat.count)")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .font(FavorecoTypography.caption)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
         }
     }
 
@@ -1790,6 +1920,21 @@ private struct CategoryStat: Identifiable {
     var id: UUID {
         category.id
     }
+}
+
+private struct MonthlyVisitStat: Identifiable {
+    let month: Date
+    let count: Int
+
+    var id: Date { month }
+}
+
+private struct CategoryChartStat: Identifiable {
+    let name: String
+    let count: Int
+    let color: Color
+
+    var id: String { name }
 }
 
 private struct StatsMetricCard: View {
