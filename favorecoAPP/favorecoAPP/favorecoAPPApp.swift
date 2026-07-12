@@ -21,6 +21,7 @@ struct favorecoAPPApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(PurchaseManager.shared)
                 .task {
                     await CategoryPresetSeeder.seedIfNeeded(in: sharedModelContainer.mainContext)
                     _ = try? AutomaticBackupService.createIfDue(in: sharedModelContainer.mainContext)

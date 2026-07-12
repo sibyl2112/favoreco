@@ -22,6 +22,7 @@ enum FavorecoModelContainerBootstrap {
     static func makeContainer() -> ModelContainer {
         let defaults = UserDefaults.standard
         let wantsCloudSync = defaults.bool(forKey: AppStorageKeys.iCloudSyncEnabled)
+            && EntitlementAccess.canUseSyncFeatures
         defaults.set(false, forKey: AppStorageKeys.iCloudSyncActiveAtLaunch)
         defaults.set("", forKey: AppStorageKeys.iCloudSyncStartupError)
 

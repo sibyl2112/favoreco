@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import StoreKit
 import UniformTypeIdentifiers
 import UserNotifications
 
@@ -1216,6 +1217,7 @@ struct JSONExportView: View {
 }
 
 struct SyncBackupSettingsView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.iCloudSyncEnabled) private var iCloudSyncEnabled = false
     @AppStorage(AppStorageKeys.iCloudSyncActiveAtLaunch) private var iCloudSyncActiveAtLaunch = false
     @AppStorage(AppStorageKeys.iCloudSyncStartupError) private var iCloudSyncStartupError = ""
@@ -1229,6 +1231,7 @@ struct SyncBackupSettingsView: View {
         Form {
             Section {
                 Toggle("iCloud同期", isOn: $iCloudSyncEnabled)
+                    .disabled(!canUseSyncFeatures)
                 LabeledContent("現在の保存先", value: iCloudSyncActiveAtLaunch ? "端末 + iCloud" : "この端末")
                 LabeledContent("iCloudアカウント", value: diagnostic?.accountStatusText ?? "未確認")
 
@@ -1266,10 +1269,10 @@ struct SyncBackupSettingsView: View {
                 Toggle("iCloud Driveにも保存", isOn: $automaticBackupUsesICloudDrive)
                     .disabled(!automaticBackupEnabled)
 #else
-                Toggle("自動バックアップ", isOn: .constant(false))
-                    .disabled(true)
-                Toggle("iCloud Driveにも保存", isOn: .constant(false))
-                    .disabled(true)
+                Toggle("自動バックアップ", isOn: $automaticBackupEnabled)
+                    .disabled(!canUseSyncFeatures)
+                Toggle("iCloud Driveにも保存", isOn: $automaticBackupUsesICloudDrive)
+                    .disabled(!canUseSyncFeatures || !automaticBackupEnabled)
 #endif
                 LabeledContent(
                     "バックアップ先",
@@ -1319,14 +1322,24 @@ struct SyncBackupSettingsView: View {
         diagnostic = await CloudSyncService.diagnostic()
         isRefreshingDiagnostic = false
     }
+
+    private var canUseSyncFeatures: Bool {
+#if DEBUG
+        true
+#else
+        purchaseManager.currentPlan.includesSync
+#endif
+    }
 }
 
 struct BillingPlanSettingsView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
+
     var body: some View {
         Form {
             Section("現在のプラン") {
-                LabeledContent("プラン", value: "無料")
-                Text("購入処理は未接続です。同期実装後の4プラン構造を前提に、無料/有料の境界だけ先に整理しています。")
+                LabeledContent("プラン", value: purchaseManager.currentPlan.displayName)
+                Text(planDescription)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1355,7 +1368,7 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("Pro買い切り候補") {
+            Section("ライト買い切り") {
                 PlanHeaderRow(
                     title: "ライト買い切り",
                     price: "¥1,500",
@@ -1378,7 +1391,7 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("同期プラン候補") {
+            Section("同期プラン") {
                 PlanHeaderRow(
                     title: "同期サブスク",
                     price: "月¥250 / 年¥1,500",
@@ -1401,7 +1414,7 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("フル買い切り候補") {
+            Section("フル買い切り") {
                 PlanHeaderRow(
                     title: "フル買い切り",
                     price: "¥6,000",
@@ -1415,16 +1428,53 @@ struct BillingPlanSettingsView: View {
             }
 
             Section("購入") {
-                NavigationLink {
-                    SettingsDocumentView(title: "アップグレード", bodyText: "StoreKit接続前のため購入はまだできません。無料、ライト買い切り、同期サブスク、フル買い切りの見せ方をこの画面で固めてから実装します。")
-                } label: {
-                    Label("アップグレード", systemImage: "crown")
+                if purchaseManager.products.isEmpty {
+                    Text("商品情報を取得できません。App Store Connectへ商品を登録すると購入ボタンが表示されます。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    if !purchaseManager.ownsLightLifetime,
+                       let product = purchaseManager.product(id: FavorecoProductID.lightLifetime) {
+                        StorePurchaseRow(title: "ライト買い切り", product: product)
+                    }
+                    if let product = purchaseManager.product(id: FavorecoProductID.syncMonthly) {
+                        StorePurchaseRow(title: "同期 月額", product: product)
+                    }
+                    if let product = purchaseManager.product(id: FavorecoProductID.syncYearly) {
+                        StorePurchaseRow(title: "同期 年額", product: product)
+                    }
+                    if purchaseManager.ownsLightLifetime,
+                       let product = purchaseManager.product(id: FavorecoProductID.syncLifetimeAddon) {
+                        StorePurchaseRow(title: "同期永久を追加", product: product)
+                    }
+                    if !purchaseManager.ownsLightLifetime,
+                       let product = purchaseManager.product(id: FavorecoProductID.fullLifetime) {
+                        StorePurchaseRow(title: "フル買い切り", product: product)
+                    }
                 }
                 Button {
+                    Task { await purchaseManager.restore() }
                 } label: {
                     Label("購入を復元", systemImage: "arrow.clockwise")
                 }
-                .disabled(true)
+                .disabled(purchaseManager.isLoading)
+            }
+
+            if purchaseManager.isLoading {
+                Section {
+                    HStack {
+                        ProgressView()
+                        Text("App Storeを確認中です。")
+                    }
+                }
+            }
+
+            if !purchaseManager.message.isEmpty {
+                Section("購入状況") {
+                    Text(purchaseManager.message)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("補足") {
@@ -1443,6 +1493,36 @@ struct BillingPlanSettingsView: View {
         }
         .navigationTitle("課金・プラン")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await purchaseManager.refresh() }
+    }
+
+    private var planDescription: String {
+        switch purchaseManager.currentPlan {
+        case .free: return "基本記録と無料機能を利用できます。"
+        case .lightLifetime: return "ローカル全機能を永久に利用できます。同期は含みません。"
+        case .syncSubscription: return "契約中はローカル全機能、同期、自動バックアップを利用できます。"
+        case .fullLifetime: return "ローカル全機能、同期、自動バックアップを永久に利用できます。"
+        }
+    }
+}
+
+private struct StorePurchaseRow: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
+    let title: String
+    let product: Product
+
+    var body: some View {
+        Button {
+            Task { await purchaseManager.purchase(product) }
+        } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(product.displayPrice)
+                    .font(FavorecoTypography.bodyStrong)
+            }
+        }
+        .disabled(purchaseManager.isLoading)
     }
 }
 

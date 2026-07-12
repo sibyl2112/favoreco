@@ -40,7 +40,8 @@ enum AutomaticBackupService {
     @MainActor
     static func createIfDue(in context: ModelContext, now: Date = Date()) throws -> URL? {
         let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: AppStorageKeys.automaticBackupEnabled) else { return nil }
+        guard defaults.bool(forKey: AppStorageKeys.automaticBackupEnabled),
+              EntitlementAccess.canUseSyncFeatures else { return nil }
         if let lastCreatedAt = defaults.object(forKey: AppStorageKeys.automaticBackupLastCreatedAt) as? Date,
            now.timeIntervalSince(lastCreatedAt) < interval {
             return nil

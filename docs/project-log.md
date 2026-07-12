@@ -4757,3 +4757,38 @@ CloudKit同期とは別系統の復元点を持ち、誤編集や削除から過
 - Apple AccountとiCloud Driveが有効な実機で作成、Files表示、別端末からの一覧/復元、削除反映を確認する
 - Apple DeveloperのApp IDでiCloud Documentsと`iCloud.com.nori.favoreco` containerが有効な署名になっていることを確認する
 - Premium権利判定をStoreKitへ接続後、製品版トグルを解放する
+
+## 2026-07-12: StoreKit 2で4プランの権利判定を接続
+
+### 変更概要
+- 無料/ライト買い切り/同期サブスク/フル買い切りの4利用状態を実装
+- ライト、同期月額、同期年額、同期永久追加、直接フルの5商品IDを定義
+- StoreKitの商品取得、購入、保留、キャンセル、verified transaction検証、購入復元を追加
+- currentEntitlementsとTransaction.updatesから現在プランを継続更新
+- ライト+同期永久追加と直接フルを同じフル権利として扱う頭金方式を実装
+- 課金画面へApp Store価格、購入ボタン、復元、現在プラン、処理状況を接続
+- 製品版では同期権利がない時にCloudKit同期/自動バックアップをUIと起動処理の両方で停止
+- DEBUGビルドは同期/バックアップの開発検証を継続できるよう解放
+
+### 変更意図
+価格表示だけだった設定を実際のApp Store権利へ接続し、サブスク失効や返金後に有料同期が動き続けないようにするため。画面だけでなく起動時のModelContainerと自動バックアップでもキャッシュ済み権利を確認する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/PurchaseManager.swift（商品ID、購入、復元、権利判定、更新監視）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（購入UI、現在プラン、有料機能ゲート）
+- favorecoAPP/favorecoAPP/Services/CloudSyncService.swift（起動時同期権利ガード）
+- favorecoAPP/favorecoAPP/Services/AutomaticBackupService.swift（起動時バックアップ権利ガード）
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift（プランキャッシュ）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（PurchaseManager注入）
+- favoreco/CLAUDE.md（現在仕様と商品ID）
+
+### 確認結果（実機 / ビルド）
+- iPhoneOS向け署名なしビルドが成功
+- StoreKit verified transaction以外を権利へ採用しないことをコード確認
+- 商品未取得時に無料プランを維持し、画面へ設定待ちを表示することをコード確認
+
+### 残課題
+- App Store Connectへ5商品を登録し、月額/年額を同じサブスクリプショングループへ設定する
+- StoreKit ConfigurationまたはSandboxで購入、キャンセル、保留、更新、失効、返金、復元、ライトからフル追加を確認する
+- 創設メンバー特典の対象判定と締切日を確定し、権利付与方式を実装する
+- ライト/同期/フルによる詳細統計、OCR高度化、テーマ等の個別機能ゲートを順次接続する
