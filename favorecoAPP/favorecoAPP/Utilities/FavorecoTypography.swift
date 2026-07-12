@@ -31,6 +31,22 @@ enum AppFontStyle: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppFontWeight: String, CaseIterable, Identifiable {
+    case light
+    case standard
+    case bold
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .light: return "細め"
+        case .standard: return "標準"
+        case .bold: return "太め"
+        }
+    }
+}
+
 enum FavorecoTypography {
     private static let jpSansName = "Noto Sans JP"
     private static let jpSerifName = "Noto Serif JP"
@@ -44,16 +60,27 @@ enum FavorecoTypography {
         return plan.includesLocalFullFeatures ? style : .standard
     }
 
+    static var effectiveWeight: AppFontWeight {
+        let rawWeight = UserDefaults.standard.string(forKey: AppStorageKeys.fontWeight) ?? ""
+        let weight = AppFontWeight(rawValue: rawWeight) ?? .standard
+        let rawPlan = UserDefaults.standard.string(forKey: AppStorageKeys.purchasedPlanCache) ?? ""
+        let plan = FavorecoPlan(rawValue: rawPlan) ?? .free
+        return plan.includesLocalFullFeatures ? weight : .standard
+    }
+
     static func jpSans(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo textStyle: Font.TextStyle = .body) -> Font {
-        .custom(japaneseFontName(prefersSerif: false), size: size, relativeTo: textStyle).weight(weight)
+        .custom(japaneseFontName(prefersSerif: false), size: size, relativeTo: textStyle)
+            .weight(adjusted(weight))
     }
 
     static func jpSerif(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo textStyle: Font.TextStyle = .body) -> Font {
-        .custom(japaneseFontName(prefersSerif: true), size: size, relativeTo: textStyle).weight(weight)
+        .custom(japaneseFontName(prefersSerif: true), size: size, relativeTo: textStyle)
+            .weight(adjusted(weight))
     }
 
     static func latinDisplay(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo textStyle: Font.TextStyle = .body) -> Font {
-        .custom(latinDisplayName, size: size, relativeTo: textStyle).weight(weight)
+        .custom(latinDisplayName, size: size, relativeTo: textStyle)
+            .weight(adjusted(weight))
     }
 
     private static func japaneseFontName(prefersSerif: Bool) -> String {
@@ -64,6 +91,27 @@ enum FavorecoTypography {
             return jpSansName
         case .serif:
             return jpSerifName
+        }
+    }
+
+    private static func adjusted(_ weight: Font.Weight) -> Font.Weight {
+        switch effectiveWeight {
+        case .standard:
+            return weight
+        case .light:
+            switch weight {
+            case .black, .heavy, .bold: return .semibold
+            case .semibold: return .medium
+            case .medium: return .regular
+            default: return .light
+            }
+        case .bold:
+            switch weight {
+            case .black, .heavy: return .black
+            case .bold, .semibold: return .bold
+            case .medium: return .semibold
+            default: return .medium
+            }
         }
     }
 

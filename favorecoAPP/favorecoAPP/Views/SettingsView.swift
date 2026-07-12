@@ -815,6 +815,7 @@ struct DisplaySettingsView: View {
 private struct FontStyleSettingsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
+    @AppStorage(AppStorageKeys.fontWeight) private var fontWeightRaw = AppFontWeight.standard.rawValue
 
     var body: some View {
         Form {
@@ -853,6 +854,24 @@ private struct FontStyleSettingsView: View {
                      : "フォント変更はライト買い切り以上で利用できます。標準表示は無料で使えます。")
             }
 
+            Section {
+                Picker("文字の太さ", selection: fontWeightBinding) {
+                    ForEach(AppFontWeight.allCases) { option in
+                        Text(option.name).tag(option.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(!canChangeFont)
+            } header: {
+                Text("文字の太さ")
+            } footer: {
+                if !canChangeFont {
+                    Text("文字の太さ変更はライト買い切り以上で利用できます。")
+                } else {
+                    Text("本文と見出しの強弱を保ったまま、アプリ全体の文字を調整します。")
+                }
+            }
+
             Section("プレビュー") {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("記録が、美しい思い出になる")
@@ -878,6 +897,16 @@ private struct FontStyleSettingsView: View {
         return AppFontStyle(rawValue: fontStyleRaw) ?? .standard
     }
 
+    private var fontWeightBinding: Binding<String> {
+        Binding(
+            get: { canChangeFont ? fontWeightRaw : AppFontWeight.standard.rawValue },
+            set: { newValue in
+                guard canChangeFont else { return }
+                fontWeightRaw = newValue
+            }
+        )
+    }
+
     private func font(
         for style: AppFontStyle,
         size: CGFloat,
@@ -886,7 +915,28 @@ private struct FontStyleSettingsView: View {
     ) -> Font {
         let usesSerif = style == .serif || (style == .standard && prefersSerif)
         let name = usesSerif ? "Noto Serif JP" : "Noto Sans JP"
-        return .custom(name, size: size, relativeTo: size >= 20 ? .title2 : .body).weight(weight)
+        return .custom(name, size: size, relativeTo: size >= 20 ? .title2 : .body)
+            .weight(previewWeight(weight))
+    }
+
+    private func previewWeight(_ weight: Font.Weight) -> Font.Weight {
+        let option = canChangeFont
+            ? (AppFontWeight(rawValue: fontWeightRaw) ?? .standard)
+            : .standard
+        switch option {
+        case .standard:
+            return weight
+        case .light:
+            if weight == .bold || weight == .heavy || weight == .black { return .semibold }
+            if weight == .semibold { return .medium }
+            if weight == .medium { return .regular }
+            return .light
+        case .bold:
+            if weight == .black || weight == .heavy { return .black }
+            if weight == .bold || weight == .semibold { return .bold }
+            if weight == .medium { return .semibold }
+            return .medium
+        }
     }
 }
 
