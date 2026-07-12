@@ -223,7 +223,10 @@ struct AddExperienceView: View {
         URLImportAssistEditor(
             officialURL: $draft.officialURL,
             title: $draft.title,
-            seriesName: $draft.seriesName
+            seriesName: $draft.seriesName,
+            visitedAt: $draft.visitedAt,
+            venueName: venueNameBinding,
+            venueAddress: venueAddressBinding
         )
     }
 
@@ -548,7 +551,10 @@ struct EditExperienceView: View {
         URLImportAssistEditor(
             officialURL: $draft.officialURL,
             title: $draft.title,
-            seriesName: $draft.seriesName
+            seriesName: $draft.seriesName,
+            visitedAt: $draft.visitedAt,
+            venueName: venueNameBinding,
+            venueAddress: venueAddressBinding
         )
     }
 
@@ -1402,9 +1408,13 @@ private func placeSearchAssist(isEnabled: Bool, address: Binding<String>, action
 }
 
 private struct URLImportAssistEditor: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @Binding var officialURL: String
     @Binding var title: String
     @Binding var seriesName: String
+    @Binding var visitedAt: Date
+    @Binding var venueName: String
+    @Binding var venueAddress: String
 
     @AppStorage(AppStorageKeys.usesURLImportAssist) private var usesURLImportAssist = true
     @State private var candidate: URLMetadataCandidate?
@@ -1447,6 +1457,14 @@ private struct URLImportAssistEditor: View {
                             }
                             .buttonStyle(.bordered)
                         }
+
+                        if purchaseManager.currentPlan.includesLocalFullFeatures {
+                            structuredEventCandidates(candidate)
+                        } else {
+                            Label("日時・会場候補はライト以上", systemImage: "lock.fill")
+                                .font(FavorecoTypography.captionStrong)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -1470,6 +1488,48 @@ private struct URLImportAssistEditor: View {
         }
     }
 
+    @ViewBuilder
+    private func structuredEventCandidates(_ candidate: URLMetadataCandidate) -> some View {
+        if candidate.eventDate != nil || !candidate.venueName.isEmpty || !candidate.venueAddress.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("構造化イベント候補")
+                    .font(FavorecoTypography.captionStrong)
+
+                if let date = candidate.eventDate {
+                    Button {
+                        visitedAt = date
+                    } label: {
+                        Label(date.formatted(date: .long, time: .shortened), systemImage: "calendar")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if !candidate.venueName.isEmpty || !candidate.venueAddress.isEmpty {
+                    Button {
+                        if !candidate.venueName.isEmpty { venueName = candidate.venueName }
+                        if !candidate.venueAddress.isEmpty { venueAddress = candidate.venueAddress }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Label(candidate.venueName.isEmpty ? "住所を反映" : candidate.venueName, systemImage: "mappin.and.ellipse")
+                            if !candidate.venueAddress.isEmpty {
+                                Text(candidate.venueAddress)
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        } else {
+            Text("このページには利用できるイベント構造化データがありません。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     @MainActor
     private func fetchMetadata() async {
         isLoading = true
@@ -1477,7 +1537,10 @@ private struct URLImportAssistEditor: View {
         errorMessage = ""
         defer { isLoading = false }
         do {
-            let result = try await URLMetadataService.fetch(from: officialURL)
+            let result = try await URLMetadataService.fetch(
+                from: officialURL,
+                includesStructuredEventData: purchaseManager.currentPlan.includesLocalFullFeatures
+            )
             candidate = result
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "候補を取得できませんでした。"

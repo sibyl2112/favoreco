@@ -218,6 +218,14 @@ struct RecordInputAssistSettingsView: View {
                 Toggle("Map検索", isOn: $usesMapSearchAssist)
                 Toggle("天気自動付与", isOn: $usesWeatherAutoFill)
                 Toggle("入力補助辞書", isOn: $usesInputSuggestionDictionary)
+                Label(
+                    purchaseManager.currentPlan.includesLocalFullFeatures
+                        ? "URLの日時・会場候補を利用できます"
+                        : "URLの日時・会場候補はライト以上",
+                    systemImage: purchaseManager.currentPlan.includesLocalFullFeatures ? "checkmark.circle" : "lock.fill"
+                )
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.secondary)
                 Text("OCR取込をOFFにしても、保存済みの読み取りテキストと手入力欄は残ります。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
@@ -1441,6 +1449,11 @@ struct BillingPlanSettingsView: View {
                     title: "OCR高度化",
                     detail: "複雑な半券、チケット、レシート、リスト画像の補助を強化。",
                     systemImage: "text.viewfinder"
+                )
+                PlanFeatureRow(
+                    title: "URL高度取込",
+                    detail: "公式ページの構造化データから日時・会場候補を取得。",
+                    systemImage: "link.badge.plus"
                 )
                 PlanFeatureRow(
                     title: "写真上限",
