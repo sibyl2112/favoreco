@@ -9,6 +9,7 @@ import Foundation
 import SwiftData
 
 enum JSONBackupImportService {
+    @MainActor
     static func inspect(data: Data) throws -> JSONBackupPreview {
         JSONBackupPreview(envelope: try decode(data: data))
     }

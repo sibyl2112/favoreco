@@ -20,8 +20,8 @@ struct FullBackupRestoreResult {
 }
 
 enum FullBackupService {
-    static let manifestFilename = "manifest.json"
-    static let mediaDirectoryName = "media"
+    nonisolated static let manifestFilename = "manifest.json"
+    nonisolated static let mediaDirectoryName = "media"
 
     @MainActor
     static func makePackage(
@@ -52,7 +52,8 @@ enum FullBackupService {
         return destination
     }
 
-    nonisolated static func inspect(packageURL: URL) throws -> FullBackupPreview {
+    @MainActor
+    static func inspect(packageURL: URL) throws -> FullBackupPreview {
         let manifestData = try Data(contentsOf: packageURL.appendingPathComponent(manifestFilename))
         let jsonPreview = try JSONBackupImportService.inspect(data: manifestData)
         let envelope = try decodeEnvelope(manifestData)
@@ -80,7 +81,7 @@ enum FullBackupService {
         let modelResult = try JSONBackupImportService.restore(data: manifestData, in: context)
         let mediaDirectory = packageURL.appendingPathComponent(mediaDirectoryName, isDirectory: true)
 
-        var visits = Dictionary(grouping: try context.fetch(FetchDescriptor<Visit>()), by: \.id)
+        let visits = Dictionary(grouping: try context.fetch(FetchDescriptor<Visit>()), by: \.id)
             .compactMapValues(\.first)
         var photos = Dictionary(grouping: try context.fetch(FetchDescriptor<PhotoBlob>()), by: \.id)
             .compactMapValues(\.first)
@@ -126,7 +127,8 @@ enum FullBackupService {
         )
     }
 
-    nonisolated private static func decodeEnvelope(_ data: Data) throws -> FavorecoBackupEnvelope {
+    @MainActor
+    private static func decodeEnvelope(_ data: Data) throws -> FavorecoBackupEnvelope {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(FavorecoBackupEnvelope.self, from: data)
