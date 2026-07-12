@@ -4726,3 +4726,34 @@ CloudKit同期とは別系統の復元点を持ち、誤編集や削除から過
 - 実機で手動作成、24時間スキップ、6世代目作成時の最古削除、復元、個別削除を確認する
 - Premium権利判定をStoreKitへ接続後、製品版の自動バックアップトグルを解放する
 - iCloud Driveへ世代パッケージを複製する自動バックアップ先は次工程で接続する
+
+## 2026-07-12: 自動バックアップをiCloud Driveへ複製
+
+### 変更概要
+- 自動バックアップに「iCloud Driveにも保存」を追加
+- 端末内バックアップ成功後、同じパッケージを`Documents/Favoreco/AutomaticBackups`へ複製
+- 端末内/iCloud Driveそれぞれ最大5世代を保持
+- 管理画面を保存先別の世代一覧へ分け、どちらからも復元/削除可能にした
+- iCloud Driveの最終成功日時と直近エラーを表示
+- CloudDocumentsとubiquity container entitlementを追加
+
+### 変更意図
+端末紛失やアプリ削除でも写真付き復元点を残せるようにしながら、iCloud未サインイン、容量不足、一時障害でローカルバックアップまで失敗扱いにしないため。CloudKitの端末間同期と、iCloud Drive上の世代バックアップを別の安全網として扱う。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/AutomaticBackupService.swift（保存先種別、iCloud複製、保存先別5世代管理）
+- favorecoAPP/favorecoAPP/Views/AutomaticBackupView.swift（端末/iCloud別一覧、復元、削除、エラー表示）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（iCloud Drive保存設定）
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift（iCloud保存設定、最終成功、エラー）
+- favorecoAPP/favorecoAPP/favorecoAPP.entitlements（CloudDocuments/ubiquity container）
+- favoreco/CLAUDE.md（現在仕様）
+
+### 確認結果（実機 / ビルド）
+- entitlementsのplist検証が成功
+- iPhoneOS向け署名なしクリーンビルドが成功
+- iCloud複製失敗を捕捉し、ローカル作成結果を維持することをコード確認
+
+### 残課題
+- Apple AccountとiCloud Driveが有効な実機で作成、Files表示、別端末からの一覧/復元、削除反映を確認する
+- Apple DeveloperのApp IDでiCloud Documentsと`iCloud.com.nori.favoreco` containerが有効な署名になっていることを確認する
+- Premium権利判定をStoreKitへ接続後、製品版トグルを解放する

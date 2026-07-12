@@ -1,12 +1,36 @@
 import Foundation
 import SwiftData
 
+enum AutomaticBackupStorage: String, Sendable {
+    case local
+    case iCloudDrive
+
+    nonisolated var displayName: String {
+        switch self {
+        case .local: return "この端末"
+        case .iCloudDrive: return "iCloud Drive"
+        }
+    }
+}
+
 struct AutomaticBackupSnapshot: Identifiable {
     let url: URL
     let createdAt: Date
     let byteCount: Int64
+    let storage: AutomaticBackupStorage
 
-    var id: String { url.path }
+    var id: String { "\(storage.rawValue):\(url.path)" }
+}
+
+enum AutomaticBackupError: LocalizedError {
+    case iCloudDriveUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .iCloudDriveUnavailable:
+            return "iCloud Driveを利用できません。Apple AccountとiCloud Driveの設定を確認してください。"
+        }
+    }
 }
 
 enum AutomaticBackupService {
@@ -61,7 +85,7 @@ enum AutomaticBackupService {
             isFullBackupManifest: true
         )
         let temporaryURL = try FullBackupService.makePackage(json: json, photos: photos)
-        let directory = try backupDirectory()
+        let directory = try backupDirectory(for: .local)
         let destination = directory
             .appendingPathComponent(filename(for: now))
             .appendingPathExtension("favorecobackup")
@@ -70,12 +94,13 @@ enum AutomaticBackupService {
         }
         try FileManager.default.moveItem(at: temporaryURL, to: destination)
         UserDefaults.standard.set(now, forKey: AppStorageKeys.automaticBackupLastCreatedAt)
-        try pruneOldSnapshots()
+        try pruneOldSnapshots(in: .local)
+        copyToICloudDriveIfEnabled(localURL: destination, createdAt: now)
         return destination
     }
 
-    nonisolated static func snapshots() throws -> [AutomaticBackupSnapshot] {
-        let directory = try backupDirectory()
+    nonisolated static func snapshots(in storage: AutomaticBackupStorage) throws -> [AutomaticBackupSnapshot] {
+        let directory = try backupDirectory(for: storage)
         let urls = try FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.creationDateKey, .contentModificationDateKey, .totalFileAllocatedSizeKey],
@@ -87,7 +112,8 @@ enum AutomaticBackupService {
             return AutomaticBackupSnapshot(
                 url: url,
                 createdAt: values?.creationDate ?? values?.contentModificationDate ?? .distantPast,
-                byteCount: directoryByteCount(at: url)
+                byteCount: directoryByteCount(at: url),
+                storage: storage
             )
         }
         .sorted { $0.createdAt > $1.createdAt }
@@ -97,21 +123,58 @@ enum AutomaticBackupService {
         try FileManager.default.removeItem(at: snapshot.url)
     }
 
-    nonisolated private static func backupDirectory() throws -> URL {
-        let base = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let directory = base.appendingPathComponent("AutomaticBackups", isDirectory: true)
+    nonisolated static func isICloudDriveAvailable() -> Bool {
+        FileManager.default.url(forUbiquityContainerIdentifier: nil) != nil
+    }
+
+    nonisolated private static func backupDirectory(for storage: AutomaticBackupStorage) throws -> URL {
+        let directory: URL
+        switch storage {
+        case .local:
+            let base = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            directory = base.appendingPathComponent("AutomaticBackups", isDirectory: true)
+        case .iCloudDrive:
+            guard let container = FileManager.default.url(forUbiquityContainerIdentifier: nil) else {
+                throw AutomaticBackupError.iCloudDriveUnavailable
+            }
+            directory = container
+                .appendingPathComponent("Documents", isDirectory: true)
+                .appendingPathComponent("Favoreco", isDirectory: true)
+                .appendingPathComponent("AutomaticBackups", isDirectory: true)
+        }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
 
-    nonisolated private static func pruneOldSnapshots() throws {
-        for snapshot in try snapshots().dropFirst(retentionCount) {
+    nonisolated private static func pruneOldSnapshots(in storage: AutomaticBackupStorage) throws {
+        for snapshot in try snapshots(in: storage).dropFirst(retentionCount) {
             try? FileManager.default.removeItem(at: snapshot.url)
+        }
+    }
+
+    private static func copyToICloudDriveIfEnabled(localURL: URL, createdAt: Date) {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: AppStorageKeys.automaticBackupUsesICloudDrive) else {
+            defaults.set("", forKey: AppStorageKeys.automaticBackupICloudError)
+            return
+        }
+        do {
+            let directory = try backupDirectory(for: .iCloudDrive)
+            let destination = directory.appendingPathComponent(localURL.lastPathComponent)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: localURL, to: destination)
+            defaults.set(createdAt, forKey: AppStorageKeys.automaticBackupLastICloudCreatedAt)
+            defaults.set("", forKey: AppStorageKeys.automaticBackupICloudError)
+            try pruneOldSnapshots(in: .iCloudDrive)
+        } catch {
+            defaults.set(error.localizedDescription, forKey: AppStorageKeys.automaticBackupICloudError)
         }
     }
 

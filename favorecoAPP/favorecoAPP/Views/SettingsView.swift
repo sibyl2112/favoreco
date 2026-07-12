@@ -1220,6 +1220,8 @@ struct SyncBackupSettingsView: View {
     @AppStorage(AppStorageKeys.iCloudSyncActiveAtLaunch) private var iCloudSyncActiveAtLaunch = false
     @AppStorage(AppStorageKeys.iCloudSyncStartupError) private var iCloudSyncStartupError = ""
     @AppStorage(AppStorageKeys.automaticBackupEnabled) private var automaticBackupEnabled = false
+    @AppStorage(AppStorageKeys.automaticBackupUsesICloudDrive) private var automaticBackupUsesICloudDrive = false
+    @AppStorage(AppStorageKeys.automaticBackupICloudError) private var automaticBackupICloudError = ""
     @State private var diagnostic: CloudSyncDiagnostic?
     @State private var isRefreshingDiagnostic = false
 
@@ -1261,11 +1263,23 @@ struct SyncBackupSettingsView: View {
             Section("バックアップ") {
 #if DEBUG
                 Toggle("自動バックアップ", isOn: $automaticBackupEnabled)
+                Toggle("iCloud Driveにも保存", isOn: $automaticBackupUsesICloudDrive)
+                    .disabled(!automaticBackupEnabled)
 #else
                 Toggle("自動バックアップ", isOn: .constant(false))
                     .disabled(true)
+                Toggle("iCloud Driveにも保存", isOn: .constant(false))
+                    .disabled(true)
 #endif
-                LabeledContent("バックアップ先", value: "この端末 / 5世代")
+                LabeledContent(
+                    "バックアップ先",
+                    value: automaticBackupUsesICloudDrive ? "端末 + iCloud Drive" : "この端末"
+                )
+                if !automaticBackupICloudError.isEmpty {
+                    Label(automaticBackupICloudError, systemImage: "exclamationmark.icloud")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.orange)
+                }
                 NavigationLink {
                     AutomaticBackupView()
                 } label: {

@@ -4,7 +4,11 @@ import SwiftUI
 struct AutomaticBackupView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(AppStorageKeys.automaticBackupLastCreatedAt) private var lastCreatedAt = Date.distantPast
-    @State private var snapshots: [AutomaticBackupSnapshot] = []
+    @AppStorage(AppStorageKeys.automaticBackupLastICloudCreatedAt) private var lastICloudCreatedAt = Date.distantPast
+    @AppStorage(AppStorageKeys.automaticBackupUsesICloudDrive) private var usesICloudDrive = false
+    @AppStorage(AppStorageKeys.automaticBackupICloudError) private var iCloudError = ""
+    @State private var localSnapshots: [AutomaticBackupSnapshot] = []
+    @State private var iCloudSnapshots: [AutomaticBackupSnapshot] = []
     @State private var selectedSnapshot: AutomaticBackupSnapshot?
     @State private var isConfirmingRestore = false
     @State private var isWorking = false
@@ -13,9 +17,12 @@ struct AutomaticBackupView: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("保存先", value: "この端末")
+                LabeledContent("保存先", value: usesICloudDrive ? "端末 + iCloud Drive" : "この端末")
                 LabeledContent("保持数", value: "最大\(AutomaticBackupService.retentionCount)世代")
-                LabeledContent("最終作成", value: lastCreatedText)
+                LabeledContent("端末の最終作成", value: createdText(lastCreatedAt))
+                if usesICloudDrive {
+                    LabeledContent("iCloudの最終作成", value: createdText(lastICloudCreatedAt))
+                }
                 Button {
                     createSnapshot()
                 } label: {
@@ -25,38 +32,18 @@ struct AutomaticBackupView: View {
             } header: {
                 Text("自動バックアップ")
             } footer: {
-                Text("端末内の記録と写真を世代保存します。端末の紛失やアプリ削除に備えるには、完全バックアップをFilesやiCloud Driveへ手動保存してください。")
+                Text("端末内へ先に保存し、設定時は同じパッケージをiCloud Driveにも複製します。iCloud側が一時利用できなくても端末内バックアップは残ります。")
             }
 
-            Section("保存済み世代") {
-                if snapshots.isEmpty {
-                    Text("バックアップはまだありません。")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(snapshots) { snapshot in
-                        Button {
-                            selectedSnapshot = snapshot
-                            isConfirmingRestore = true
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(snapshot.createdAt.formatted(date: .abbreviated, time: .shortened))
-                                        .foregroundStyle(.primary)
-                                    Text(ByteCountFormatter.string(fromByteCount: snapshot.byteCount, countStyle: .file))
-                                        .font(FavorecoTypography.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "clock.arrow.circlepath")
-                            }
-                        }
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                delete(snapshot)
-                            } label: {
-                                Label("削除", systemImage: "trash")
-                            }
-                        }
+            snapshotSection(title: "この端末", snapshots: localSnapshots)
+
+            if usesICloudDrive {
+                snapshotSection(title: "iCloud Drive", snapshots: iCloudSnapshots)
+                if !iCloudError.isEmpty {
+                    Section("iCloud Drive") {
+                        Label(iCloudError, systemImage: "exclamationmark.icloud")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.orange)
                     }
                 }
             }
@@ -89,9 +76,45 @@ struct AutomaticBackupView: View {
         }
     }
 
-    private var lastCreatedText: String {
-        guard lastCreatedAt != .distantPast else { return "未作成" }
-        return lastCreatedAt.formatted(date: .abbreviated, time: .shortened)
+    @ViewBuilder
+    private func snapshotSection(title: String, snapshots: [AutomaticBackupSnapshot]) -> some View {
+        Section(title) {
+            if snapshots.isEmpty {
+                Text("バックアップはまだありません。")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(snapshots) { snapshot in
+                    Button {
+                        selectedSnapshot = snapshot
+                        isConfirmingRestore = true
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(snapshot.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                    .foregroundStyle(.primary)
+                                Text(ByteCountFormatter.string(fromByteCount: snapshot.byteCount, countStyle: .file))
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "clock.arrow.circlepath")
+                        }
+                    }
+                    .swipeActions {
+                        Button(role: .destructive) {
+                            delete(snapshot)
+                        } label: {
+                            Label("削除", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func createdText(_ date: Date) -> String {
+        guard date != .distantPast else { return "未作成" }
+        return date.formatted(date: .abbreviated, time: .shortened)
     }
 
     private func createSnapshot() {
@@ -135,10 +158,23 @@ struct AutomaticBackupView: View {
 
     private func reload() {
         do {
-            snapshots = try AutomaticBackupService.snapshots()
+            localSnapshots = try AutomaticBackupService.snapshots(in: .local)
         } catch {
-            snapshots = []
+            localSnapshots = []
             message = "失敗: \(error.localizedDescription)"
+        }
+        guard usesICloudDrive else {
+            iCloudSnapshots = []
+            return
+        }
+        do {
+            iCloudSnapshots = try AutomaticBackupService.snapshots(in: .iCloudDrive)
+            if iCloudError == AutomaticBackupError.iCloudDriveUnavailable.localizedDescription {
+                iCloudError = ""
+            }
+        } catch {
+            iCloudSnapshots = []
+            iCloudError = error.localizedDescription
         }
     }
 }
