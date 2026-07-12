@@ -27,14 +27,9 @@ enum URLMetadataService {
             throw URLMetadataError.invalidURL
         }
 
-        let provider = LPMetadataProvider()
-        provider.timeout = 15
-        let metadata = try await provider.startFetchingMetadata(for: url)
-        let title = metadata.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !title.isEmpty else {
-            throw URLMetadataError.titleNotFound
-        }
-        let resolvedURL = metadata.originalURL ?? metadata.url ?? url
+        let basicMetadata = try await fetchBasicMetadata(from: url)
+        let title = basicMetadata.title
+        let resolvedURL = basicMetadata.resolvedURL
         let structuredData = includesStructuredData
             ? (try? await fetchStructuredData(from: resolvedURL))
             : nil
@@ -48,6 +43,57 @@ enum URLMetadataService {
             structuredDateLabel: structuredData.map { dateLabel(for: $0.typeName) } ?? "",
             contributors: structuredData?.contributors ?? []
         )
+    }
+
+    @MainActor
+    private static func fetchBasicMetadata(from url: URL) async throws -> (title: String, resolvedURL: URL) {
+        let provider = LPMetadataProvider()
+        provider.timeout = 15
+        if let metadata = try? await provider.startFetchingMetadata(for: url) {
+            let title = metadata.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !title.isEmpty {
+                return (title, metadata.originalURL ?? metadata.url ?? url)
+            }
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Favoreco/1.0",
+            forHTTPHeaderField: "User-Agent"
+        )
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<400).contains(httpResponse.statusCode),
+              data.count <= 5_000_000 else {
+            throw URLMetadataError.titleNotFound
+        }
+        let encoding = String.Encoding.utf8
+        guard let html = String(data: data, encoding: encoding),
+              let title = htmlTitle(in: html),
+              !title.isEmpty else {
+            throw URLMetadataError.titleNotFound
+        }
+        return (title, httpResponse.url ?? url)
+    }
+
+    nonisolated private static func htmlTitle(in html: String) -> String? {
+        let pattern = #"<title[^>]*>([\s\S]*?)</title>"#
+        guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = expression.firstMatch(
+                in: html,
+                range: NSRange(html.startIndex..., in: html)
+              ),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: html) else { return nil }
+        return String(html[range])
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     nonisolated static func normalizedURL(from rawValue: String) -> URL? {

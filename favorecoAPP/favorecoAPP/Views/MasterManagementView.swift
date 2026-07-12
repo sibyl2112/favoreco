@@ -5,6 +5,7 @@ import SwiftUI
 struct PersonMasterManagementView: View {
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
     @State private var searchText = ""
+    @State private var isShowingCreatePerson = false
 
     private var activePeople: [PersonMaster] {
         let active = people.filter { !$0.isArchived }
@@ -39,6 +40,100 @@ struct PersonMasterManagementView: View {
         }
         .navigationTitle("人物・団体マスター")
         .searchable(text: $searchText, prompt: "名前・よみ・別名を検索")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingCreatePerson = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("人物・団体を追加")
+            }
+        }
+        .sheet(isPresented: $isShowingCreatePerson) {
+            PersonMasterCreateView()
+        }
+    }
+}
+
+private struct PersonMasterCreateView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @State private var displayName = ""
+    @State private var reading = ""
+    @State private var roleTagsRaw = ""
+    @State private var aliasesRaw = ""
+    @State private var officialURL = ""
+    @State private var socialLinksRaw = ""
+    @State private var memo = ""
+    @State private var showsOptionalFields = false
+    @State private var errorMessage = ""
+
+    private var trimmedName: String {
+        displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("基本情報") {
+                    TextField("表示名", text: $displayName)
+                    TextField("よみ（任意）", text: $reading)
+                    TextField("タグ（カンマ区切り）", text: $roleTagsRaw)
+                }
+
+                Section {
+                    DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
+                        TextField("別名（カンマ区切り）", text: $aliasesRaw)
+                        TextField("公式URL", text: $officialURL)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                        TextField("SNS・参考リンク（1行1件）", text: $socialLinksRaw, axis: .vertical)
+                            .lineLimit(2...6)
+                        TextField("メモ", text: $memo, axis: .vertical)
+                            .lineLimit(3...8)
+                    }
+                }
+
+                if !errorMessage.isEmpty {
+                    Section { Text(errorMessage).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle("人物・団体を追加")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") { save() }
+                        .disabled(trimmedName.isEmpty)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        let now = Date()
+        modelContext.insert(PersonMaster(
+            displayName: trimmedName,
+            reading: reading.trimmingCharacters(in: .whitespacesAndNewlines),
+            aliasesRaw: aliasesRaw.trimmingCharacters(in: .whitespacesAndNewlines),
+            roleTagsRaw: roleTagsRaw.trimmingCharacters(in: .whitespacesAndNewlines),
+            memo: memo.trimmingCharacters(in: .whitespacesAndNewlines),
+            officialURL: officialURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            socialLinksRaw: socialLinksRaw.trimmingCharacters(in: .whitespacesAndNewlines),
+            normalizedName: normalizedMasterText(trimmedName),
+            createdAt: now,
+            updatedAt: now
+        ))
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            errorMessage = "保存できませんでした: \(error.localizedDescription)"
+        }
     }
 }
 

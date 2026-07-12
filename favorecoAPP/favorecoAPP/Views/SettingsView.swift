@@ -14,7 +14,9 @@ import UserNotifications
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
+    @AppStorage(AppStorageKeys.debugPlanOverride) private var debugPlanOverride = "storekit"
     @State private var debugMessage = ""
 
     var body: some View {
@@ -106,6 +108,22 @@ struct SettingsView: View {
                 }
 
                 Section("開発") {
+#if DEBUG
+                    Picker("テスト権利", selection: $debugPlanOverride) {
+                        Text("StoreKit購入結果").tag("storekit")
+                        Text("無料").tag(FavorecoPlan.free.rawValue)
+                        Text("ライト買い切り").tag(FavorecoPlan.lightLifetime.rawValue)
+                        Text("同期プラン").tag(FavorecoPlan.syncSubscription.rawValue)
+                        Text("フル買い切り").tag(FavorecoPlan.fullLifetime.rawValue)
+                    }
+                    .onChange(of: debugPlanOverride) { _, newValue in
+                        Task {
+                            await purchaseManager.setDebugPlanOverride(FavorecoPlan(rawValue: newValue))
+                        }
+                    }
+
+                    LabeledContent("現在の権利", value: purchaseManager.currentPlan.displayName)
+#endif
                     NavigationLink {
                         NotificationDebugView()
                     } label: {
@@ -122,6 +140,13 @@ struct SettingsView: View {
                         deleteDebugData()
                     } label: {
                         Label("仮データを削除", systemImage: "trash")
+                    }
+
+                    NavigationLink {
+                        FullDataDeletionView()
+                    } label: {
+                        Label("全データ削除（テスト）", systemImage: "trash.fill")
+                            .foregroundStyle(.red)
                     }
 
                     if !debugMessage.isEmpty {

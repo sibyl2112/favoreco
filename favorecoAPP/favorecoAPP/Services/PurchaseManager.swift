@@ -39,12 +39,8 @@ enum FavorecoProductID {
 
 enum EntitlementAccess {
     nonisolated static var canUseSyncFeatures: Bool {
-#if DEBUG
-        true
-#else
         let rawValue = UserDefaults.standard.string(forKey: AppStorageKeys.purchasedPlanCache) ?? ""
         return (FavorecoPlan(rawValue: rawValue) ?? .free).includesSync
-#endif
     }
 }
 
@@ -122,6 +118,17 @@ final class PurchaseManager: ObservableObject {
         products.first { $0.id == id }
     }
 
+#if DEBUG
+    func setDebugPlanOverride(_ plan: FavorecoPlan?) async {
+        if let plan {
+            UserDefaults.standard.set(plan.rawValue, forKey: AppStorageKeys.debugPlanOverride)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppStorageKeys.debugPlanOverride)
+        }
+        await refreshEntitlements()
+    }
+#endif
+
     private func observeTransactions() -> Task<Void, Never> {
         Task { [weak self] in
             for await update in Transaction.updates {
@@ -154,6 +161,12 @@ final class PurchaseManager: ObservableObject {
         } else {
             currentPlan = .free
         }
+#if DEBUG
+        if let rawValue = UserDefaults.standard.string(forKey: AppStorageKeys.debugPlanOverride),
+           let overriddenPlan = FavorecoPlan(rawValue: rawValue) {
+            currentPlan = overriddenPlan
+        }
+#endif
         UserDefaults.standard.set(currentPlan.rawValue, forKey: AppStorageKeys.purchasedPlanCache)
         await MonthlyReportNotificationScheduler.reschedule(isEntitled: currentPlan.includesSync)
     }

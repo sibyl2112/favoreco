@@ -115,9 +115,15 @@ enum DebugDataSeeder {
     static func deleteSampleData(in context: ModelContext) throws -> Int {
         let visitDescriptor = FetchDescriptor<Visit>()
         let visits = try context.fetch(visitDescriptor)
-        let deletedCount = visits.filter { visit in
+        let debugVisits = visits.filter { visit in
             visit.event?.officialURL.hasPrefix(debugURLPrefix) == true
-        }.count
+        }
+        let deletedCount = debugVisits.count
+
+        // Delete the records explicitly so category counts cannot retain orphaned visits.
+        for visit in debugVisits {
+            context.delete(visit)
+        }
 
         let eventDescriptor = FetchDescriptor<ExperienceEvent>()
         let events = try context.fetch(eventDescriptor)

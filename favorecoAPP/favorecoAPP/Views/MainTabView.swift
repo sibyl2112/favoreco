@@ -19,8 +19,8 @@ struct MainTabView: View {
     @AppStorage(AppStorageKeys.opensPreviousYearlyReport) private var opensPreviousYearlyReport = false
     @State private var selectedTab: MainTab = .home
     @State private var isShowingCreateMenu = false
+    @State private var isShowingCategoryChooser = false
     @State private var isShowingAddInboxItem = false
-    @State private var isShowingAddTicketPlan = false
     @State private var selectedCategoryForRecord: RecordCategory?
 
     private var visibleCategories: [RecordCategory] {
@@ -72,29 +72,30 @@ struct MainTabView: View {
             }
         }
         .confirmationDialog("記録を追加", isPresented: $isShowingCreateMenu, titleVisibility: .visible) {
-            if visibleCategories.isEmpty {
-                Button("記録を追加") {}
-                    .disabled(true)
-            } else {
-                ForEach(createMenuCategories) { category in
-                    Button(category.id == preferredCategory?.id
-                        ? "\(category.name)に記録を追加（デフォルト）"
-                        : "\(category.name)に記録を追加"
-                    ) {
-                        selectedCategoryForRecord = category
-                    }
+            Button("思い出を記録") {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(180))
+                    isShowingCategoryChooser = true
                 }
             }
-
-            Button("あとで記録") {
+            .disabled(visibleCategories.isEmpty)
+            Button("クイック記録") {
                 isShowingAddInboxItem = true
-            }
-            Button("予定・チケットを追加") {
-                isShowingAddTicketPlan = true
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("今すぐ記録するか、Inboxに一時保存します。")
+            Text("詳しく残すか、あとで整理するメモとして保存します。")
+        }
+        .confirmationDialog("ジャンルを選択", isPresented: $isShowingCategoryChooser, titleVisibility: .visible) {
+            ForEach(createMenuCategories) { category in
+                Button(category.id == preferredCategory?.id
+                    ? "\(category.name)（デフォルト）"
+                    : category.name
+                ) {
+                    selectedCategoryForRecord = category
+                }
+            }
+            Button("キャンセル", role: .cancel) {}
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoStats)) { _ in
             selectedTab = .stats
@@ -119,9 +120,6 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $isShowingAddInboxItem) {
             AddInboxItemView()
-        }
-        .sheet(isPresented: $isShowingAddTicketPlan) {
-            AddTicketPlanView()
         }
     }
 }
@@ -180,6 +178,16 @@ private struct RecordsView: View {
             }
             .listStyle(.plain)
             .navigationTitle("記録")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        TicketOverviewView()
+                    } label: {
+                        Image(systemName: "ticket")
+                    }
+                    .accessibilityLabel("予定・チケット")
+                }
+            }
         }
     }
 }
@@ -327,7 +335,7 @@ private struct CalendarView: View {
 
             Spacer()
 
-            Text(displayedMonth.formatted(.dateTime.year().month(.wide)))
+            Text(japaneseYearMonth(displayedMonth))
                 .font(FavorecoTypography.sectionTitle)
 
             Spacer()
@@ -340,6 +348,11 @@ private struct CalendarView: View {
             }
             .buttonStyle(.bordered)
         }
+    }
+
+    private func japaneseYearMonth(_ date: Date) -> String {
+        let components = calendar.dateComponents([.year, .month], from: date)
+        return "\(components.year ?? 0)年\(components.month ?? 0)月"
     }
 
     private var externalCalendarControl: some View {
@@ -1338,7 +1351,8 @@ private enum StatsReportKind {
     func periodLabel(for date: Date) -> String {
         switch self {
         case .monthly:
-            return date.formatted(.dateTime.year().month(.wide))
+            let components = Calendar.current.dateComponents([.year, .month], from: date)
+            return "\(components.year ?? 0)年\(components.month ?? 0)月"
         case .yearly:
             return date.formatted(.dateTime.year())
         }

@@ -51,7 +51,7 @@ struct AddTicketPlanView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("予定") {
+                Section("予定の基本情報") {
                     Picker("ジャンル", selection: $draft.categoryID) {
                         Text("未設定").tag(Optional<UUID>.none)
                         ForEach(visibleCategories) { category in
@@ -70,7 +70,7 @@ struct AddTicketPlanView: View {
                         .textInputAutocapitalization(.never)
                 }
 
-                Section("チケット申込") {
+                Section("申込状況") {
                     Toggle("申込情報も作成", isOn: $draft.createsTicketAttempt)
 
                     if draft.createsTicketAttempt {
@@ -136,6 +136,11 @@ struct AddTicketPlanView: View {
                             }
                         }
 
+                    }
+                }
+
+                if draft.createsTicketAttempt && draft.showsAnyTicketMilestone {
+                    Section("締切・発券") {
                         if draft.showsSaleStart {
                             DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
                         }
@@ -555,6 +560,10 @@ private struct TicketPlanDraft {
 
     var showsIssueStart: Bool {
         flowKey == "saleWaiting" || flowKey == "acquired"
+    }
+
+    var showsAnyTicketMilestone: Bool {
+        showsSaleStart || showsApplyDeadline || showsResultAnnounce || showsPaymentDeadline || showsIssueStart
     }
 
     var showsTicketDetails: Bool {

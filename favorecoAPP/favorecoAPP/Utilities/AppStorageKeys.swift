@@ -32,6 +32,7 @@ enum AppStorageKeys {
     static let automaticBackupLastICloudCreatedAt = "automaticBackupLastICloudCreatedAt"
     static let automaticBackupICloudError = "automaticBackupICloudError"
     nonisolated static let purchasedPlanCache = "purchasedPlanCache"
+    nonisolated static let debugPlanOverride = "debugPlanOverride"
     static let defaultRecordDateMode = "defaultRecordDateMode"
     static let defaultGenreMode = "defaultGenreMode"
     static let lastUsedCategoryTemplateKey = "lastUsedCategoryTemplateKey"

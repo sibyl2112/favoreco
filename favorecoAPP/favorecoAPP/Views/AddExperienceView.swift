@@ -11,6 +11,7 @@ import PhotosUI
 import UIKit
 import ImageIO
 import Vision
+import MapKit
 
 struct AddExperienceView: View {
     let category: RecordCategory
@@ -212,7 +213,10 @@ struct AddExperienceView: View {
             )
             placeSearchAssist(
                 isEnabled: usesMapSearchAssist,
+                venueName: draft.venueName,
                 address: venueAddressBinding,
+                latitude: draft.latitude,
+                longitude: draft.longitude,
                 action: { isShowingPlaceSearch = true }
             )
             ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
@@ -543,7 +547,10 @@ struct EditExperienceView: View {
             )
             placeSearchAssist(
                 isEnabled: usesMapSearchAssist,
+                venueName: draft.venueName,
                 address: venueAddressBinding,
+                latitude: draft.latitude,
+                longitude: draft.longitude,
                 action: { isShowingPlaceSearch = true }
             )
             ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
@@ -917,7 +924,10 @@ struct AddVisitView: View {
             )
             placeSearchAssist(
                 isEnabled: usesMapSearchAssist,
+                venueName: draft.venueName,
                 address: venueAddressBinding,
+                latitude: draft.latitude,
+                longitude: draft.longitude,
                 action: { isShowingPlaceSearch = true }
             )
             ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
@@ -1433,13 +1443,78 @@ private func placeSuggestionList(
 }
 
 @ViewBuilder
-private func placeSearchAssist(isEnabled: Bool, address: Binding<String>, action: @escaping () -> Void) -> some View {
+private func placeSearchAssist(
+    isEnabled: Bool,
+    venueName: String,
+    address: Binding<String>,
+    latitude: Double,
+    longitude: Double,
+    action: @escaping () -> Void
+) -> some View {
     if isEnabled {
         TextField("住所（地図では住所を優先）", text: address)
             .textContentType(.fullStreetAddress)
         Button(action: action) {
             Label("Apple Mapsから会場を選択", systemImage: "map")
         }
+        PlaceMapPreview(
+            venueName: venueName,
+            address: address.wrappedValue,
+            latitude: latitude,
+            longitude: longitude
+        )
+    }
+}
+
+private struct PlaceMapPreview: View {
+    let venueName: String
+    let address: String
+    let latitude: Double
+    let longitude: Double
+    @State private var resolvedCoordinate: CLLocationCoordinate2D?
+
+    private var explicitCoordinate: CLLocationCoordinate2D? {
+        guard latitude != 0 || longitude != 0 else { return nil }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    private var coordinate: CLLocationCoordinate2D? {
+        explicitCoordinate ?? resolvedCoordinate
+    }
+
+    private var geocodeKey: String {
+        "\(address)|\(latitude)|\(longitude)"
+    }
+
+    var body: some View {
+        if let coordinate {
+            Map(initialPosition: .region(MKCoordinateRegion(
+                center: coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
+            ))) {
+                Marker(venueName.isEmpty ? address : venueName, coordinate: coordinate)
+            }
+            .frame(height: 170)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .accessibilityLabel("\(venueName.isEmpty ? address : venueName)の地図")
+        }
+        EmptyView()
+            .task(id: geocodeKey) {
+                guard explicitCoordinate == nil else {
+                    resolvedCoordinate = nil
+                    return
+                }
+                let query = address.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !query.isEmpty else {
+                    resolvedCoordinate = nil
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                let placemarks = try? await CLGeocoder().geocodeAddressString(query)
+                guard !Task.isCancelled else { return }
+                resolvedCoordinate = placemarks?.first?.location?.coordinate
+            }
     }
 }
 
@@ -2453,6 +2528,12 @@ private struct PhotoUnitEditor: View {
     @Binding var coverPhotoPath: String
     @State private var isShowingCamera = false
     @State private var isShowingCameraUnavailableAlert = false
+    @State private var importCompletedCount = 0
+    @State private var importTotalCount = 0
+
+    private var isImportingPhotos: Bool {
+        importTotalCount > 0
+    }
 
     private var maxPhotoCount: Int {
         purchaseManager.currentPlan.includesLocalFullFeatures ? 30 : 10
@@ -2481,17 +2562,6 @@ private struct PhotoUnitEditor: View {
                     .foregroundStyle(.secondary)
             }
 
-            Picker("カバー比率", selection: $aspectRatioKey) {
-                ForEach(EyecatchAspectRatio.all) { ratio in
-                    Text("\(ratio.name)（\(ratio.displayValue)）").tag(ratio.key)
-                }
-            }
-
-            Text(selectedAspectRatio.note)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
             if currentPhotoCount == 0 {
                 Text("思い出写真、半券写真、表紙画像などを追加できます。")
                     .font(FavorecoTypography.caption)
@@ -2501,7 +2571,22 @@ private struct PhotoUnitEditor: View {
                 photoGrid
             }
 
-            if remainingPhotoSlots > 0 {
+            if isImportingPhotos {
+                VStack(alignment: .leading, spacing: 6) {
+                    ProgressView(
+                        value: Double(importCompletedCount),
+                        total: Double(max(importTotalCount, 1))
+                    )
+                    Text("写真を取り込み中 \(importCompletedCount)/\(importTotalCount)")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+
+            if isImportingPhotos {
+                EmptyView()
+            } else if remainingPhotoSlots > 0 {
                 photoAddControls
             } else {
                 Label(photoLimitMessage, systemImage: "checkmark.circle")
@@ -2615,8 +2700,8 @@ private struct PhotoUnitEditor: View {
             }
 
             ForEach(pendingPhotos) { photo in
-                PhotoThumbnail(
-                    image: photo.image,
+                PendingPhotoThumbnail(
+                    photo: photo,
                     title: "追加予定",
                     aspectRatio: selectedAspectRatio.value,
                     isCover: coverPhotoPath == photo.relativePath,
@@ -2635,20 +2720,32 @@ private struct PhotoUnitEditor: View {
     @MainActor
     private func appendPhotos(from items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
+        let importItems = Array(items.prefix(remainingPhotoSlots))
+        importCompletedCount = 0
+        importTotalCount = importItems.count
+        defer {
+            importCompletedCount = 0
+            importTotalCount = 0
+        }
 
-        for item in items.prefix(remainingPhotoSlots) {
+        for item in importItems {
             guard let data = try? await item.loadTransferable(type: Data.self) else {
+                importCompletedCount += 1
                 continue
             }
             let filename = item.itemIdentifier ?? "photo.jpg"
             let quality = compressionQuality
             guard let pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
                 PendingPhoto.make(from: data, filename: filename, compressionQuality: quality)
-            }).value else { continue }
+            }).value else {
+                importCompletedCount += 1
+                continue
+            }
             pendingPhotos.append(pendingPhoto)
             if coverPhotoPath.isEmpty {
                 coverPhotoPath = pendingPhoto.relativePath
             }
+            importCompletedCount += 1
         }
     }
 
@@ -2674,6 +2771,43 @@ private struct PhotoUnitEditor: View {
                 coverPhotoPath = pendingPhoto.relativePath
             }
         }
+    }
+}
+
+private struct PendingPhotoThumbnail: View {
+    let photo: PendingPhoto
+    let title: String
+    let aspectRatio: Double
+    let isCover: Bool
+    let onSetCover: () -> Void
+    let onDelete: () -> Void
+    @State private var image: UIImage?
+
+    var body: some View {
+        PhotoThumbnail(
+            image: image,
+            title: title,
+            aspectRatio: aspectRatio,
+            isCover: isCover,
+            onSetCover: onSetCover,
+            onDelete: onDelete
+        )
+        .task(id: cacheKey) {
+            image = nil
+            if let cached = ThumbnailLoader.cached(forKey: cacheKey) {
+                image = cached
+                return
+            }
+            let data = photo.data
+            let key = cacheKey
+            image = await Task.detached(priority: .userInitiated) {
+                ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: 420, cacheKey: key)
+            }.value
+        }
+    }
+
+    private var cacheKey: String {
+        "pending-editor-\(photo.id.uuidString)-\(photo.data.count)"
     }
 }
 
