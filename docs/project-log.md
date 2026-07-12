@@ -4626,3 +4626,22 @@ favorecoの初期値として決めた「保存後は編集画面ではなく情
 - 実機で写真0枚/1枚/多数、同一端末への再取込、別端末への復元、Files/iCloud Drive/ローカル保存先を確認する
 - 1GB級バックアップの時間、空き容量不足、中断時の一時ファイル掃除を実測する
 - プロフィール表示名/写真や表示設定などAppStorage設定は今回のSwiftData完全バックアップ対象外。設定DTOは自動バックアップ工程で追加する
+
+## 2026-07-12: 同期OFF時の起動失敗を修正
+
+### 変更概要
+- 同期OFFおよびCloudKit初期化失敗時の`ModelConfiguration`へ`cloudKitDatabase: .none`を明示
+- iCloud entitlement追加後も、従来のローカルSwiftDataストアをCloudKit検証なしで開くよう修正
+
+### 変更意図
+iCloud capabilityがある環境では省略したCloudKit設定がautomaticとして解釈され得るため、同期OFFのローカル構成を明示し、CloudKitスキーマ検証エラーによる起動時クラッシュを防ぐため。既存データの削除やストア移行は行わない。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/CloudSyncService.swift（ローカル構成をCloudKit非使用へ固定）
+
+### 確認結果（実機 / ビルド）
+- iPhoneOS向け署名なしクリーンビルドを実施
+
+### 残課題
+- 実機またはシミュレータで既存ローカルデータを保持したまま起動できることを確認する
+- 同期ON側のCloudKitスキーマ互換性を別途検証する

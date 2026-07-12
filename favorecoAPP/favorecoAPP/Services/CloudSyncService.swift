@@ -41,7 +41,11 @@ enum FavorecoModelContainerBootstrap {
         }
 
         do {
-            let localConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            let localConfiguration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                cloudKitDatabase: .none
+            )
             return try ModelContainer(for: schema, configurations: [localConfiguration])
         } catch {
             fatalError("Could not create local ModelContainer: \(error)")
