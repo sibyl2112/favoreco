@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AutomaticBackupView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \PhotoBlob.createdAt, order: .reverse) private var photos: [PhotoBlob]
     @AppStorage(AppStorageKeys.automaticBackupLastCreatedAt) private var lastCreatedAt = Date.distantPast
     @AppStorage(AppStorageKeys.automaticBackupLastICloudCreatedAt) private var lastICloudCreatedAt = Date.distantPast
     @AppStorage(AppStorageKeys.automaticBackupUsesICloudDrive) private var usesICloudDrive = false
@@ -14,11 +15,20 @@ struct AutomaticBackupView: View {
     @State private var isWorking = false
     @State private var message = ""
 
+    private var totalPhotoBytes: Int64 {
+        photos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
+    }
+
+    private var effectiveRetentionCount: Int {
+        AutomaticBackupService.retentionCount(forPhotoBytes: totalPhotoBytes)
+    }
+
     var body: some View {
         Form {
             Section {
                 LabeledContent("保存先", value: usesICloudDrive ? "端末 + iCloud Drive" : "この端末")
-                LabeledContent("保持数", value: "最大\(AutomaticBackupService.retentionCount)世代")
+                LabeledContent("保持数", value: "最大\(effectiveRetentionCount)世代")
+                LabeledContent("写真容量", value: ByteCountFormatter.string(fromByteCount: totalPhotoBytes, countStyle: .file))
                 LabeledContent("端末の最終作成", value: createdText(lastCreatedAt))
                 if usesICloudDrive {
                     LabeledContent("iCloudの最終作成", value: createdText(lastICloudCreatedAt))
@@ -32,7 +42,7 @@ struct AutomaticBackupView: View {
             } header: {
                 Text("自動バックアップ")
             } footer: {
-                Text("端末内へ先に保存し、設定時は同じパッケージをiCloud Driveにも複製します。iCloud側が一時利用できなくても端末内バックアップは残ります。")
+                Text("端末内へ先に保存し、設定時は同じパッケージをiCloud Driveにも複製します。写真が500MB以上では3世代、1GB以上では2世代へ自動調整します。")
             }
 
             snapshotSection(title: "この端末", snapshots: localSnapshots)

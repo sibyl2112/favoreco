@@ -37,17 +37,9 @@ struct ExperienceDetailView: View {
         CategoryRecordTemplate.template(for: category)
     }
 
-    private var firstPhotoImage: UIImage? {
-        guard let photo = sortedPhotos.first,
-              !photo.data.isEmpty else {
-            return nil
-        }
-        return UIImage(data: photo.data)
-    }
-
     private var sortedPhotos: [PhotoBlob] {
         (visit.photos ?? [])
-            .filter { $0.mediaKind == "photo" && !$0.data.isEmpty }
+            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
             .sorted { lhs, rhs in
                 let lhsIsCover = !visit.eyecatchPath.isEmpty && lhs.relativePath == visit.eyecatchPath
                 let rhsIsCover = !visit.eyecatchPath.isEmpty && rhs.relativePath == visit.eyecatchPath
@@ -181,33 +173,27 @@ struct ExperienceDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("写真")
 
-                if sortedPhotos.count == 1, let firstPhotoImage {
-                    Image(uiImage: firstPhotoImage)
-                        .resizable()
-                        .scaledToFill()
+                if sortedPhotos.count == 1, let firstPhoto = sortedPhotos.first {
+                    RepresentativePhotoImage(photo: firstPhoto, maxPixelSize: 1600)
                         .aspectRatio(CGFloat(eyecatchAspectRatio), contentMode: .fill)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 10)], spacing: 10) {
                         ForEach(sortedPhotos) { photo in
-                            if let image = UIImage(data: photo.data) {
-                                ZStack(alignment: .bottomLeading) {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .aspectRatio(CGFloat(eyecatchAspectRatio), contentMode: .fill)
-                                        .frame(maxWidth: .infinity)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                    if photo.relativePath == visit.eyecatchPath {
-                                        Label("カバー", systemImage: "star.fill")
-                                            .font(FavorecoTypography.captionStrong)
-                                            .foregroundStyle(.white)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 5)
-                                            .background(.black.opacity(0.58), in: Capsule())
-                                            .padding(7)
-                                    }
+                            ZStack(alignment: .bottomLeading) {
+                                RepresentativePhotoImage(photo: photo, maxPixelSize: 720)
+                                    .aspectRatio(CGFloat(eyecatchAspectRatio), contentMode: .fill)
+                                    .frame(maxWidth: .infinity)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                if photo.relativePath == visit.eyecatchPath {
+                                    Label("カバー", systemImage: "star.fill")
+                                        .font(FavorecoTypography.captionStrong)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 5)
+                                        .background(.black.opacity(0.58), in: Capsule())
+                                        .padding(7)
                                 }
                             }
                         }

@@ -1726,7 +1726,7 @@ private struct PlaceSearchView: View {
     }
 }
 
-private struct PendingPhoto: Identifiable {
+private struct PendingPhoto: Identifiable, Sendable {
     let id = UUID()
     var data: Data
     var originalFilename: String
@@ -2599,8 +2599,8 @@ private struct PhotoUnitEditor: View {
     private var photoGrid: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
             ForEach(existingPhotos) { photo in
-                PhotoThumbnail(
-                    image: UIImage(data: photo.data),
+                SavedPhotoThumbnail(
+                    photo: photo,
                     title: "保存済み",
                     aspectRatio: selectedAspectRatio.value,
                     isCover: coverPhotoPath == photo.relativePath,
@@ -2637,14 +2637,14 @@ private struct PhotoUnitEditor: View {
         guard !items.isEmpty else { return }
 
         for item in items.prefix(remainingPhotoSlots) {
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let pendingPhoto = PendingPhoto.make(
-                    from: data,
-                    filename: item.itemIdentifier ?? "photo.jpg",
-                    compressionQuality: compressionQuality
-                  ) else {
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
                 continue
             }
+            let filename = item.itemIdentifier ?? "photo.jpg"
+            let quality = compressionQuality
+            guard let pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
+                PendingPhoto.make(from: data, filename: filename, compressionQuality: quality)
+            }).value else { continue }
             pendingPhotos.append(pendingPhoto)
             if coverPhotoPath.isEmpty {
                 coverPhotoPath = pendingPhoto.relativePath
@@ -2662,19 +2662,55 @@ private struct PhotoUnitEditor: View {
     }
 
     private func appendCapturedPhoto(_ image: UIImage) {
-        guard remainingPhotoSlots > 0,
-              let data = image.jpegData(compressionQuality: 1),
-              let pendingPhoto = PendingPhoto.make(
-                from: data,
-                filename: "camera-\(UUID().uuidString).jpg",
-                compressionQuality: compressionQuality
-              ) else {
-            return
+        guard remainingPhotoSlots > 0, let data = image.jpegData(compressionQuality: 1) else { return }
+        let filename = "camera-\(UUID().uuidString).jpg"
+        let quality = compressionQuality
+        Task {
+            guard let pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
+                PendingPhoto.make(from: data, filename: filename, compressionQuality: quality)
+            }).value, remainingPhotoSlots > 0 else { return }
+            pendingPhotos.append(pendingPhoto)
+            if coverPhotoPath.isEmpty {
+                coverPhotoPath = pendingPhoto.relativePath
+            }
         }
-        pendingPhotos.append(pendingPhoto)
-        if coverPhotoPath.isEmpty {
-            coverPhotoPath = pendingPhoto.relativePath
+    }
+}
+
+private struct SavedPhotoThumbnail: View {
+    let photo: PhotoBlob
+    let title: String
+    let aspectRatio: Double
+    let isCover: Bool
+    let onSetCover: () -> Void
+    let onDelete: () -> Void
+    @State private var image: UIImage?
+
+    var body: some View {
+        PhotoThumbnail(
+            image: image,
+            title: title,
+            aspectRatio: aspectRatio,
+            isCover: isCover,
+            onSetCover: onSetCover,
+            onDelete: onDelete
+        )
+        .task(id: cacheKey) {
+            image = nil
+            if let cached = ThumbnailLoader.cached(forKey: cacheKey) {
+                image = cached
+                return
+            }
+            let data = photo.data
+            let key = cacheKey
+            image = await Task.detached(priority: .userInitiated) {
+                ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: 420, cacheKey: key)
+            }.value
         }
+    }
+
+    private var cacheKey: String {
+        "editor-\(photo.id.uuidString)-\(photo.byteCount)"
     }
 }
 
@@ -2736,23 +2772,27 @@ private struct PhotoThumbnail: View {
 }
 
 private extension PendingPhoto {
-    static func make(from data: Data, filename: String, compressionQuality: Double) -> PendingPhoto? {
-        guard let image = UIImage(data: data) else { return nil }
-        let targetWidth: CGFloat = 1600
-        let scale = min(1, targetWidth / max(image.size.width, 1))
-        let targetSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: targetSize)
-        let redrawnImage = renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: targetSize))
+    nonisolated static func make(from data: Data, filename: String, compressionQuality: Double) -> PendingPhoto? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1600,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
         }
         let safeQuality = min(max(compressionQuality, 0.5), 0.95)
-        let compressedData = redrawnImage.jpegData(compressionQuality: safeQuality) ?? data
+        guard let compressedData = UIImage(cgImage: cgImage).jpegData(compressionQuality: safeQuality) else {
+            return nil
+        }
 
         return PendingPhoto(
             data: compressedData,
             originalFilename: filename,
-            width: Int(targetSize.width),
-            height: Int(targetSize.height)
+            width: cgImage.width,
+            height: cgImage.height
         )
     }
 }

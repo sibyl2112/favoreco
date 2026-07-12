@@ -1004,6 +1004,20 @@ struct DataManagementView: View {
             + places.filter(\.isArchived).count
     }
 
+    private var totalPhotoBytes: Int64 {
+        photos.reduce(Int64(0)) { partialResult, photo in
+            partialResult + Int64(max(photo.byteCount, 0))
+        }
+    }
+
+    private var averagePhotoBytes: Int64 {
+        photos.isEmpty ? 0 : totalPhotoBytes / Int64(photos.count)
+    }
+
+    private var estimatedTenThousandPhotoBytes: Int64 {
+        averagePhotoBytes * 10_000
+    }
+
     var body: some View {
         Form {
             Section {
@@ -1024,6 +1038,11 @@ struct DataManagementView: View {
                 LabeledContent("あとで記録", value: "\(inboxItems.count)")
                 LabeledContent("ジャンル", value: "\(categories.count)")
                 LabeledContent("写真", value: "\(photos.count)")
+                LabeledContent("写真容量", value: ByteCountFormatter.string(fromByteCount: totalPhotoBytes, countStyle: .file))
+                if !photos.isEmpty {
+                    LabeledContent("1枚の平均", value: ByteCountFormatter.string(fromByteCount: averagePhotoBytes, countStyle: .file))
+                    LabeledContent("1万枚の推定", value: ByteCountFormatter.string(fromByteCount: estimatedTenThousandPhotoBytes, countStyle: .file))
+                }
             }
 
             Section("マスター管理") {
@@ -1555,6 +1574,7 @@ struct JSONExportView: View {
 
 struct SyncBackupSettingsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
+    @Query(sort: \PhotoBlob.createdAt, order: .reverse) private var photos: [PhotoBlob]
     @AppStorage(AppStorageKeys.iCloudSyncEnabled) private var iCloudSyncEnabled = false
     @AppStorage(AppStorageKeys.iCloudSyncActiveAtLaunch) private var iCloudSyncActiveAtLaunch = false
     @AppStorage(AppStorageKeys.iCloudSyncStartupError) private var iCloudSyncStartupError = ""
@@ -1564,6 +1584,10 @@ struct SyncBackupSettingsView: View {
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     @State private var diagnostic: CloudSyncDiagnostic?
     @State private var isRefreshingDiagnostic = false
+
+    private var totalPhotoBytes: Int64 {
+        photos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
+    }
 
     var body: some View {
         Form {
@@ -1595,6 +1619,7 @@ struct SyncBackupSettingsView: View {
                 }
                 .disabled(isRefreshingDiagnostic)
                 LabeledContent("写真の同期", value: iCloudSyncActiveAtLaunch ? "含む" : "OFF")
+                LabeledContent("写真データ", value: ByteCountFormatter.string(fromByteCount: totalPhotoBytes, countStyle: .file))
             } header: {
                 Text("同期")
             } footer: {
@@ -1631,7 +1656,7 @@ struct SyncBackupSettingsView: View {
                 } label: {
                     Label("完全バックアップ・復元", systemImage: "archivebox")
                 }
-                Text("24時間に1回、起動時に写真付きバックアップを作成します。製品版では同期プラン向け機能として提供予定です。")
+                Text("24時間に1回、起動時に写真付きバックアップを作成します。写真容量が増えると保持世代数を自動で減らし、作成前に端末の空き容量を確認します。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }

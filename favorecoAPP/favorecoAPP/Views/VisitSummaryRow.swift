@@ -32,7 +32,7 @@ struct VisitSummaryRow: View {
 
     private var firstPhoto: PhotoBlob? {
         let photos = (visit.photos ?? [])
-            .filter { $0.mediaKind == "photo" && !$0.data.isEmpty }
+            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
         if !visit.eyecatchPath.isEmpty,
            let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
             return cover

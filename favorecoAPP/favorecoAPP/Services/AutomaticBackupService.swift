@@ -24,11 +24,16 @@ struct AutomaticBackupSnapshot: Identifiable {
 
 enum AutomaticBackupError: LocalizedError {
     case iCloudDriveUnavailable
+    case insufficientStorage(requiredBytes: Int64, availableBytes: Int64)
 
     var errorDescription: String? {
         switch self {
         case .iCloudDriveUnavailable:
             return "iCloud Driveを利用できません。Apple AccountとiCloud Driveの設定を確認してください。"
+        case .insufficientStorage(let requiredBytes, let availableBytes):
+            let required = ByteCountFormatter.string(fromByteCount: requiredBytes, countStyle: .file)
+            let available = ByteCountFormatter.string(fromByteCount: availableBytes, countStyle: .file)
+            return "写真付きバックアップには約\(required)の空きが必要です。現在の空きは約\(available)です。"
         }
     }
 }
@@ -36,6 +41,12 @@ enum AutomaticBackupError: LocalizedError {
 enum AutomaticBackupService {
     nonisolated static let retentionCount = 5
     nonisolated static let interval: TimeInterval = 24 * 60 * 60
+
+    nonisolated static func retentionCount(forPhotoBytes byteCount: Int64) -> Int {
+        if byteCount >= 1_000_000_000 { return 2 }
+        if byteCount >= 500_000_000 { return 3 }
+        return retentionCount
+    }
 
     @MainActor
     static func createIfDue(in context: ModelContext, now: Date = Date()) throws -> URL? {
@@ -59,6 +70,9 @@ enum AutomaticBackupService {
         let visits = try snapshotContext.fetch(FetchDescriptor<Visit>())
         let inboxItems = try snapshotContext.fetch(FetchDescriptor<InboxItem>())
         let photos = try snapshotContext.fetch(FetchDescriptor<PhotoBlob>())
+        let totalPhotoBytes = photos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
+        try ensureAvailableCapacity(forPhotoBytes: totalPhotoBytes)
+        let retentionLimit = retentionCount(forPhotoBytes: totalPhotoBytes)
         let socialAccounts = try snapshotContext.fetch(FetchDescriptor<SocialAccount>())
         let people = try snapshotContext.fetch(FetchDescriptor<PersonMaster>())
         let personLinks = try snapshotContext.fetch(FetchDescriptor<EventPersonLink>())
@@ -97,8 +111,8 @@ enum AutomaticBackupService {
         }
         try FileManager.default.moveItem(at: temporaryURL, to: destination)
         UserDefaults.standard.set(now, forKey: AppStorageKeys.automaticBackupLastCreatedAt)
-        try pruneOldSnapshots(in: .local)
-        copyToICloudDriveIfEnabled(localURL: destination, createdAt: now)
+        try pruneOldSnapshots(in: .local, keeping: retentionLimit)
+        copyToICloudDriveIfEnabled(localURL: destination, createdAt: now, retentionLimit: retentionLimit)
         return destination
     }
 
@@ -154,13 +168,13 @@ enum AutomaticBackupService {
         return directory
     }
 
-    nonisolated private static func pruneOldSnapshots(in storage: AutomaticBackupStorage) throws {
-        for snapshot in try snapshots(in: storage).dropFirst(retentionCount) {
+    nonisolated private static func pruneOldSnapshots(in storage: AutomaticBackupStorage, keeping retentionLimit: Int) throws {
+        for snapshot in try snapshots(in: storage).dropFirst(retentionLimit) {
             try? FileManager.default.removeItem(at: snapshot.url)
         }
     }
 
-    private static func copyToICloudDriveIfEnabled(localURL: URL, createdAt: Date) {
+    private static func copyToICloudDriveIfEnabled(localURL: URL, createdAt: Date, retentionLimit: Int) {
         let defaults = UserDefaults.standard
         guard defaults.bool(forKey: AppStorageKeys.automaticBackupUsesICloudDrive) else {
             defaults.set("", forKey: AppStorageKeys.automaticBackupICloudError)
@@ -175,7 +189,7 @@ enum AutomaticBackupService {
             try FileManager.default.copyItem(at: localURL, to: destination)
             defaults.set(createdAt, forKey: AppStorageKeys.automaticBackupLastICloudCreatedAt)
             defaults.set("", forKey: AppStorageKeys.automaticBackupICloudError)
-            try pruneOldSnapshots(in: .iCloudDrive)
+            try pruneOldSnapshots(in: .iCloudDrive, keeping: retentionLimit)
         } catch {
             defaults.set(error.localizedDescription, forKey: AppStorageKeys.automaticBackupICloudError)
         }
@@ -186,6 +200,23 @@ enum AutomaticBackupService {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return "favoreco-auto-\(formatter.string(from: date))"
+    }
+
+    nonisolated private static func ensureAvailableCapacity(forPhotoBytes photoBytes: Int64) throws {
+        guard photoBytes > 0 else { return }
+        let base = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let values = try base.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        guard let available = values.volumeAvailableCapacityForImportantUsage else { return }
+        let safetyMargin = max(Int64(500_000_000), photoBytes / 10)
+        let required = photoBytes + safetyMargin
+        if available < required {
+            throw AutomaticBackupError.insufficientStorage(requiredBytes: required, availableBytes: available)
+        }
     }
 
     nonisolated private static func directoryByteCount(at root: URL) -> Int64 {

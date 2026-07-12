@@ -316,7 +316,7 @@ enum EventRepresentativePhotoResolver {
 
     private static func photoItems(in visit: Visit) -> [PhotoBlob] {
         (visit.photos ?? [])
-            .filter { $0.mediaKind == "photo" && !$0.data.isEmpty }
+            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
             .sorted { $0.createdAt < $1.createdAt }
     }
 }

@@ -706,6 +706,10 @@ final class PhotoBlob {
 
     var visit: Visit?
 
+    var hasStoredData: Bool {
+        byteCount > 0
+    }
+
     init(
         id: UUID = UUID(),
         relativePath: String = "",
