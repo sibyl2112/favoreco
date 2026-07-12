@@ -8,6 +8,37 @@
 import SwiftUI
 import UIKit
 
+enum FavorecoThemeMode: String, CaseIterable, Identifiable {
+    case categoryAccent
+    case unified
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .categoryAccent: return "標準（ジャンル色）"
+        case .unified: return "全体を同じ色にする"
+        }
+    }
+}
+
+struct FavorecoThemeColorPreset: Identifiable {
+    let id: String
+    let name: String
+    let hex: String
+
+    static let all: [FavorecoThemeColorPreset] = [
+        FavorecoThemeColorPreset(id: "teal", name: "ティール", hex: "#147C88"),
+        FavorecoThemeColorPreset(id: "wine", name: "ワイン", hex: "#8B2F45"),
+        FavorecoThemeColorPreset(id: "sage", name: "セージ", hex: "#7D8C78"),
+        FavorecoThemeColorPreset(id: "charcoal", name: "チャコール", hex: "#3B3D4A"),
+        FavorecoThemeColorPreset(id: "amber", name: "アンバー", hex: "#B8792F"),
+        FavorecoThemeColorPreset(id: "green", name: "グリーン", hex: "#2E7D60"),
+        FavorecoThemeColorPreset(id: "rose", name: "ローズ", hex: "#A24C55"),
+        FavorecoThemeColorPreset(id: "blue", name: "ブルー", hex: "#536C95"),
+    ]
+}
+
 extension Color {
     init(hex: String) {
         let sanitizedHex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)

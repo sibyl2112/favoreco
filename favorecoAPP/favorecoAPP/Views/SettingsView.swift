@@ -670,6 +670,7 @@ struct NotificationSettingsView: View {
 }
 
 struct DisplaySettingsView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.showsHomeAttention) private var showsHomeAttention = true
     @AppStorage(AppStorageKeys.showsHomeExperienceGallery) private var showsHomeExperienceGallery = true
     @AppStorage(AppStorageKeys.showsHomeInbox) private var showsHomeInbox = true
@@ -680,6 +681,8 @@ struct DisplaySettingsView: View {
     @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
     @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
+    @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
+    @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#147C88"
 
     var body: some View {
         Form {
@@ -705,6 +708,40 @@ struct DisplaySettingsView: View {
                     }
                 }
             }
+
+            Section("テーマ") {
+                if purchaseManager.currentPlan.includesLocalFullFeatures {
+                    Picker("配色", selection: themeModeBinding) {
+                        ForEach(FavorecoThemeMode.allCases) { mode in
+                            Text(mode.name).tag(mode)
+                        }
+                    }
+
+                    if effectiveThemeMode == .unified {
+                        Picker("全体カラー", selection: $unifiedThemeColorHex) {
+                            ForEach(FavorecoThemeColorPreset.all) { preset in
+                                Label {
+                                    Text(preset.name)
+                                } icon: {
+                                    Circle()
+                                        .fill(Color(hex: preset.hex))
+                                        .frame(width: 14, height: 14)
+                                }
+                                .tag(preset.hex)
+                            }
+                        }
+                    }
+                } else {
+                    LabeledContent("配色", value: FavorecoThemeMode.categoryAccent.name)
+                    Label("全体統一テーマはライト以上", systemImage: "lock.fill")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("標準では白を基調にジャンル色をアクセントとして使います。全体統一では操作色を選んだ色へ揃えます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .navigationTitle("表示設定")
         .navigationBarTitleDisplayMode(.inline)
@@ -714,6 +751,18 @@ struct DisplaySettingsView: View {
         followsSystemTextSize
             ? "端末設定に従う"
             : (AppTextSize(rawValue: appTextSizeRaw) ?? .standard).name
+    }
+
+    private var effectiveThemeMode: FavorecoThemeMode {
+        guard purchaseManager.currentPlan.includesLocalFullFeatures else { return .categoryAccent }
+        return FavorecoThemeMode(rawValue: themeModeRaw) ?? .categoryAccent
+    }
+
+    private var themeModeBinding: Binding<FavorecoThemeMode> {
+        Binding(
+            get: { effectiveThemeMode },
+            set: { themeModeRaw = $0.rawValue }
+        )
     }
 }
 

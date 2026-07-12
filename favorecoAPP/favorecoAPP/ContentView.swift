@@ -9,8 +9,11 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
+    @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
+    @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#147C88"
 
     var body: some View {
         Group {
@@ -22,14 +25,24 @@ struct ContentView: View {
         }
         .modifier(AppTextSizeModifier())
         .preferredColorScheme(appearanceMode.colorScheme)
+        .tint(effectiveTint)
     }
 
     private var appearanceMode: AppAppearanceMode {
         AppAppearanceMode(rawValue: appearanceModeRaw) ?? .system
     }
+
+    private var effectiveTint: Color {
+        let mode = FavorecoThemeMode(rawValue: themeModeRaw) ?? .categoryAccent
+        guard purchaseManager.currentPlan.includesLocalFullFeatures, mode == .unified else {
+            return Color(hex: "#147C88")
+        }
+        return Color(hex: unifiedThemeColorHex)
+    }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(PurchaseManager.shared)
         .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self], inMemory: true)
 }

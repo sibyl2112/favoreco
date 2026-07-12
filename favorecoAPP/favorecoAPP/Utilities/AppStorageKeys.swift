@@ -17,6 +17,8 @@ enum AppStorageKeys {
     static let followsSystemTextSize = "followsSystemTextSize"
     static let appTextSize = "appTextSize"
     static let appearanceMode = "appearanceMode"
+    static let themeMode = "themeMode"
+    static let unifiedThemeColorHex = "unifiedThemeColorHex"
     static let profileDisplayName = "profileDisplayName"
     static let profileImageData = "profileImageData"
     static let iCloudSyncEnabled = "iCloudSyncEnabled"
