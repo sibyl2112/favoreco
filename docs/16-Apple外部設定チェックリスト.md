@@ -12,7 +12,7 @@
 - StoreKit構成: `Favoreco.storekit`
 - アプリ表示名: `Favoreco`
 - Version / Build: `1.0 (1)`
-- Deployment Target: iOS 26.5
+- Deployment Target: iOS 18.0
 
 ## 1. Apple Developer
 
@@ -123,7 +123,7 @@ Auto-Renewable Subscription Group: `Favoreco Sync`
 
 ## 7. リリース前の要判断
 
-- 最低対応OSはiOS 26.5で確定。Deployment Targetは変更しない
+- 最低対応OSはiOS 18.0。iOS 26実機を主確認端末とし、iOS 18 Simulatorと公開前TestFlightで互換確認する
 - iPad対応はデザイン完成度を見て判断する。含める場合は全主要画面をiPadで確認し、見送る場合は提出前にTargeted Device FamilyをiPhoneのみに変更する
 - `com.nori.favoreco` と `iCloud.com.nori.favoreco` をRANOVIQOの恒久IDとして採用するか
 - 創設メンバー特典の対象、締切日、権利付与方法

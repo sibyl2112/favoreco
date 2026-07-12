@@ -14,7 +14,7 @@
 
 ## 2. 技術スタック
 
-- 最低対応OSは `iOS 26.5` で確定する。旧OS対応のためにDeployment Targetを下げる作業はv1では行わない。
+- 最低対応OSは `iOS 18.0` とする。開発中の実機総合確認は先にiOS 26で進め、iOS 18はSimulatorの互換確認と公開前のTestFlight協力者による実機確認で補完する。iOS 26の見た目・挙動を基準にし、iOS 18で利用できないAPIはavailability分岐または同等の代替表示を用意する。
 - iPadは開発中のレイアウト検証用にUniversal設定を残すが、初版の正式対応は主要画面のデザイン完成度とiPad実機確認結果を見て公開直前に判断する。正式対応を見送る場合はApp Store提出前にTargeted Device FamilyをiPhoneのみに変更する。
 
 SwiftUI / SwiftData / MapKit / ImageIO / UserNotifications（Mystorium準拠・外部ライブラリゼロ方針。`docs/04-Mystorium構造リファレンス.md` 参照）

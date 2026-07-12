@@ -5,6 +5,35 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-12: 最低対応をiOS 18へ変更
+
+### 変更概要
+- Debug/ReleaseのDeployment TargetをiOS 18.0へ変更した。
+- iOS 26で導入されたMKMapItemのlocation/addressは26以上で使用し、iOS 18〜25ではplacemarkとCNPostalAddressFormatterへフォールバックするようにした。
+- iOS 26実機を先に確認し、iOS 18はSimulatorと公開前TestFlightで補完する検証方針へ更新した。
+- iOS 18 Simulator runtimeの追加手順を実機総合確認書へ追記した。
+
+### 変更意図
+iOS 26.5限定で対象利用者を狭めず、iOS 18利用者にも提供しながら、手元にiOS 18実機がない検証制約をSimulatorとTestFlightで補うため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP.xcodeproj/project.pbxproj`
+- `favorecoAPP/favorecoAPP/Services/PlaceSearchService.swift`
+- `favoreco/CLAUDE.md`
+- `docs/15-実機総合確認手順.md`
+- `docs/16-Apple外部設定チェックリスト.md`
+- `docs/project-log.md`
+
+### 確認結果
+- iOS 18.0をDeployment TargetにしたiPhone向けRelease・署名なし全体ビルド成功。
+- iOS 18互換エラーは場所検索の2 APIだけで、availability分岐後に解消した。
+- iOS 26では新MapKit API、iOS 18〜25では従来APIが選ばれることをコード確認した。
+- 現在のMacにはiOS 26.2/26.4/26.5 runtimeのみで、iOS 18 Simulator runtimeは未導入。
+
+### 残課題
+- Xcode ComponentsからiOS 18 Simulator runtimeを導入し、主要フローを画面確認する。
+- 公開前にiOS 18実機のTestFlight協力者で写真、Map、通知、カレンダーを確認する。
+
 ## 2026-07-12: 対応OSを確定しiPad対応判断を保留
 
 ### 変更概要

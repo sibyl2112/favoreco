@@ -1,5 +1,6 @@
 import Foundation
 import MapKit
+import Contacts
 
 struct PlaceSearchCandidate: Identifiable, Sendable {
     let id: String
@@ -21,9 +22,9 @@ enum PlaceSearchService {
         let response = try await MKLocalSearch(request: request).start()
 
         return response.mapItems.prefix(20).map { item in
-            let coordinate = item.location.coordinate
+            let coordinate = coordinate(for: item)
             let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let address = item.address?.fullAddress.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let address = formattedAddress(for: item)
             let resolvedName = (name?.isEmpty == false ? name : nil) ?? address
             return PlaceSearchCandidate(
                 id: "\(coordinate.latitude),\(coordinate.longitude),\(resolvedName)",
@@ -34,6 +35,27 @@ enum PlaceSearchService {
             )
         }
         .filter { !$0.name.isEmpty }
+    }
+
+    private static func coordinate(for item: MKMapItem) -> CLLocationCoordinate2D {
+        if #available(iOS 26.0, *) {
+            return item.location.coordinate
+        } else {
+            return item.placemark.coordinate
+        }
+    }
+
+    private static func formattedAddress(for item: MKMapItem) -> String {
+        let address: String
+        if #available(iOS 26.0, *) {
+            address = item.address?.fullAddress ?? ""
+        } else if let postalAddress = item.placemark.postalAddress {
+            address = CNPostalAddressFormatter.string(from: postalAddress, style: .mailingAddress)
+                .replacingOccurrences(of: "\n", with: " ")
+        } else {
+            address = item.placemark.title ?? ""
+        }
+        return address.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     nonisolated static func appleMapsURL(
