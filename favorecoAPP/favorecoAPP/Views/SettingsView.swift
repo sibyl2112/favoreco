@@ -603,13 +603,16 @@ struct NotificationSettingsView: View {
 
             Section("思い出") {
                 Toggle("思い出リマインダー", isOn: $memoryReminderEnabled)
-                Toggle("毎月1日に月刊Favorecoを通知", isOn: $monthlyReportEnabled)
+                Toggle("月刊・年間Favorecoを通知", isOn: $monthlyReportEnabled)
                     .disabled(!purchaseManager.currentPlan.includesSync)
                     .onChange(of: monthlyReportEnabled) { _, _ in
                         rescheduleMonthlyReportNotification()
                     }
+                Text("月刊は毎月1日9時、年間は毎年1月1日10時にお知らせします。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 if !purchaseManager.currentPlan.includesSync {
-                    Label("月刊レポート通知は同期プラン以上", systemImage: "lock.fill")
+                    Label("思い出レポート通知は同期プラン以上", systemImage: "lock.fill")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }

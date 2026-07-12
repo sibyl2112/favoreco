@@ -15,6 +15,7 @@ struct MainTabView: View {
     @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
     @AppStorage(AppStorageKeys.homeSelectedCategoryTemplateKey) private var homeSelectedCategoryTemplateKey = ""
     @AppStorage(AppStorageKeys.opensPreviousMonthlyReport) private var opensPreviousMonthlyReport = false
+    @AppStorage(AppStorageKeys.opensPreviousYearlyReport) private var opensPreviousYearlyReport = false
     @State private var selectedTab: MainTab = .home
     @State private var isShowingCreateMenu = false
     @State private var isShowingAddInboxItem = false
@@ -98,11 +99,16 @@ struct MainTabView: View {
             selectedTab = .stats
         }
         .task {
-            if opensPreviousMonthlyReport {
+            if opensPreviousMonthlyReport || opensPreviousYearlyReport {
                 selectedTab = .stats
             }
         }
         .onChange(of: opensPreviousMonthlyReport) { _, shouldOpen in
+            if shouldOpen {
+                selectedTab = .stats
+            }
+        }
+        .onChange(of: opensPreviousYearlyReport) { _, shouldOpen in
             if shouldOpen {
                 selectedTab = .stats
             }
@@ -784,7 +790,9 @@ private struct StatsView: View {
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
     @State private var showsAmount = false
     @AppStorage(AppStorageKeys.opensPreviousMonthlyReport) private var opensPreviousMonthlyReport = false
+    @AppStorage(AppStorageKeys.opensPreviousYearlyReport) private var opensPreviousYearlyReport = false
     @State private var isShowingAutomaticMonthlyReport = false
+    @State private var isShowingAutomaticYearlyReport = false
 
     private var calendar: Calendar {
         Calendar.current
@@ -884,13 +892,24 @@ private struct StatsView: View {
                     initialPeriodStart: previousMonthStart
                 )
             }
+            .navigationDestination(isPresented: $isShowingAutomaticYearlyReport) {
+                StatsReportDraftView(
+                    kind: .yearly,
+                    allVisits: visibleVisits,
+                    categories: categories,
+                    initialPeriodStart: previousYearStart
+                )
+            }
         }
-        .task { openPreviousMonthlyReportIfNeeded() }
+        .task { openAutomaticReportIfNeeded() }
         .onChange(of: opensPreviousMonthlyReport) { _, _ in
-            openPreviousMonthlyReportIfNeeded()
+            openAutomaticReportIfNeeded()
+        }
+        .onChange(of: opensPreviousYearlyReport) { _, _ in
+            openAutomaticReportIfNeeded()
         }
         .onChange(of: isActive) { _, _ in
-            openPreviousMonthlyReportIfNeeded()
+            openAutomaticReportIfNeeded()
         }
     }
 
@@ -898,10 +917,20 @@ private struct StatsView: View {
         calendar.date(byAdding: .month, value: -1, to: Date().startOfMonth) ?? Date().startOfMonth
     }
 
-    private func openPreviousMonthlyReportIfNeeded() {
-        guard isActive, opensPreviousMonthlyReport, purchaseManager.currentPlan.includesSync else { return }
-        opensPreviousMonthlyReport = false
-        isShowingAutomaticMonthlyReport = true
+    private var previousYearStart: Date {
+        let currentYearStart = calendar.date(from: calendar.dateComponents([.year], from: Date())) ?? Date()
+        return calendar.date(byAdding: .year, value: -1, to: currentYearStart) ?? currentYearStart
+    }
+
+    private func openAutomaticReportIfNeeded() {
+        guard isActive, purchaseManager.currentPlan.includesSync else { return }
+        if opensPreviousYearlyReport {
+            opensPreviousYearlyReport = false
+            isShowingAutomaticYearlyReport = true
+        } else if opensPreviousMonthlyReport {
+            opensPreviousMonthlyReport = false
+            isShowingAutomaticMonthlyReport = true
+        }
     }
 
     private var summaryGrid: some View {

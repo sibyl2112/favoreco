@@ -33,9 +33,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didReceive response: UNNotificationResponse
     ) async {
         let userInfo = response.notification.request.content.userInfo
-        guard userInfo[MonthlyReportNotificationScheduler.destinationKey] as? String
-                == MonthlyReportNotificationScheduler.destinationValue else { return }
-        UserDefaults.standard.set(true, forKey: AppStorageKeys.opensPreviousMonthlyReport)
+        guard let destination = userInfo[MonthlyReportNotificationScheduler.destinationKey] as? String else { return }
+        switch destination {
+        case MonthlyReportNotificationScheduler.monthlyDestinationValue:
+            UserDefaults.standard.set(true, forKey: AppStorageKeys.opensPreviousMonthlyReport)
+        case MonthlyReportNotificationScheduler.yearlyDestinationValue:
+            UserDefaults.standard.set(true, forKey: AppStorageKeys.opensPreviousYearlyReport)
+        default:
+            return
+        }
         await MainActor.run {
             NotificationCenter.default.post(name: .openFavorecoStats, object: nil)
         }

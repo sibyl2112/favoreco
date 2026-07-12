@@ -5,6 +5,37 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-12: 年間Favorecoの自動提案通知を接続
+
+### 変更概要
+- 同期プラン以上の思い出レポート通知に、毎年1月1日10時の年間Favoreco通知を追加した。
+- 月刊は毎月1日9時、年間は毎年1月1日10時とし、1月1日に2件が同時配信されないようにした。
+- 年間通知をタップすると統計タブへ移動し、前年を選択した年間Favorecoを直接開くようにした。
+- 月刊/年間の通知遷移フラグを分離し、両方が残った場合も片方を失わないようにした。
+- 自動バックアップとStoreKitが未接続と残っていた正本記述を、現在の実装状態へ更新した。
+
+### 変更意図
+月刊だけで止まっていたPremiumの自動思い出提案を年間までつなぎ、毎年の振り返りを利用者の明示操作なしで発見できるようにするため。画像は通知時に生成せず、通知先画面を開いた時に端末内データを集計する既存方針を維持する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Services/MonthlyReportNotificationScheduler.swift`
+- `favorecoAPP/favorecoAPP/AppDelegate.swift`
+- `favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift`
+- `favorecoAPP/favorecoAPP/Views/MainTabView.swift`
+- `favorecoAPP/favorecoAPP/Views/SettingsView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 確認結果
+- iPhone向け署名なし全体ビルド成功。
+- 月刊/年間で通知IDと遷移先を分離し、予約更新/解除では両方を処理することをコード確認した。
+- 同期プラン権利がない場合は通知予約も通知先レポート遷移も実行しないことを確認した。
+- SwiftDataモデルとCloudKitスキーマの変更なし。
+
+### 残課題
+- 実機で通知許可ON、同期プラン権利ありの状態における予約件数と通知タップ遷移を確認する。
+- 高度グラフと外部データ補助を含むPremium高度レポートは後続候補。
+
 ## 2026-07-11: OCR取込設定を入力画面へ接続
 
 ### 変更概要
