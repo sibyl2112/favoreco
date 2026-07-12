@@ -887,6 +887,22 @@ struct DataManagementView: View {
                 LabeledContent("写真", value: "\(photos.count)")
             }
 
+            Section("マスター管理") {
+                NavigationLink {
+                    PersonMasterManagementView()
+                } label: {
+                    LabeledContent("人物・団体", value: "\(people.filter { !$0.isArchived }.count)")
+                }
+                NavigationLink {
+                    PlaceMasterManagementView()
+                } label: {
+                    LabeledContent("場所", value: "\(places.filter { !$0.isArchived }.count)")
+                }
+                Text("似た候補を確認し、過去の表示スナップショットを変えずに統合できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("インポート・エクスポート") {
                 NavigationLink {
                     FullBackupView()
