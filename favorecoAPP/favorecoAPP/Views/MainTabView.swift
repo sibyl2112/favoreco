@@ -753,6 +753,7 @@ private extension Date {
 }
 
 private struct StatsView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var showsAmount = false
@@ -821,7 +822,14 @@ private struct StatsView: View {
             Text("ジャンル別")
                 .font(FavorecoTypography.sectionTitle)
 
-            if categoryStats.isEmpty {
+            if !purchaseManager.currentPlan.includesLocalFullFeatures {
+                StatsLockedFeatureCard(
+                    title: "詳細統計",
+                    message: "ジャンル別の回数や傾向は、ライト買い切り・同期プラン・フル買い切りで利用できます。",
+                    systemImage: "chart.bar.xaxis",
+                    requirement: "ライト以上"
+                )
+            } else if categoryStats.isEmpty {
                 PlaceholderRow(
                     icon: "square.grid.2x2",
                     title: "ジャンル別統計はまだありません",
@@ -879,29 +887,56 @@ private struct StatsView: View {
                 .font(FavorecoTypography.sectionTitle)
 
             VStack(spacing: 10) {
-                NavigationLink {
-                    StatsReportDraftView(kind: .monthly, allVisits: visits, categories: categories)
-                } label: {
-                    StatsReportPreviewCard(
+                if purchaseManager.currentPlan.includesLocalFullFeatures {
+                    NavigationLink {
+                        StatsReportDraftView(kind: .monthly, allVisits: visits, categories: categories)
+                    } label: {
+                        StatsReportPreviewCard(
+                            title: "月刊Favoreco",
+                            badge: "手動作成",
+                            detail: "今月の記録、写真、ジャンル傾向、印象的な体験を1枚の思い出カードにまとめます。",
+                            systemImage: "sparkles"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    StatsLockedFeatureCard(
                         title: "月刊Favoreco",
-                        badge: "Premium候補",
-                        detail: "今月の記録、写真、ジャンル傾向、印象的な体験を1枚の思い出カードにまとめる下書きです。",
-                        systemImage: "sparkles"
+                        message: "月ごとの記録を集計し、思い出カードを手動で作成・共有できます。",
+                        systemImage: "sparkles",
+                        requirement: "ライト以上"
                     )
                 }
-                .buttonStyle(.plain)
 
-                NavigationLink {
-                    StatsReportDraftView(kind: .yearly, allVisits: visits, categories: categories)
-                } label: {
-                    StatsReportPreviewCard(
+                if purchaseManager.currentPlan.includesLocalFullFeatures {
+                    NavigationLink {
+                        StatsReportDraftView(kind: .yearly, allVisits: visits, categories: categories)
+                    } label: {
+                        StatsReportPreviewCard(
+                            title: "年間Favoreco",
+                            badge: "手動作成",
+                            detail: "年間ベスト、今年の10枚、よく通った場所、ジャンル横断の変化を見返します。",
+                            systemImage: "calendar.badge.star"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    StatsLockedFeatureCard(
                         title: "年間Favoreco",
-                        badge: "Pro / Premium候補",
-                        detail: "年間ベスト、今年の10枚、よく通った場所、ジャンル横断の変化を見返す下書きです。",
-                        systemImage: "calendar.badge.star"
+                        message: "1年分の記録を集計し、年間の思い出カードを手動で作成・共有できます。",
+                        systemImage: "calendar.badge.star",
+                        requirement: "ライト以上"
                     )
                 }
-                .buttonStyle(.plain)
+
+                StatsLockedFeatureCard(
+                    title: "毎月届く思い出レポート",
+                    message: purchaseManager.currentPlan.includesSync
+                        ? "同期済みの記録から自動で提案する機能です。現在は準備中です。"
+                        : "同期済みの記録から、月刊・年間レポートを自動で提案する予定です。",
+                    systemImage: "wand.and.stars",
+                    requirement: purchaseManager.currentPlan.includesSync ? "同期プラン・準備中" : "同期プラン以上"
+                )
             }
         }
     }
@@ -913,6 +948,40 @@ private struct StatsView: View {
         formatter.currencyCode = "JPY"
         formatter.maximumFractionDigits = 0
         return formatter.string(from: number) ?? "¥\(number.stringValue)"
+    }
+}
+
+private struct StatsLockedFeatureCard: View {
+    let title: String
+    let message: String
+    let systemImage: String
+    let requirement: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(FavorecoTypography.bodyStrong)
+                Text(message)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Label(
+                    requirement,
+                    systemImage: requirement.contains("準備中") ? "clock" : "lock.fill"
+                )
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -1744,5 +1813,6 @@ private struct PlaceholderRow: View {
 
 #Preview {
     MainTabView()
+        .environmentObject(PurchaseManager.shared)
         .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self], inMemory: true)
 }
