@@ -539,6 +539,7 @@ private struct EditTicketAccountView: View {
 }
 
 struct NotificationSettingsView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
     @AppStorage(AppStorageKeys.notificationMasterEnabled) private var masterEnabled = false
     @AppStorage(AppStorageKeys.notificationApplicationStartEnabled) private var applicationStartEnabled = false
@@ -549,6 +550,7 @@ struct NotificationSettingsView: View {
     @AppStorage(AppStorageKeys.notificationPerformanceReminderEnabled) private var performanceReminderEnabled = true
     @AppStorage(AppStorageKeys.notificationMembershipExpiryEnabled) private var membershipExpiryEnabled = false
     @AppStorage(AppStorageKeys.notificationMemoryReminderEnabled) private var memoryReminderEnabled = false
+    @AppStorage(AppStorageKeys.notificationMonthlyReportEnabled) private var monthlyReportEnabled = false
     @State private var authorizationStatusText = "確認中"
     @State private var permissionMessage = ""
 
@@ -560,8 +562,10 @@ struct NotificationSettingsView: View {
                         if newValue {
                             requestNotificationAuthorization()
                             rescheduleMembershipNotificationsIfNeeded()
+                            rescheduleMonthlyReportNotification()
                         } else {
                             cancelMembershipNotifications()
+                            MonthlyReportNotificationScheduler.cancel()
                         }
                     }
                 LabeledContent("iOS通知許可", value: authorizationStatusText)
@@ -599,11 +603,21 @@ struct NotificationSettingsView: View {
 
             Section("思い出") {
                 Toggle("思い出リマインダー", isOn: $memoryReminderEnabled)
+                Toggle("毎月1日に月刊Favorecoを通知", isOn: $monthlyReportEnabled)
+                    .disabled(!purchaseManager.currentPlan.includesSync)
+                    .onChange(of: monthlyReportEnabled) { _, _ in
+                        rescheduleMonthlyReportNotification()
+                    }
+                if !purchaseManager.currentPlan.includesSync {
+                    Label("月刊レポート通知は同期プラン以上", systemImage: "lock.fill")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .disabled(!masterEnabled)
 
             Section("現在の実装範囲") {
-                Text("通知タイプ別の設定保存、iOS通知許可、予定・申込・FC/会員期限の予約まで接続しています。予定・申込は保存時、FC・会員期限は設定変更時にも反映します。")
+                Text("通知タイプ別の設定保存、iOS通知許可、予定・申込・FC/会員期限、同期プランの月刊Favoreco通知まで接続しています。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -612,6 +626,10 @@ struct NotificationSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await refreshNotificationAuthorizationStatus()
+            rescheduleMonthlyReportNotification()
+        }
+        .onChange(of: purchaseManager.currentPlan) { _, _ in
+            rescheduleMonthlyReportNotification()
         }
     }
 
@@ -627,6 +645,7 @@ struct NotificationSettingsView: View {
                 } else {
                     permissionMessage = "通知が許可されました。"
                     rescheduleMembershipNotificationsIfNeeded()
+                    rescheduleMonthlyReportNotification()
                 }
             } catch {
                 masterEnabled = false
@@ -651,6 +670,14 @@ struct NotificationSettingsView: View {
     private func cancelMembershipNotifications() {
         for account in ticketAccounts {
             TicketAccountNotificationScheduler.cancel(account: account)
+        }
+    }
+
+    private func rescheduleMonthlyReportNotification() {
+        Task {
+            await MonthlyReportNotificationScheduler.reschedule(
+                isEntitled: purchaseManager.currentPlan.includesSync
+            )
         }
     }
 

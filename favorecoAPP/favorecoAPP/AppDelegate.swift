@@ -27,4 +27,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) async -> UNNotificationPresentationOptions {
         [.banner, .sound, .badge]
     }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let userInfo = response.notification.request.content.userInfo
+        guard userInfo[MonthlyReportNotificationScheduler.destinationKey] as? String
+                == MonthlyReportNotificationScheduler.destinationValue else { return }
+        UserDefaults.standard.set(true, forKey: AppStorageKeys.opensPreviousMonthlyReport)
+        await MainActor.run {
+            NotificationCenter.default.post(name: .openFavorecoStats, object: nil)
+        }
+    }
+}
+
+extension Notification.Name {
+    static let openFavorecoStats = Notification.Name("openFavorecoStats")
 }

@@ -52,4 +52,6 @@ enum AppStorageKeys {
     static let notificationPerformanceReminderEnabled = "notificationPerformanceReminderEnabled"
     static let notificationMembershipExpiryEnabled = "notificationMembershipExpiryEnabled"
     static let notificationMemoryReminderEnabled = "notificationMemoryReminderEnabled"
+    static let notificationMonthlyReportEnabled = "notificationMonthlyReportEnabled"
+    static let opensPreviousMonthlyReport = "opensPreviousMonthlyReport"
 }

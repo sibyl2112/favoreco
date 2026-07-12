@@ -14,6 +14,7 @@ struct MainTabView: View {
     @AppStorage(AppStorageKeys.defaultGenreMode) private var defaultGenreMode = "lastUsed"
     @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
     @AppStorage(AppStorageKeys.homeSelectedCategoryTemplateKey) private var homeSelectedCategoryTemplateKey = ""
+    @AppStorage(AppStorageKeys.opensPreviousMonthlyReport) private var opensPreviousMonthlyReport = false
     @State private var selectedTab: MainTab = .home
     @State private var isShowingCreateMenu = false
     @State private var isShowingAddInboxItem = false
@@ -57,7 +58,7 @@ struct MainTabView: View {
                     }
                     .tag(MainTab.calendar)
 
-                StatsView()
+                StatsView(isActive: selectedTab == .stats)
                     .tabItem {
                         Label("統計", systemImage: "chart.bar")
                     }
@@ -92,6 +93,19 @@ struct MainTabView: View {
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("今すぐ記録するか、Inboxに一時保存します。")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openFavorecoStats)) { _ in
+            selectedTab = .stats
+        }
+        .task {
+            if opensPreviousMonthlyReport {
+                selectedTab = .stats
+            }
+        }
+        .onChange(of: opensPreviousMonthlyReport) { _, shouldOpen in
+            if shouldOpen {
+                selectedTab = .stats
+            }
         }
         .sheet(item: $selectedCategoryForRecord) { category in
             AddExperienceView(category: category)
@@ -754,10 +768,13 @@ private extension Date {
 }
 
 private struct StatsView: View {
+    let isActive: Bool
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var showsAmount = false
+    @AppStorage(AppStorageKeys.opensPreviousMonthlyReport) private var opensPreviousMonthlyReport = false
+    @State private var isShowingAutomaticMonthlyReport = false
 
     private var calendar: Calendar {
         Calendar.current
@@ -806,7 +823,32 @@ private struct StatsView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("統計")
+            .navigationDestination(isPresented: $isShowingAutomaticMonthlyReport) {
+                StatsReportDraftView(
+                    kind: .monthly,
+                    allVisits: visits,
+                    categories: categories,
+                    initialPeriodStart: previousMonthStart
+                )
+            }
         }
+        .task { openPreviousMonthlyReportIfNeeded() }
+        .onChange(of: opensPreviousMonthlyReport) { _, _ in
+            openPreviousMonthlyReportIfNeeded()
+        }
+        .onChange(of: isActive) { _, _ in
+            openPreviousMonthlyReportIfNeeded()
+        }
+    }
+
+    private var previousMonthStart: Date {
+        calendar.date(byAdding: .month, value: -1, to: Date().startOfMonth) ?? Date().startOfMonth
+    }
+
+    private func openPreviousMonthlyReportIfNeeded() {
+        guard isActive, opensPreviousMonthlyReport, purchaseManager.currentPlan.includesSync else { return }
+        opensPreviousMonthlyReport = false
+        isShowingAutomaticMonthlyReport = true
     }
 
     private var summaryGrid: some View {
@@ -930,14 +972,31 @@ private struct StatsView: View {
                     )
                 }
 
-                StatsLockedFeatureCard(
-                    title: "毎月届く思い出レポート",
-                    message: purchaseManager.currentPlan.includesSync
-                        ? "同期済みの記録から自動で提案する機能です。現在は準備中です。"
-                        : "同期済みの記録から、月刊・年間レポートを自動で提案する予定です。",
-                    systemImage: "wand.and.stars",
-                    requirement: purchaseManager.currentPlan.includesSync ? "同期プラン・準備中" : "同期プラン以上"
-                )
+                if purchaseManager.currentPlan.includesSync {
+                    NavigationLink {
+                        StatsReportDraftView(
+                            kind: .monthly,
+                            allVisits: visits,
+                            categories: categories,
+                            initialPeriodStart: previousMonthStart
+                        )
+                    } label: {
+                        StatsReportPreviewCard(
+                            title: "先月の月刊Favoreco",
+                            badge: "自動提案",
+                            detail: "毎月1日に、先月の記録から新しい思い出カードを提案します。",
+                            systemImage: "wand.and.stars"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    StatsLockedFeatureCard(
+                        title: "毎月届く思い出レポート",
+                        message: "同期済みの記録から、前月の月刊Favorecoを自動で提案します。",
+                        systemImage: "wand.and.stars",
+                        requirement: "同期プラン以上"
+                    )
+                }
             }
         }
     }
@@ -1051,11 +1110,16 @@ private struct StatsReportDraftView: View {
     @State private var isShowingImageShare = false
     @State private var imageGenerationError = ""
 
-    init(kind: StatsReportKind, allVisits: [Visit], categories: [RecordCategory]) {
+    init(
+        kind: StatsReportKind,
+        allVisits: [Visit],
+        categories: [RecordCategory],
+        initialPeriodStart: Date? = nil
+    ) {
         self.kind = kind
         self.allVisits = allVisits
         self.categories = categories
-        _selectedPeriodStart = State(initialValue: kind.periodStart(containing: Date()))
+        _selectedPeriodStart = State(initialValue: kind.periodStart(containing: initialPeriodStart ?? Date()))
     }
 
     private var visits: [Visit] {

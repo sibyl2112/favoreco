@@ -155,6 +155,7 @@ final class PurchaseManager: ObservableObject {
             currentPlan = .free
         }
         UserDefaults.standard.set(currentPlan.rawValue, forKey: AppStorageKeys.purchasedPlanCache)
+        await MonthlyReportNotificationScheduler.reschedule(isEntitled: currentPlan.includesSync)
     }
 
     private func verified<T>(_ result: VerificationResult<T>) throws -> T {
