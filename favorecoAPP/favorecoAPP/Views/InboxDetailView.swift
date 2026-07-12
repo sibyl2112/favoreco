@@ -19,6 +19,7 @@ struct InboxDetailView: View {
     @State private var isShowingConvertForm = false
     @State private var selectedExistingEventID = ""
     @State private var selectedEventForVisit: ExperienceEvent?
+    @State private var isShowingTicketPlanForm = false
     @State private var operationErrorMessage: String?
 
     private var visibleCategories: [RecordCategory] {
@@ -101,6 +102,13 @@ struct InboxDetailView: View {
                         }
                         .disabled(selectedExistingEvent == nil || item.state == "resolved")
                     }
+
+                    Button {
+                        isShowingTicketPlanForm = true
+                    } label: {
+                        Label("予定・チケットに変換", systemImage: "calendar.badge.plus")
+                    }
+                    .disabled(item.state == "resolved")
                 }
 
                 Button(role: .destructive) {
@@ -128,6 +136,13 @@ struct InboxDetailView: View {
                 initialDraft: VisitDraft(inboxItem: item)
             ) {
                 if let category = event.category {
+                    markResolved(category: category)
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingTicketPlanForm) {
+            if let category = selectedCategory {
+                AddTicketPlanView(inboxItem: item, category: category) {
                     markResolved(category: category)
                 }
             }

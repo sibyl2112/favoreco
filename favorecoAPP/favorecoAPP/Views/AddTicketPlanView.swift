@@ -18,10 +18,18 @@ struct AddTicketPlanView: View {
     @State private var validationError = ""
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     private let editingPlan: Plan?
+    private let onSave: (() -> Void)?
 
     init(plan: Plan? = nil) {
         self.editingPlan = plan
+        self.onSave = nil
         _draft = State(initialValue: TicketPlanDraft(plan: plan))
+    }
+
+    init(inboxItem: InboxItem, category: RecordCategory, onSave: (() -> Void)? = nil) {
+        self.editingPlan = nil
+        self.onSave = onSave
+        _draft = State(initialValue: TicketPlanDraft(inboxItem: inboxItem, categoryID: category.id))
     }
 
     private var visibleCategories: [RecordCategory] {
@@ -240,6 +248,7 @@ struct AddTicketPlanView: View {
             category: selectedCategory
         )
         modelContext.insert(plan)
+        onSave?()
 
         var attemptForScheduling: TicketAttempt?
         if draft.createsTicketAttempt {
@@ -279,6 +288,8 @@ struct AddTicketPlanView: View {
             }
             dismiss()
         } catch {
+            modelContext.rollback()
+            validationError = "予定を保存できませんでした。もう一度お試しください。"
             assertionFailure("Failed to save ticket plan: \(error)")
         }
     }
@@ -423,6 +434,14 @@ private struct TicketPlanDraft {
     var memo = ""
 
     init() {}
+
+    init(inboxItem: InboxItem, categoryID: UUID) {
+        self.categoryID = categoryID
+        title = inboxItem.title
+        officialURL = inboxItem.sourceURL
+        memo = inboxItem.body
+        createsTicketAttempt = false
+    }
 
     init(plan: Plan?) {
         guard let plan else { return }
