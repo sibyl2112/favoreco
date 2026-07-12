@@ -34,12 +34,12 @@ enum DebugDataSeeder {
             for sampleIndex in 0..<sampleCountPerCategory {
                 let sampleNumber = sampleIndex + 1
                 let title = sampleTitle(for: category, index: sampleIndex)
-                let samplePath = "\(debugPhotoPrefix)\(category.templateKey)-\(sampleNumber).png"
                 let sampleImage = sampleImage(
                     for: category,
                     title: title,
                     index: sampleIndex
                 )
+                let samplePath = "\(debugPhotoPrefix)\(category.templateKey)-\(sampleNumber).jpg"
                 let createdAt = now.addingTimeInterval(TimeInterval(-((index * sampleCountPerCategory) + sampleIndex) * 86400))
                 let event = ExperienceEvent(
                     title: title,
@@ -77,7 +77,7 @@ enum DebugDataSeeder {
                 )
                 let photo = PhotoBlob(
                     relativePath: samplePath,
-                    originalFilename: "sample-\(category.templateKey)-\(sampleNumber).png",
+                    originalFilename: "sample-\(category.templateKey)-\(sampleNumber).jpg",
                     mediaKind: "photo",
                     purpose: "memory",
                     byteCount: sampleImage.data.count,
@@ -149,25 +149,50 @@ enum DebugDataSeeder {
 
     private static func sampleImage(for category: RecordCategory, title: String, index: Int) -> SampleImage {
         let resourceName = "\(category.templateKey)-\((index % 3) + 1)"
-        if let url = Bundle.main.url(
-            forResource: resourceName,
-            withExtension: "png",
-            subdirectory: "Resources/DebugSampleImages"
-        ),
+        let resourceURL = Bundle.main.url(forResource: resourceName, withExtension: "png")
+            ?? Bundle.main.url(
+                forResource: resourceName,
+                withExtension: "png",
+                subdirectory: "Resources/DebugSampleImages"
+            )
+        if let url = resourceURL,
            let data = try? Data(contentsOf: url),
-           let image = UIImage(data: data) {
-            return SampleImage(data: data, width: Int(image.size.width), height: Int(image.size.height))
+           let normalized = normalizedJPEG(from: data) {
+            return normalized
         }
 
         let size = sampleImageSize(for: category, index: index)
-        let data = samplePNGData(for: category, title: title, index: index, size: size)
+        let data = sampleJPEGData(for: category, title: title, index: index, size: size)
         return SampleImage(data: data, width: Int(size.width), height: Int(size.height))
     }
 
-    private static func samplePNGData(for category: RecordCategory, title: String, index: Int, size: CGSize) -> Data {
-        let renderer = UIGraphicsImageRenderer(size: size)
+    private static func normalizedJPEG(from data: Data) -> SampleImage? {
+        guard let source = UIImage(data: data),
+              let cgImage = source.cgImage else {
+            return nil
+        }
+        let size = CGSize(width: cgImage.width, height: cgImage.height)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            source.draw(in: CGRect(origin: .zero, size: size))
+        }
+        guard let jpegData = image.jpegData(compressionQuality: 0.82) else {
+            return nil
+        }
+        return SampleImage(data: jpegData, width: cgImage.width, height: cgImage.height)
+    }
+
+    private static func sampleJPEGData(for category: RecordCategory, title: String, index: Int, size: CGSize) -> Data {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         let baseColor = UIColor(hexString: category.colorHex)
-        return renderer.pngData { context in
+        let image = renderer.image { context in
             let rect = CGRect(origin: .zero, size: size)
             let cgContext = context.cgContext
             baseColor.setFill()
@@ -229,6 +254,7 @@ enum DebugDataSeeder {
                 withAttributes: categoryAttributes
             )
         }
+        return image.jpegData(compressionQuality: 0.82) ?? Data()
     }
 
     private static func sampleImageSize(for category: RecordCategory, index: Int) -> CGSize {
