@@ -16,8 +16,9 @@ struct EventDetailView: View {
     @State private var isShowingAddVisit = false
     @State private var isShowingEditEvent = false
     @State private var isShowingRepresentativePhotoPicker = false
+    @State private var isShowingArchiveConfirmation = false
     @State private var isShowingDeleteConfirmation = false
-    @State private var deletionErrorMessage: String?
+    @State private var actionErrorMessage: String?
 
     private var category: RecordCategory? {
         event.category
@@ -71,6 +72,12 @@ struct EventDetailView: View {
                     }
 
                     Button(role: .destructive) {
+                        isShowingArchiveConfirmation = true
+                    } label: {
+                        Label("対象を非表示", systemImage: "archivebox")
+                    }
+
+                    Button(role: .destructive) {
                         isShowingDeleteConfirmation = true
                     } label: {
                         Label("この対象とすべての記録を削除", systemImage: "trash")
@@ -96,6 +103,14 @@ struct EventDetailView: View {
         .sheet(isPresented: $isShowingRepresentativePhotoPicker) {
             RepresentativePhotoPicker(event: event)
         }
+        .confirmationDialog("この対象を非表示にしますか？", isPresented: $isShowingArchiveConfirmation, titleVisibility: .visible) {
+            Button("非表示にする", role: .destructive) {
+                archiveThisEvent()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("履歴と写真は削除せず、通常の対象一覧から外します。データ管理の「非表示の対象」から復元できます。")
+        }
         .confirmationDialog("この対象を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
             Button("この対象とすべての記録を削除", role: .destructive) {
                 deleteThisEvent()
@@ -104,13 +119,25 @@ struct EventDetailView: View {
         } message: {
             Text("「\(eventTitle)」と、ひもづく記録 \(visits.count) 件（写真を含む）をすべて削除します。取り消せません。")
         }
-        .alert("削除に失敗しました", isPresented: Binding(
-            get: { deletionErrorMessage != nil },
-            set: { if !$0 { deletionErrorMessage = nil } }
+        .alert("処理に失敗しました", isPresented: Binding(
+            get: { actionErrorMessage != nil },
+            set: { if !$0 { actionErrorMessage = nil } }
         )) {
-            Button("OK", role: .cancel) { deletionErrorMessage = nil }
+            Button("OK", role: .cancel) { actionErrorMessage = nil }
         } message: {
-            Text(deletionErrorMessage ?? "")
+            Text(actionErrorMessage ?? "")
+        }
+    }
+
+    private func archiveThisEvent() {
+        event.isArchived = true
+        event.updatedAt = Date()
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            actionErrorMessage = "この対象を非表示にできませんでした。もう一度お試しください。"
         }
     }
 
@@ -119,7 +146,7 @@ struct EventDetailView: View {
             try RecordDeletionService.deleteEvent(event, in: modelContext)
             dismiss()
         } catch {
-            deletionErrorMessage = "この対象を削除できませんでした。もう一度お試しください。"
+            actionErrorMessage = "この対象を削除できませんでした。もう一度お試しください。"
             assertionFailure("Failed to delete event: \(error)")
         }
     }

@@ -35,18 +35,22 @@ struct HomeView: View {
         inboxItems.filter { $0.state == "unresolved" }
     }
 
+    private var visibleVisits: [Visit] {
+        visits.filter { $0.event?.isArchived != true }
+    }
+
     private var recentVisits: [Visit] {
-        Array(visits.prefix(8))
+        Array(visibleVisits.prefix(8))
     }
 
     /// 記録・予定・締切・Inbox がいずれも無い＝Homeに出す中身が無い状態。
     private var isHomeContentEmpty: Bool {
-        visits.isEmpty && attentionItems.isEmpty && unresolvedInboxItems.isEmpty
+        visibleVisits.isEmpty && attentionItems.isEmpty && unresolvedInboxItems.isEmpty
     }
 
     private var upcomingVisits: [Visit] {
         let now = Calendar.current.startOfDay(for: Date())
-        return visits
+        return visibleVisits
             .filter { $0.visitedAt >= now }
             .sorted { $0.visitedAt < $1.visitedAt }
     }
@@ -65,7 +69,7 @@ struct HomeView: View {
     private var currentYearVisitCount: Int {
         let calendar = Calendar.current
         let year = calendar.component(.year, from: Date())
-        return visits.filter { calendar.component(.year, from: $0.visitedAt) == year }.count
+        return visibleVisits.filter { calendar.component(.year, from: $0.visitedAt) == year }.count
     }
 
     private var attentionItems: [HomeAttentionItem] {
@@ -292,7 +296,7 @@ struct HomeView: View {
                         inboxSection
                     }
                     // 4. 最近の記録
-                    if showsRecentRecords && !visits.isEmpty {
+                    if showsRecentRecords && !visibleVisits.isEmpty {
                         recentSection
                     }
                     // 5. ジャンル一覧
@@ -300,7 +304,7 @@ struct HomeView: View {
                         categorySection
                     }
                     // 6. 統計サマリ（任意表示）
-                    if showsStatsSummary && !visits.isEmpty {
+                    if showsStatsSummary && !visibleVisits.isEmpty {
                         statsSummarySection
                     }
                     // 7. お気に入り・ベスト（任意表示）
@@ -369,7 +373,7 @@ struct HomeView: View {
                 tint: Color(hex: "#8B2F45")
             )
             HomeMiniStatCell(
-                value: "\(visits.count)",
+                value: "\(visibleVisits.count)",
                 label: "総記録数",
                 icon: "chart.bar.fill",
                 tint: Color(hex: "#B8792F")
@@ -460,16 +464,16 @@ struct HomeView: View {
 
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("最近の記録", count: visits.count)
+            sectionHeader("最近の記録", count: visibleVisits.count)
 
-            if visits.isEmpty {
+            if visibleVisits.isEmpty {
                 EmptyStateRow(
                     icon: "sparkles.rectangle.stack",
                     title: "記録はまだありません",
                     message: "次の実装で、カテゴリから最初の記録を追加できるようにします。"
                 )
             } else {
-                ForEach(visits.prefix(5)) { visit in
+                ForEach(visibleVisits.prefix(5)) { visit in
                     NavigationLink {
                         ExperienceDetailView(visit: visit)
                     } label: {
@@ -506,10 +510,10 @@ struct HomeView: View {
 
     private var statsSummarySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("統計サマリ", count: visits.count)
+            sectionHeader("統計サマリ", count: visibleVisits.count)
 
             HStack(spacing: 12) {
-                SummaryMetricCard(title: "記録", value: "\(visits.count)", icon: "sparkles.rectangle.stack")
+                SummaryMetricCard(title: "記録", value: "\(visibleVisits.count)", icon: "sparkles.rectangle.stack")
                 SummaryMetricCard(title: "ジャンル", value: "\(visibleCategories.count)", icon: "square.grid.2x2")
             }
         }

@@ -1101,6 +1101,12 @@ struct DataManagementView: View {
             }
 
             Section("データ整理") {
+                NavigationLink {
+                    ArchivedEventManagementView()
+                } label: {
+                    LabeledContent("非表示の対象", value: "\(events.filter(\.isArchived).count)")
+                }
+
                 Button(role: .destructive) {
                     isConfirmingArchivedDeletion = true
                 } label: {
@@ -1152,6 +1158,89 @@ struct DataManagementView: View {
         } catch {
             modelContext.rollback()
             maintenanceMessage = "削除に失敗しました: \(error.localizedDescription)"
+        }
+    }
+}
+
+private struct ArchivedEventManagementView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var allEvents: [ExperienceEvent]
+    @State private var restoreErrorMessage: String?
+
+    private var archivedEvents: [ExperienceEvent] {
+        allEvents.filter(\.isArchived)
+    }
+
+    var body: some View {
+        List {
+            if archivedEvents.isEmpty {
+                ContentUnavailableView(
+                    "非表示の対象はありません",
+                    systemImage: "archivebox",
+                    description: Text("対象詳細のメニューから非表示にした項目がここへ表示されます。")
+                )
+            } else {
+                Section {
+                    ForEach(archivedEvents) { event in
+                        HStack(spacing: 12) {
+                            Image(systemName: event.category?.iconSymbol ?? "rectangle.stack")
+                                .foregroundStyle(Color(hex: event.category?.colorHex ?? "#6F8F7A"))
+                                .frame(width: 30)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(event.title.isEmpty ? "記録" : event.title)
+                                    .font(FavorecoTypography.bodyStrong)
+                                HStack(spacing: 8) {
+                                    Text(event.category?.name ?? "未分類")
+                                    Text("履歴 \((event.visits ?? []).count)件")
+                                }
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Button {
+                                restore(event)
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward.circle.fill")
+                                    .font(.title3)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("\(event.title)を再表示")
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button("再表示") {
+                                restore(event)
+                            }
+                            .tint(.accentColor)
+                        }
+                    }
+                } footer: {
+                    Text("再表示すると、ジャンル内の対象一覧と記録一覧へ戻ります。履歴・写真・予定は変更しません。")
+                }
+            }
+        }
+        .navigationTitle("非表示の対象")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("復元に失敗しました", isPresented: Binding(
+            get: { restoreErrorMessage != nil },
+            set: { if !$0 { restoreErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { restoreErrorMessage = nil }
+        } message: {
+            Text(restoreErrorMessage ?? "")
+        }
+    }
+
+    private func restore(_ event: ExperienceEvent) {
+        event.isArchived = false
+        event.updatedAt = Date()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            restoreErrorMessage = "「\(event.title.isEmpty ? "記録" : event.title)」を再表示できませんでした。"
         }
     }
 }

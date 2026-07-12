@@ -146,17 +146,21 @@ private struct CenterCreateButton: View {
 private struct RecordsView: View {
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
 
+    private var visibleVisits: [Visit] {
+        visits.filter { $0.event?.isArchived != true }
+    }
+
     var body: some View {
         NavigationStack {
             List {
-                if visits.isEmpty {
+                if visibleVisits.isEmpty {
                     PlaceholderRow(
                         icon: "rectangle.stack",
                         title: "記録はまだありません",
                         message: "中央の＋から最初の記録を追加できます。"
                     )
                 } else {
-                    ForEach(visits) { visit in
+                    ForEach(visibleVisits) { visit in
                         NavigationLink {
                             ExperienceDetailView(visit: visit)
                         } label: {
@@ -183,12 +187,16 @@ private struct CalendarView: View {
 
     private let calendar = Calendar.current
 
+    private var visibleVisits: [Visit] {
+        visits.filter { $0.event?.isArchived != true }
+    }
+
     private var daysInDisplayedMonth: [CalendarDay] {
         CalendarDay.days(for: displayedMonth, calendar: calendar)
     }
 
     private var visitsByDay: [Date: [Visit]] {
-        Dictionary(grouping: visits) { visit in
+        Dictionary(grouping: visibleVisits) { visit in
             calendar.startOfDay(for: visit.visitedAt)
         }
     }
@@ -219,7 +227,7 @@ private struct CalendarView: View {
 
     private var upcomingVisits: [Visit] {
         let today = calendar.startOfDay(for: Date())
-        return visits
+        return visibleVisits
             .filter { calendar.startOfDay(for: $0.visitedAt) >= today }
             .prefix(5)
             .map { $0 }
@@ -780,20 +788,24 @@ private struct StatsView: View {
         Calendar.current
     }
 
+    private var visibleVisits: [Visit] {
+        visits.filter { $0.event?.isArchived != true }
+    }
+
     private var thisYearVisits: [Visit] {
-        visits.filter { calendar.isDate($0.visitedAt, equalTo: Date(), toGranularity: .year) }
+        visibleVisits.filter { calendar.isDate($0.visitedAt, equalTo: Date(), toGranularity: .year) }
     }
 
     private var thisMonthVisits: [Visit] {
-        visits.filter { calendar.isDate($0.visitedAt, equalTo: Date(), toGranularity: .month) }
+        visibleVisits.filter { calendar.isDate($0.visitedAt, equalTo: Date(), toGranularity: .month) }
     }
 
     private var totalAmount: Decimal {
-        visits.reduce(Decimal(0)) { $0 + $1.amount }
+        visibleVisits.reduce(Decimal(0)) { $0 + $1.amount }
     }
 
     private var averageRating: Double {
-        let ratedVisits = visits.filter { $0.overallRating > 0 }
+        let ratedVisits = visibleVisits.filter { $0.overallRating > 0 }
         guard !ratedVisits.isEmpty else { return 0 }
         return ratedVisits.reduce(0) { $0 + $1.overallRating } / Double(ratedVisits.count)
     }
@@ -802,7 +814,7 @@ private struct StatsView: View {
         categories
             .filter { !$0.isArchived }
             .map { category in
-                let count = visits.filter { $0.event?.category?.id == category.id }.count
+                let count = visibleVisits.filter { $0.event?.category?.id == category.id }.count
                 return CategoryStat(category: category, count: count)
             }
             .filter { $0.count > 0 }
@@ -826,7 +838,7 @@ private struct StatsView: View {
             .navigationDestination(isPresented: $isShowingAutomaticMonthlyReport) {
                 StatsReportDraftView(
                     kind: .monthly,
-                    allVisits: visits,
+                    allVisits: visibleVisits,
                     categories: categories,
                     initialPeriodStart: previousMonthStart
                 )
@@ -853,7 +865,7 @@ private struct StatsView: View {
 
     private var summaryGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            StatsMetricCard(title: "総記録数", value: "\(visits.count)", icon: "rectangle.stack")
+            StatsMetricCard(title: "総記録数", value: "\(visibleVisits.count)", icon: "rectangle.stack")
             StatsMetricCard(title: "今年", value: "\(thisYearVisits.count)", icon: "calendar")
             StatsMetricCard(title: "今月", value: "\(thisMonthVisits.count)", icon: "calendar.badge.clock")
             StatsMetricCard(title: "平均評価", value: averageRating == 0 ? "-" : String(format: "%.1f", averageRating), icon: "star.fill")
@@ -932,7 +944,7 @@ private struct StatsView: View {
             VStack(spacing: 10) {
                 if purchaseManager.currentPlan.includesLocalFullFeatures {
                     NavigationLink {
-                        StatsReportDraftView(kind: .monthly, allVisits: visits, categories: categories)
+                        StatsReportDraftView(kind: .monthly, allVisits: visibleVisits, categories: categories)
                     } label: {
                         StatsReportPreviewCard(
                             title: "月刊Favoreco",
@@ -953,7 +965,7 @@ private struct StatsView: View {
 
                 if purchaseManager.currentPlan.includesLocalFullFeatures {
                     NavigationLink {
-                        StatsReportDraftView(kind: .yearly, allVisits: visits, categories: categories)
+                        StatsReportDraftView(kind: .yearly, allVisits: visibleVisits, categories: categories)
                     } label: {
                         StatsReportPreviewCard(
                             title: "年間Favoreco",
@@ -976,7 +988,7 @@ private struct StatsView: View {
                     NavigationLink {
                         StatsReportDraftView(
                             kind: .monthly,
-                            allVisits: visits,
+                            allVisits: visibleVisits,
                             categories: categories,
                             initialPeriodStart: previousMonthStart
                         )
