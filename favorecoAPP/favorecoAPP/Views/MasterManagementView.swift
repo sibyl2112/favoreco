@@ -4,8 +4,19 @@ import SwiftUI
 
 struct PersonMasterManagementView: View {
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
+    @State private var searchText = ""
 
-    private var activePeople: [PersonMaster] { people.filter { !$0.isArchived } }
+    private var activePeople: [PersonMaster] {
+        let active = people.filter { !$0.isArchived }
+        let query = normalizedMasterText(searchText)
+        guard !query.isEmpty else { return active }
+        return active.filter {
+            normalizedMasterText($0.displayName).contains(query)
+                || normalizedMasterText($0.reading).contains(query)
+                || $0.aliasesRaw.components(separatedBy: CharacterSet(charactersIn: ",、\n"))
+                    .contains { normalizedMasterText($0).contains(query) }
+        }
+    }
 
     var body: some View {
         List {
@@ -27,13 +38,26 @@ struct PersonMasterManagementView: View {
             }
         }
         .navigationTitle("人物・団体マスター")
+        .searchable(text: $searchText, prompt: "名前・よみ・別名を検索")
     }
 }
 
 struct PlaceMasterManagementView: View {
     @Query(sort: \PlaceMaster.name) private var places: [PlaceMaster]
+    @State private var searchText = ""
 
-    private var activePlaces: [PlaceMaster] { places.filter { !$0.isArchived } }
+    private var activePlaces: [PlaceMaster] {
+        let active = places.filter { !$0.isArchived }
+        let query = normalizedMasterText(searchText)
+        guard !query.isEmpty else { return active }
+        return active.filter {
+            normalizedMasterText($0.name).contains(query)
+                || normalizedMasterText($0.reading).contains(query)
+                || normalizedMasterText($0.address).contains(query)
+                || $0.aliasesRaw.components(separatedBy: CharacterSet(charactersIn: ",、\n"))
+                    .contains { normalizedMasterText($0).contains(query) }
+        }
+    }
 
     var body: some View {
         List {
@@ -55,6 +79,7 @@ struct PlaceMasterManagementView: View {
             }
         }
         .navigationTitle("場所マスター")
+        .searchable(text: $searchText, prompt: "名称・住所・別名を検索")
     }
 }
 
@@ -63,8 +88,15 @@ private struct PersonMasterMergeView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
+    @State private var draft: PersonMasterDraft
+    @State private var showsOptionalFields = false
     @State private var selectedDestination: PersonMaster?
     @State private var errorMessage = ""
+
+    init(person: PersonMaster) {
+        self.person = person
+        _draft = State(initialValue: PersonMasterDraft(person: person))
+    }
 
     private var candidates: [PersonMaster] {
         people.filter { !$0.isArchived && $0.id != person.id && isSimilarPerson($0, person) }
@@ -72,10 +104,24 @@ private struct PersonMasterMergeView: View {
 
     var body: some View {
         Form {
-            Section("現在のマスター") {
-                LabeledContent("表示名", value: person.displayName)
-                if !person.reading.isEmpty { LabeledContent("よみ", value: person.reading) }
+            Section("基本情報") {
+                TextField("表示名", text: $draft.displayName)
+                TextField("よみ（任意）", text: $draft.reading)
+                TextField("別名（カンマ区切り）", text: $draft.aliasesRaw)
+                TextField("タグ（カンマ区切り）", text: $draft.roleTagsRaw)
                 LabeledContent("紐付け", value: "\(person.eventLinks?.count ?? 0)件")
+            }
+
+            Section {
+                DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
+                    TextField("公式URL", text: $draft.officialURL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                    TextField("SNS・参考リンク（1行1件）", text: $draft.socialLinksRaw, axis: .vertical)
+                        .lineLimit(2...6)
+                    TextField("メモ", text: $draft.memo, axis: .vertical)
+                        .lineLimit(3...8)
+                }
             }
 
             Section("似た人物・団体") {
@@ -104,6 +150,12 @@ private struct PersonMasterMergeView: View {
             }
         }
         .navigationTitle(person.displayName)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") { save() }
+                    .disabled(!draft.canSave)
+            }
+        }
         .confirmationDialog(
             "人物・団体を統合しますか？",
             isPresented: Binding(get: { selectedDestination != nil }, set: { if !$0 { selectedDestination = nil } }),
@@ -129,6 +181,26 @@ private struct PersonMasterMergeView: View {
             errorMessage = "統合できませんでした: \(error.localizedDescription)"
         }
     }
+
+    private func save() {
+        person.displayName = draft.trimmedDisplayName
+        person.reading = draft.trimmedReading
+        person.aliasesRaw = draft.trimmedAliasesRaw
+        person.roleTagsRaw = draft.trimmedRoleTagsRaw
+        person.officialURL = draft.trimmedOfficialURL
+        person.socialLinksRaw = draft.trimmedSocialLinksRaw
+        person.memo = draft.trimmedMemo
+        person.normalizedName = normalizedMasterText(draft.trimmedDisplayName)
+        person.updatedAt = Date()
+        do {
+            try modelContext.save()
+            errorMessage = ""
+        } catch {
+            modelContext.rollback()
+            draft = PersonMasterDraft(person: person)
+            errorMessage = "保存できませんでした: \(error.localizedDescription)"
+        }
+    }
 }
 
 private struct PlaceMasterMergeView: View {
@@ -136,8 +208,15 @@ private struct PlaceMasterMergeView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PlaceMaster.name) private var places: [PlaceMaster]
+    @State private var draft: PlaceMasterDraft
+    @State private var showsOptionalFields = false
     @State private var selectedDestination: PlaceMaster?
     @State private var errorMessage = ""
+
+    init(place: PlaceMaster) {
+        self.place = place
+        _draft = State(initialValue: PlaceMasterDraft(place: place))
+    }
 
     private var candidates: [PlaceMaster] {
         places.filter { !$0.isArchived && $0.id != place.id && isSimilarPlace($0, place) }
@@ -145,10 +224,27 @@ private struct PlaceMasterMergeView: View {
 
     var body: some View {
         Form {
-            Section("現在のマスター") {
-                LabeledContent("名称", value: place.name)
-                if !place.address.isEmpty { LabeledContent("住所", value: place.address) }
+            Section("基本情報") {
+                TextField("名称", text: $draft.name)
+                TextField("よみ（任意）", text: $draft.reading)
+                TextField("住所", text: $draft.address)
+                    .textContentType(.fullStreetAddress)
+                TextField("別名（カンマ区切り）", text: $draft.aliasesRaw)
+                TextField("タグ（カンマ区切り）", text: $draft.placeTagsRaw)
                 LabeledContent("利用", value: "\((place.visits?.count ?? 0) + (place.plans?.count ?? 0))件")
+            }
+
+            Section {
+                DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
+                    TextField("公式URL", text: $draft.officialURL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                    TextField("メモ", text: $draft.memo, axis: .vertical)
+                        .lineLimit(3...8)
+                    if place.latitude != 0 || place.longitude != 0 {
+                        LabeledContent("保存座標", value: String(format: "%.5f, %.5f", place.latitude, place.longitude))
+                    }
+                }
             }
 
             Section("同じ場所の可能性") {
@@ -177,6 +273,12 @@ private struct PlaceMasterMergeView: View {
             }
         }
         .navigationTitle(place.name)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") { save() }
+                    .disabled(!draft.canSave)
+            }
+        }
         .confirmationDialog(
             "場所を統合しますか？",
             isPresented: Binding(get: { selectedDestination != nil }, set: { if !$0 { selectedDestination = nil } }),
@@ -202,6 +304,85 @@ private struct PlaceMasterMergeView: View {
             errorMessage = "統合できませんでした: \(error.localizedDescription)"
         }
     }
+
+    private func save() {
+        place.name = draft.trimmedName
+        place.reading = draft.trimmedReading
+        place.address = draft.trimmedAddress
+        place.aliasesRaw = draft.trimmedAliasesRaw
+        place.placeTagsRaw = draft.trimmedPlaceTagsRaw
+        place.officialURL = draft.trimmedOfficialURL
+        place.memo = draft.trimmedMemo
+        place.normalizedName = normalizedMasterText(draft.trimmedName)
+        place.normalizedAddress = normalizedMasterText(draft.trimmedAddress)
+        place.updatedAt = Date()
+        do {
+            try modelContext.save()
+            errorMessage = ""
+        } catch {
+            modelContext.rollback()
+            draft = PlaceMasterDraft(place: place)
+            errorMessage = "保存できませんでした: \(error.localizedDescription)"
+        }
+    }
+}
+
+private struct PersonMasterDraft {
+    var displayName: String
+    var reading: String
+    var aliasesRaw: String
+    var roleTagsRaw: String
+    var memo: String
+    var officialURL: String
+    var socialLinksRaw: String
+
+    init(person: PersonMaster) {
+        displayName = person.displayName
+        reading = person.reading
+        aliasesRaw = person.aliasesRaw
+        roleTagsRaw = person.roleTagsRaw
+        memo = person.memo
+        officialURL = person.officialURL
+        socialLinksRaw = person.socialLinksRaw
+    }
+
+    var trimmedDisplayName: String { displayName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedReading: String { reading.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedAliasesRaw: String { aliasesRaw.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedRoleTagsRaw: String { roleTagsRaw.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedOfficialURL: String { officialURL.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedSocialLinksRaw: String { socialLinksRaw.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var canSave: Bool { !trimmedDisplayName.isEmpty }
+}
+
+private struct PlaceMasterDraft {
+    var name: String
+    var reading: String
+    var aliasesRaw: String
+    var placeTagsRaw: String
+    var address: String
+    var officialURL: String
+    var memo: String
+
+    init(place: PlaceMaster) {
+        name = place.name
+        reading = place.reading
+        aliasesRaw = place.aliasesRaw
+        placeTagsRaw = place.placeTagsRaw
+        address = place.address
+        officialURL = place.officialURL
+        memo = place.memo
+    }
+
+    var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedReading: String { reading.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedAliasesRaw: String { aliasesRaw.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedPlaceTagsRaw: String { placeTagsRaw.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedAddress: String { address.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedOfficialURL: String { officialURL.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var canSave: Bool { !trimmedName.isEmpty }
 }
 
 private struct MasterListRow: View {
