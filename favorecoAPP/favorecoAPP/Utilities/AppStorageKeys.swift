@@ -17,6 +17,8 @@ enum AppStorageKeys {
     static let followsSystemTextSize = "followsSystemTextSize"
     static let appTextSize = "appTextSize"
     static let appearanceMode = "appearanceMode"
+    static let profileDisplayName = "profileDisplayName"
+    static let profileImageData = "profileImageData"
     static let defaultRecordDateMode = "defaultRecordDateMode"
     static let defaultGenreMode = "defaultGenreMode"
     static let lastUsedCategoryTemplateKey = "lastUsedCategoryTemplateKey"

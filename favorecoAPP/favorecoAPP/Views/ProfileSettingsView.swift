@@ -7,10 +7,16 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UIKit
 
 struct ProfileSettingsView: View {
     @Environment(\.openURL) private var openURL
     @Query(sort: \SocialAccount.sortOrder) private var socialAccounts: [SocialAccount]
+    @AppStorage(AppStorageKeys.profileDisplayName) private var profileDisplayName = ""
+    @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
+    @State private var selectedProfilePhoto: PhotosPickerItem?
+    @State private var photoErrorMessage = ""
 
     private var activeAccounts: [SocialAccount] {
         socialAccounts
@@ -26,10 +32,32 @@ struct ProfileSettingsView: View {
     var body: some View {
         List {
             Section("プロフィール") {
-                LabeledContent("表示名", value: "未設定")
-                Text("アイコンと表示名は次の実装で編集できるようにします。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 16) {
+                    ProfileAvatarView(data: profileImageData, size: 72)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        PhotosPicker(selection: $selectedProfilePhoto, matching: .images) {
+                            Label(profileImageData.isEmpty ? "写真を選ぶ" : "写真を変更", systemImage: "photo")
+                        }
+
+                        if !profileImageData.isEmpty {
+                            Button("写真を削除", role: .destructive) {
+                                profileImageData = Data()
+                            }
+                            .font(FavorecoTypography.caption)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+
+                TextField("表示名（任意）", text: $profileDisplayName)
+                    .textInputAutocapitalization(.words)
+
+                if !photoErrorMessage.isEmpty {
+                    Text(photoErrorMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.red)
+                }
             }
 
             Section {
@@ -57,6 +85,63 @@ struct ProfileSettingsView: View {
             }
         }
         .navigationTitle("プロフィール")
+        .task(id: selectedProfilePhoto) {
+            await loadSelectedProfilePhoto()
+        }
+    }
+
+    @MainActor
+    private func loadSelectedProfilePhoto() async {
+        guard let selectedProfilePhoto else { return }
+        guard let sourceData = try? await selectedProfilePhoto.loadTransferable(type: Data.self),
+              let sourceImage = UIImage(data: sourceData),
+              let processedData = sourceImage.profileAvatarData else {
+            photoErrorMessage = "写真を読み込めませんでした。別の写真を選んでください。"
+            return
+        }
+        profileImageData = processedData
+        photoErrorMessage = ""
+    }
+}
+
+struct ProfileAvatarView: View {
+    let data: Data
+    var size: CGFloat
+
+    var body: some View {
+        Group {
+            if let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "person.crop.circle.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+}
+
+private extension UIImage {
+    var profileAvatarData: Data? {
+        guard size.width > 0, size.height > 0 else { return nil }
+        let outputSize = CGSize(width: 320, height: 320)
+        let scale = max(outputSize.width / size.width, outputSize.height / size.height)
+        let drawSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let origin = CGPoint(
+            x: (outputSize.width - drawSize.width) / 2,
+            y: (outputSize.height - drawSize.height) / 2
+        )
+        let renderer = UIGraphicsImageRenderer(size: outputSize)
+        let redrawn = renderer.image { _ in
+            draw(in: CGRect(origin: origin, size: drawSize))
+        }
+        return redrawn.jpegData(compressionQuality: 0.82)
     }
 }
 

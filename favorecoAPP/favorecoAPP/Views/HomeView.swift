@@ -23,6 +23,7 @@ struct HomeView: View {
     @AppStorage(AppStorageKeys.showsHomeCategories) private var showsCategories = true
     @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsStatsSummary = false
     @AppStorage(AppStorageKeys.showsHomeFavorites) private var showsFavorites = false
+    @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
     @State private var isShowingSettings = false
 
     private var visibleCategories: [RecordCategory] {
@@ -321,8 +322,9 @@ struct HomeView: View {
                     Button {
                         isShowingSettings = true
                     } label: {
-                        Label("マイ", systemImage: "person.crop.circle")
+                        ProfileAvatarView(data: profileImageData, size: 30)
                     }
+                    .accessibilityLabel("マイ・設定")
                 }
             }
             .sheet(isPresented: $isShowingSettings) {
