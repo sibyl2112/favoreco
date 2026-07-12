@@ -52,18 +52,20 @@ enum AutomaticBackupService {
     @MainActor
     @discardableResult
     static func create(in context: ModelContext, now: Date = Date()) throws -> URL? {
-        let categories = try context.fetch(FetchDescriptor<RecordCategory>())
-        let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
-        let visits = try context.fetch(FetchDescriptor<Visit>())
-        let inboxItems = try context.fetch(FetchDescriptor<InboxItem>())
-        let photos = try context.fetch(FetchDescriptor<PhotoBlob>())
-        let socialAccounts = try context.fetch(FetchDescriptor<SocialAccount>())
-        let people = try context.fetch(FetchDescriptor<PersonMaster>())
-        let personLinks = try context.fetch(FetchDescriptor<EventPersonLink>())
-        let places = try context.fetch(FetchDescriptor<PlaceMaster>())
-        let plans = try context.fetch(FetchDescriptor<Plan>())
-        let ticketAccounts = try context.fetch(FetchDescriptor<TicketAccount>())
-        let ticketAttempts = try context.fetch(FetchDescriptor<TicketAttempt>())
+        let snapshotContext = ModelContext(context.container)
+        snapshotContext.autosaveEnabled = false
+        let categories = try snapshotContext.fetch(FetchDescriptor<RecordCategory>())
+        let events = try snapshotContext.fetch(FetchDescriptor<ExperienceEvent>())
+        let visits = try snapshotContext.fetch(FetchDescriptor<Visit>())
+        let inboxItems = try snapshotContext.fetch(FetchDescriptor<InboxItem>())
+        let photos = try snapshotContext.fetch(FetchDescriptor<PhotoBlob>())
+        let socialAccounts = try snapshotContext.fetch(FetchDescriptor<SocialAccount>())
+        let people = try snapshotContext.fetch(FetchDescriptor<PersonMaster>())
+        let personLinks = try snapshotContext.fetch(FetchDescriptor<EventPersonLink>())
+        let places = try snapshotContext.fetch(FetchDescriptor<PlaceMaster>())
+        let plans = try snapshotContext.fetch(FetchDescriptor<Plan>())
+        let ticketAccounts = try snapshotContext.fetch(FetchDescriptor<TicketAccount>())
+        let ticketAttempts = try snapshotContext.fetch(FetchDescriptor<TicketAttempt>())
         let modelCount = categories.count + events.count + visits.count + inboxItems.count
             + socialAccounts.count + people.count + personLinks.count + places.count
             + plans.count + ticketAccounts.count + ticketAttempts.count

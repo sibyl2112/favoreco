@@ -35,9 +35,11 @@ enum FullBackupService {
         try FileManager.default.createDirectory(at: mediaDirectory, withIntermediateDirectories: true)
         try Data(json.utf8).write(to: root.appendingPathComponent(manifestFilename), options: .atomic)
 
-        for photo in photos where !photo.data.isEmpty {
+        for photo in photos {
+            let data = photo.data
+            guard !data.isEmpty else { continue }
             let destination = mediaDirectory.appendingPathComponent("\(photo.id.uuidString).bin")
-            try photo.data.write(to: destination, options: .atomic)
+            try data.write(to: destination, options: .atomic)
         }
         return root
     }

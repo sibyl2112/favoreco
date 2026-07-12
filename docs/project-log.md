@@ -4792,3 +4792,34 @@ CloudKit同期とは別系統の復元点を持ち、誤編集や削除から過
 - StoreKit ConfigurationまたはSandboxで購入、キャンセル、保留、更新、失効、返金、復元、ライトからフル追加を確認する
 - 創設メンバー特典の対象判定と締切日を確定し、権利付与方式を実装する
 - ライト/同期/フルによる詳細統計、OCR高度化、テーマ等の個別機能ゲートを順次接続する
+
+## 2026-07-12: ローカルStoreKitテスト環境を追加
+
+### 変更概要
+- Xcode用`Favoreco.storekit`へ買い切り3商品と自動更新サブスク2商品を定義
+- 月額¥250/年額¥1,500を同じサブスクリプショングループへ配置
+- ライト¥1,500、同期永久追加¥4,500、フル¥6,000を非消耗型として定義
+- 共有schemeのRun OptionsへStoreKit Configurationを接続
+- 自動バックアップをメイン画面と別の短命ModelContextで作成し、写真Dataを処理後に解放しやすくした
+- 写真書き出し時に`photo.data`へ二度アクセスしていた処理を1回へ修正
+
+### 変更意図
+App Store Connect登録前でも購入、更新、失効、返金、復元、Ask to BuyなどをXcodeだけで検証できるようにするため。また、起動時自動バックアップが写真Dataを画面用ModelContextへ残し続け、メモリ圧迫につながる可能性を下げるため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Configuration/Favoreco.storekit（ローカル商品/価格/サブスクグループ）
+- favorecoAPP/favorecoAPP.xcodeproj/xcshareddata/xcschemes/favorecoAPP.xcscheme（Run時StoreKit設定）
+- favorecoAPP/favorecoAPP/Services/AutomaticBackupService.swift（短命ModelContext）
+- favorecoAPP/favorecoAPP/Services/FullBackupService.swift（写真Dataの単一読込）
+- favoreco/CLAUDE.md（現在仕様）
+
+### 確認結果（実機 / ビルド）
+- Xcode StoreKit Configuration Editorで5商品を正常認識
+- 月額/年額が同じAuto-Renewable Subscriptionグループに表示されることを確認
+- Scheme > Run > Optionsで`Favoreco.storekit`が選択済みであることを確認
+- StoreKit JSONの構文とPurchaseManagerの商品ID完全一致を確認
+- iPhoneOS向け署名なしクリーンビルドが成功
+
+### 残課題
+- Xcodeの購入シートで5商品の購入、月額/年額切替、失効、返金、復元、ライト+同期永久追加を実操作確認する
+- 大量写真で自動バックアップ前後のメモリ使用量をInstrumentsで実測する
