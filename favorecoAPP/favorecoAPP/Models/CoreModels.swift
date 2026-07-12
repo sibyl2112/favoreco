@@ -129,6 +129,9 @@ final class PersonMaster {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
+    @Relationship(deleteRule: .cascade, inverse: \EventPersonLink.person)
+    var eventLinks: [EventPersonLink]? = []
+
     init(
         id: UUID = UUID(),
         displayName: String = "",
@@ -233,6 +236,12 @@ final class PlaceMaster {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
+    @Relationship(deleteRule: .nullify, inverse: \Plan.placeMaster)
+    var plans: [Plan]? = []
+
+    @Relationship(deleteRule: .nullify, inverse: \Visit.placeMaster)
+    var visits: [Visit]? = []
+
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -299,6 +308,9 @@ final class ExperienceEvent {
 
     @Relationship(deleteRule: .cascade, inverse: \Plan.event)
     var plans: [Plan]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \EventPersonLink.event)
+    var personLinks: [EventPersonLink]? = []
 
     init(
         id: UUID = UUID(),
@@ -592,6 +604,12 @@ final class Visit {
 
     @Relationship(deleteRule: .cascade, inverse: \PhotoBlob.visit)
     var photos: [PhotoBlob]? = []
+
+    @Relationship(deleteRule: .nullify, inverse: \Plan.visit)
+    var plans: [Plan]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \EventPersonLink.visit)
+    var personLinks: [EventPersonLink]? = []
 
     init(
         id: UUID = UUID(),
