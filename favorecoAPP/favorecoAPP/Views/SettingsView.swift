@@ -1210,18 +1210,45 @@ struct JSONExportView: View {
 }
 
 struct SyncBackupSettingsView: View {
+    @AppStorage(AppStorageKeys.iCloudSyncEnabled) private var iCloudSyncEnabled = false
+    @AppStorage(AppStorageKeys.iCloudSyncActiveAtLaunch) private var iCloudSyncActiveAtLaunch = false
+    @AppStorage(AppStorageKeys.iCloudSyncStartupError) private var iCloudSyncStartupError = ""
+    @State private var diagnostic: CloudSyncDiagnostic?
+    @State private var isRefreshingDiagnostic = false
+
     var body: some View {
         Form {
-            Section("同期") {
-                Toggle("iCloud同期", isOn: .constant(false))
-                    .disabled(true)
-                LabeledContent("最終同期", value: "未同期")
-                Button {
-                } label: {
-                    Label("今すぐ同期", systemImage: "arrow.clockwise")
+            Section {
+                Toggle("iCloud同期", isOn: $iCloudSyncEnabled)
+                LabeledContent("現在の保存先", value: iCloudSyncActiveAtLaunch ? "端末 + iCloud" : "この端末")
+                LabeledContent("iCloudアカウント", value: diagnostic?.accountStatusText ?? "未確認")
+
+                if iCloudSyncEnabled != iCloudSyncActiveAtLaunch {
+                    Label("変更はアプリを終了し、次に起動した時から反映されます。", systemImage: "arrow.clockwise.circle")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .disabled(true)
-                LabeledContent("写真の同期", value: "準備中")
+
+                if !iCloudSyncStartupError.isEmpty {
+                    Label("同期を開始できなかったため、この端末だけで安全に起動しました。", systemImage: "exclamationmark.icloud")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.orange)
+                    Text(iCloudSyncStartupError)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    Task { await refreshDiagnostic() }
+                } label: {
+                    Label(isRefreshingDiagnostic ? "確認中" : "同期環境を確認", systemImage: "arrow.clockwise")
+                }
+                .disabled(isRefreshingDiagnostic)
+                LabeledContent("写真の同期", value: iCloudSyncActiveAtLaunch ? "含む" : "OFF")
+            } header: {
+                Text("同期")
+            } footer: {
+                Text("ONでは同じApple Accountの端末間で記録と写真を自動同期します。まず端末内へ保存されるため、通信やiCloud容量の問題で記録が失われることはありません。初回はWi-Fi環境を推奨します。")
             }
 
             Section("バックアップ") {
@@ -1236,15 +1263,28 @@ struct SyncBackupSettingsView: View {
             }
 
             Section("同期トラブル診断") {
-                NavigationLink {
-                    SettingsDocumentView(title: "同期トラブル診断", bodyText: "iCloud状態、端末容量、写真同期、最終同期時刻を確認する画面として準備予定です。")
-                } label: {
-                    Label("診断を開く", systemImage: "stethoscope")
+                LabeledContent("iCloud Drive", value: diagnostic?.hasUbiquityContainer == true ? "利用可能" : "未確認 / 利用不可")
+                LabeledContent("起動時の同期接続", value: iCloudSyncActiveAtLaunch ? "接続済み" : "未接続")
+                if let errorMessage = diagnostic?.errorMessage, !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
         .navigationTitle("同期・バックアップ")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await refreshDiagnostic()
+        }
+    }
+
+    @MainActor
+    private func refreshDiagnostic() async {
+        guard !isRefreshingDiagnostic else { return }
+        isRefreshingDiagnostic = true
+        diagnostic = await CloudSyncService.diagnostic()
+        isRefreshingDiagnostic = false
     }
 }
 

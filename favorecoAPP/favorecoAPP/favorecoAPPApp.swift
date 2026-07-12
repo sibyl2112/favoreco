@@ -16,29 +16,7 @@ struct favorecoAPPApp: App {
         FontRegistrar.registerBundledFonts()
     }
 
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            RecordCategory.self,
-            ExperienceEvent.self,
-            Visit.self,
-            InboxItem.self,
-            PhotoBlob.self,
-            SocialAccount.self,
-            PersonMaster.self,
-            EventPersonLink.self,
-            PlaceMaster.self,
-            Plan.self,
-            TicketAccount.self,
-            TicketAttempt.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    var sharedModelContainer: ModelContainer = FavorecoModelContainerBootstrap.makeContainer()
 
     var body: some Scene {
         WindowGroup {

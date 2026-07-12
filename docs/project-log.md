@@ -4567,3 +4567,33 @@ favorecoの初期値として決めた「保存後は編集画面ではなく情
 ### 残課題
 - 実機で写真選択、変更、削除、縦長/横長画像の中央トリミング、再起動後の保持を確認する
 - 現在の表示名/写真は端末内AppStorage。iCloud同期/JSONバックアップ対象へ含める時にプロフィールDTOへ移行する
+
+## 2026-07-12: SwiftData CloudKit同期基盤を接続
+
+### 変更概要
+- 同期OFF時は従来の完全ローカル、ON時はSwiftDataのCloudKit automatic構成で起動するブートストラップを追加
+- CloudKit構成の初期化に失敗した場合、同じローカルストアへ安全にフォールバック
+- 設定画面へ同期ON/OFF、現在の保存先、Apple Account、iCloud Drive、写真同期、起動エラー表示を追加
+- iCloud container、CloudKit service、ubiquity key-value storeのentitlementを追加
+- 同期設定変更は次回起動から反映し、初回同期はWi-Fiを推奨する説明を追加
+
+### 変更意図
+保存を常に端末内で先に確定しながら、同じApple Accountの端末間で記録とexternalStorage写真を同期できる完全版の基盤を作るため。iCloud未サインイン、容量不足、設定不備があってもローカル記録を失わない構造を守るため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/CloudSyncService.swift（コンテナ構築、ローカルフォールバック、iCloud診断）
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift（同期設定/起動状態/エラーキー）
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift（共通ブートストラップ）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（同期設定と診断UI）
+- favorecoAPP/favorecoAPP/favorecoAPP.entitlements（CloudKit/iCloud capability）
+- favoreco/CLAUDE.md（現在仕様）
+
+### 確認結果（実機 / ビルド）
+- entitlementsのplist検証が成功
+- iPhoneOS向け署名なしクリーンビルドが成功
+- 同期OFFの既定構成が従来どおりローカルModelConfigurationを生成することをコード確認
+
+### 残課題
+- Apple DeveloperでApp IDとiCloud.com.nori.favorecoのCloudKit capabilityを有効化し、署名付き実機ビルドを行う
+- 2台の実機で既存ローカル記録の初回アップロード、追加/編集/削除、写真、オフライン復帰、同期OFF後のローカル保持を確認する
+- SwiftData automaticは強制同期APIや正確な最終同期時刻を提供しないため、設定画面は環境/接続状態を診断し、同期タイミングはOS管理とする
