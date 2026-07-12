@@ -5,6 +5,36 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-12: Apple外部設定監査と実機総合確認手順を整備
+
+### 変更概要
+- アプリ表示名を `Favoreco` に固定し、カメラ/カレンダー権限説明を日本語で実用途に合わせた。
+- Entitlements、iCloud Container、WeatherKit、StoreKit 5商品、SchemeのStoreKit構成を監査した。
+- 実機確認を初回起動から同期、課金、大量写真、削除まで順番に実施できる総合手順書を追加した。
+- Apple Developer、CloudKit Console、App Store Connect商品、Sandbox/TestFlight、審査素材の外部設定チェックリストを追加した。
+- Releaseビルドで検出した課金権利キャッシュキーのMainActor警告を解消した。
+
+### 変更意図
+コード実装完了後の実機確認とApple側設定を漏れなく進め、Debugビルドでは見えないRelease固有の問題も公開前に発見できる状態にするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP.xcodeproj/project.pbxproj`
+- `favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift`
+- `docs/15-実機総合確認手順.md`
+- `docs/16-Apple外部設定チェックリスト.md`
+- `docs/project-log.md`
+
+### 確認結果
+- Entitlements plist検証成功。
+- StoreKit構成JSON検証成功。
+- iPhone向けRelease・署名なし全体ビルド成功。
+- Bundle ID、iCloud Container、5つの商品IDがコード、StoreKit構成、手順書で一致することを確認した。
+
+### 残課題
+- 実機総合確認手順を実施し、結果と不具合を記録する。
+- Apple Developer/App Store Connect/CloudKit Productionの操作はアカウント画面で実施する。
+- iOS 26.5を最低対応にするか、iPadを初版対応に含めるかを公開前に確定する。
+
 ## 2026-07-12: リンク・サポートと規約参照本文を接続
 
 ### 変更概要
