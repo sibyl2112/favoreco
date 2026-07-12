@@ -7,21 +7,64 @@
 
 import SwiftUI
 
+enum AppFontStyle: String, CaseIterable, Identifiable {
+    case standard
+    case sans
+    case serif
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .standard: return "スタンダード"
+        case .sans: return "ゴシック中心"
+        case .serif: return "明朝中心"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .standard: return "本文はゴシック、印象的な見出しは明朝"
+        case .sans: return "日本語をすっきりしたゴシックで統一"
+        case .serif: return "日本語を落ち着いた明朝で統一"
+        }
+    }
+}
+
 enum FavorecoTypography {
-    private static let jpSans = "Noto Sans JP"
-    private static let jpSerif = "Noto Serif JP"
-    private static let latinDisplay = "Cormorant Garamond"
+    private static let jpSansName = "Noto Sans JP"
+    private static let jpSerifName = "Noto Serif JP"
+    private static let latinDisplayName = "Cormorant Garamond"
+
+    static var effectiveStyle: AppFontStyle {
+        let rawStyle = UserDefaults.standard.string(forKey: AppStorageKeys.fontStyle) ?? ""
+        let style = AppFontStyle(rawValue: rawStyle) ?? .standard
+        let rawPlan = UserDefaults.standard.string(forKey: AppStorageKeys.purchasedPlanCache) ?? ""
+        let plan = FavorecoPlan(rawValue: rawPlan) ?? .free
+        return plan.includesLocalFullFeatures ? style : .standard
+    }
 
     static func jpSans(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo textStyle: Font.TextStyle = .body) -> Font {
-        .custom(jpSans, size: size, relativeTo: textStyle).weight(weight)
+        .custom(japaneseFontName(prefersSerif: false), size: size, relativeTo: textStyle).weight(weight)
     }
 
     static func jpSerif(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo textStyle: Font.TextStyle = .body) -> Font {
-        .custom(jpSerif, size: size, relativeTo: textStyle).weight(weight)
+        .custom(japaneseFontName(prefersSerif: true), size: size, relativeTo: textStyle).weight(weight)
     }
 
     static func latinDisplay(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo textStyle: Font.TextStyle = .body) -> Font {
-        .custom(latinDisplay, size: size, relativeTo: textStyle).weight(weight)
+        .custom(latinDisplayName, size: size, relativeTo: textStyle).weight(weight)
+    }
+
+    private static func japaneseFontName(prefersSerif: Bool) -> String {
+        switch effectiveStyle {
+        case .standard:
+            return prefersSerif ? jpSerifName : jpSansName
+        case .sans:
+            return jpSansName
+        case .serif:
+            return jpSerifName
+        }
     }
 
     static var appLogo: Font {

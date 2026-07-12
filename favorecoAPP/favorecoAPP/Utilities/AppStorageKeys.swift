@@ -16,6 +16,7 @@ enum AppStorageKeys {
     static let showsHomeFavorites = "showsHomeFavorites"
     static let followsSystemTextSize = "followsSystemTextSize"
     static let appTextSize = "appTextSize"
+    static let fontStyle = "fontStyle"
     static let appearanceMode = "appearanceMode"
     static let themeMode = "themeMode"
     static let unifiedThemeColorHex = "unifiedThemeColorHex"

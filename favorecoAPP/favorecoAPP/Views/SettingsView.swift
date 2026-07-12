@@ -715,6 +715,7 @@ struct DisplaySettingsView: View {
     @AppStorage(AppStorageKeys.showsHomeFavorites) private var showsHomeFavorites = false
     @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
     @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
+    @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
     @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
     @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#147C88"
@@ -736,6 +737,11 @@ struct DisplaySettingsView: View {
                     TextSizeSettingsView()
                 } label: {
                     LabeledContent("文字サイズ", value: textSizeSummary)
+                }
+                NavigationLink {
+                    FontStyleSettingsView()
+                } label: {
+                    LabeledContent("フォント", value: effectiveFontStyle.name)
                 }
                 Picker("外観モード", selection: $appearanceModeRaw) {
                     ForEach(AppAppearanceMode.allCases) { mode in
@@ -793,11 +799,94 @@ struct DisplaySettingsView: View {
         return FavorecoThemeMode(rawValue: themeModeRaw) ?? .categoryAccent
     }
 
+    private var effectiveFontStyle: AppFontStyle {
+        guard purchaseManager.currentPlan.includesLocalFullFeatures else { return .standard }
+        return AppFontStyle(rawValue: fontStyleRaw) ?? .standard
+    }
+
     private var themeModeBinding: Binding<FavorecoThemeMode> {
         Binding(
             get: { effectiveThemeMode },
             set: { themeModeRaw = $0.rawValue }
         )
+    }
+}
+
+private struct FontStyleSettingsView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
+    @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(AppFontStyle.allCases) { style in
+                    Button {
+                        guard style == .standard || canChangeFont else { return }
+                        fontStyleRaw = style.rawValue
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(style.name)
+                                    .font(font(for: style, size: 17, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                Text(style.detail)
+                                    .font(font(for: style, size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if selectedStyle == style {
+                                Image(systemName: "checkmark")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(.tint)
+                            } else if style != .standard && !canChangeFont {
+                                Image(systemName: "lock.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } footer: {
+                Text(canChangeFont
+                     ? "英字の見出しには、どの設定でも Cormorant Garamond を使います。"
+                     : "フォント変更はライト買い切り以上で利用できます。標準表示は無料で使えます。")
+            }
+
+            Section("プレビュー") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("記録が、美しい思い出になる")
+                        .font(font(for: selectedStyle, size: 24, weight: .bold, prefersSerif: true))
+                    Text("観た作品や訪れた場所を、写真と一緒に残せます。")
+                        .font(font(for: selectedStyle, size: 15))
+                    Text("Favoreco 2026")
+                        .font(FavorecoTypography.latinDisplay(20, weight: .semibold, relativeTo: .headline))
+                }
+                .padding(.vertical, 6)
+            }
+        }
+        .navigationTitle("フォント")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var canChangeFont: Bool {
+        purchaseManager.currentPlan.includesLocalFullFeatures
+    }
+
+    private var selectedStyle: AppFontStyle {
+        guard canChangeFont else { return .standard }
+        return AppFontStyle(rawValue: fontStyleRaw) ?? .standard
+    }
+
+    private func font(
+        for style: AppFontStyle,
+        size: CGFloat,
+        weight: Font.Weight = .regular,
+        prefersSerif: Bool = false
+    ) -> Font {
+        let usesSerif = style == .serif || (style == .standard && prefersSerif)
+        let name = usesSerif ? "Noto Serif JP" : "Noto Sans JP"
+        return .custom(name, size: size, relativeTo: size >= 20 ? .title2 : .body).weight(weight)
     }
 }
 

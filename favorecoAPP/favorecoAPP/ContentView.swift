@@ -14,6 +14,7 @@ struct ContentView: View {
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
     @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
     @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#147C88"
+    @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
 
     var body: some View {
         Group {
@@ -27,6 +28,7 @@ struct ContentView: View {
         .preferredColorScheme(appearanceMode.colorScheme)
         .environment(\.favorecoThemePalette, effectiveThemePalette)
         .tint(effectiveThemePalette.globalTint)
+        .animation(nil, value: fontStyleRaw)
     }
 
     private var appearanceMode: AppAppearanceMode {
