@@ -142,10 +142,12 @@ private struct GenreManagementRow: View {
 struct GenreDetailSettingsView: View {
     let category: RecordCategory
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SocialAccount.sortOrder) private var socialAccounts: [SocialAccount]
     @State private var draft: GenreDetailDraft
     @State private var warningMessage = ""
+    @State private var isShowingRemoveConfirmation = false
 
     private var linkedSocialAccounts: [SocialAccount] {
         socialAccounts
@@ -155,6 +157,14 @@ struct GenreDetailSettingsView: View {
 
     private var enabledUnits: [RecordUnitDefinition] {
         RecordUnitDefinition.definitions(for: category.enabledUnitsRaw)
+    }
+
+    private var linkedRecordCount: Int {
+        (category.events?.count ?? 0) + (category.plans?.count ?? 0) + (category.socialAccounts?.count ?? 0)
+    }
+
+    private var removalActionName: String {
+        linkedRecordCount == 0 ? "完全に削除" : "非表示にする"
     }
 
     init(category: RecordCategory) {
@@ -225,6 +235,28 @@ struct GenreDetailSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            Section("ジャンル管理") {
+                Button {
+                    duplicateAsCustomGenre()
+                } label: {
+                    Label("この設定を複製", systemImage: "plus.square.on.square")
+                }
+
+                if !category.isBuiltIn {
+                    Button(role: .destructive) {
+                        isShowingRemoveConfirmation = true
+                    } label: {
+                        Label(removalActionName, systemImage: linkedRecordCount == 0 ? "trash" : "archivebox")
+                    }
+
+                    if linkedRecordCount > 0 {
+                        Text("記録・予定・SNS紐付けがあるため、データを守るため完全削除せず非表示にします。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
         .navigationTitle(category.name)
         .navigationBarTitleDisplayMode(.inline)
@@ -234,6 +266,22 @@ struct GenreDetailSettingsView: View {
                     save()
                 }
                 .disabled(!draft.canSave)
+            }
+        }
+        .confirmationDialog(
+            linkedRecordCount == 0 ? "自作ジャンルを削除しますか？" : "自作ジャンルを非表示にしますか？",
+            isPresented: $isShowingRemoveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(removalActionName, role: .destructive) {
+                removeCustomGenre()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            if linkedRecordCount == 0 {
+                Text("この操作は取り消せません。")
+            } else {
+                Text("紐づくデータは削除されません。ジャンル管理から再表示できます。")
             }
         }
     }
@@ -271,6 +319,77 @@ struct GenreDetailSettingsView: View {
     private func activeCategoryCount() throws -> Int {
         let descriptor = FetchDescriptor<RecordCategory>()
         return try modelContext.fetch(descriptor).filter { !$0.isArchived }.count
+    }
+
+    private func duplicateAsCustomGenre() {
+        warningMessage = ""
+        let descriptor = FetchDescriptor<RecordCategory>()
+        let allCategories = (try? modelContext.fetch(descriptor)) ?? []
+        let now = Date()
+        let duplicate = RecordCategory(
+            name: uniqueCopyName(baseName: category.name, categories: allCategories),
+            iconSymbol: category.iconSymbol,
+            colorHex: category.colorHex,
+            sortOrder: (allCategories.map(\.sortOrder).max() ?? 0) + 10,
+            isBuiltIn: false,
+            templateKey: "custom_\(UUID().uuidString)",
+            enabledUnitsRaw: category.enabledUnitsRaw,
+            templateTypeKey: category.templateTypeKey,
+            targetNameLabel: category.targetNameLabel,
+            recordUnitName: category.recordUnitName,
+            dateLabel: category.dateLabel,
+            isArchived: false,
+            createdAt: now,
+            updatedAt: now
+        )
+        modelContext.insert(duplicate)
+        do {
+            try modelContext.save()
+            warningMessage = "「\(duplicate.name)」を追加しました。"
+        } catch {
+            modelContext.rollback()
+            warningMessage = "複製できませんでした。"
+        }
+    }
+
+    private func uniqueCopyName(baseName: String, categories: [RecordCategory]) -> String {
+        let names = Set(categories.map(\.name))
+        let first = "\(baseName) コピー"
+        guard names.contains(first) else { return first }
+        var suffix = 2
+        while names.contains("\(first) \(suffix)") {
+            suffix += 1
+        }
+        return "\(first) \(suffix)"
+    }
+
+    private func removeCustomGenre() {
+        guard !category.isBuiltIn else { return }
+        warningMessage = ""
+
+        if linkedRecordCount > 0 {
+            if !category.isArchived, (try? activeCategoryCount()) ?? 1 <= 1 {
+                warningMessage = "少なくとも1つの表示ジャンルが必要です。"
+                return
+            }
+            category.isArchived = true
+            category.updatedAt = Date()
+        } else {
+            if !category.isArchived, (try? activeCategoryCount()) ?? 1 <= 1 {
+                warningMessage = "少なくとも1つの表示ジャンルが必要です。"
+                return
+            }
+            modelContext.delete(category)
+        }
+
+        do {
+            try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: modelContext)
+            try modelContext.save()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            warningMessage = "更新できませんでした。"
+        }
     }
 }
 
