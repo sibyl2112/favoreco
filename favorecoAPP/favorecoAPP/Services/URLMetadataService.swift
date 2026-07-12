@@ -7,11 +7,22 @@ struct URLMetadataCandidate: Sendable {
     let eventDate: Date?
     let venueName: String
     let venueAddress: String
+    let structuredType: String
+    let structuredDateLabel: String
+    let contributors: [URLContributorCandidate]
+}
+
+struct URLContributorCandidate: Identifiable, Sendable {
+    let name: String
+    let roleKey: String
+    let roleName: String
+
+    var id: String { "\(roleKey):\(name)" }
 }
 
 enum URLMetadataService {
     @MainActor
-    static func fetch(from rawValue: String, includesStructuredEventData: Bool = false) async throws -> URLMetadataCandidate {
+    static func fetch(from rawValue: String, includesStructuredData: Bool = false) async throws -> URLMetadataCandidate {
         guard let url = normalizedURL(from: rawValue) else {
             throw URLMetadataError.invalidURL
         }
@@ -24,15 +35,18 @@ enum URLMetadataService {
             throw URLMetadataError.titleNotFound
         }
         let resolvedURL = metadata.originalURL ?? metadata.url ?? url
-        let eventData = includesStructuredEventData
-            ? (try? await fetchStructuredEventData(from: resolvedURL))
+        let structuredData = includesStructuredData
+            ? (try? await fetchStructuredData(from: resolvedURL))
             : nil
         return URLMetadataCandidate(
             title: title,
             resolvedURL: resolvedURL,
-            eventDate: eventData?.date,
-            venueName: eventData?.venueName ?? "",
-            venueAddress: eventData?.venueAddress ?? ""
+            eventDate: structuredData?.date,
+            venueName: structuredData?.venueName ?? "",
+            venueAddress: structuredData?.venueAddress ?? "",
+            structuredType: structuredData?.typeName ?? "",
+            structuredDateLabel: structuredData.map { dateLabel(for: $0.typeName) } ?? "",
+            contributors: structuredData?.contributors ?? []
         )
     }
 
@@ -46,7 +60,7 @@ enum URLMetadataService {
         return url
     }
 
-    private static func fetchStructuredEventData(from url: URL) async throws -> StructuredEventData? {
+    private static func fetchStructuredData(from url: URL) async throws -> StructuredPageData? {
         var request = URLRequest(url: url)
         request.timeoutInterval = 15
         request.setValue("Favoreco/1.0", forHTTPHeaderField: "User-Agent")
@@ -60,11 +74,14 @@ enum URLMetadataService {
 
         for jsonData in jsonLDScriptData(in: html) {
             guard let object = try? JSONSerialization.jsonObject(with: jsonData),
-                  let event = findEventObject(in: object) else { continue }
-            return StructuredEventData(
-                date: parsedISODate(event["startDate"] as? String),
-                venueName: venueName(from: event),
-                venueAddress: venueAddress(from: event)
+                  let candidate = findSupportedObject(in: object) else { continue }
+            let typeName = supportedType(in: candidate) ?? ""
+            return StructuredPageData(
+                typeName: typeName,
+                date: structuredDate(from: candidate, typeName: typeName),
+                venueName: typeName == "Event" ? venueName(from: candidate) : "",
+                venueAddress: typeName == "Event" ? venueAddress(from: candidate) : "",
+                contributors: contributors(from: candidate, typeName: typeName)
             )
         }
         return nil
@@ -83,27 +100,88 @@ enum URLMetadataService {
         }
     }
 
-    private static func findEventObject(in object: Any) -> [String: Any]? {
+    private static func findSupportedObject(in object: Any) -> [String: Any]? {
         if let dictionary = object as? [String: Any] {
-            let typeValue = dictionary["@type"]
-            let types: [String]
-            if let type = typeValue as? String {
-                types = [type]
-            } else {
-                types = typeValue as? [String] ?? []
-            }
-            if types.contains(where: { $0.caseInsensitiveCompare("Event") == .orderedSame }) {
+            if supportedType(in: dictionary) != nil {
                 return dictionary
             }
             for value in dictionary.values {
-                if let event = findEventObject(in: value) { return event }
+                if let candidate = findSupportedObject(in: value) { return candidate }
             }
         } else if let array = object as? [Any] {
             for value in array {
-                if let event = findEventObject(in: value) { return event }
+                if let candidate = findSupportedObject(in: value) { return candidate }
             }
         }
         return nil
+    }
+
+    private static func supportedType(in dictionary: [String: Any]) -> String? {
+        let rawTypes: [String]
+        if let type = dictionary["@type"] as? String {
+            rawTypes = [type]
+        } else {
+            rawTypes = dictionary["@type"] as? [String] ?? []
+        }
+        if rawTypes.contains(where: { $0.caseInsensitiveCompare("Event") == .orderedSame || $0.lowercased().hasSuffix("event") }) {
+            return "Event"
+        }
+        return ["Book", "Movie"].first { supported in
+            rawTypes.contains { $0.caseInsensitiveCompare(supported) == .orderedSame }
+        }
+    }
+
+    private static func structuredDate(from object: [String: Any], typeName: String) -> Date? {
+        let keys = typeName == "Event"
+            ? ["startDate"]
+            : ["datePublished", "dateCreated", "releaseDate"]
+        return keys.lazy.compactMap { parsedISODate(object[$0] as? String) }.first
+    }
+
+    private static func dateLabel(for typeName: String) -> String {
+        switch typeName {
+        case "Book": return "発売日"
+        case "Movie": return "公開日"
+        default: return "開催日時"
+        }
+    }
+
+    private static func contributors(from object: [String: Any], typeName: String) -> [URLContributorCandidate] {
+        let fields: [(key: String, roleKey: String, roleName: String)]
+        switch typeName {
+        case "Book":
+            fields = [("author", "author", "作者"), ("translator", "translator", "翻訳"), ("publisher", "publisher", "出版社")]
+        case "Movie":
+            fields = [("director", "director", "監督"), ("actor", "cast", "出演"), ("author", "screenplay", "脚本")]
+        default:
+            fields = [("performer", "cast", "出演"), ("organizer", "organizer", "主催")]
+        }
+
+        var seen = Set<String>()
+        return fields.flatMap { field in
+            names(from: object[field.key]).compactMap { name in
+                let key = "\(field.roleKey):\(name.folding(options: [.caseInsensitive, .widthInsensitive], locale: .current))"
+                guard seen.insert(key).inserted else { return nil }
+                return URLContributorCandidate(name: name, roleKey: field.roleKey, roleName: field.roleName)
+            }
+        }
+    }
+
+    private static func names(from value: Any?) -> [String] {
+        if let name = value as? String {
+            return normalizedNames([name])
+        }
+        if let dictionary = value as? [String: Any] {
+            return normalizedNames([dictionary["name"] as? String].compactMap { $0 })
+        }
+        if let values = value as? [Any] {
+            return normalizedNames(values.flatMap { names(from: $0) })
+        }
+        return []
+    }
+
+    private static func normalizedNames(_ names: [String]) -> [String] {
+        names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
 
     private static func parsedISODate(_ value: String?) -> Date? {
@@ -111,7 +189,12 @@ enum URLMetadataService {
         let formatter = ISO8601DateFormatter()
         if let date = formatter.date(from: value) { return date }
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: value)
+        if let date = formatter.date(from: value) { return date }
+        let dayFormatter = DateFormatter()
+        dayFormatter.calendar = Calendar(identifier: .gregorian)
+        dayFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dayFormatter.dateFormat = "yyyy-MM-dd"
+        return dayFormatter.date(from: value)
     }
 
     private static func venueName(from event: [String: Any]) -> String {
@@ -144,10 +227,12 @@ enum URLMetadataService {
     }
 }
 
-private struct StructuredEventData {
+private struct StructuredPageData {
+    let typeName: String
     let date: Date?
     let venueName: String
     let venueAddress: String
+    let contributors: [URLContributorCandidate]
 }
 
 enum URLMetadataError: LocalizedError {

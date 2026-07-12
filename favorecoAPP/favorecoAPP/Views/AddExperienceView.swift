@@ -226,7 +226,9 @@ struct AddExperienceView: View {
             seriesName: $draft.seriesName,
             visitedAt: $draft.visitedAt,
             venueName: venueNameBinding,
-            venueAddress: venueAddressBinding
+            venueAddress: venueAddressBinding,
+            pendingPeople: $pendingPeople,
+            advancedEntries: $draft.advancedEntries
         )
     }
 
@@ -554,7 +556,9 @@ struct EditExperienceView: View {
             seriesName: $draft.seriesName,
             visitedAt: $draft.visitedAt,
             venueName: venueNameBinding,
-            venueAddress: venueAddressBinding
+            venueAddress: venueAddressBinding,
+            pendingPeople: $pendingPeople,
+            advancedEntries: $draft.advancedEntries
         )
     }
 
@@ -1415,6 +1419,8 @@ private struct URLImportAssistEditor: View {
     @Binding var visitedAt: Date
     @Binding var venueName: String
     @Binding var venueAddress: String
+    @Binding var pendingPeople: [PendingPersonLink]
+    @Binding var advancedEntries: [AdvancedFieldEntry]
 
     @AppStorage(AppStorageKeys.usesURLImportAssist) private var usesURLImportAssist = true
     @State private var candidate: URLMetadataCandidate?
@@ -1459,9 +1465,9 @@ private struct URLImportAssistEditor: View {
                         }
 
                         if purchaseManager.currentPlan.includesLocalFullFeatures {
-                            structuredEventCandidates(candidate)
+                            structuredCandidates(candidate)
                         } else {
-                            Label("日時・会場候補はライト以上", systemImage: "lock.fill")
+                            Label("日時・会場・人物候補はライト以上", systemImage: "lock.fill")
                                 .font(FavorecoTypography.captionStrong)
                                 .foregroundStyle(.secondary)
                         }
@@ -1489,17 +1495,20 @@ private struct URLImportAssistEditor: View {
     }
 
     @ViewBuilder
-    private func structuredEventCandidates(_ candidate: URLMetadataCandidate) -> some View {
-        if candidate.eventDate != nil || !candidate.venueName.isEmpty || !candidate.venueAddress.isEmpty {
+    private func structuredCandidates(_ candidate: URLMetadataCandidate) -> some View {
+        if candidate.eventDate != nil || !candidate.venueName.isEmpty || !candidate.venueAddress.isEmpty || !candidate.contributors.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("構造化イベント候補")
+                Text(structuredCandidateTitle(candidate.structuredType))
                     .font(FavorecoTypography.captionStrong)
 
                 if let date = candidate.eventDate {
                     Button {
-                        visitedAt = date
+                        applyStructuredDate(date, candidate: candidate)
                     } label: {
-                        Label(date.formatted(date: .long, time: .shortened), systemImage: "calendar")
+                        Label(
+                            "\(candidate.structuredDateLabel): \(formattedStructuredDate(date, type: candidate.structuredType))",
+                            systemImage: "calendar"
+                        )
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.bordered)
@@ -1522,12 +1531,64 @@ private struct URLImportAssistEditor: View {
                     }
                     .buttonStyle(.bordered)
                 }
+
+                ForEach(candidate.contributors) { contributor in
+                    Button {
+                        appendContributor(contributor)
+                    } label: {
+                        Label("\(contributor.roleName): \(contributor.name)", systemImage: "person.badge.plus")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(hasContributor(contributor))
+                }
             }
         } else {
-            Text("このページには利用できるイベント構造化データがありません。")
+            Text("このページには利用できる構造化データがありません。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func structuredCandidateTitle(_ type: String) -> String {
+        switch type {
+        case "Book": return "書籍の構造化候補"
+        case "Movie": return "映画の構造化候補"
+        default: return "イベントの構造化候補"
+        }
+    }
+
+    private func formattedStructuredDate(_ date: Date, type: String) -> String {
+        type == "Event"
+            ? date.formatted(date: .long, time: .shortened)
+            : date.formatted(date: .long, time: .omitted)
+    }
+
+    private func applyStructuredDate(_ date: Date, candidate: URLMetadataCandidate) {
+        if candidate.structuredType == "Event" {
+            visitedAt = date
+            return
+        }
+        let label = candidate.structuredDateLabel
+        let value = date.formatted(date: .long, time: .omitted)
+        if let index = advancedEntries.firstIndex(where: { $0.trimmedLabel == label }) {
+            advancedEntries[index].value = value
+        } else {
+            advancedEntries.append(AdvancedFieldEntry(label: label, value: value))
+        }
+    }
+
+    private func hasContributor(_ contributor: URLContributorCandidate) -> Bool {
+        pendingPeople.contains {
+            normalizedPersonName($0.name) == normalizedPersonName(contributor.name) && $0.role.key == contributor.roleKey
+        }
+    }
+
+    private func appendContributor(_ contributor: URLContributorCandidate) {
+        guard !hasContributor(contributor) else { return }
+        pendingPeople.append(
+            PendingPersonLink(name: contributor.name, role: PersonRoleOption.option(for: contributor.roleKey))
+        )
     }
 
     @MainActor
@@ -1539,7 +1600,7 @@ private struct URLImportAssistEditor: View {
         do {
             let result = try await URLMetadataService.fetch(
                 from: officialURL,
-                includesStructuredEventData: purchaseManager.currentPlan.includesLocalFullFeatures
+                includesStructuredData: purchaseManager.currentPlan.includesLocalFullFeatures
             )
             candidate = result
         } catch {
