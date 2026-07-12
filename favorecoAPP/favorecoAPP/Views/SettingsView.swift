@@ -165,6 +165,7 @@ struct SettingsView: View {
 }
 
 struct RecordInputAssistSettingsView: View {
+    @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.defaultRecordDateMode) private var defaultRecordDateMode = "today"
     @AppStorage(AppStorageKeys.defaultGenreMode) private var defaultGenreMode = "lastUsed"
     @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
@@ -217,9 +218,17 @@ struct RecordInputAssistSettingsView: View {
                 Toggle("Map検索", isOn: $usesMapSearchAssist)
                 Toggle("天気自動付与", isOn: $usesWeatherAutoFill)
                 Toggle("入力補助辞書", isOn: $usesInputSuggestionDictionary)
-                Text("OCR取込をOFFにしても、保存済みの読み取りテキストと手入力欄は残ります。項目への自動振り分けなどの高度OCRはPro候補です。")
+                Text("OCR取込をOFFにしても、保存済みの読み取りテキストと手入力欄は残ります。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
+                Label(
+                    purchaseManager.currentPlan.includesLocalFullFeatures
+                        ? "高度OCRの項目候補を利用できます"
+                        : "高度OCRの項目候補はライト以上",
+                    systemImage: purchaseManager.currentPlan.includesLocalFullFeatures ? "checkmark.circle" : "lock.fill"
+                )
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.secondary)
             }
 
             Section("後日検討") {
