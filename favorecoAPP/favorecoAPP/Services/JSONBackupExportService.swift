@@ -24,18 +24,23 @@ enum JSONBackupExportService {
         places: [PlaceMaster],
         plans: [Plan],
         ticketAccounts: [TicketAccount],
-        ticketAttempts: [TicketAttempt]
+        ticketAttempts: [TicketAttempt],
+        includesPhotoBinaryData: Bool = false
     ) throws -> String {
         let envelope = FavorecoBackupEnvelope(
             appName: "favoreco",
             schemaVersion: schemaVersion,
             exportedAt: Date(),
-            note: "Manual JSON backup. Photo binary data is not included.",
+            note: includesPhotoBinaryData
+                ? "Favoreco full backup manifest. Photo binary data is stored in the media directory."
+                : "Manual JSON backup. Photo binary data is not included.",
             categories: categories.sorted { $0.sortOrder < $1.sortOrder }.map(BackupCategory.init),
             events: events.sorted { $0.updatedAt > $1.updatedAt }.map(BackupEvent.init),
             visits: visits.sorted { $0.visitedAt > $1.visitedAt }.map(BackupVisit.init),
             inboxItems: inboxItems.sorted { $0.updatedAt > $1.updatedAt }.map(BackupInboxItem.init),
-            photos: photos.sorted { $0.createdAt > $1.createdAt }.map(BackupPhoto.init),
+            photos: photos.sorted { $0.createdAt > $1.createdAt }.map {
+                BackupPhoto($0, includesBinaryData: includesPhotoBinaryData)
+            },
             socialAccounts: socialAccounts.sorted { $0.sortOrder < $1.sortOrder }.map(BackupSocialAccount.init),
             people: people.sorted { $0.displayName < $1.displayName }.map(BackupPerson.init),
             personLinks: personLinks.sorted { $0.sortOrder < $1.sortOrder }.map(BackupPersonLink.init),
@@ -229,7 +234,7 @@ struct BackupPhoto: Codable {
     var createdAt: Date
     var includesBinaryData: Bool
 
-    nonisolated init(_ photo: PhotoBlob) {
+    nonisolated init(_ photo: PhotoBlob, includesBinaryData: Bool = false) {
         id = photo.id
         visitID = photo.visit?.id
         relativePath = photo.relativePath
@@ -240,7 +245,7 @@ struct BackupPhoto: Codable {
         width = photo.width
         height = photo.height
         createdAt = photo.createdAt
-        includesBinaryData = false
+        self.includesBinaryData = includesBinaryData
     }
 }
 

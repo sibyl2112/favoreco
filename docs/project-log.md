@@ -4597,3 +4597,32 @@ favorecoの初期値として決めた「保存後は編集画面ではなく情
 - Apple DeveloperでApp IDとiCloud.com.nori.favorecoのCloudKit capabilityを有効化し、署名付き実機ビルドを行う
 - 2台の実機で既存ローカル記録の初回アップロード、追加/編集/削除、写真、オフライン復帰、同期OFF後のローカル保持を確認する
 - SwiftData automaticは強制同期APIや正確な最終同期時刻を提供しないため、設定画面は環境/接続状態を診断し、同期タイミングはOS管理とする
+
+## 2026-07-12: 写真付き完全バックアップと復元を接続
+
+### 変更概要
+- JSON manifestと写真本体を含む`.favorecobackup`パッケージの作成/Files書き出しを追加
+- パッケージ復元前にモデル件数、写真件数、写真容量を検査して表示
+- 既存JSONのUUIDマージ復元後、PhotoBlobをUUIDで追加/更新しVisitへ再紐付け
+- 写真を1枚ずつ一時パッケージへ書き、全写真を単一Dataへまとめない構成を採用
+- データ管理と同期・バックアップの両方から完全バックアップ画面へ遷移
+- 一時パッケージを再作成時/画面終了時に削除
+
+### 変更意図
+同期OFF利用者にも写真を含む端末外の安全網を無料で提供し、機種変更やアプリ再導入時に記録と写真をまとめて戻せるようにするため。復元は既存データを消さず、失敗時に壊れにくいUUIDマージ方式を維持するため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/FullBackupService.swift（パッケージ作成、検査、写真復元）
+- favorecoAPP/favorecoAPP/Views/FullBackupView.swift（書き出し/復元UI、Files連携）
+- favorecoAPP/favorecoAPP/Services/JSONBackupExportService.swift（完全バックアップmanifest対応）
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift（完全バックアップ入口）
+- favoreco/CLAUDE.md（現在仕様）
+
+### 確認結果（実機 / ビルド）
+- git diffの空白/構文チェックが成功
+- iPhoneOS向け署名なしクリーンビルドが成功
+
+### 残課題
+- 実機で写真0枚/1枚/多数、同一端末への再取込、別端末への復元、Files/iCloud Drive/ローカル保存先を確認する
+- 1GB級バックアップの時間、空き容量不足、中断時の一時ファイル掃除を実測する
+- プロフィール表示名/写真や表示設定などAppStorage設定は今回のSwiftData完全バックアップ対象外。設定DTOは自動バックアップ工程で追加する

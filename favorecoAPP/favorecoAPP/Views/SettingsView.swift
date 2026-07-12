@@ -795,6 +795,12 @@ struct DataManagementView: View {
 
             Section("インポート・エクスポート") {
                 NavigationLink {
+                    FullBackupView()
+                } label: {
+                    Label("写真付き完全バックアップ", systemImage: "archivebox")
+                }
+
+                NavigationLink {
                     JSONExportView()
                 } label: {
                     Label("JSONエクスポート", systemImage: "square.and.arrow.up")
@@ -1256,9 +1262,9 @@ struct SyncBackupSettingsView: View {
                     .disabled(true)
                 LabeledContent("バックアップ先", value: "準備中")
                 NavigationLink {
-                    SettingsDocumentView(title: "復元", bodyText: "バックアップから復元する入口として準備予定です。既存データを壊さない取り込み方式にします。")
+                    FullBackupView()
                 } label: {
-                    Label("復元", systemImage: "clock.arrow.circlepath")
+                    Label("完全バックアップ・復元", systemImage: "archivebox")
                 }
             }
 
