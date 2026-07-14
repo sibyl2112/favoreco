@@ -47,6 +47,13 @@ enum RecordDeletionService {
         let allLinks = (try? context.fetch(FetchDescriptor<EventPersonLink>())) ?? []
         let allPlans = (try? context.fetch(FetchDescriptor<Plan>())) ?? []
         let visitIDs = Set((event.visits ?? []).map(\.id))
+        let ownedPlans = allPlans.filter { $0.event?.id == eventID }
+        let notificationTargets = ownedPlans.map { plan in
+            (
+                planID: plan.id,
+                attemptIDs: (plan.ticketAttempts ?? []).map(\.id)
+            )
+        }
 
         // 配下 Visit を参照する Plan.visit を解除（Event 配下の Plan は cascade 対象だが、外部参照も安全に外す）
         for plan in allPlans where plan.visit.map({ visitIDs.contains($0.id) }) == true {
@@ -59,6 +66,13 @@ enum RecordDeletionService {
 
         context.delete(event) // Visit / Plan は Event の .cascade、PhotoBlob / TicketAttempt はさらに cascade
         try context.save()
+
+        for target in notificationTargets {
+            for attemptID in target.attemptIDs {
+                TicketNotificationScheduler.cancel(planID: target.planID, attemptID: attemptID)
+            }
+            TicketNotificationScheduler.cancel(planID: target.planID, attemptID: nil)
+        }
     }
 
     /// 非表示済みのモデルだけを完全削除する。ジャンルは非表示設定として保持する。

@@ -17,8 +17,12 @@ enum TicketNotificationScheduler {
     }
 
     static func cancel(plan: Plan, attempt: TicketAttempt?) {
+        cancel(planID: plan.id, attemptID: attempt?.id)
+    }
+
+    static func cancel(planID: UUID, attemptID: UUID?) {
         let center = UNUserNotificationCenter.current()
-        let staleIdentifiers = staleIdentifierCandidates(planID: plan.id, attemptID: attempt?.id)
+        let staleIdentifiers = staleIdentifierCandidates(planID: planID, attemptID: attemptID)
         center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
         center.removeDeliveredNotifications(withIdentifiers: staleIdentifiers)
     }
