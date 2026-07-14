@@ -70,9 +70,6 @@ enum AutomaticBackupService {
         let visits = try snapshotContext.fetch(FetchDescriptor<Visit>())
         let inboxItems = try snapshotContext.fetch(FetchDescriptor<InboxItem>())
         let photos = try snapshotContext.fetch(FetchDescriptor<PhotoBlob>())
-        let totalPhotoBytes = photos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
-        try ensureAvailableCapacity(forPhotoBytes: totalPhotoBytes)
-        let retentionLimit = retentionCount(forPhotoBytes: totalPhotoBytes)
         let socialAccounts = try snapshotContext.fetch(FetchDescriptor<SocialAccount>())
         let people = try snapshotContext.fetch(FetchDescriptor<PersonMaster>())
         let personLinks = try snapshotContext.fetch(FetchDescriptor<EventPersonLink>())
@@ -80,10 +77,15 @@ enum AutomaticBackupService {
         let plans = try snapshotContext.fetch(FetchDescriptor<Plan>())
         let ticketAccounts = try snapshotContext.fetch(FetchDescriptor<TicketAccount>())
         let ticketAttempts = try snapshotContext.fetch(FetchDescriptor<TicketAttempt>())
-        let modelCount = categories.count + events.count + visits.count + inboxItems.count
+        let userContentCount = categories.filter { !$0.isBuiltIn }.count
+            + events.count + visits.count + inboxItems.count + photos.count
             + socialAccounts.count + people.count + personLinks.count + places.count
             + plans.count + ticketAccounts.count + ticketAttempts.count
-        guard modelCount > 0 else { return nil }
+        guard userContentCount > 0 else { return nil }
+
+        let totalPhotoBytes = photos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
+        try ensureAvailableCapacity(forPhotoBytes: totalPhotoBytes)
+        let retentionLimit = retentionCount(forPhotoBytes: totalPhotoBytes)
 
         let json = try JSONBackupExportService.makeBackupJSON(
             categories: categories,
