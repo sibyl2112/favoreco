@@ -99,6 +99,65 @@ struct TicketStatusDefinition: Identifiable, Hashable {
     }
 }
 
+enum TicketAttemptPresentationOrder {
+    static func sorted(_ attempts: [TicketAttempt], now: Date = Date()) -> [TicketAttempt] {
+        attempts.sorted { isOrderedBefore($0, $1, now: now) }
+    }
+
+    static func isOrderedBefore(_ lhs: TicketAttempt, _ rhs: TicketAttempt, now: Date = Date()) -> Bool {
+        let leftAction = TicketNextActionDefinition.nextAction(for: lhs, now: now)
+        let rightAction = TicketNextActionDefinition.nextAction(for: rhs, now: now)
+
+        switch (leftAction, rightAction) {
+        case let (.some(left), .some(right)):
+            if left.date != right.date { return left.date < right.date }
+            if left.priority != right.priority { return left.priority < right.priority }
+        case (.some(_), .none):
+            return true
+        case (.none, .some(_)):
+            return false
+        case (.none, .none):
+            break
+        }
+
+        let leftIssue = TicketInputIssueDefinition.issue(for: lhs)
+        let rightIssue = TicketInputIssueDefinition.issue(for: rhs)
+        switch (leftIssue, rightIssue) {
+        case let (.some(left), .some(right)):
+            if left.priority != right.priority { return left.priority < right.priority }
+        case (.some(_), .none):
+            return true
+        case (.none, .some(_)):
+            return false
+        case (.none, .none):
+            break
+        }
+
+        let leftRank = statusRank(lhs.statusKey)
+        let rightRank = statusRank(rhs.statusKey)
+        if leftRank != rightRank { return leftRank < rightRank }
+        if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    private static func statusRank(_ key: String) -> Int {
+        switch key {
+        case "waitingPayment": 0
+        case "beforeApply": 1
+        case "onSaleSoon": 2
+        case "waitingResult": 3
+        case "won": 4
+        case "waitingIssue": 5
+        case "issued": 6
+        case "interested": 7
+        case "lost": 8
+        case "skipped": 9
+        case "attended": 10
+        default: 11
+        }
+    }
+}
+
 struct TicketEntryRouteDefinition: Identifiable, Hashable {
     let key: String
     let name: String

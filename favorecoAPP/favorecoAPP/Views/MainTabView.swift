@@ -1020,7 +1020,7 @@ private struct PlanSummaryRow: View {
     }
 
     private var ticketAttempt: TicketAttempt? {
-        activeAttempts.sorted { $0.updatedAt > $1.updatedAt }.first
+        TicketAttemptPresentationOrder.sorted(activeAttempts).first
     }
 
     private var nextTicketAction: TicketNextActionDefinition? {

@@ -29,9 +29,9 @@ struct PlanDetailView: View {
     }
 
     private var attempts: [TicketAttempt] {
-        (plan.ticketAttempts ?? [])
-            .filter { !$0.isArchived }
-            .sorted { $0.updatedAt > $1.updatedAt }
+        TicketAttemptPresentationOrder.sorted(
+            (plan.ticketAttempts ?? []).filter { !$0.isArchived }
+        )
     }
 
     private var dateRangeText: String {
@@ -280,6 +280,14 @@ struct PlanDetailView: View {
                 Text("チケット申込はまだ登録されていません。")
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
+                Button {
+                    isShowingAddAttempt = true
+                } label: {
+                    Label("申込を追加", systemImage: "plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(categoryColor)
             }
             .planSectionCard()
         } else {

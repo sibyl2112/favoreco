@@ -31,9 +31,9 @@ struct TicketOverviewView: View {
     }
 
     private var filteredAttempts: [TicketAttempt] {
-        searchedAttempts
-            .filter(selectedFilter.includes)
-            .sorted(by: ticketAttemptOrder)
+        TicketAttemptPresentationOrder.sorted(
+            searchedAttempts.filter(selectedFilter.includes)
+        )
     }
 
     private var searchedAttempts: [TicketAttempt] {
@@ -241,38 +241,6 @@ struct TicketOverviewView: View {
         }
     }
 
-    private func ticketAttemptOrder(_ lhs: TicketAttempt, _ rhs: TicketAttempt) -> Bool {
-        let leftAction = TicketNextActionDefinition.nextAction(for: lhs)
-        let rightAction = TicketNextActionDefinition.nextAction(for: rhs)
-        let leftIssue = TicketInputIssueDefinition.issue(for: lhs)
-        let rightIssue = TicketInputIssueDefinition.issue(for: rhs)
-
-        if leftAction == nil, rightAction == nil {
-            switch (leftIssue, rightIssue) {
-            case let (.some(left), .some(right)):
-                if left.priority != right.priority { return left.priority < right.priority }
-            case (.some(_), .none):
-                return true
-            case (.none, .some(_)):
-                return false
-            case (.none, .none):
-                break
-            }
-        }
-
-        switch (leftAction, rightAction) {
-        case let (.some(left), .some(right)):
-            return left.date == right.date ? left.priority < right.priority : left.date < right.date
-        case (.some(_), .none):
-            return true
-        case (.none, .some(_)):
-            return false
-        case (.none, .none):
-            let leftDate = lhs.plan?.startsAt ?? lhs.updatedAt
-            let rightDate = rhs.plan?.startsAt ?? rhs.updatedAt
-            return leftDate < rightDate
-        }
-    }
 }
 
 private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
