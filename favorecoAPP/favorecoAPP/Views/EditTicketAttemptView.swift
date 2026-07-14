@@ -208,18 +208,26 @@ struct EditTicketAttemptView: View {
             modelContext.insert(attempt)
         }
 
-        attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
-            plan: plan,
-            attempt: attempt
-        ).joined(separator: ",")
+        let isTerminal = TicketStatusDefinition.isTerminal(attempt.statusKey)
+        attempt.notificationSettingsRaw = isTerminal
+            ? ""
+            : TicketNotificationScheduler.scheduledIdentifiers(
+                plan: plan,
+                attempt: attempt
+            ).joined(separator: ",")
 
         do {
             try modelContext.save()
-            Task {
-                await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
+            if isTerminal {
+                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+            } else {
+                Task {
+                    await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
+                }
             }
             dismiss()
         } catch {
+            modelContext.rollback()
             operationError = "申込を保存できませんでした。もう一度お試しください。"
             assertionFailure("Failed to save ticket attempt: \(error)")
         }

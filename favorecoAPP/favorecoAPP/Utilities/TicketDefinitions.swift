@@ -94,8 +94,14 @@ struct TicketStatusDefinition: Identifiable, Hashable {
         TicketStatusDefinition(key: "skipped", name: "見送り", attentionLevel: "none"),
     ]
 
+    static let terminalKeys: Set<String> = ["lost", "attended", "skipped"]
+
     static func name(for key: String) -> String {
         all.first(where: { $0.key == key })?.name ?? key
+    }
+
+    static func isTerminal(_ key: String) -> Bool {
+        terminalKeys.contains(key)
     }
 }
 

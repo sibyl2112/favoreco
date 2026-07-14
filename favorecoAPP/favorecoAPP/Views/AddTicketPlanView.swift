@@ -559,19 +559,14 @@ struct AddTicketPlanView: View {
         var attemptForScheduling: TicketAttempt?
         if draft.createsTicketAttempt {
             let attempt = makeTicketAttempt(for: plan, now: now)
-            attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
-                plan: plan,
-                attempt: attempt
-            ).joined(separator: ",")
+            attempt.notificationSettingsRaw = notificationSettingsRaw(for: attempt, plan: plan)
             modelContext.insert(attempt)
             attemptForScheduling = attempt
         }
 
         do {
             try modelContext.save()
-            Task {
-                await TicketNotificationScheduler.reschedule(plan: plan, attempt: attemptForScheduling)
-            }
+            syncNotifications(for: plan, attempt: attemptForScheduling, includesPlanReminder: true)
             onSave?()
             dismiss()
         } catch {
@@ -583,17 +578,12 @@ struct AddTicketPlanView: View {
 
     private func createTicketAttempt(on plan: Plan, now: Date) {
         let attempt = makeTicketAttempt(for: plan, now: now)
-        attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
-            plan: plan,
-            attempt: attempt
-        ).joined(separator: ",")
+        attempt.notificationSettingsRaw = notificationSettingsRaw(for: attempt, plan: plan)
         modelContext.insert(attempt)
 
         do {
             try modelContext.save()
-            Task {
-                await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
-            }
+            syncNotifications(for: plan, attempt: attempt, includesPlanReminder: false)
             onSave?()
             dismiss()
         } catch {
@@ -669,10 +659,7 @@ struct AddTicketPlanView: View {
             if existingAttempt == nil {
                 modelContext.insert(attempt)
             }
-            attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
-                plan: plan,
-                attempt: attempt
-            ).joined(separator: ",")
+            attempt.notificationSettingsRaw = notificationSettingsRaw(for: attempt, plan: plan)
             attemptForScheduling = attempt
         } else {
             existingAttempt?.isArchived = true
@@ -686,8 +673,8 @@ struct AddTicketPlanView: View {
             if !editsPlanOnly, let existingAttempt, !draft.createsTicketAttempt {
                 TicketNotificationScheduler.cancel(plan: plan, attempt: existingAttempt)
             }
+            syncNotifications(for: plan, attempt: attemptForScheduling, includesPlanReminder: true)
             Task {
-                await TicketNotificationScheduler.reschedule(plan: plan, attempt: attemptForScheduling)
                 if purchaseManager.currentPlan.includesSync,
                    automaticallyUpdatesExternalCalendar,
                    (ExternalCalendarLinkStore.hasLink(planID: plan.id) || !plan.externalCalendarEventIdentifier.isEmpty) {
@@ -700,6 +687,32 @@ struct AddTicketPlanView: View {
             modelContext.rollback()
             validationError = "予定を更新できませんでした。もう一度お試しください。"
             assertionFailure("Failed to update ticket plan: \(error)")
+        }
+    }
+
+    private func notificationSettingsRaw(for attempt: TicketAttempt, plan: Plan) -> String {
+        guard !TicketStatusDefinition.isTerminal(attempt.statusKey) else { return "" }
+        return TicketNotificationScheduler.scheduledIdentifiers(
+            plan: plan,
+            attempt: attempt
+        ).joined(separator: ",")
+    }
+
+    private func syncNotifications(
+        for plan: Plan,
+        attempt: TicketAttempt?,
+        includesPlanReminder: Bool
+    ) {
+        Task {
+            if includesPlanReminder {
+                await TicketNotificationScheduler.reschedule(plan: plan, attempt: nil)
+            }
+            guard let attempt else { return }
+            if TicketStatusDefinition.isTerminal(attempt.statusKey) {
+                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+            } else {
+                await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
+            }
         }
     }
 

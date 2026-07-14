@@ -10,8 +10,6 @@ import SwiftData
 
 @MainActor
 enum TicketAttemptStatusUpdater {
-    private static let terminalStatusKeys: Set<String> = ["lost", "skipped", "attended"]
-
     static func update(
         attempt: TicketAttempt,
         to statusKey: String,
@@ -23,7 +21,7 @@ enum TicketAttemptStatusUpdater {
         attempt.statusKey = statusKey
         attempt.updatedAt = now
 
-        let isTerminal = terminalStatusKeys.contains(statusKey)
+        let isTerminal = TicketStatusDefinition.isTerminal(statusKey)
         if isTerminal {
             attempt.notificationSettingsRaw = ""
         } else {
@@ -80,7 +78,7 @@ enum TicketAttemptStatusUpdater {
         let now = Date()
         attempt.isArchived = false
         attempt.updatedAt = now
-        if terminalStatusKeys.contains(attempt.statusKey) {
+        if TicketStatusDefinition.isTerminal(attempt.statusKey) {
             attempt.notificationSettingsRaw = ""
         } else {
             attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
@@ -96,7 +94,7 @@ enum TicketAttemptStatusUpdater {
             throw error
         }
 
-        if !terminalStatusKeys.contains(attempt.statusKey) {
+        if !TicketStatusDefinition.isTerminal(attempt.statusKey) {
             Task {
                 await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
             }
