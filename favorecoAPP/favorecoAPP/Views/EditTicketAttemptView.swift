@@ -17,6 +17,8 @@ struct EditTicketAttemptView: View {
     private let editingAttempt: TicketAttempt?
     @State private var draft: TicketAttemptDraft
     @State private var validationError = ""
+    @State private var operationError = ""
+    @State private var isShowingArchiveConfirmation = false
 
     init(plan: Plan, attempt: TicketAttempt? = nil) {
         self.plan = plan
@@ -121,13 +123,13 @@ struct EditTicketAttemptView: View {
 
                 if draft.showsTicketDetails {
                     Section("金額・座席") {
-                    TextField("チケット代", text: $draft.priceText)
-                        .keyboardType(.numberPad)
-                    TextField("手数料", text: $draft.feeText)
-                        .keyboardType(.numberPad)
-                    Stepper("枚数 \(draft.quantity)", value: $draft.quantity, in: 1...20)
-                    TextField("座席・整理番号", text: $draft.seatText, axis: .vertical)
-                        .lineLimit(2...4)
+                        TextField("チケット代", text: $draft.priceText)
+                            .keyboardType(.numberPad)
+                        TextField("手数料", text: $draft.feeText)
+                            .keyboardType(.numberPad)
+                        Stepper("枚数 \(draft.quantity)", value: $draft.quantity, in: 1...20)
+                        TextField("座席・整理番号", text: $draft.seatText, axis: .vertical)
+                            .lineLimit(2...4)
                     }
                 }
 
@@ -139,9 +141,9 @@ struct EditTicketAttemptView: View {
                 if editingAttempt != nil {
                     Section {
                         Button(role: .destructive) {
-                            archiveAttempt()
+                            isShowingArchiveConfirmation = true
                         } label: {
-                            Label("この申込を削除", systemImage: "trash")
+                            Label("この申込を非表示", systemImage: "archivebox")
                         }
                     }
                 }
@@ -163,6 +165,26 @@ struct EditTicketAttemptView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(validationError)
+            }
+            .confirmationDialog(
+                "この申込を非表示にしますか？",
+                isPresented: $isShowingArchiveConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("申込を非表示", role: .destructive) {
+                    archiveAttempt()
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("予定本体と他の申込は残り、この申込の予約済み通知だけを解除します。")
+            }
+            .alert("操作を完了できませんでした", isPresented: Binding(
+                get: { !operationError.isEmpty },
+                set: { if !$0 { operationError = "" } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(operationError)
             }
         }
     }
@@ -198,6 +220,7 @@ struct EditTicketAttemptView: View {
             }
             dismiss()
         } catch {
+            operationError = "申込を保存できませんでした。もう一度お試しください。"
             assertionFailure("Failed to save ticket attempt: \(error)")
         }
     }
@@ -211,6 +234,7 @@ struct EditTicketAttemptView: View {
             )
             dismiss()
         } catch {
+            operationError = "申込を非表示にできませんでした。もう一度お試しください。"
             assertionFailure("Failed to archive ticket attempt: \(error)")
         }
     }
