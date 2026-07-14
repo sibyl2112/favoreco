@@ -13,156 +13,71 @@ import UserNotifications
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @EnvironmentObject private var purchaseManager: PurchaseManager
-    @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
-    @AppStorage(AppStorageKeys.debugPlanOverride) private var debugPlanOverride = "storekit"
-    @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var debugHomeCategoryLayout = HomeCategoryLayoutMode.horizontal.rawValue
-    @State private var debugMessage = ""
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("マイ") {
-                    NavigationLink {
-                        ProfileSettingsView()
-                    } label: {
-                        Label("プロフィール", systemImage: "person.crop.circle")
-                    }
-
-                    NavigationLink {
-                        RegistrationIntegrationSettingsView()
-                    } label: {
-                        Label("登録情報・連携", systemImage: "person.text.rectangle")
-                    }
+            List {
+                NavigationLink {
+                    MySettingsHubView()
+                } label: {
+                    SettingsNavigationLabel(
+                        title: "マイ・登録情報",
+                        detail: "プロフィール、SNS、FC・チケットアカウント",
+                        systemImage: "person.crop.circle"
+                    )
                 }
 
-                Section("表示") {
-                    NavigationLink {
-                        DisplaySettingsView()
-                    } label: {
-                        Label("表示設定", systemImage: "textformat.size")
-                    }
+                NavigationLink {
+                    AppSettingsHubView()
+                } label: {
+                    SettingsNavigationLabel(
+                        title: "アプリ設定",
+                        detail: "表示、ジャンル、記録の初期値、通知",
+                        systemImage: "slider.horizontal.3"
+                    )
                 }
 
-                Section("ジャンル") {
-                    NavigationLink {
-                        GenreManagementView()
-                    } label: {
-                        Label("ジャンル管理", systemImage: "square.grid.2x2")
-                    }
-
-                    Button {
-                        hasCompletedGenreOnboarding = false
-                        dismiss()
-                    } label: {
-                        Label("初回ジャンル選択をやり直す", systemImage: "checklist")
-                    }
+                NavigationLink {
+                    DataSyncSettingsHubView()
+                } label: {
+                    SettingsNavigationLabel(
+                        title: "データと同期",
+                        detail: "マスター、書き出し、バックアップ、iCloud",
+                        systemImage: "externaldrive.badge.icloud"
+                    )
                 }
 
-                Section("記録・入力補助") {
-                    NavigationLink {
-                        RecordInputAssistSettingsView()
-                    } label: {
-                        Label("記録・入力補助", systemImage: "wand.and.sparkles")
-                    }
+                NavigationLink {
+                    BillingPlanSettingsView()
+                } label: {
+                    SettingsNavigationLabel(
+                        title: "プラン",
+                        detail: "利用中のプラン、購入、購入の復元",
+                        systemImage: "crown"
+                    )
                 }
 
-                Section("通知") {
-                    NavigationLink {
-                        NotificationSettingsView()
-                    } label: {
-                        Label("通知設定", systemImage: "bell")
-                    }
+                NavigationLink {
+                    SupportLinksView()
+                } label: {
+                    SettingsNavigationLabel(
+                        title: "サポート",
+                        detail: "公式リンク、お問い合わせ、規約、アプリ情報",
+                        systemImage: "questionmark.circle"
+                    )
                 }
 
-                Section("データ管理") {
-                    NavigationLink {
-                        DataManagementView()
-                    } label: {
-                        Label("データ管理", systemImage: "externaldrive")
-                    }
-                }
-
-                Section("同期・バックアップ") {
-                    NavigationLink {
-                        SyncBackupSettingsView()
-                    } label: {
-                        Label("同期・バックアップ", systemImage: "arrow.triangle.2.circlepath.icloud")
-                    }
-                }
-
-                Section("課金・プラン") {
-                    NavigationLink {
-                        BillingPlanSettingsView()
-                    } label: {
-                        Label("課金・プラン", systemImage: "crown")
-                    }
-                }
-
-                Section("リンク・サポート") {
-                    NavigationLink {
-                        SupportLinksView()
-                    } label: {
-                        Label("リンク・サポート", systemImage: "questionmark.circle")
-                    }
-                }
-
-                Section("開発") {
 #if DEBUG
-                    Picker("テスト権利", selection: $debugPlanOverride) {
-                        Text("StoreKit購入結果").tag("storekit")
-                        Text("無料").tag(FavorecoPlan.free.rawValue)
-                        Text("ライト買い切り").tag(FavorecoPlan.lightLifetime.rawValue)
-                        Text("同期プラン").tag(FavorecoPlan.syncSubscription.rawValue)
-                        Text("フル買い切り").tag(FavorecoPlan.fullLifetime.rawValue)
+                    NavigationLink {
+                        DeveloperSettingsView()
+                    } label: {
+                        SettingsNavigationLabel(
+                            title: "開発者メニュー",
+                            detail: "テスト権利、仮データ、通知診断",
+                            systemImage: "hammer"
+                        )
                     }
-                    .onChange(of: debugPlanOverride) { _, newValue in
-                        Task {
-                            await purchaseManager.setDebugPlanOverride(FavorecoPlan(rawValue: newValue))
-                        }
-                    }
-
-                    LabeledContent("現在の権利", value: purchaseManager.currentPlan.displayName)
-
-                    Picker("Homeジャンル表示", selection: $debugHomeCategoryLayout) {
-                        ForEach(HomeCategoryLayoutMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode.rawValue)
-                        }
-                    }
-                    .pickerStyle(.segmented)
 #endif
-                    NavigationLink {
-                        NotificationDebugView()
-                    } label: {
-                        Label("チケット・通知診断", systemImage: "bell.badge")
-                    }
-
-                    Button {
-                        insertDebugData()
-                    } label: {
-                        Label("写真付き仮データを追加", systemImage: "hammer.fill")
-                    }
-
-                    Button(role: .destructive) {
-                        deleteDebugData()
-                    } label: {
-                        Label("仮データを削除", systemImage: "trash")
-                    }
-
-                    NavigationLink {
-                        FullDataDeletionView()
-                    } label: {
-                        Label("全データ削除（テスト）", systemImage: "trash.fill")
-                            .foregroundStyle(.red)
-                    }
-
-                    if !debugMessage.isEmpty {
-                        Text(debugMessage)
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
@@ -174,6 +89,209 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+}
+
+private struct SettingsNavigationLabel: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(.primary)
+                Text(detail)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct MySettingsHubView: View {
+    var body: some View {
+        List {
+            NavigationLink {
+                ProfileSettingsView()
+            } label: {
+                SettingsNavigationLabel(
+                    title: "プロフィール",
+                    detail: "表示名、写真、SNSアカウント",
+                    systemImage: "person.crop.circle"
+                )
+            }
+
+            NavigationLink {
+                RegistrationIntegrationSettingsView()
+            } label: {
+                SettingsNavigationLabel(
+                    title: "登録情報・連携",
+                    detail: "FC、プレイガイド、劇場会員、外部カレンダー",
+                    systemImage: "person.text.rectangle"
+                )
+            }
+        }
+        .navigationTitle("マイ・登録情報")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct AppSettingsHubView: View {
+    var body: some View {
+        List {
+            NavigationLink {
+                DisplaySettingsView()
+            } label: {
+                SettingsNavigationLabel(
+                    title: "表示・外観",
+                    detail: "Home表示、外観、文字、フォント、テーマ",
+                    systemImage: "textformat.size"
+                )
+            }
+
+            NavigationLink {
+                GenreManagementView()
+            } label: {
+                SettingsNavigationLabel(
+                    title: "ジャンル",
+                    detail: "表示順、表示・非表示、自作ジャンル、有効ユニット",
+                    systemImage: "square.grid.2x2"
+                )
+            }
+
+            NavigationLink {
+                RecordInputAssistSettingsView()
+            } label: {
+                SettingsNavigationLabel(
+                    title: "記録・入力補助",
+                    detail: "初期値、写真圧縮、URL・OCR・Map・天気の補助",
+                    systemImage: "wand.and.sparkles"
+                )
+            }
+
+            NavigationLink {
+                NotificationSettingsView()
+            } label: {
+                SettingsNavigationLabel(
+                    title: "通知",
+                    detail: "チケット期限、公演前日・当日、会員期限、レポート",
+                    systemImage: "bell"
+                )
+            }
+        }
+        .navigationTitle("アプリ設定")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct DataSyncSettingsHubView: View {
+    var body: some View {
+        List {
+            NavigationLink {
+                DataManagementView()
+            } label: {
+                SettingsNavigationLabel(
+                    title: "データ管理",
+                    detail: "マスター、読み書き、キャッシュ、非表示・削除",
+                    systemImage: "externaldrive"
+                )
+            }
+
+            NavigationLink {
+                SyncBackupSettingsView()
+            } label: {
+                SettingsNavigationLabel(
+                    title: "同期・バックアップ",
+                    detail: "iCloud同期、自動・完全バックアップ、復元、診断",
+                    systemImage: "arrow.triangle.2.circlepath.icloud"
+                )
+            }
+        }
+        .navigationTitle("データと同期")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct DeveloperSettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var purchaseManager: PurchaseManager
+    @AppStorage(AppStorageKeys.debugPlanOverride) private var debugPlanOverride = "storekit"
+    @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var debugHomeCategoryLayout = HomeCategoryLayoutMode.horizontal.rawValue
+    @State private var debugMessage = ""
+
+    var body: some View {
+        Form {
+            Section("権利・表示") {
+                Picker("テスト権利", selection: $debugPlanOverride) {
+                    Text("StoreKit購入結果").tag("storekit")
+                    Text("無料").tag(FavorecoPlan.free.rawValue)
+                    Text("ライト買い切り").tag(FavorecoPlan.lightLifetime.rawValue)
+                    Text("同期プラン").tag(FavorecoPlan.syncSubscription.rawValue)
+                    Text("フル買い切り").tag(FavorecoPlan.fullLifetime.rawValue)
+                }
+                .onChange(of: debugPlanOverride) { _, newValue in
+                    Task {
+                        await purchaseManager.setDebugPlanOverride(FavorecoPlan(rawValue: newValue))
+                    }
+                }
+
+                LabeledContent("現在の権利", value: purchaseManager.currentPlan.displayName)
+
+                Picker("Homeジャンル表示", selection: $debugHomeCategoryLayout) {
+                    ForEach(HomeCategoryLayoutMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section("診断") {
+                NavigationLink {
+                    NotificationDebugView()
+                } label: {
+                    Label("チケット・通知診断", systemImage: "bell.badge")
+                }
+            }
+
+            Section("仮データ") {
+                Button {
+                    insertDebugData()
+                } label: {
+                    Label("写真付き仮データを追加", systemImage: "hammer.fill")
+                }
+
+                Button(role: .destructive) {
+                    deleteDebugData()
+                } label: {
+                    Label("仮データを削除", systemImage: "trash")
+                }
+
+                NavigationLink {
+                    FullDataDeletionView()
+                } label: {
+                    Label("全データ削除（テスト）", systemImage: "trash.fill")
+                        .foregroundStyle(.red)
+                }
+
+                if !debugMessage.isEmpty {
+                    Text(debugMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .navigationTitle("開発者メニュー")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func insertDebugData() {

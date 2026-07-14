@@ -10,7 +10,9 @@ import SwiftData
 
 struct GenreManagementView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var warningMessage = ""
     @State private var isShowingAddGenre = false
@@ -56,6 +58,17 @@ struct GenreManagementView: View {
                     }
                 }
                 .onMove(perform: moveCategories)
+            }
+
+            Section {
+                Button {
+                    hasCompletedGenreOnboarding = false
+                    dismiss()
+                } label: {
+                    Label("ジャンル選択をやり直す", systemImage: "checklist")
+                }
+            } footer: {
+                Text("初回設定と同じ画面で、記録するジャンルを選び直します。既存の記録は削除されません。")
             }
         }
         .navigationTitle("ジャンル管理")
