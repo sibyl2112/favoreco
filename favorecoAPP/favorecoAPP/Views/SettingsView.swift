@@ -317,7 +317,6 @@ private struct DeveloperSettingsView: View {
 
 struct RecordInputAssistSettingsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
-    @AppStorage(AppStorageKeys.defaultRecordDateMode) private var defaultRecordDateMode = "today"
     @AppStorage(AppStorageKeys.defaultGenreMode) private var defaultGenreMode = "lastUsed"
     @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
     @AppStorage(AppStorageKeys.photoAddStartMode) private var photoAddStartMode = "camera"
@@ -330,29 +329,29 @@ struct RecordInputAssistSettingsView: View {
 
     var body: some View {
         Form {
-            Section("記録の初期値") {
-                Picker("デフォルト記録日", selection: $defaultRecordDateMode) {
-                    Text("今日").tag("today")
-                }
-
-                Picker("デフォルトジャンル", selection: $defaultGenreMode) {
+            Section {
+                Picker("最初に選ぶジャンル", selection: $defaultGenreMode) {
                     Text("最後に使ったジャンル").tag("lastUsed")
                     Text("Homeで選択中のジャンル").tag("homeSelected")
                 }
 
-                Picker("記録追加後", selection: $afterSaveRecordAction) {
+                Picker("保存後", selection: $afterSaveRecordAction) {
                     Text("詳細を開く").tag("openDetail")
                     Text("一覧に戻る").tag("returnToList")
                 }
+            } header: {
+                Text("記録の初期値")
+            } footer: {
+                Text("新しい記録の日付は今日から始まり、入力画面で変更できます。")
             }
 
             Section("写真") {
-                Picker("写真追加", selection: $photoAddStartMode) {
+                Picker("写真追加時に開く", selection: $photoAddStartMode) {
                     Text("カメラを開く").tag("camera")
                     Text("写真ライブラリを開く").tag("library")
                 }
 
-                Picker("写真圧縮", selection: $photoCompressionQuality) {
+                Picker("保存画質", selection: $photoCompressionQuality) {
                     Text("85%（画質優先）").tag(0.85)
                     Text("65%（容量優先）").tag(0.65)
                 }
@@ -364,11 +363,11 @@ struct RecordInputAssistSettingsView: View {
             }
 
             Section("入力補助") {
-                Toggle("URL取込候補", isOn: $usesURLImportAssist)
-                Toggle("OCR取込", isOn: $usesOCRImportAssist)
-                Toggle("Map検索", isOn: $usesMapSearchAssist)
-                Toggle("天気自動付与", isOn: $usesWeatherAutoFill)
-                Toggle("入力補助辞書", isOn: $usesInputSuggestionDictionary)
+                Toggle("URLから候補を取得", isOn: $usesURLImportAssist)
+                Toggle("画像から文字を読み取る", isOn: $usesOCRImportAssist)
+                Toggle("会場をMapで検索", isOn: $usesMapSearchAssist)
+                Toggle("対象日の天気を付ける", isOn: $usesWeatherAutoFill)
+                Toggle("登録済み候補を表示", isOn: $usesInputSuggestionDictionary)
                 Label(
                     purchaseManager.currentPlan.includesLocalFullFeatures
                         ? "URLの日時・会場候補を利用できます"
@@ -388,10 +387,6 @@ struct RecordInputAssistSettingsView: View {
                 )
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(.secondary)
-            }
-
-            Section("後日検討") {
-                LabeledContent("Apple Music連携", value: "V2以降で検討")
             }
         }
         .navigationTitle("記録・入力補助")
