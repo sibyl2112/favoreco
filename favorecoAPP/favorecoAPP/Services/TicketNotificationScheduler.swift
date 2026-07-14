@@ -10,7 +10,10 @@ import UserNotifications
 
 enum TicketNotificationScheduler {
     static func scheduledAttemptIdentifiers(plan: Plan, attempt: TicketAttempt) -> [String] {
-        notificationSpecs(plan: plan, attempt: attempt).map(\.identifier)
+        guard UserDefaults.standard.bool(forKey: AppStorageKeys.notificationMasterEnabled) else {
+            return []
+        }
+        return notificationSpecs(plan: plan, attempt: attempt).map(\.identifier)
     }
 
     static func cancel(plan: Plan, attempt: TicketAttempt?) {

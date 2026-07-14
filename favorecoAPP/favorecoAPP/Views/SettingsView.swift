@@ -572,7 +572,10 @@ private struct EditTicketAccountView: View {
 }
 
 struct NotificationSettingsView: View {
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var purchaseManager: PurchaseManager
+    @Query private var plans: [Plan]
+    @Query private var ticketAttempts: [TicketAttempt]
     @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
     @AppStorage(AppStorageKeys.notificationMasterEnabled) private var masterEnabled = false
     @AppStorage(AppStorageKeys.notificationApplicationStartEnabled) private var applicationStartEnabled = false
@@ -594,9 +597,8 @@ struct NotificationSettingsView: View {
                     .onChange(of: masterEnabled) { _, newValue in
                         if newValue {
                             requestNotificationAuthorization()
-                            rescheduleMembershipNotificationsIfNeeded()
-                            rescheduleMonthlyReportNotification()
                         } else {
+                            synchronizePlanAndTicketNotifications()
                             cancelMembershipNotifications()
                             MonthlyReportNotificationScheduler.cancel()
                         }
@@ -611,11 +613,29 @@ struct NotificationSettingsView: View {
 
             Section("予定・チケット") {
                 Toggle("申込開始", isOn: $applicationStartEnabled)
+                    .onChange(of: applicationStartEnabled) { _, _ in
+                        synchronizePlanAndTicketNotifications()
+                    }
                 Toggle("申込締切", isOn: $applicationDeadlineEnabled)
+                    .onChange(of: applicationDeadlineEnabled) { _, _ in
+                        synchronizePlanAndTicketNotifications()
+                    }
                 Toggle("当落発表", isOn: $lotteryResultEnabled)
+                    .onChange(of: lotteryResultEnabled) { _, _ in
+                        synchronizePlanAndTicketNotifications()
+                    }
                 Toggle("入金締切", isOn: $paymentDeadlineEnabled)
+                    .onChange(of: paymentDeadlineEnabled) { _, _ in
+                        synchronizePlanAndTicketNotifications()
+                    }
                 Toggle("発券開始", isOn: $ticketIssueEnabled)
+                    .onChange(of: ticketIssueEnabled) { _, _ in
+                        synchronizePlanAndTicketNotifications()
+                    }
                 Toggle("公演前日/当日", isOn: $performanceReminderEnabled)
+                    .onChange(of: performanceReminderEnabled) { _, _ in
+                        synchronizePlanAndTicketNotifications()
+                    }
                 Text("公演前日/当日だけ初期ONです。申込、当落、入金、発券は必要なものだけ選びます。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
@@ -680,6 +700,7 @@ struct NotificationSettingsView: View {
                     permissionMessage = "iOS側で通知が許可されていません。必要になったら設定アプリから許可できます。"
                 } else {
                     permissionMessage = "通知が許可されました。"
+                    synchronizePlanAndTicketNotifications()
                     rescheduleMembershipNotificationsIfNeeded()
                     rescheduleMonthlyReportNotification()
                 }
@@ -699,6 +720,20 @@ struct NotificationSettingsView: View {
         Task {
             for account in ticketAccounts where !account.isArchived && account.renewalNotify {
                 await TicketAccountNotificationScheduler.reschedule(account: account)
+            }
+        }
+    }
+
+    private func synchronizePlanAndTicketNotifications() {
+        Task {
+            do {
+                try await TicketNotificationSettingsSyncService.synchronize(
+                    plans: plans,
+                    attempts: ticketAttempts,
+                    in: modelContext
+                )
+            } catch {
+                permissionMessage = "予定・チケット通知を更新できませんでした。"
             }
         }
     }
