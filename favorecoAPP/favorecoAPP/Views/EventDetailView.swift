@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 import UIKit
 
 struct EventDetailView: View {
@@ -62,7 +63,7 @@ struct EventDetailView: View {
                     Button {
                         isShowingEditEvent = true
                     } label: {
-                        Label("対象を編集", systemImage: "pencil")
+                        Label("対象情報・画像を編集", systemImage: "pencil")
                     }
 
                     if EventRepresentativePhotoResolver.hasPhotos(event) {
@@ -321,6 +322,9 @@ enum EventRepresentativePhotoResolver {
            let selected = photos.first(where: { $0.relativePath == event.representativeEyecatchPath }) {
             return selected
         }
+        if event.eyecatchData != nil {
+            return nil
+        }
         for visit in sortedVisits(event) {
             let visitPhotos = photoItems(in: visit)
             if !visit.eyecatchPath.isEmpty,
@@ -471,6 +475,10 @@ struct EditEventView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: EventDraft
+    @State private var eyecatchData: Data?
+    @State private var selectedEyecatchItem: PhotosPickerItem?
+    @State private var isProcessingEyecatch = false
+    @State private var saveErrorMessage: String?
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: event.category)
@@ -479,11 +487,49 @@ struct EditEventView: View {
     init(event: ExperienceEvent) {
         self.event = event
         _draft = State(initialValue: EventDraft(event: event))
+        _eyecatchData = State(initialValue: event.eyecatchData)
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    if let eyecatchData, let image = UIImage(data: eyecatchData) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 180)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                        Button("画像を外す", role: .destructive) {
+                            self.eyecatchData = nil
+                        }
+                    }
+
+                    PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
+                        Label(eyecatchData == nil ? "写真を選ぶ" : "写真を変更", systemImage: "photo")
+                    }
+                    .disabled(isProcessingEyecatch)
+                    .onChange(of: selectedEyecatchItem) { _, item in
+                        guard let item else { return }
+                        Task { await loadEyecatch(from: item) }
+                    }
+
+                    if isProcessingEyecatch {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("画像を準備しています")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("対象アイキャッチ")
+                } footer: {
+                    Text("クイック登録の表紙や、記録写真がない対象の代表画像として表示します。")
+                }
+
                 Section(template.targetSectionTitle) {
                     TextField(template.titlePlaceholder, text: $draft.title)
                     TextField(template.seriesPlaceholder, text: $draft.seriesName)
@@ -522,10 +568,35 @@ struct EditEventView: View {
                     Button("保存") {
                         save()
                     }
-                    .disabled(!draft.canSave)
+                    .disabled(!draft.canSave || isProcessingEyecatch)
                 }
             }
+            .alert("保存に失敗しました", isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { saveErrorMessage = nil }
+            } message: {
+                Text(saveErrorMessage ?? "")
+            }
         }
+    }
+
+    @MainActor
+    private func loadEyecatch(from item: PhotosPickerItem) async {
+        isProcessingEyecatch = true
+        defer {
+            isProcessingEyecatch = false
+            selectedEyecatchItem = nil
+        }
+        guard let sourceData = try? await item.loadTransferable(type: Data.self),
+              let compressed = await Task.detached(priority: .userInitiated, operation: {
+                  QuickCaptureImageService.compressedJPEG(from: sourceData)
+              }).value else {
+            saveErrorMessage = "画像を読み込めませんでした。別の写真をお試しください。"
+            return
+        }
+        eyecatchData = compressed
     }
 
     private func save() {
@@ -534,12 +605,15 @@ struct EditEventView: View {
         event.officialURL = draft.trimmedOfficialURL
         event.memo = draft.trimmedMemo
         event.importMemo = draft.trimmedImportMemo
+        event.eyecatchData = eyecatchData
         event.updatedAt = Date()
 
         do {
             try modelContext.save()
             dismiss()
         } catch {
+            modelContext.rollback()
+            saveErrorMessage = "対象情報を保存できませんでした。もう一度お試しください。"
             assertionFailure("Failed to update event: \(error)")
         }
     }
