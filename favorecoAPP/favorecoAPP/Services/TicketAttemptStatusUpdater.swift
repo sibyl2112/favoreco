@@ -23,9 +23,9 @@ enum TicketAttemptStatusUpdater {
         attempt.statusKey = statusKey
         attempt.updatedAt = now
 
-        if terminalStatusKeys.contains(statusKey) {
+        let isTerminal = terminalStatusKeys.contains(statusKey)
+        if isTerminal {
             attempt.notificationSettingsRaw = ""
-            TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
         } else {
             attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
                 plan: plan,
@@ -33,9 +33,16 @@ enum TicketAttemptStatusUpdater {
             ).joined(separator: ",")
         }
 
-        try modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
 
-        if !terminalStatusKeys.contains(statusKey) {
+        if isTerminal {
+            TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+        } else {
             Task {
                 await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
             }
@@ -53,7 +60,12 @@ enum TicketAttemptStatusUpdater {
         attempt.updatedAt = now
         attempt.notificationSettingsRaw = ""
 
-        try modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
         TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
     }
 
@@ -77,7 +89,12 @@ enum TicketAttemptStatusUpdater {
             ).joined(separator: ",")
         }
 
-        try modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
 
         if !terminalStatusKeys.contains(attempt.statusKey) {
             Task {

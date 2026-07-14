@@ -22,6 +22,7 @@ struct PlanDetailView: View {
     @State private var isShowingDeleteConfirmation = false
     @State private var recordEventForVisit: ExperienceEvent?
     @State private var navigatingVisit: Visit?
+    @State private var operationError = ""
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
 
     private var categoryColor: Color {
@@ -185,6 +186,14 @@ struct PlanDetailView: View {
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("予定と紐づく申込を非表示にし、予約済み通知をキャンセルします。記録済みVisitは削除しません。")
+        }
+        .alert("処理に失敗しました", isPresented: Binding(
+            get: { !operationError.isEmpty },
+            set: { if !$0 { operationError = "" } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(operationError)
         }
     }
 
@@ -408,9 +417,8 @@ struct PlanDetailView: View {
         for attempt in activeAttempts {
             attempt.isArchived = true
             attempt.updatedAt = Date()
-            TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+            attempt.notificationSettingsRaw = ""
         }
-        TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
 
         let removesExternalEvent = purchaseManager.currentPlan.includesSync
             && automaticallyUpdatesExternalCalendar
@@ -418,6 +426,10 @@ struct PlanDetailView: View {
 
         do {
             try modelContext.save()
+            for attempt in activeAttempts {
+                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+            }
+            TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
             if removesExternalEvent {
                 Task {
                     _ = try? await ExternalCalendarSyncService.remove(plan: plan)
@@ -428,7 +440,8 @@ struct PlanDetailView: View {
             }
             dismiss()
         } catch {
-            assertionFailure("Failed to archive plan: \(error)")
+            modelContext.rollback()
+            operationError = "予定を非表示にできませんでした。もう一度お試しください。"
         }
     }
 
@@ -457,7 +470,7 @@ struct PlanDetailView: View {
                 try modelContext.save()
             } catch {
                 modelContext.rollback()
-                assertionFailure("Failed to repair plan event before record entry: \(error)")
+                operationError = "参加記録の準備に失敗しました。もう一度お試しください。"
                 return
             }
         }
@@ -473,7 +486,7 @@ struct PlanDetailView: View {
                 in: modelContext
             )
         } catch {
-            assertionFailure("Failed to update ticket status: \(error)")
+            operationError = "申込状態を更新できませんでした。もう一度お試しください。"
         }
     }
 
