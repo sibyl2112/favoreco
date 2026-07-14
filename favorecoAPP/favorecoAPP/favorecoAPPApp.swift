@@ -24,6 +24,9 @@ struct favorecoAPPApp: App {
                 .environmentObject(PurchaseManager.shared)
                 .task {
                     await CategoryPresetSeeder.seedIfNeeded(in: sharedModelContainer.mainContext)
+                    try? TicketNotificationMetadataMigrationService.normalize(
+                        in: sharedModelContainer.mainContext
+                    )
                     _ = try? AutomaticBackupService.createIfDue(in: sharedModelContainer.mainContext)
                 }
         }
