@@ -62,8 +62,24 @@ struct HomeView: View {
             .sorted { $0.startsAt < $1.startsAt }
     }
 
+    private var upcomingItems: [HomeUpcomingItem] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let linkedVisitIDs = Set(upcomingPlans.compactMap { $0.visit?.id })
+        let futureVisits = visibleVisits.filter { visit in
+            calendar.startOfDay(for: visit.visitedAt) >= today
+                && !linkedVisitIDs.contains(visit.id)
+        }
+
+        return (
+            upcomingPlans.map(HomeUpcomingItem.plan)
+                + futureVisits.map(HomeUpcomingItem.visit)
+        )
+        .sorted { $0.startsAt < $1.startsAt }
+    }
+
     private var upcomingItemCount: Int {
-        upcomingPlans.count
+        upcomingItems.count
     }
 
     private var currentYearVisitCount: Int {
@@ -325,7 +341,7 @@ struct HomeView: View {
 
                 Spacer()
 
-                if !upcomingPlans.isEmpty {
+                if !upcomingItems.isEmpty {
                     Button("予定一覧") {
                         NotificationCenter.default.post(name: .openFavorecoPlanList, object: nil)
                     }
@@ -333,7 +349,7 @@ struct HomeView: View {
                 }
             }
 
-            switch upcomingPlans.count {
+            switch upcomingItems.count {
             case 0:
                 VStack(alignment: .leading, spacing: 12) {
                     EmptyStateRow(
@@ -352,41 +368,51 @@ struct HomeView: View {
                 }
 
             case 1:
-                NavigationLink {
-                    PlanDetailView(plan: upcomingPlans[0])
-                } label: {
-                    HomeUpcomingPlanCard(plan: upcomingPlans[0])
-                }
-                .buttonStyle(.plain)
+                upcomingItemLink(upcomingItems[0])
 
             default:
                 TabView(selection: $selectedUpcomingPlanIndex) {
-                    ForEach(Array(upcomingPlans.enumerated()), id: \.element.id) { index, plan in
-                        NavigationLink {
-                            PlanDetailView(plan: plan)
-                        } label: {
-                            HomeUpcomingPlanCard(plan: plan)
-                        }
-                        .buttonStyle(.plain)
+                    ForEach(Array(upcomingItems.enumerated()), id: \.element.id) { index, item in
+                        upcomingItemLink(item)
                         .tag(index)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .frame(height: 156)
 
-                Text("\(min(selectedUpcomingPlanIndex + 1, upcomingPlans.count)) / \(upcomingPlans.count)")
+                Text("\(min(selectedUpcomingPlanIndex + 1, upcomingItems.count)) / \(upcomingItems.count)")
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .accessibilityLabel("予定 \(min(selectedUpcomingPlanIndex + 1, upcomingPlans.count))件目、全\(upcomingPlans.count)件")
+                    .accessibilityLabel("予定 \(min(selectedUpcomingPlanIndex + 1, upcomingItems.count))件目、全\(upcomingItems.count)件")
             }
         }
-        .onChange(of: upcomingPlans.count) { _, count in
+        .onChange(of: upcomingItems.count) { _, count in
             if count == 0 {
                 selectedUpcomingPlanIndex = 0
             } else if selectedUpcomingPlanIndex >= count {
                 selectedUpcomingPlanIndex = count - 1
             }
+        }
+    }
+
+    @ViewBuilder
+    private func upcomingItemLink(_ item: HomeUpcomingItem) -> some View {
+        switch item {
+        case .plan(let plan):
+            NavigationLink {
+                PlanDetailView(plan: plan)
+            } label: {
+                HomeUpcomingPlanCard(plan: plan)
+            }
+            .buttonStyle(.plain)
+        case .visit(let visit):
+            NavigationLink {
+                ExperienceDetailView(visit: visit)
+            } label: {
+                HomeUpcomingVisitCard(visit: visit)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -631,6 +657,29 @@ private struct InterestedEventRow: View {
     }
 }
 
+private enum HomeUpcomingItem: Identifiable {
+    case plan(Plan)
+    case visit(Visit)
+
+    var id: String {
+        switch self {
+        case .plan(let plan):
+            return "plan-\(plan.id.uuidString)"
+        case .visit(let visit):
+            return "visit-\(visit.id.uuidString)"
+        }
+    }
+
+    var startsAt: Date {
+        switch self {
+        case .plan(let plan):
+            return plan.startsAt
+        case .visit(let visit):
+            return visit.visitedAt
+        }
+    }
+}
+
 private struct HomeUpcomingPlanCard: View {
     let plan: Plan
     @Environment(\.favorecoThemePalette) private var themePalette
@@ -676,6 +725,79 @@ private struct HomeUpcomingPlanCard: View {
 
                 if !plan.venueNameSnapshot.isEmpty {
                     Label(plan.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(tint.opacity(0.18), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HomeUpcomingVisitCard: View {
+    let visit: Visit
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    private var category: RecordCategory? {
+        visit.event?.category
+    }
+
+    private var tint: Color {
+        themePalette.categoryColor(hex: category?.colorHex ?? "#147C88")
+    }
+
+    private var dateText: String {
+        visit.visitedAt.formatted(
+            .dateTime
+                .locale(Locale(identifier: "ja_JP"))
+                .month(.defaultDigits)
+                .day()
+                .weekday(.abbreviated)
+                .hour()
+                .minute()
+        )
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: category?.iconSymbol ?? "calendar")
+                .font(.title2)
+                .foregroundStyle(tint)
+                .frame(width: 48, height: 48)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(category?.name ?? "参加予定")
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(tint)
+
+                Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? "予定" : "予定")
+                    .font(FavorecoTypography.cardTitle)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                Label(dateText, systemImage: "calendar")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                if !visit.venueNameSnapshot.isEmpty {
+                    Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
