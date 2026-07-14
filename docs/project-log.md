@@ -6202,3 +6202,33 @@ iOS 18対応のためにUI全体を古い表現へ固定せず、主な利用環
 - 申込0件/1件/複数件の予定で予定名、日時、会場を編集し、申込件数・状態・締切が変わらないことを実機確認する
 - 予定日時変更後に前日/当日通知だけが更新され、申込締切・当落・発券通知が残ることを確認する
 - 申込カードのタップと`申込を追加`から、従来どおり申込専用編集画面を開けることを確認する
+
+## 2026-07-14: 予定状態とチケット申込状態を分離
+
+### 変更概要
+- 新規予定の`Plan.stateKey`を申込状態にかかわらず`planned`で作成するように変更
+- 既存予定への申込追加、申込編集、状態変更で`Plan.stateKey`を上書きしないように変更
+- 申込の追加・編集・非表示・復元では、予定本体の更新日時を変更しないようにした
+- 予定詳細は申込がある場合だけTicketAttemptの状態を表示し、申込がない場合は予定/参加済みを表示
+
+### 変更意図
+`Plan`は予定そのものの状態、`TicketAttempt`は抽選・購入・入金・発券など申込ごとの状態を持つ正本設計へ合わせるため。従来は複数申込のうち1件を編集すると、その申込状態で予定全体が上書きされ、別の有効な申込があっても予定が落選・見送り扱いになる可能性があった。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift
+- favorecoAPP/favorecoAPP/Views/EditTicketAttemptView.swift
+- favorecoAPP/favorecoAPP/Views/PlanDetailView.swift
+- favorecoAPP/favorecoAPP/Services/TicketAttemptStatusUpdater.swift
+- docs/project-log.md
+
+### 確認結果（実機 / ビルド）
+- iOS 18最低対象、iOS 26.5 SDKの汎用Simulatorビルド成功
+- チケット作成・追加・編集・状態変更から`Plan.stateKey`への代入がなくなったことを横断検索で確認
+- 参加記録保存時の`Plan.stateKey = attended`は維持されることを確認
+- `git diff --check`で空白エラーなし
+- 実機確認は未実施
+
+### 残課題
+- 1予定へ抽選申込を複数追加し、片方を落選/非表示にしても他申込と予定日時が変わらないことを実機確認する
+- 申込なし/あり/参加記録済みの予定詳細で、見出しが予定/申込状態/参加済みになることを確認する
+- 旧バージョンでPlanに保存済みのチケット状態は表示上問題ないが、将来のデータ移行時に`planned/attended`へ正規化する

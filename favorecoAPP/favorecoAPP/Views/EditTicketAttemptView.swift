@@ -190,8 +190,6 @@ struct EditTicketAttemptView: View {
             plan: plan,
             attempt: attempt
         ).joined(separator: ",")
-        plan.updatedAt = now
-        plan.stateKey = attempt.statusKey
 
         do {
             try modelContext.save()

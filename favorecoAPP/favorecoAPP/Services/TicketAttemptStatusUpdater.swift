@@ -22,8 +22,6 @@ enum TicketAttemptStatusUpdater {
         let now = Date()
         attempt.statusKey = statusKey
         attempt.updatedAt = now
-        plan.stateKey = statusKey
-        plan.updatedAt = now
 
         if terminalStatusKeys.contains(statusKey) {
             TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
@@ -47,7 +45,6 @@ enum TicketAttemptStatusUpdater {
         let now = Date()
         attempt.isArchived = true
         attempt.updatedAt = now
-        plan.updatedAt = now
 
         try modelContext.save()
         TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
@@ -64,7 +61,6 @@ enum TicketAttemptStatusUpdater {
         let now = Date()
         attempt.isArchived = false
         attempt.updatedAt = now
-        plan.updatedAt = now
 
         try modelContext.save()
 

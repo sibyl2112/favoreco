@@ -539,7 +539,7 @@ struct AddTicketPlanView: View {
             title: draft.trimmedTitle,
             subtitle: draft.trimmedSubtitle,
             planKindKey: "performance",
-            stateKey: draft.createsTicketAttempt ? draft.statusKey : "planned",
+            stateKey: "planned",
             startsAt: draft.startsAt,
             endsAt: draft.endsAt,
             opensAt: draft.opensAt,
@@ -588,10 +588,6 @@ struct AddTicketPlanView: View {
             attempt: attempt
         ).joined(separator: ",")
         modelContext.insert(attempt)
-        plan.stateKey = draft.statusKey
-        plan.updatedAt = now
-        plan.event?.stateKey = "active"
-        plan.event?.updatedAt = now
 
         do {
             try modelContext.save()
@@ -652,9 +648,6 @@ struct AddTicketPlanView: View {
 
         plan.title = draft.trimmedTitle
         plan.subtitle = draft.trimmedSubtitle
-        if !editsPlanOnly {
-            plan.stateKey = draft.createsTicketAttempt ? draft.statusKey : "planned"
-        }
         plan.startsAt = draft.startsAt
         plan.endsAt = draft.endsAt
         plan.opensAt = draft.opensAt

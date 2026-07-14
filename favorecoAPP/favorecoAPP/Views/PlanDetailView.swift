@@ -201,7 +201,7 @@ struct PlanDetailView: View {
                     Text(plan.category?.name ?? "予定")
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(categoryColor)
-                    Text(TicketStatusDefinition.name(for: attempts.first?.statusKey ?? plan.stateKey))
+                    Text(planStatusText)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -246,6 +246,13 @@ struct PlanDetailView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .planSectionCard()
+    }
+
+    private var planStatusText: String {
+        if let attempt = attempts.first {
+            return TicketStatusDefinition.name(for: attempt.statusKey)
+        }
+        return plan.visit != nil || plan.stateKey == "attended" ? "参加済み" : "予定"
     }
 
     private var basicSection: some View {
