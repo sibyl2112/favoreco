@@ -28,6 +28,7 @@ enum RecordDeletionService {
         let attemptCount: Int
         let masterCount: Int
         let linkCount: Int
+        let externalCalendarTargets: [ExternalCalendarDeletionTarget]
 
         var totalCount: Int {
             eventCount + visitCount + planCount + attemptCount + masterCount + linkCount
@@ -36,6 +37,7 @@ enum RecordDeletionService {
 
     struct AllDataDeletionResult {
         let deletedModelCount: Int
+        let externalCalendarTargets: [ExternalCalendarDeletionTarget]
     }
 
     /// この記録（Visit）だけを削除する。Event は残す（配下の Visit が 0 件になっても自動削除しない）。
@@ -63,15 +65,7 @@ enum RecordDeletionService {
                 attemptIDs: (plan.ticketAttempts ?? []).map(\.id)
             )
         }
-        let externalCalendarTargets = ownedPlans.compactMap { plan -> ExternalCalendarDeletionTarget? in
-            let storedIdentifier = ExternalCalendarLinkStore.identifier(planID: plan.id)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let legacyIdentifier = plan.externalCalendarEventIdentifier
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let identifier = storedIdentifier.isEmpty ? legacyIdentifier : storedIdentifier
-            guard !identifier.isEmpty else { return nil }
-            return ExternalCalendarDeletionTarget(planID: plan.id, eventIdentifier: identifier)
-        }
+        let externalCalendarTargets = externalCalendarTargets(for: ownedPlans)
 
         // 配下 Visit を参照する Plan.visit を解除（Event 配下の Plan は cascade 対象だが、外部参照も安全に外す）
         for plan in allPlans where plan.visit.map({ visitIDs.contains($0.id) }) == true {
@@ -124,6 +118,7 @@ enum RecordDeletionService {
         let archivedPersonIDs = Set(archivedPeople.map(\.id))
         let archivedPlaces = places.filter(\.isArchived)
         let archivedSocialAccounts = socialAccounts.filter(\.isArchived)
+        let externalCalendarTargets = externalCalendarTargets(for: archivedPlans)
 
         for plan in archivedPlans {
             for attempt in plan.ticketAttempts ?? [] {
@@ -177,7 +172,8 @@ enum RecordDeletionService {
                 + archivedSocialAccounts.count
                 + archivedPeople.count
                 + archivedPlaces.count,
-            linkCount: archivedLinks.count
+            linkCount: archivedLinks.count,
+            externalCalendarTargets: externalCalendarTargets
         )
     }
 
@@ -197,6 +193,7 @@ enum RecordDeletionService {
         let plans = try context.fetch(FetchDescriptor<Plan>())
         let accounts = try context.fetch(FetchDescriptor<TicketAccount>())
         let attempts = try context.fetch(FetchDescriptor<TicketAttempt>())
+        let externalCalendarTargets = externalCalendarTargets(for: plans)
 
         let deletedModelCount = categories.count + events.count + visits.count
             + inboxItems.count + photos.count + socialAccounts.count + people.count
@@ -253,7 +250,23 @@ enum RecordDeletionService {
 
         UserDefaults.standard.set(false, forKey: AppStorageKeys.hasCompletedGenreOnboarding)
 
-        return AllDataDeletionResult(deletedModelCount: deletedModelCount)
+        return AllDataDeletionResult(
+            deletedModelCount: deletedModelCount,
+            externalCalendarTargets: externalCalendarTargets
+        )
+    }
+
+    @MainActor
+    private static func externalCalendarTargets(for plans: [Plan]) -> [ExternalCalendarDeletionTarget] {
+        plans.compactMap { plan in
+            let storedIdentifier = ExternalCalendarLinkStore.identifier(planID: plan.id)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let legacyIdentifier = plan.externalCalendarEventIdentifier
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let identifier = storedIdentifier.isEmpty ? legacyIdentifier : storedIdentifier
+            guard !identifier.isEmpty else { return nil }
+            return ExternalCalendarDeletionTarget(planID: plan.id, eventIdentifier: identifier)
+        }
     }
 
     /// 指定 Visit を参照する関連（Plan.visit / EventPersonLink.visit）を安全に解除・削除する。

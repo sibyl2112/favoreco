@@ -119,6 +119,10 @@ enum ExternalCalendarLinkStore {
         UserDefaults.standard.set(links, forKey: storageKey)
     }
 
+    nonisolated static func clearAll() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+
     nonisolated static func hasLink(planID: UUID) -> Bool {
         !(storedLinks()[planID.uuidString] ?? "").isEmpty
     }

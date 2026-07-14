@@ -1051,6 +1051,8 @@ private struct TextSizeSettingsView: View {
 
 struct DataManagementView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var purchaseManager: PurchaseManager
+    @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     @Query private var categories: [RecordCategory]
     @Query private var events: [ExperienceEvent]
     @Query private var visits: [Visit]
@@ -1247,11 +1249,24 @@ struct DataManagementView: View {
     private func deleteArchivedData() {
         do {
             let result = try RecordDeletionService.deleteArchivedData(in: modelContext)
+            reconcileDeletedCalendarLinks(result.externalCalendarTargets, clearsAllLinks: false)
             maintenanceMessage = "アーカイブ済みデータを\(result.totalCount)件削除しました（対象\(result.eventCount)、記録\(result.visitCount)、予定\(result.planCount)、申込\(result.attemptCount)、マスター\(result.masterCount)、人物リンク\(result.linkCount)）。"
         } catch {
             modelContext.rollback()
             maintenanceMessage = "削除に失敗しました: \(error.localizedDescription)"
         }
+    }
+
+    private func reconcileDeletedCalendarLinks(
+        _ targets: [RecordDeletionService.ExternalCalendarDeletionTarget],
+        clearsAllLinks: Bool
+    ) {
+        reconcileExternalCalendarLinks(
+            targets,
+            removesExternalEvents: purchaseManager.currentPlan.includesSync
+                && automaticallyUpdatesExternalCalendar,
+            clearsAllLinks: clearsAllLinks
+        )
     }
 }
 
@@ -1340,6 +1355,8 @@ private struct ArchivedEventManagementView: View {
 
 struct FullDataDeletionView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var purchaseManager: PurchaseManager
+    @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     @Query private var categories: [RecordCategory]
     @Query private var events: [ExperienceEvent]
     @Query private var visits: [Visit]
@@ -1443,12 +1460,47 @@ struct FullDataDeletionView: View {
         errorMessage = ""
         Task { @MainActor in
             do {
-                _ = try RecordDeletionService.deleteAllData(in: modelContext)
+                let result = try RecordDeletionService.deleteAllData(in: modelContext)
+                reconcileExternalCalendarLinks(
+                    result.externalCalendarTargets,
+                    removesExternalEvents: purchaseManager.currentPlan.includesSync
+                        && automaticallyUpdatesExternalCalendar,
+                    clearsAllLinks: true
+                )
             } catch {
                 modelContext.rollback()
                 errorMessage = "全データ削除に失敗しました: \(error.localizedDescription)"
                 isDeleting = false
             }
+        }
+    }
+}
+
+private func reconcileExternalCalendarLinks(
+    _ targets: [RecordDeletionService.ExternalCalendarDeletionTarget],
+    removesExternalEvents: Bool,
+    clearsAllLinks: Bool
+) {
+    guard removesExternalEvents else {
+        if clearsAllLinks {
+            ExternalCalendarLinkStore.clearAll()
+        } else {
+            for target in targets {
+                ExternalCalendarLinkStore.clear(planID: target.planID)
+            }
+        }
+        return
+    }
+
+    Task { @MainActor in
+        for target in targets {
+            _ = try? await ExternalCalendarSyncService.remove(
+                identifier: target.eventIdentifier,
+                planID: target.planID
+            )
+        }
+        if clearsAllLinks {
+            ExternalCalendarLinkStore.clearAll()
         }
     }
 }
