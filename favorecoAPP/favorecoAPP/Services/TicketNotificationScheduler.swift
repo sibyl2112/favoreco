@@ -199,14 +199,9 @@ enum TicketNotificationScheduler {
     }
 
     private static func staleIdentifierCandidates(planID: UUID, attemptID: UUID?) -> [String] {
-        var identifiers = [
-            "plan.\(planID.uuidString).performance.previousDay",
-            "plan.\(planID.uuidString).performance.sameDay",
-        ]
-
         if let attemptID {
             let prefix = "ticket.\(attemptID.uuidString)"
-            identifiers.append(contentsOf: [
+            return [
                 "\(prefix).applicationStart",
                 "\(prefix).applicationDeadline.dayBefore",
                 "\(prefix).applicationDeadline.hourBefore",
@@ -214,10 +209,13 @@ enum TicketNotificationScheduler {
                 "\(prefix).paymentDeadline.dayBefore",
                 "\(prefix).paymentDeadline.hourBefore",
                 "\(prefix).ticketIssue",
-            ])
+            ]
         }
 
-        return identifiers
+        return [
+            "plan.\(planID.uuidString).performance.previousDay",
+            "plan.\(planID.uuidString).performance.sameDay",
+        ]
     }
 
     private static func planTitle(_ plan: Plan) -> String {
