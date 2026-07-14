@@ -20,7 +20,7 @@ struct PlanDetailView: View {
     @State private var editingAttempt: TicketAttempt?
     @State private var calendarDraft: CalendarEventDraft?
     @State private var isShowingDeleteConfirmation = false
-    @State private var isShowingCreateRecordConfirmation = false
+    @State private var recordEventForVisit: ExperienceEvent?
     @State private var navigatingVisit: Visit?
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
 
@@ -134,10 +134,10 @@ struct PlanDetailView: View {
                         if let visit = plan.visit {
                             navigatingVisit = visit
                         } else {
-                            isShowingCreateRecordConfirmation = true
+                            prepareRecordEntry()
                         }
                     } label: {
-                        Label(plan.visit == nil ? "参加記録を作成" : "参加記録を開く", systemImage: "sparkles")
+                        Label(plan.visit == nil ? "参加記録を入力" : "参加記録を開く", systemImage: "sparkles")
                     }
 
                     Button(role: .destructive) {
@@ -159,6 +159,13 @@ struct PlanDetailView: View {
         .sheet(item: $editingAttempt) { attempt in
             EditTicketAttemptView(plan: plan, attempt: attempt)
         }
+        .sheet(item: $recordEventForVisit) { event in
+            AddVisitView(
+                event: event,
+                initialDraft: VisitDraft(plan: plan),
+                sourcePlan: plan
+            )
+        }
         .sheet(item: $calendarDraft) { draft in
             CalendarEventEditSheet(draft: draft) { identifier in
                 ExternalCalendarLinkStore.set(identifier: identifier, planID: plan.id)
@@ -178,14 +185,6 @@ struct PlanDetailView: View {
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("予定と紐づく申込を非表示にし、予約済み通知をキャンセルします。記録済みVisitは削除しません。")
-        }
-        .confirmationDialog("参加記録を作成しますか？", isPresented: $isShowingCreateRecordConfirmation, titleVisibility: .visible) {
-            Button("作成して開く") {
-                createVisitFromPlan()
-            }
-            Button("キャンセル", role: .cancel) {}
-        } message: {
-            Text("予定のタイトル、日時、会場、チケット状態、座席、金額、メモを引き継いだ記録を作成します。")
         }
     }
 
@@ -418,14 +417,13 @@ struct PlanDetailView: View {
         }
     }
 
-    private func createVisitFromPlan() {
+    private func prepareRecordEntry() {
         if let visit = plan.visit {
             navigatingVisit = visit
             return
         }
 
         let now = Date()
-        let attempt = attempts.first
         let event = plan.event ?? ExperienceEvent(
             title: plan.title.isEmpty ? "予定" : plan.title,
             seriesName: plan.subtitle,
@@ -440,41 +438,16 @@ struct PlanDetailView: View {
         if plan.event == nil {
             modelContext.insert(event)
             plan.event = event
+            do {
+                try modelContext.save()
+            } catch {
+                modelContext.rollback()
+                assertionFailure("Failed to repair plan event before record entry: \(error)")
+                return
+            }
         }
 
-        let visit = Visit(
-            visitedAt: plan.startsAt,
-            endedAt: plan.endsAt,
-            venueNameSnapshot: plan.venueNameSnapshot,
-            // Visitのoutcomeは planned/applied/won/paid/ticketed/attended/canceled 系。
-            // チケット状態キー（issued/waitingPayment 等）とは別体系のため、参加記録＝「参加済み」を明示する。
-            outcomeKey: "attended",
-            seatText: attempt?.seatText ?? "",
-            note: visitNote(from: attempt),
-            amount: visitAmount(from: attempt),
-            createdAt: now,
-            updatedAt: now,
-            event: event,
-            placeMaster: plan.placeMaster
-        )
-
-        plan.visit = visit
-        plan.stateKey = "attended"
-        plan.updatedAt = now
-        if let attempt, !["lost", "skipped"].contains(attempt.statusKey) {
-            attempt.statusKey = "attended"
-            attempt.updatedAt = now
-        }
-
-        modelContext.insert(visit)
-        TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
-
-        do {
-            try modelContext.save()
-            navigatingVisit = visit
-        } catch {
-            assertionFailure("Failed to create visit from plan: \(error)")
-        }
+        recordEventForVisit = event
     }
 
     private func updateAttemptStatus(_ attempt: TicketAttempt, to statusKey: String) {
@@ -489,21 +462,6 @@ struct PlanDetailView: View {
         }
     }
 
-    private func visitNote(from attempt: TicketAttempt?) -> String {
-        [
-            plan.memo,
-            attempt?.memo ?? "",
-            plan.officialURL.isEmpty ? "" : "公式: \(plan.officialURL)",
-            attempt?.purchaseURL.isEmpty == false ? "購入/申込: \(attempt?.purchaseURL ?? "")" : "",
-        ]
-        .filter { !$0.isEmpty }
-        .joined(separator: "\n")
-    }
-
-    private func visitAmount(from attempt: TicketAttempt?) -> Decimal {
-        guard let attempt else { return Decimal(0) }
-        return (attempt.price + attempt.fee) * Decimal(attempt.quantity)
-    }
 }
 
 private struct TicketOpenDestination {

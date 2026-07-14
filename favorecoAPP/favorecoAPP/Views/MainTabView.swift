@@ -33,12 +33,13 @@ struct MainTabView: View {
     @AppStorage(AppStorageKeys.opensPreviousYearlyReport) private var opensPreviousYearlyReport = false
     @State private var selectedTab: MainTab = .home
     @State private var isShowingCreateMenu = false
-    @State private var isShowingCategoryChooser = false
+    @State private var isShowingRecordTargetSelection = false
     @State private var isShowingAddPlan = false
     @State private var isShowingAddTicketSchedule = false
     @State private var isShowingQuickRegistration = false
     @State private var pendingCreateAction: CreateAction?
-    @State private var selectedCategoryForRecord: RecordCategory?
+    @State private var pendingRecordDestination: RecordEntryDestination?
+    @State private var recordDestination: RecordEntryDestination?
     @State private var calendarDisplayMode: CalendarDisplayMode = .calendar
 
     private var visibleCategories: [RecordCategory] {
@@ -100,16 +101,14 @@ struct MainTabView: View {
             .presentationDetents([.height(400)])
             .presentationDragIndicator(.visible)
         }
-        .confirmationDialog("ジャンルを選択", isPresented: $isShowingCategoryChooser, titleVisibility: .visible) {
-            ForEach(createMenuCategories) { category in
-                Button(category.id == preferredCategory?.id
-                    ? "\(category.name)（デフォルト）"
-                    : category.name
-                ) {
-                    selectedCategoryForRecord = category
-                }
+        .sheet(isPresented: $isShowingRecordTargetSelection, onDismiss: openPendingRecordDestination) {
+            RecordTargetSelectionView(
+                categories: createMenuCategories,
+                preferredCategory: preferredCategory
+            ) { destination in
+                pendingRecordDestination = destination
+                isShowingRecordTargetSelection = false
             }
-            Button("キャンセル", role: .cancel) {}
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoStats)) { _ in
             selectedTab = .stats
@@ -136,8 +135,13 @@ struct MainTabView: View {
                 selectedTab = .stats
             }
         }
-        .sheet(item: $selectedCategoryForRecord) { category in
-            AddExperienceView(category: category)
+        .sheet(item: $recordDestination) { destination in
+            switch destination {
+            case .new(let category):
+                AddExperienceView(category: category)
+            case .existing(let event):
+                AddVisitView(event: event)
+            }
         }
         .sheet(isPresented: $isShowingAddPlan) {
             AddTicketPlanView(entryMode: .plan)
@@ -158,11 +162,160 @@ struct MainTabView: View {
         case .plan:
             isShowingAddPlan = true
         case .record:
-            isShowingCategoryChooser = true
+            isShowingRecordTargetSelection = true
         case .quick:
             isShowingQuickRegistration = true
         case .ticketSchedule:
             isShowingAddTicketSchedule = true
+        }
+    }
+
+    private func openPendingRecordDestination() {
+        guard let pendingRecordDestination else { return }
+        self.pendingRecordDestination = nil
+        recordDestination = pendingRecordDestination
+    }
+}
+
+private enum RecordEntryDestination: Identifiable {
+    case new(RecordCategory)
+    case existing(ExperienceEvent)
+
+    var id: String {
+        switch self {
+        case .new(let category): "new-\(category.id.uuidString)"
+        case .existing(let event): "existing-\(event.id.uuidString)"
+        }
+    }
+}
+
+private struct RecordTargetSelectionView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var allEvents: [ExperienceEvent]
+
+    let categories: [RecordCategory]
+    let preferredCategory: RecordCategory?
+    let onSelect: (RecordEntryDestination) -> Void
+
+    @State private var selectedCategoryID: UUID?
+    @State private var searchText = ""
+
+    private var selectedCategory: RecordCategory? {
+        categories.first(where: { $0.id == selectedCategoryID }) ?? preferredCategory ?? categories.first
+    }
+
+    private var matchingEvents: [ExperienceEvent] {
+        guard let selectedCategory else { return [] }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allEvents
+            .filter { event in
+                guard !event.isArchived, event.category?.id == selectedCategory.id else { return false }
+                return query.isEmpty
+                    || event.title.localizedCaseInsensitiveContains(query)
+                    || event.seriesName.localizedCaseInsensitiveContains(query)
+            }
+            .prefix(query.isEmpty ? 5 : 20)
+            .map { $0 }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Menu {
+                        ForEach(categories) { category in
+                            Button {
+                                selectedCategoryID = category.id
+                                searchText = ""
+                            } label: {
+                                Label(category.name, systemImage: category.iconSymbol)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: selectedCategory?.iconSymbol ?? "square.grid.2x2")
+                                .frame(width: 28)
+                            Text(selectedCategory?.name ?? "ジャンルを選択")
+                                .font(FavorecoTypography.bodyStrong)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    Text("ジャンル")
+                }
+
+                Section {
+                    Button {
+                        guard let selectedCategory else { return }
+                        onSelect(.new(selectedCategory))
+                    } label: {
+                        Label("新しい作品・対象を登録", systemImage: "plus.circle.fill")
+                            .font(FavorecoTypography.bodyStrong)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .disabled(selectedCategory == nil)
+                }
+
+                Section {
+                    TextField("タイトルを検索", text: $searchText)
+                        .textInputAutocapitalization(.never)
+
+                    if matchingEvents.isEmpty {
+                        ContentUnavailableView(
+                            searchText.isEmpty ? "登録済みの対象はありません" : "一致する対象はありません",
+                            systemImage: searchText.isEmpty ? "rectangle.stack" : "magnifyingglass",
+                            description: Text(searchText.isEmpty ? "上のボタンから新しい対象を登録できます。" : "タイトルやシリーズ名を変えて検索してください。")
+                        )
+                    } else {
+                        ForEach(matchingEvents) { event in
+                            Button {
+                                onSelect(.existing(event))
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: event.category?.iconSymbol ?? "rectangle.stack")
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 28)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(event.title.isEmpty ? "名称未設定" : event.title)
+                                            .font(FavorecoTypography.bodyStrong)
+                                            .foregroundStyle(.primary)
+                                        if !event.seriesName.isEmpty {
+                                            Text(event.seriesName)
+                                                .font(FavorecoTypography.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                } header: {
+                    Text(searchText.isEmpty ? "最近の作品・対象" : "検索結果")
+                } footer: {
+                    Text("登録済みの対象を選ぶと、タイトルや公式情報を重複登録せず、今回の記録だけを追加できます。")
+                }
+            }
+            .navigationTitle("体験済みを記録")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+            .onAppear {
+                selectedCategoryID = selectedCategoryID ?? preferredCategory?.id ?? categories.first?.id
+            }
         }
     }
 }

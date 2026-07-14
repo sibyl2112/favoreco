@@ -711,6 +711,7 @@ struct EditExperienceView: View {
 
 struct AddVisitView: View {
     let event: ExperienceEvent
+    let sourcePlan: Plan?
     let onSave: (() -> Void)?
 
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
@@ -740,9 +741,11 @@ struct AddVisitView: View {
     init(
         event: ExperienceEvent,
         initialDraft: VisitDraft = VisitDraft(),
+        sourcePlan: Plan? = nil,
         onSave: (() -> Void)? = nil
     ) {
         self.event = event
+        self.sourcePlan = sourcePlan
         self.onSave = onSave
         _draft = State(initialValue: initialDraft)
     }
@@ -762,7 +765,7 @@ struct AddVisitView: View {
                     }
                 }
             }
-            .navigationTitle("回を追加")
+            .navigationTitle("記録を追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -968,7 +971,7 @@ struct AddVisitView: View {
         let now = Date()
         let visit = Visit(
             visitedAt: draft.visitedAt,
-            endedAt: draft.visitedAt,
+            endedAt: inheritedEndedAt,
             venueNameSnapshot: draft.trimmedVenueName,
             overallRating: draft.overallRating,
             outcomeKey: draft.outcomeKey,
@@ -987,15 +990,31 @@ struct AddVisitView: View {
 
         event.stateKey = "active"
         event.updatedAt = now
+        if let sourcePlan {
+            sourcePlan.visit = visit
+            sourcePlan.stateKey = "attended"
+            sourcePlan.updatedAt = now
+            if let attempt = (sourcePlan.ticketAttempts ?? [])
+                .filter({ !$0.isArchived })
+                .sorted(by: { $0.updatedAt > $1.updatedAt })
+                .first,
+               !["lost", "skipped"].contains(attempt.statusKey) {
+                attempt.statusKey = "attended"
+                attempt.updatedAt = now
+            }
+        }
         modelContext.insert(visit)
         insertPendingPeople(for: visit)
         insertPendingPhotos(for: visit)
-        onSave?()
 
         do {
             try modelContext.save()
+            if let sourcePlan {
+                TicketNotificationScheduler.cancel(plan: sourcePlan, attempt: nil)
+            }
             Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
             lastUsedCategoryTemplateKey = event.category?.templateKey ?? lastUsedCategoryTemplateKey
+            onSave?()
             if afterSaveRecordAction == "openDetail" {
                 savedVisit = visit
                 isShowingSavedDetail = true
@@ -1007,6 +1026,12 @@ struct AddVisitView: View {
             saveErrorMessage = "記録を保存できませんでした。入力内容を確認して、もう一度お試しください。"
             assertionFailure("Failed to save visit: \(error)")
         }
+    }
+
+    private var inheritedEndedAt: Date {
+        guard let sourcePlan else { return draft.visitedAt }
+        let duration = max(sourcePlan.endsAt.timeIntervalSince(sourcePlan.startsAt), 0)
+        return draft.visitedAt.addingTimeInterval(duration)
     }
 
     private func insertPendingPhotos(for visit: Visit) {
@@ -1229,6 +1254,32 @@ struct VisitDraft {
     var note: String = ""
 
     init() {}
+
+    init(plan: Plan) {
+        let attempt = (plan.ticketAttempts ?? [])
+            .filter { !$0.isArchived }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+
+        visitedAt = plan.startsAt
+        venueName = plan.venueNameSnapshot
+        venueAddress = plan.placeMaster?.address ?? ""
+        latitude = plan.placeMaster?.latitude ?? 0
+        longitude = plan.placeMaster?.longitude ?? 0
+        outcomeKey = "attended"
+        seatText = attempt?.seatText ?? ""
+        amountText = formattedCurrencyAmount(
+            attempt.map { ($0.price + $0.fee) * Decimal($0.quantity) } ?? Decimal(0)
+        )
+        note = [
+            plan.memo,
+            attempt?.memo ?? "",
+            plan.officialURL.isEmpty ? "" : "公式: \(plan.officialURL)",
+            attempt?.purchaseURL.isEmpty == false ? "購入/申込: \(attempt?.purchaseURL ?? "")" : "",
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n")
+    }
 
     init(inboxItem: InboxItem) {
         note = [inboxItem.body, inboxItem.sourceURL]
