@@ -15,7 +15,11 @@ enum JSONBackupImportService {
     }
 
     @MainActor
-    static func restore(data: Data, in context: ModelContext) throws -> JSONBackupRestoreResult {
+    static func restore(
+        data: Data,
+        in context: ModelContext,
+        savesChanges: Bool = true
+    ) throws -> JSONBackupRestoreResult {
         let envelope = try decode(data: data)
         var insertedCount = 0
         var updatedCount = 0
@@ -358,7 +362,9 @@ enum JSONBackupImportService {
         }
 
         try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: context)
-        try context.save()
+        if savesChanges {
+            try context.save()
+        }
 
         return JSONBackupRestoreResult(
             insertedCount: insertedCount,

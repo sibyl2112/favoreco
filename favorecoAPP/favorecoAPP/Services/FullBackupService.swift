@@ -88,7 +88,11 @@ enum FullBackupService {
     static func restore(packageURL: URL, in context: ModelContext) throws -> FullBackupRestoreResult {
         let manifestData = try Data(contentsOf: packageURL.appendingPathComponent(manifestFilename))
         let envelope = try decodeEnvelope(manifestData)
-        let modelResult = try JSONBackupImportService.restore(data: manifestData, in: context)
+        let modelResult = try JSONBackupImportService.restore(
+            data: manifestData,
+            in: context,
+            savesChanges: false
+        )
         let mediaDirectory = packageURL.appendingPathComponent(mediaDirectoryName, isDirectory: true)
 
         let visits = Dictionary(grouping: try context.fetch(FetchDescriptor<Visit>()), by: \.id)
