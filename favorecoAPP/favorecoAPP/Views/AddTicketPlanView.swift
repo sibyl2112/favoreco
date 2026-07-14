@@ -677,6 +677,7 @@ struct AddTicketPlanView: View {
         } else {
             existingAttempt?.isArchived = true
             existingAttempt?.updatedAt = now
+            existingAttempt?.notificationSettingsRaw = ""
             attemptForScheduling = nil
         }
 
@@ -696,6 +697,8 @@ struct AddTicketPlanView: View {
             }
             dismiss()
         } catch {
+            modelContext.rollback()
+            validationError = "予定を更新できませんでした。もう一度お試しください。"
             assertionFailure("Failed to update ticket plan: \(error)")
         }
     }
