@@ -20,7 +20,10 @@ struct MainTabView: View {
     @State private var selectedTab: MainTab = .home
     @State private var isShowingCreateMenu = false
     @State private var isShowingCategoryChooser = false
-    @State private var isShowingAddInboxItem = false
+    @State private var isShowingAddPlan = false
+    @State private var isShowingAddTicketSchedule = false
+    @State private var isShowingQuickRegistration = false
+    @State private var pendingCreateAction: CreateAction?
     @State private var selectedCategoryForRecord: RecordCategory?
 
     private var visibleCategories: [RecordCategory] {
@@ -71,20 +74,16 @@ struct MainTabView: View {
                 isShowingCreateMenu = true
             }
         }
-        .confirmationDialog("記録を追加", isPresented: $isShowingCreateMenu, titleVisibility: .visible) {
-            Button("思い出を記録") {
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(180))
-                    isShowingCategoryChooser = true
+        .sheet(isPresented: $isShowingCreateMenu, onDismiss: openPendingCreateAction) {
+            CreateEntryMenuView(
+                canCreateRecord: !visibleCategories.isEmpty,
+                onSelect: { action in
+                    pendingCreateAction = action
+                    isShowingCreateMenu = false
                 }
-            }
-            .disabled(visibleCategories.isEmpty)
-            Button("クイック記録") {
-                isShowingAddInboxItem = true
-            }
-            Button("キャンセル", role: .cancel) {}
-        } message: {
-            Text("詳しく残すか、あとで整理するメモとして保存します。")
+            )
+            .presentationDetents([.height(400)])
+            .presentationDragIndicator(.visible)
         }
         .confirmationDialog("ジャンルを選択", isPresented: $isShowingCategoryChooser, titleVisibility: .visible) {
             ForEach(createMenuCategories) { category in
@@ -118,9 +117,133 @@ struct MainTabView: View {
         .sheet(item: $selectedCategoryForRecord) { category in
             AddExperienceView(category: category)
         }
-        .sheet(isPresented: $isShowingAddInboxItem) {
-            AddInboxItemView()
+        .sheet(isPresented: $isShowingAddPlan) {
+            AddTicketPlanView(entryMode: .plan)
         }
+        .sheet(isPresented: $isShowingQuickRegistration) {
+            QuickRegistrationView()
+        }
+        .sheet(isPresented: $isShowingAddTicketSchedule) {
+            AddTicketPlanView(entryMode: .ticketSchedule)
+        }
+    }
+
+    private func openPendingCreateAction() {
+        guard let action = pendingCreateAction else { return }
+        pendingCreateAction = nil
+
+        switch action {
+        case .plan:
+            isShowingAddPlan = true
+        case .record:
+            isShowingCategoryChooser = true
+        case .quick:
+            isShowingQuickRegistration = true
+        case .ticketSchedule:
+            isShowingAddTicketSchedule = true
+        }
+    }
+}
+
+private enum CreateAction: String, Identifiable {
+    case plan
+    case record
+    case quick
+    case ticketSchedule
+
+    var id: String { rawValue }
+}
+
+private struct CreateEntryMenuView: View {
+    @Environment(\.dismiss) private var dismiss
+    let canCreateRecord: Bool
+    let onSelect: (CreateAction) -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 8) {
+                CreateEntryButton(
+                    title: "予定を立てる",
+                    detail: "これから体験する予定を登録",
+                    systemImage: "calendar.badge.plus"
+                ) {
+                    onSelect(.plan)
+                }
+
+                CreateEntryButton(
+                    title: "体験済みを記録",
+                    detail: "観た・行った・体験した思い出を残す",
+                    systemImage: "square.and.pencil",
+                    isEnabled: canCreateRecord
+                ) {
+                    onSelect(.record)
+                }
+
+                CreateEntryButton(
+                    title: "クイック登録",
+                    detail: "気になるものを最低限で一時保存",
+                    systemImage: "bolt.fill"
+                ) {
+                    onSelect(.quick)
+                }
+
+                CreateEntryButton(
+                    title: "チケットスケジュールを追加",
+                    detail: "抽選・発売・発券の予定を登録",
+                    systemImage: "ticket"
+                ) {
+                    onSelect(.ticketSchedule)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+            .navigationTitle("追加")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct CreateEntryButton: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    var isEnabled = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(FavorecoTypography.bodyStrong)
+                        .foregroundStyle(.primary)
+                    Text(detail)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
     }
 }
 
@@ -143,7 +266,7 @@ private struct CenterCreateButton: View {
                 .background(Color.accentColor, in: Circle())
                 .shadow(color: .black.opacity(0.16), radius: 10, x: 0, y: 4)
         }
-        .accessibilityLabel("記録を追加")
+        .accessibilityLabel("追加メニューを開く")
         .padding(.bottom, 18)
     }
 }

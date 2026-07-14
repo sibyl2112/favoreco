@@ -14,6 +14,7 @@ enum AppStorageKeys {
     static let showsHomeCategories = "showsHomeCategories"
     static let showsHomeStatsSummary = "showsHomeStatsSummary"
     static let showsHomeFavorites = "showsHomeFavorites"
+    static let debugHomeCategoryLayout = "debugHomeCategoryLayout"
     static let followsSystemTextSize = "followsSystemTextSize"
     static let appTextSize = "appTextSize"
     static let fontStyle = "fontStyle"
@@ -59,4 +60,20 @@ enum AppStorageKeys {
     static let notificationMonthlyReportEnabled = "notificationMonthlyReportEnabled"
     static let opensPreviousMonthlyReport = "opensPreviousMonthlyReport"
     static let opensPreviousYearlyReport = "opensPreviousYearlyReport"
+}
+
+enum HomeCategoryLayoutMode: String, CaseIterable, Identifiable {
+    case horizontal
+    case grid
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .horizontal:
+            return "横1段"
+        case .grid:
+            return "4列"
+        }
+    }
 }

@@ -17,6 +17,7 @@ struct SettingsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
     @AppStorage(AppStorageKeys.debugPlanOverride) private var debugPlanOverride = "storekit"
+    @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var debugHomeCategoryLayout = HomeCategoryLayoutMode.horizontal.rawValue
     @State private var debugMessage = ""
 
     var body: some View {
@@ -123,6 +124,13 @@ struct SettingsView: View {
                     }
 
                     LabeledContent("現在の権利", value: purchaseManager.currentPlan.displayName)
+
+                    Picker("Homeジャンル表示", selection: $debugHomeCategoryLayout) {
+                        ForEach(HomeCategoryLayoutMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
 #endif
                     NavigationLink {
                         NotificationDebugView()
@@ -753,7 +761,7 @@ struct DisplaySettingsView: View {
             Section("Home表示") {
                 Toggle("アテンション", isOn: $showsHomeAttention)
                 Toggle("体験ギャラリー", isOn: $showsHomeExperienceGallery)
-                Toggle("あとで記録", isOn: $showsHomeInbox)
+                Toggle("気になる", isOn: $showsHomeInbox)
                 Toggle("最近の記録", isOn: $showsHomeRecentRecords)
                 Toggle("ジャンル一覧", isOn: $showsHomeCategories)
                 Toggle("統計サマリ", isOn: $showsHomeStatsSummary)
@@ -1062,8 +1070,11 @@ struct DataManagementView: View {
 
             Section("保存データ") {
                 LabeledContent("対象", value: "\(events.count)")
+                LabeledContent("気になる対象", value: "\(events.filter { $0.stateKey == "interested" && !$0.isArchived }.count)")
                 LabeledContent("訪問/鑑賞記録", value: "\(visits.count)")
-                LabeledContent("あとで記録", value: "\(inboxItems.count)")
+                if !inboxItems.isEmpty {
+                    LabeledContent("旧クイックデータ（移行待ち）", value: "\(inboxItems.count)")
+                }
                 LabeledContent("ジャンル", value: "\(categories.count)")
                 LabeledContent("写真", value: "\(photos.count)")
                 LabeledContent("写真容量", value: ByteCountFormatter.string(fromByteCount: totalPhotoBytes, countStyle: .file))
@@ -1336,7 +1347,7 @@ struct FullDataDeletionView: View {
                 LabeledContent("記録", value: "\(visits.count)件")
                 LabeledContent("写真", value: "\(photos.count)件")
                 LabeledContent("予定・申込", value: "\(plans.count + ticketAttempts.count)件")
-                Text("自作ジャンル、人物、場所、SNS、登録情報、あとで記録も削除されます。通知予約とキャッシュも消去します。")
+                Text("自作ジャンル、人物、場所、SNS、登録情報、気になる対象も削除されます。通知予約とキャッシュも消去します。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1533,7 +1544,10 @@ struct JSONExportView: View {
                 LabeledContent("予定", value: "\(plans.count)")
                 LabeledContent("登録情報・名義", value: "\(ticketAccounts.count)")
                 LabeledContent("チケット申込", value: "\(ticketAttempts.count)")
-                LabeledContent("あとで記録", value: "\(inboxItems.count)")
+                LabeledContent("気になる対象", value: "\(events.filter { $0.stateKey == "interested" && !$0.isArchived }.count)")
+                if !inboxItems.isEmpty {
+                    LabeledContent("旧クイックデータ", value: "\(inboxItems.count)")
+                }
                 LabeledContent("SNS", value: "\(socialAccounts.count)")
                 LabeledContent("写真メタデータ", value: "\(photos.count)")
             }

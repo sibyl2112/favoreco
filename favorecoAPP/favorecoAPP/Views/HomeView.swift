@@ -10,8 +10,10 @@ import SwiftData
 import UIKit
 
 struct HomeView: View {
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \InboxItem.createdAt, order: .reverse) private var inboxItems: [InboxItem]
     @Query(sort: \Plan.startsAt, order: .forward) private var plans: [Plan]
@@ -25,14 +27,23 @@ struct HomeView: View {
     @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsStatsSummary = false
     @AppStorage(AppStorageKeys.showsHomeFavorites) private var showsFavorites = false
     @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
+    @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var categoryLayoutModeRaw = HomeCategoryLayoutMode.horizontal.rawValue
     @State private var isShowingSettings = false
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
     }
 
+    private var categoryLayoutMode: HomeCategoryLayoutMode {
+        HomeCategoryLayoutMode(rawValue: categoryLayoutModeRaw) ?? .horizontal
+    }
+
     private var unresolvedInboxItems: [InboxItem] {
         inboxItems.filter { $0.state == "unresolved" }
+    }
+
+    private var interestedEvents: [ExperienceEvent] {
+        events.filter { !$0.isArchived && $0.stateKey == "interested" }
     }
 
     private var visibleVisits: [Visit] {
@@ -45,7 +56,7 @@ struct HomeView: View {
 
     /// 記録・予定・締切・Inbox がいずれも無い＝Homeに出す中身が無い状態。
     private var isHomeContentEmpty: Bool {
-        visibleVisits.isEmpty && attentionItems.isEmpty && unresolvedInboxItems.isEmpty
+        visibleVisits.isEmpty && attentionItems.isEmpty && interestedEvents.isEmpty && unresolvedInboxItems.isEmpty
     }
 
     private var upcomingVisits: [Visit] {
@@ -106,20 +117,6 @@ struct HomeView: View {
                 )
             }
             items.append(contentsOf: visitItems)
-        }
-
-        if items.count < 5 {
-            let inboxAttention = unresolvedInboxItems.prefix(5 - items.count).map { item in
-                HomeAttentionItem(
-                    icon: "tray",
-                    title: item.title.isEmpty ? "あとで記録" : item.title,
-                    subtitle: "未整理",
-                    dueDate: item.createdAt,
-                    tint: .secondary,
-                    priority: 90
-                )
-            }
-            items.append(contentsOf: inboxAttention)
         }
 
         return Array(items.sorted { lhs, rhs in
@@ -279,6 +276,10 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    // 実機比較中: ヘッダー直下で横1段 / 4列を切り替える。
+                    if showsCategories {
+                        categorySection
+                    }
                     hero
                     crossGenreMiniStats
 
@@ -291,23 +292,19 @@ struct HomeView: View {
                     if showsExperienceGallery && !recentVisits.isEmpty {
                         experienceGallerySection
                     }
-                    // 3. あとで記録
-                    if showsInbox && !unresolvedInboxItems.isEmpty {
+                    // 3. 気になる
+                    if showsInbox && (!interestedEvents.isEmpty || !unresolvedInboxItems.isEmpty) {
                         inboxSection
                     }
                     // 4. 最近の記録
                     if showsRecentRecords && !visibleVisits.isEmpty {
                         recentSection
                     }
-                    // 5. ジャンル一覧
-                    if showsCategories && !visibleCategories.isEmpty {
-                        categorySection
-                    }
-                    // 6. 統計サマリ（任意表示）
+                    // 5. 統計サマリ（任意表示）
                     if showsStatsSummary && !visibleVisits.isEmpty {
                         statsSummarySection
                     }
-                    // 7. お気に入り・ベスト（任意表示）
+                    // 6. お気に入り・ベスト（任意表示）
                     if showsFavorites {
                         favoritesSection
                     }
@@ -332,9 +329,12 @@ struct HomeView: View {
                     .accessibilityLabel("マイ・設定")
                 }
             }
-            .sheet(isPresented: $isShowingSettings) {
-                SettingsView()
-            }
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView()
+        }
+        .task {
+            try? LegacyInboxMigrationService.migrateIfNeeded(in: modelContext)
+        }
         }
     }
 
@@ -384,7 +384,7 @@ struct HomeView: View {
 
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("カテゴリ", count: visibleCategories.count)
+            sectionHeader("ジャンル", count: visibleCategories.count)
 
             if visibleCategories.isEmpty {
                 EmptyStateRow(
@@ -392,18 +392,45 @@ struct HomeView: View {
                     title: "何もありません",
                     message: "設定からジャンルを選び直すと、記録の入口が表示されます。"
                 )
+            } else if categoryLayoutMode == .horizontal {
+                horizontalCategoryLayout
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 148), spacing: 12)], spacing: 12) {
-                    ForEach(visibleCategories) { category in
-                        NavigationLink {
-                            CategoryTopView(category: category)
-                        } label: {
-                            CategoryTile(category: category)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+                gridCategoryLayout
             }
+        }
+    }
+
+    private var horizontalCategoryLayout: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(alignment: .top, spacing: 12) {
+                categoryLinks
+            }
+            .padding(.trailing, 20)
+        }
+        .scrollClipDisabled()
+        .accessibilityLabel("ジャンル一覧 横スクロール")
+    }
+
+    private var gridCategoryLayout: some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(minimum: 60), spacing: 8), count: 4),
+            alignment: .leading,
+            spacing: 12
+        ) {
+            categoryLinks
+        }
+        .accessibilityLabel("ジャンル一覧 4列表示")
+    }
+
+    @ViewBuilder
+    private var categoryLinks: some View {
+        ForEach(visibleCategories) { category in
+            NavigationLink {
+                CategoryTopView(category: category)
+            } label: {
+                HomeCategoryShortcut(category: category)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -470,7 +497,7 @@ struct HomeView: View {
                 EmptyStateRow(
                     icon: "sparkles.rectangle.stack",
                     title: "記録はまだありません",
-                    message: "次の実装で、カテゴリから最初の記録を追加できるようにします。"
+                    message: "中央の＋から体験済みの記録を追加できます。"
                 )
             } else {
                 ForEach(visibleVisits.prefix(5)) { visit in
@@ -487,16 +514,25 @@ struct HomeView: View {
 
     private var inboxSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("あとで記録", count: unresolvedInboxItems.count)
+            sectionHeader("気になる", count: interestedEvents.count + unresolvedInboxItems.count)
 
-            if unresolvedInboxItems.isEmpty {
+            if interestedEvents.isEmpty && unresolvedInboxItems.isEmpty {
                 EmptyStateRow(
                     icon: "tray",
-                    title: "Inboxは空です",
-                    message: "気になる作品・行きたい場所・飲みたい酒を一時保存する場所になります。"
+                    title: "気になる対象はありません",
+                    message: "クイック登録した作品や場所がここに表示されます。"
                 )
             } else {
-                ForEach(unresolvedInboxItems.prefix(3)) { item in
+                ForEach(interestedEvents.prefix(3)) { event in
+                    NavigationLink {
+                        EventDetailView(event: event)
+                    } label: {
+                        InterestedEventRow(event: event)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ForEach(unresolvedInboxItems.prefix(max(0, 3 - interestedEvents.count))) { item in
                     NavigationLink {
                         InboxDetailView(item: item)
                     } label: {
@@ -547,6 +583,49 @@ struct HomeView: View {
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct InterestedEventRow: View {
+    let event: ExperienceEvent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            if let data = event.eyecatchData, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 64, height: 78)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(event.title.isEmpty ? "無題" : event.title)
+                    .font(FavorecoTypography.cardTitle)
+                    .lineLimit(2)
+
+                HStack(spacing: 10) {
+                    if let category = event.category {
+                        Label(category.name, systemImage: category.iconSymbol)
+                    }
+                    if !event.officialURL.isEmpty {
+                        Label("URL", systemImage: "link")
+                    }
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+
+                if !event.memo.isEmpty {
+                    Text(event.memo)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -831,28 +910,38 @@ private struct InboxItemRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(item.title.isEmpty ? "無題" : item.title)
-                .font(FavorecoTypography.cardTitle)
-                .lineLimit(2)
-
-            HStack(spacing: 10) {
-                if let categoryName {
-                    Label(categoryName, systemImage: "square.grid.2x2")
-                }
-                if !item.sourceURL.isEmpty {
-                    Label("URL", systemImage: "link")
-                }
-                Label(item.createdAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+        HStack(alignment: .top, spacing: 12) {
+            if let data = item.eyecatchData, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 64, height: 78)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(.secondary)
 
-            if !item.body.isEmpty {
-                Text(item.body)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.title.isEmpty ? "無題" : item.title)
+                    .font(FavorecoTypography.cardTitle)
                     .lineLimit(2)
+
+                HStack(spacing: 10) {
+                    if let categoryName {
+                        Label(categoryName, systemImage: "square.grid.2x2")
+                    }
+                    if !item.sourceURL.isEmpty {
+                        Label("URL", systemImage: "link")
+                    }
+                    Label(item.createdAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+
+                if !item.body.isEmpty {
+                    Text(item.body)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -861,50 +950,34 @@ private struct InboxItemRow: View {
     }
 }
 
-private struct CategoryTile: View {
+private struct HomeCategoryShortcut: View {
     let category: RecordCategory
     @Environment(\.favorecoThemePalette) private var themePalette
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
-                Image(systemName: category.iconSymbol)
-                    .font(.title2)
-                    .foregroundStyle(themePalette.categoryColor(hex: category.colorHex))
-                Spacer(minLength: 8)
-                if category.isBuiltIn {
-                    Text("標準")
-                        .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption2))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(category.name.isEmpty ? "無題カテゴリ" : category.name)
-                    .font(FavorecoTypography.cardTitle)
-                    .lineLimit(2)
-                Text(category.enabledUnitsRaw.isEmpty ? "ユニット未設定" : unitSummary(category.enabledUnitsRaw))
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-        .padding(14)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(themePalette.categoryColor(hex: category.colorHex))
-                .frame(width: 4)
-                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
-        }
+    private var tint: Color {
+        themePalette.categoryColor(hex: category.colorHex)
     }
 
-    private func unitSummary(_ rawValue: String) -> String {
-        "ユニット \(rawValue.split(separator: ",").count)件"
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: category.iconSymbol)
+                .font(.system(size: 21, weight: .medium))
+                .foregroundStyle(tint)
+                .frame(width: 38, height: 38)
+                .background(tint.opacity(0.12), in: Circle())
+
+            Text(category.name.isEmpty ? "無題" : category.name)
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(width: 68, alignment: .top)
+        .frame(minHeight: 64, alignment: .top)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(category.name.isEmpty ? "無題ジャンル" : category.name)
+        .accessibilityHint("ジャンルトップを開きます")
     }
 }
 

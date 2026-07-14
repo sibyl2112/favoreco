@@ -69,7 +69,7 @@ struct JSONImportView: View {
                     previewRow("予定", preview.planCount)
                     previewRow("登録情報・名義", preview.ticketAccountCount)
                     previewRow("チケット申込", preview.ticketAttemptCount)
-                    previewRow("あとで記録", preview.inboxCount)
+                    previewRow("旧クイックデータ", preview.inboxCount)
                     previewRow("SNS", preview.socialAccountCount)
                     previewRow("写真メタデータ", preview.photoMetadataCount)
                 }

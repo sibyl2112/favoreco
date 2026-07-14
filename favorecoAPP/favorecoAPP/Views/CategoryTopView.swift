@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct CategoryTopView: View {
     let category: RecordCategory
@@ -241,6 +242,12 @@ private struct EventRow: View {
                 HStack(spacing: 12) {
                     if let representativePhoto {
                         RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 220)
+                            .frame(width: 68, height: 68)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    } else if let data = event.eyecatchData, let image = UIImage(data: data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
                             .frame(width: 68, height: 68)
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }

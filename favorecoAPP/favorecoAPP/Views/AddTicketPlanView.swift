@@ -9,6 +9,11 @@ import SwiftUI
 import SwiftData
 
 struct AddTicketPlanView: View {
+    enum EntryMode {
+        case plan
+        case ticketSchedule
+    }
+
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -18,18 +23,28 @@ struct AddTicketPlanView: View {
     @State private var validationError = ""
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     private let editingPlan: Plan?
+    private let targetEvent: ExperienceEvent?
     private let onSave: (() -> Void)?
 
-    init(plan: Plan? = nil) {
+    init(plan: Plan? = nil, entryMode: EntryMode = .ticketSchedule) {
         self.editingPlan = plan
+        self.targetEvent = plan?.event
         self.onSave = nil
-        _draft = State(initialValue: TicketPlanDraft(plan: plan))
+        _draft = State(initialValue: TicketPlanDraft(plan: plan, entryMode: entryMode))
     }
 
     init(inboxItem: InboxItem, category: RecordCategory, onSave: (() -> Void)? = nil) {
         self.editingPlan = nil
+        self.targetEvent = nil
         self.onSave = onSave
         _draft = State(initialValue: TicketPlanDraft(inboxItem: inboxItem, categoryID: category.id))
+    }
+
+    init(event: ExperienceEvent, entryMode: EntryMode = .plan, onSave: (() -> Void)? = nil) {
+        self.editingPlan = nil
+        self.targetEvent = event
+        self.onSave = onSave
+        _draft = State(initialValue: TicketPlanDraft(event: event, entryMode: entryMode))
     }
 
     private var visibleCategories: [RecordCategory] {
@@ -176,7 +191,7 @@ struct AddTicketPlanView: View {
                         .lineLimit(3...8)
                 }
             }
-            .navigationTitle(editingPlan == nil ? "予定・チケット" : "予定を編集")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -216,6 +231,11 @@ struct AddTicketPlanView: View {
         }
     }
 
+    private var navigationTitle: String {
+        if editingPlan != nil { return "予定を編集" }
+        return draft.createsTicketAttempt ? "チケットスケジュール" : "予定を立てる"
+    }
+
     private func accountLabel(_ account: TicketAccount) -> String {
         let holder = account.accountName.isEmpty ? "名義未設定" : account.accountName
         return "\(account.serviceName) / \(holder)"
@@ -250,9 +270,12 @@ struct AddTicketPlanView: View {
             memo: draft.trimmedMemo,
             createdAt: now,
             updatedAt: now,
-            category: selectedCategory
+            category: targetEvent?.category ?? selectedCategory,
+            event: targetEvent
         )
         modelContext.insert(plan)
+        targetEvent?.stateKey = "active"
+        targetEvent?.updatedAt = now
         onSave?()
 
         var attemptForScheduling: TicketAttempt?
@@ -438,7 +461,9 @@ private struct TicketPlanDraft {
     var purchaseURL = ""
     var memo = ""
 
-    init() {}
+    init(entryMode: AddTicketPlanView.EntryMode = .ticketSchedule) {
+        createsTicketAttempt = entryMode == .ticketSchedule
+    }
 
     init(inboxItem: InboxItem, categoryID: UUID) {
         self.categoryID = categoryID
@@ -448,8 +473,19 @@ private struct TicketPlanDraft {
         createsTicketAttempt = false
     }
 
-    init(plan: Plan?) {
-        guard let plan else { return }
+    init(event: ExperienceEvent, entryMode: AddTicketPlanView.EntryMode = .plan) {
+        categoryID = event.category?.id
+        title = event.title
+        officialURL = event.officialURL
+        memo = event.memo
+        createsTicketAttempt = entryMode == .ticketSchedule
+    }
+
+    init(plan: Plan?, entryMode: AddTicketPlanView.EntryMode = .ticketSchedule) {
+        guard let plan else {
+            createsTicketAttempt = entryMode == .ticketSchedule
+            return
+        }
         let attempt = plan.ticketAttempts?
             .filter { !$0.isArchived }
             .sorted { $0.updatedAt > $1.updatedAt }

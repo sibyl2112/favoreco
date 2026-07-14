@@ -10,7 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    static let schemaVersion = 1
+    static let schemaVersion = 2
 
     static func makeBackupJSON(
         categories: [RecordCategory],
@@ -36,9 +36,13 @@ enum JSONBackupExportService {
                 ? "Favoreco full backup manifest. Photo binary data is stored in the media directory."
                 : "Manual JSON backup. Photo binary data is not included.",
             categories: categories.sorted { $0.sortOrder < $1.sortOrder }.map(BackupCategory.init),
-            events: events.sorted { $0.updatedAt > $1.updatedAt }.map(BackupEvent.init),
+            events: events.sorted { $0.updatedAt > $1.updatedAt }.map {
+                BackupEvent($0, includesBinaryData: includesPhotoBinaryData || isFullBackupManifest)
+            },
             visits: visits.sorted { $0.visitedAt > $1.visitedAt }.map(BackupVisit.init),
-            inboxItems: inboxItems.sorted { $0.updatedAt > $1.updatedAt }.map(BackupInboxItem.init),
+            inboxItems: inboxItems.sorted { $0.updatedAt > $1.updatedAt }.map {
+                BackupInboxItem($0, includesBinaryData: includesPhotoBinaryData || isFullBackupManifest)
+            },
             photos: photos.sorted { $0.createdAt > $1.createdAt }.map {
                 BackupPhoto($0, includesBinaryData: includesPhotoBinaryData)
             },
@@ -123,7 +127,10 @@ struct BackupEvent: Codable {
     var organizerNameSnapshot: String
     var representativeEyecatchPath: String
     var officialURL: String
+    var stateKey: String?
     var memo: String
+    var importMemo: String?
+    var eyecatchDataBase64: String?
     var unitFieldsRaw: String
     var isArchived: Bool
     var createdAt: Date
@@ -133,7 +140,7 @@ struct BackupEvent: Codable {
     var sakeAcidity: Double
     var alcoholPercentage: Double
 
-    nonisolated init(_ event: ExperienceEvent) {
+    nonisolated init(_ event: ExperienceEvent, includesBinaryData: Bool = false) {
         id = event.id
         categoryID = event.category?.id
         title = event.title
@@ -142,7 +149,10 @@ struct BackupEvent: Codable {
         organizerNameSnapshot = event.organizerNameSnapshot
         representativeEyecatchPath = event.representativeEyecatchPath
         officialURL = event.officialURL
+        stateKey = event.stateKey
         memo = event.memo
+        importMemo = event.importMemo
+        eyecatchDataBase64 = includesBinaryData ? event.eyecatchData?.base64EncodedString() : nil
         unitFieldsRaw = event.unitFieldsRaw
         isArchived = event.isArchived
         createdAt = event.createdAt
@@ -206,10 +216,11 @@ struct BackupInboxItem: Codable {
     var sourceKind: String
     var targetTemplateKey: String
     var state: String
+    var eyecatchData: Data?
     var createdAt: Date
     var updatedAt: Date
 
-    nonisolated init(_ item: InboxItem) {
+    nonisolated init(_ item: InboxItem, includesBinaryData: Bool = false) {
         id = item.id
         title = item.title
         body = item.body
@@ -217,6 +228,7 @@ struct BackupInboxItem: Codable {
         sourceKind = item.sourceKind
         targetTemplateKey = item.targetTemplateKey
         state = item.state
+        eyecatchData = includesBinaryData ? item.eyecatchData : nil
         createdAt = item.createdAt
         updatedAt = item.updatedAt
     }

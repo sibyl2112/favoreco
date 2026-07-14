@@ -290,11 +290,16 @@ final class ExperienceEvent {
     var organizerNameSnapshot: String = ""
     var representativeEyecatchPath: String = ""
     var officialURL: String = ""
+    var stateKey: String = "active"
     var memo: String = ""
+    var importMemo: String = ""
     var unitFieldsRaw: String = ""
     var isArchived: Bool = false
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
+
+    @Attribute(.externalStorage)
+    var eyecatchData: Data?
 
     var sakePolishingRatio: Double = 0
     var sakeMeterValue: Double = 0
@@ -320,11 +325,14 @@ final class ExperienceEvent {
         organizerNameSnapshot: String = "",
         representativeEyecatchPath: String = "",
         officialURL: String = "",
+        stateKey: String = "active",
         memo: String = "",
+        importMemo: String = "",
         unitFieldsRaw: String = "",
         isArchived: Bool = false,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
+        eyecatchData: Data? = nil,
         category: RecordCategory? = nil
     ) {
         self.id = id
@@ -334,11 +342,14 @@ final class ExperienceEvent {
         self.organizerNameSnapshot = organizerNameSnapshot
         self.representativeEyecatchPath = representativeEyecatchPath
         self.officialURL = officialURL
+        self.stateKey = stateKey
         self.memo = memo
+        self.importMemo = importMemo
         self.unitFieldsRaw = unitFieldsRaw
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.eyecatchData = eyecatchData
         self.category = category
     }
 }
@@ -663,6 +674,8 @@ final class InboxItem {
     var sourceKind: String = "manual"
     var targetTemplateKey: String = ""
     var state: String = "unresolved"
+    @Attribute(.externalStorage)
+    var eyecatchData: Data?
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
@@ -674,6 +687,7 @@ final class InboxItem {
         sourceKind: String = "manual",
         targetTemplateKey: String = "",
         state: String = "unresolved",
+        eyecatchData: Data? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -684,6 +698,7 @@ final class InboxItem {
         self.sourceKind = sourceKind
         self.targetTemplateKey = targetTemplateKey
         self.state = state
+        self.eyecatchData = eyecatchData
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

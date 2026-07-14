@@ -166,6 +166,9 @@ enum JSONBackupImportService {
             model.sourceKind = item.sourceKind
             model.targetTemplateKey = item.targetTemplateKey
             model.state = item.state
+            if let eyecatchData = item.eyecatchData {
+                model.eyecatchData = eyecatchData
+            }
             model.createdAt = item.createdAt
             model.updatedAt = item.updatedAt
         }
@@ -187,7 +190,13 @@ enum JSONBackupImportService {
             model.organizerNameSnapshot = item.organizerNameSnapshot
             model.representativeEyecatchPath = item.representativeEyecatchPath
             model.officialURL = item.officialURL
+            model.stateKey = item.stateKey ?? "active"
             model.memo = item.memo
+            model.importMemo = item.importMemo ?? ""
+            if let base64 = item.eyecatchDataBase64,
+               let data = Data(base64Encoded: base64) {
+                model.eyecatchData = data
+            }
             model.unitFieldsRaw = item.unitFieldsRaw
             model.isArchived = item.isArchived
             model.createdAt = item.createdAt

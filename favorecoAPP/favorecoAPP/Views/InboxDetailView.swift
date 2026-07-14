@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct InboxDetailView: View {
     let item: InboxItem
@@ -46,7 +47,15 @@ struct InboxDetailView: View {
 
     var body: some View {
         Form {
-            Section("あとで記録") {
+            Section("クイック登録") {
+                if let data = item.eyecatchData, let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+
                 LabeledContent("タイトル", value: item.title.isEmpty ? "無題" : item.title)
 
                 if !item.sourceURL.isEmpty {
@@ -77,7 +86,7 @@ struct InboxDetailView: View {
                 Button {
                     isShowingConvertForm = true
                 } label: {
-                    Label("新しい対象として本記録に変換", systemImage: "rectangle.stack.badge.plus")
+                    Label("新しい対象として体験済みを記録", systemImage: "rectangle.stack.badge.plus")
                 }
                 .disabled(selectedCategory == nil || item.state == "resolved")
 
@@ -98,7 +107,7 @@ struct InboxDetailView: View {
                         Button {
                             selectedEventForVisit = selectedExistingEvent
                         } label: {
-                            Label("既存対象に回を追加", systemImage: "plus.square.on.square")
+                            Label("登録済み対象に体験済みを記録", systemImage: "plus.square.on.square")
                         }
                         .disabled(selectedExistingEvent == nil || item.state == "resolved")
                     }
@@ -106,7 +115,7 @@ struct InboxDetailView: View {
                     Button {
                         isShowingTicketPlanForm = true
                     } label: {
-                        Label("予定・チケットに変換", systemImage: "calendar.badge.plus")
+                        Label("この対象で予定を立てる", systemImage: "calendar.badge.plus")
                     }
                     .disabled(item.state == "resolved")
                 }
@@ -118,7 +127,7 @@ struct InboxDetailView: View {
                 }
             }
         }
-        .navigationTitle("あとで記録")
+        .navigationTitle("気になる")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isShowingConvertForm) {
             if let category = selectedCategory {

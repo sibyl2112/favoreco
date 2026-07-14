@@ -10,7 +10,6 @@ import SwiftData
 import PhotosUI
 import UIKit
 import ImageIO
-import Vision
 import MapKit
 
 struct AddExperienceView: View {
@@ -986,6 +985,7 @@ struct AddVisitView: View {
             placeMaster: resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
         )
 
+        event.stateKey = "active"
         event.updatedAt = now
         modelContext.insert(visit)
         insertPendingPeople(for: visit)
@@ -2254,7 +2254,9 @@ private struct OCRUnitEditor: View {
             return
         }
 
-        let recognizedText = await recognizedText(from: data)
+        let recognizedText = await Task.detached(priority: .userInitiated) {
+            QuickCaptureImageService.recognizedText(from: data)
+        }.value
         guard !recognizedText.isEmpty else {
             statusText = "文字を読み取れませんでした。必要なら手入力してください。"
             return
@@ -2268,29 +2270,6 @@ private struct OCRUnitEditor: View {
         statusText = "読み取り結果を追加しました。"
     }
 
-    private func recognizedText(from data: Data) async -> String {
-        await Task.detached(priority: .userInitiated) {
-            guard let image = UIImage(data: data),
-                  let cgImage = image.cgImage else {
-                return ""
-            }
-
-            let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = true
-            request.recognitionLanguages = ["ja-JP", "en-US"]
-
-            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: CGImagePropertyOrientation(image.imageOrientation), options: [:])
-            do {
-                try handler.perform([request])
-                return request.results?
-                    .compactMap { $0.topCandidates(1).first?.string }
-                    .joined(separator: "\n") ?? ""
-            } catch {
-                return ""
-            }
-        }.value
-    }
 }
 
 private struct AdvancedUnitEditor: View {
@@ -2351,22 +2330,6 @@ private struct TicketPlanOption: Identifiable {
 
     static func name(for key: String) -> String {
         all.first(where: { $0.key == key })?.name ?? key
-    }
-}
-
-private extension CGImagePropertyOrientation {
-    nonisolated init(_ orientation: UIImage.Orientation) {
-        switch orientation {
-        case .up: self = .up
-        case .down: self = .down
-        case .left: self = .left
-        case .right: self = .right
-        case .upMirrored: self = .upMirrored
-        case .downMirrored: self = .downMirrored
-        case .leftMirrored: self = .leftMirrored
-        case .rightMirrored: self = .rightMirrored
-        @unknown default: self = .up
-        }
     }
 }
 

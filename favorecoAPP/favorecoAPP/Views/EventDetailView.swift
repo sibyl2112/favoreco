@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct EventDetailView: View {
     let event: ExperienceEvent
@@ -14,6 +15,7 @@ struct EventDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.favorecoThemePalette) private var themePalette
     @State private var isShowingAddVisit = false
+    @State private var isShowingAddPlan = false
     @State private var isShowingEditEvent = false
     @State private var isShowingRepresentativePhotoPicker = false
     @State private var isShowingArchiveConfirmation = false
@@ -86,16 +88,12 @@ struct EventDetailView: View {
                     Label("メニュー", systemImage: "ellipsis.circle")
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isShowingAddVisit = true
-                } label: {
-                    Label("回を追加", systemImage: "plus")
-                }
-            }
         }
         .sheet(isPresented: $isShowingAddVisit) {
             AddVisitView(event: event)
+        }
+        .sheet(isPresented: $isShowingAddPlan) {
+            AddTicketPlanView(event: event, entryMode: .plan)
         }
         .sheet(isPresented: $isShowingEditEvent) {
             EditEventView(event: event)
@@ -158,6 +156,13 @@ struct EventDetailView: View {
                     .aspectRatio(16 / 9, contentMode: .fill)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else if let data = event.eyecatchData, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .aspectRatio(16 / 9, contentMode: .fill)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
             HStack(alignment: .top, spacing: 14) {
@@ -174,6 +179,12 @@ struct EventDetailView: View {
                     Text(category?.name ?? "未分類")
                         .font(FavorecoTypography.bodyStrong)
                         .foregroundStyle(accentColor)
+
+                    if event.stateKey == "interested" {
+                        Label("気になる", systemImage: "bookmark.fill")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -183,13 +194,23 @@ struct EventDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Button {
-                isShowingAddVisit = true
-            } label: {
-                Label(template.visitSectionTitle + "を追加", systemImage: "plus.circle.fill")
-                    .frame(maxWidth: .infinity)
+            HStack(spacing: 10) {
+                Button {
+                    isShowingAddPlan = true
+                } label: {
+                    Label("予定を立てる", systemImage: "calendar.badge.plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    isShowingAddVisit = true
+                } label: {
+                    Label("記録を追加", systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
             .tint(accentColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -207,7 +228,7 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var eventMemoSection: some View {
-        if !event.memo.isEmpty || !event.officialURL.isEmpty {
+        if !event.memo.isEmpty || !event.importMemo.isEmpty || !event.officialURL.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text(template.targetSectionTitle)
                     .font(FavorecoTypography.sectionTitle)
@@ -217,6 +238,19 @@ struct EventDetailView: View {
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if !event.importMemo.isEmpty {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("読み取りメモ", systemImage: "text.viewfinder")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
+                        Text(event.importMemo)
+                            .font(FavorecoTypography.body)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 if let url = URL(string: event.officialURL), !event.officialURL.isEmpty {
@@ -470,6 +504,11 @@ struct EditEventView: View {
                             .frame(minHeight: 120)
                     }
                 }
+
+                Section("読み取りメモ") {
+                    TextEditor(text: $draft.importMemo)
+                        .frame(minHeight: 140)
+                }
             }
             .navigationTitle("対象を編集")
             .navigationBarTitleDisplayMode(.inline)
@@ -494,6 +533,7 @@ struct EditEventView: View {
         event.seriesName = draft.trimmedSeriesName
         event.officialURL = draft.trimmedOfficialURL
         event.memo = draft.trimmedMemo
+        event.importMemo = draft.trimmedImportMemo
         event.updatedAt = Date()
 
         do {
@@ -510,12 +550,14 @@ private struct EventDraft {
     var seriesName: String
     var officialURL: String
     var memo: String
+    var importMemo: String
 
     init(event: ExperienceEvent) {
         title = event.title
         seriesName = event.seriesName
         officialURL = event.officialURL
         memo = event.memo
+        importMemo = event.importMemo
     }
 
     var trimmedTitle: String {
@@ -532,6 +574,10 @@ private struct EventDraft {
 
     var trimmedMemo: String {
         memo.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedImportMemo: String {
+        importMemo.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var canSave: Bool {

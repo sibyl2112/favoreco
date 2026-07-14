@@ -96,13 +96,15 @@ enum DebugDataSeeder {
         }
 
         if let firstCategory = categories.first {
-            context.insert(InboxItem(
-                title: "あとで記録する候補",
-                body: "デバッグ用のInboxItemです。本記録への変換導線を確認できます。",
-                sourceURL: "\(debugURLPrefix)inbox",
-                targetTemplateKey: firstCategory.templateKey,
+            context.insert(ExperienceEvent(
+                title: "気になる候補",
+                officialURL: "\(debugURLPrefix)interested",
+                stateKey: "interested",
+                memo: "クイック登録後の対象詳細と、予定・記録の追加導線を確認する仮データです。",
+                importMemo: "読み取りメモの表示確認用テキスト",
                 createdAt: now,
-                updatedAt: now
+                updatedAt: now,
+                category: firstCategory
             ))
         }
 
