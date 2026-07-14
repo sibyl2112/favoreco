@@ -104,6 +104,7 @@ enum AutomaticBackupService {
             isFullBackupManifest: true
         )
         let temporaryURL = try FullBackupService.makePackage(json: json, photos: photos)
+        defer { try? FileManager.default.removeItem(at: temporaryURL) }
         let directory = try backupDirectory(for: .local)
         let destination = directory
             .appendingPathComponent(filename(for: now))

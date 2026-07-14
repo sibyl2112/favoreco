@@ -147,17 +147,20 @@ struct FullBackupView: View {
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
+        var copiedPackageURL: URL?
         do {
             guard let sourceURL = try result.get().first else { return }
             let hasAccess = sourceURL.startAccessingSecurityScopedResource()
             defer { if hasAccess { sourceURL.stopAccessingSecurityScopedResource() } }
             removeTemporaryPackage(importedPackageURL)
             let localURL = try FullBackupService.copyPackageToTemporaryLocation(from: sourceURL)
-            importedPackageURL = localURL
+            copiedPackageURL = localURL
             importPreview = try FullBackupService.inspect(packageURL: localURL)
+            importedPackageURL = localURL
             restoreResult = nil
             message = "バックアップを確認しました。"
         } catch {
+            removeTemporaryPackage(copiedPackageURL)
             importedPackageURL = nil
             importPreview = nil
             message = "失敗: \(error.localizedDescription)"

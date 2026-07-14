@@ -31,25 +31,35 @@ enum FullBackupService {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("favoreco-full-\(UUID().uuidString)")
             .appendingPathExtension("favorecobackup")
-        let mediaDirectory = root.appendingPathComponent(mediaDirectoryName, isDirectory: true)
-        try FileManager.default.createDirectory(at: mediaDirectory, withIntermediateDirectories: true)
-        try Data(json.utf8).write(to: root.appendingPathComponent(manifestFilename), options: .atomic)
+        do {
+            let mediaDirectory = root.appendingPathComponent(mediaDirectoryName, isDirectory: true)
+            try FileManager.default.createDirectory(at: mediaDirectory, withIntermediateDirectories: true)
+            try Data(json.utf8).write(to: root.appendingPathComponent(manifestFilename), options: .atomic)
 
-        for photo in photos {
-            let data = photo.data
-            guard !data.isEmpty else { continue }
-            let destination = mediaDirectory.appendingPathComponent("\(photo.id.uuidString).bin")
-            try data.write(to: destination, options: .atomic)
+            for photo in photos {
+                let data = photo.data
+                guard !data.isEmpty else { continue }
+                let destination = mediaDirectory.appendingPathComponent("\(photo.id.uuidString).bin")
+                try data.write(to: destination, options: .atomic)
+            }
+            return root
+        } catch {
+            try? FileManager.default.removeItem(at: root)
+            throw error
         }
-        return root
     }
 
     nonisolated static func copyPackageToTemporaryLocation(from sourceURL: URL) throws -> URL {
         let destination = FileManager.default.temporaryDirectory
             .appendingPathComponent("favoreco-import-\(UUID().uuidString)")
             .appendingPathExtension("favorecobackup")
-        try FileManager.default.copyItem(at: sourceURL, to: destination)
-        return destination
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+            return destination
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            throw error
+        }
     }
 
     @MainActor
