@@ -148,7 +148,7 @@ struct GenreOnboardingView: View {
                 OnboardingMessagePanel(
                     symbol: "checkmark.seal.fill",
                     title: "準備できました",
-                    message: "最初の記録は、あとからでも大丈夫。Homeに入ってから中央の+で追加できます。",
+                    message: "最初の記録は、あとからでも大丈夫。Homeに入ってから下部の「追加」で登録できます。",
                     accentColor: Color(hex: "#6F8F7A")
                 )
 

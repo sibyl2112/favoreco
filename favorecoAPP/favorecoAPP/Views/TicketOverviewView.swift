@@ -293,7 +293,7 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         case .archived:
             "個別に非表示にした申込を、ここから再表示できます。"
         default:
-            "中央の＋から予定・チケットを追加できます。"
+            "下部の「追加」から予定・チケットを登録できます。"
         }
     }
 

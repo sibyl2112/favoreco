@@ -523,7 +523,7 @@ struct HomeView: View {
                 EmptyStateRow(
                     icon: "sparkles.rectangle.stack",
                     title: "記録はまだありません",
-                    message: "中央の＋から体験済みの記録を追加できます。"
+                    message: "下部の「追加」から体験済みの記録を登録できます。"
                 )
             } else {
                 ForEach(visibleVisits.prefix(5)) { visit in

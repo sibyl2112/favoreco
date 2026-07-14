@@ -58,37 +58,50 @@ struct MainTabView: View {
         return [preferredCategory] + visibleCategories.filter { $0.id != preferredCategory.id }
     }
 
+    private var tabSelection: Binding<MainTab> {
+        Binding(
+            get: { selectedTab },
+            set: { newValue in
+                if newValue == .create {
+                    isShowingCreateMenu = true
+                } else {
+                    selectedTab = newValue
+                }
+            }
+        )
+    }
+
     var body: some View {
-        ZStack(alignment: .bottom) {
-            TabView(selection: $selectedTab) {
-                HomeView()
-                    .tabItem {
-                        Label("Home", systemImage: "house")
-                    }
-                    .tag(MainTab.home)
+        TabView(selection: tabSelection) {
+            HomeView()
+                .tabItem {
+                    Label("Home", systemImage: "house")
+                }
+                .tag(MainTab.home)
 
-                RecordsView()
-                    .tabItem {
-                        Label("記録", systemImage: "rectangle.stack")
-                    }
-                    .tag(MainTab.records)
+            RecordsView()
+                .tabItem {
+                    Label("記録", systemImage: "rectangle.stack")
+                }
+                .tag(MainTab.records)
 
-                CalendarView(displayMode: $calendarDisplayMode)
-                    .tabItem {
-                        Label("カレンダー", systemImage: "calendar")
-                    }
-                    .tag(MainTab.calendar)
+            Color.clear
+                .tabItem {
+                    Label("追加", systemImage: "plus")
+                }
+                .tag(MainTab.create)
 
-                StatsView(isActive: selectedTab == .stats)
-                    .tabItem {
-                        Label("統計", systemImage: "chart.bar")
-                    }
-                    .tag(MainTab.stats)
-            }
+            CalendarView(displayMode: $calendarDisplayMode)
+                .tabItem {
+                    Label("カレンダー", systemImage: "calendar")
+                }
+                .tag(MainTab.calendar)
 
-            CenterCreateButton {
-                isShowingCreateMenu = true
-            }
+            StatsView(isActive: selectedTab == .stats)
+                .tabItem {
+                    Label("統計", systemImage: "chart.bar")
+                }
+                .tag(MainTab.stats)
         }
         .sheet(isPresented: $isShowingCreateMenu, onDismiss: openPendingCreateAction) {
             CreateEntryMenuView(
@@ -425,25 +438,9 @@ private struct CreateEntryButton: View {
 private enum MainTab: Hashable {
     case home
     case records
+    case create
     case calendar
     case stats
-}
-
-private struct CenterCreateButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 58, height: 58)
-                .background(Color.accentColor, in: Circle())
-                .shadow(color: .black.opacity(0.16), radius: 10, x: 0, y: 4)
-        }
-        .accessibilityLabel("追加メニューを開く")
-        .padding(.bottom, 18)
-    }
 }
 
 private struct RecordsView: View {
@@ -460,7 +457,7 @@ private struct RecordsView: View {
                     PlaceholderRow(
                         icon: "rectangle.stack",
                         title: "記録はまだありません",
-                        message: "中央の＋から最初の記録を追加できます。"
+                        message: "下部の「追加」から最初の記録を追加できます。"
                     )
                 } else {
                     ForEach(visibleVisits) { visit in
@@ -679,7 +676,7 @@ private struct CalendarView: View {
                 PlaceholderRow(
                     icon: "calendar.badge.plus",
                     title: "今後の予定はありません",
-                    message: "Homeまたは中央の＋から予定を立てられます。"
+                    message: "Homeまたは下部の「追加」から予定を立てられます。"
                 )
                 .padding(14)
                 .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
