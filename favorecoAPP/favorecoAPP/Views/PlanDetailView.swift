@@ -151,7 +151,7 @@ struct PlanDetailView: View {
             }
         }
         .sheet(isPresented: $isShowingEditPlan) {
-            AddTicketPlanView(plan: plan)
+            AddTicketPlanView(plan: plan, entryMode: .plan)
         }
         .sheet(isPresented: $isShowingAddAttempt) {
             EditTicketAttemptView(plan: plan)

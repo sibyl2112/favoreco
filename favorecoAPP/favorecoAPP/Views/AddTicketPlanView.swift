@@ -133,6 +133,10 @@ struct AddTicketPlanView: View {
         editingPlan == nil && targetEvent == nil
     }
 
+    private var editsPlanOnly: Bool {
+        editingPlan != nil && entryMode == .plan
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -277,108 +281,109 @@ struct AddTicketPlanView: View {
                     }
                 }
 
-                Section("申込状況") {
-                    if entryMode == .ticketSchedule {
-                        LabeledContent("入力内容", value: "チケットスケジュール")
-                    } else {
-                        Toggle("申込情報も作成", isOn: $draft.createsTicketAttempt)
+                if !editsPlanOnly {
+                    Section("申込状況") {
+                        if entryMode == .ticketSchedule {
+                            LabeledContent("入力内容", value: "チケットスケジュール")
+                        } else {
+                            Toggle("申込情報も作成", isOn: $draft.createsTicketAttempt)
+                        }
+
+                        if draft.createsTicketAttempt {
+                            Picker("今の状態", selection: $draft.flowKey) {
+                                ForEach(TicketFlowDefinition.all) { flow in
+                                    Text(flow.name).tag(flow.key)
+                                }
+                            }
+                            .onChange(of: draft.flowKey) { _, newValue in
+                                draft.applyFlowDefaults(newValue)
+                            }
+
+                            Text(TicketFlowDefinition.definition(for: draft.flowKey).description)
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+
+                            if draft.showsDetailedStatus {
+                                Picker("詳細状態", selection: $draft.statusKey) {
+                                    ForEach(draft.statusOptions) { status in
+                                        Text(status.name).tag(status.key)
+                                    }
+                                }
+                            }
+
+                            if draft.showsEntryRoute {
+                                Picker("区分", selection: $draft.entryRouteKey) {
+                                    Text("未設定").tag("")
+                                    ForEach(draft.entryRouteOptions) { route in
+                                        Text(route.name).tag(route.key)
+                                    }
+                                }
+                            }
+
+                            if draft.showsAccountFields {
+                                Picker("名義・アカウント", selection: $draft.accountID) {
+                                    Text("未設定").tag(Optional<UUID>.none)
+                                    ForEach(activeAccounts) { account in
+                                        Text(accountLabel(account)).tag(Optional(account.id))
+                                    }
+                                }
+
+                                TextField("名義メモ", text: $draft.holderName)
+                            }
+
+                            if draft.showsTicketGuide {
+                                Picker("プレイガイド", selection: $draft.ticketGuideKey) {
+                                    ForEach(TicketGuideDefinition.all) { guide in
+                                        Text(guide.name).tag(guide.key)
+                                    }
+                                }
+                                .onChange(of: draft.ticketGuideKey) { _, newValue in
+                                    draft.applyTicketGuide(newValue)
+                                }
+
+                                if draft.ticketGuideKey == TicketGuideDefinition.customKey {
+                                    TextField("購入先・サイト名", text: $draft.ticketSite)
+                                    TextField("申込・購入URL", text: $draft.purchaseURL)
+                                        .keyboardType(.URL)
+                                        .textInputAutocapitalization(.never)
+                                } else {
+                                    LabeledContent("申込・購入URL", value: draft.purchaseURL.isEmpty ? "未設定" : draft.purchaseURL)
+                                        .font(FavorecoTypography.caption)
+                                }
+                            }
+                        }
                     }
 
-                    if draft.createsTicketAttempt {
-                        Picker("今の状態", selection: $draft.flowKey) {
-                            ForEach(TicketFlowDefinition.all) { flow in
-                                Text(flow.name).tag(flow.key)
+                    if draft.createsTicketAttempt && draft.showsAnyTicketMilestone {
+                        Section("締切・発券") {
+                            if draft.showsSaleStart {
+                                DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
                             }
-                        }
-                        .onChange(of: draft.flowKey) { _, newValue in
-                            draft.applyFlowDefaults(newValue)
-                        }
-
-                        Text(TicketFlowDefinition.definition(for: draft.flowKey).description)
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-
-                        if draft.showsDetailedStatus {
-                            Picker("詳細状態", selection: $draft.statusKey) {
-                                ForEach(draft.statusOptions) { status in
-                                    Text(status.name).tag(status.key)
-                                }
+                            if draft.showsApplyDeadline {
+                                DateToggleRow(title: "申込締切", isOn: $draft.hasApplyDeadline, date: $draft.applyDeadlineAt)
                             }
-                        }
-
-                        if draft.showsEntryRoute {
-                            Picker("区分", selection: $draft.entryRouteKey) {
-                                Text("未設定").tag("")
-                                ForEach(draft.entryRouteOptions) { route in
-                                    Text(route.name).tag(route.key)
-                                }
+                            if draft.showsResultAnnounce {
+                                DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
                             }
-                        }
-
-                        if draft.showsAccountFields {
-                            Picker("名義・アカウント", selection: $draft.accountID) {
-                                Text("未設定").tag(Optional<UUID>.none)
-                                ForEach(activeAccounts) { account in
-                                    Text(accountLabel(account)).tag(Optional(account.id))
-                                }
+                            if draft.showsPaymentDeadline {
+                                DateToggleRow(title: "入金締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
                             }
-
-                            TextField("名義メモ", text: $draft.holderName)
-                        }
-
-                        if draft.showsTicketGuide {
-                            Picker("プレイガイド", selection: $draft.ticketGuideKey) {
-                                ForEach(TicketGuideDefinition.all) { guide in
-                                    Text(guide.name).tag(guide.key)
-                                }
+                            if draft.showsIssueStart {
+                                DateToggleRow(title: "発券開始", isOn: $draft.hasIssueStart, date: $draft.issueStartAt)
                             }
-                            .onChange(of: draft.ticketGuideKey) { _, newValue in
-                                draft.applyTicketGuide(newValue)
-                            }
-
-                            if draft.ticketGuideKey == TicketGuideDefinition.customKey {
-                                TextField("購入先・サイト名", text: $draft.ticketSite)
-                                TextField("申込・購入URL", text: $draft.purchaseURL)
-                                    .keyboardType(.URL)
-                                    .textInputAutocapitalization(.never)
-                            } else {
-                                LabeledContent("申込・購入URL", value: draft.purchaseURL.isEmpty ? "未設定" : draft.purchaseURL)
-                                    .font(FavorecoTypography.caption)
-                            }
-                        }
-
-                    }
-                }
-
-                if draft.createsTicketAttempt && draft.showsAnyTicketMilestone {
-                    Section("締切・発券") {
-                        if draft.showsSaleStart {
-                            DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
-                        }
-                        if draft.showsApplyDeadline {
-                            DateToggleRow(title: "申込締切", isOn: $draft.hasApplyDeadline, date: $draft.applyDeadlineAt)
-                        }
-                        if draft.showsResultAnnounce {
-                            DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
-                        }
-                        if draft.showsPaymentDeadline {
-                            DateToggleRow(title: "入金締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
-                        }
-                        if draft.showsIssueStart {
-                            DateToggleRow(title: "発券開始", isOn: $draft.hasIssueStart, date: $draft.issueStartAt)
                         }
                     }
-                }
 
-                if draft.createsTicketAttempt && draft.showsTicketDetails {
-                    Section("金額・座席") {
-                        TextField("チケット代", text: $draft.priceText)
-                            .keyboardType(.numberPad)
-                        TextField("手数料", text: $draft.feeText)
-                            .keyboardType(.numberPad)
-                        Stepper("枚数 \(draft.quantity)", value: $draft.quantity, in: 1...20)
-                        TextField("座席・整理番号", text: $draft.seatText, axis: .vertical)
-                            .lineLimit(2...4)
+                    if draft.createsTicketAttempt && draft.showsTicketDetails {
+                        Section("金額・座席") {
+                            TextField("チケット代", text: $draft.priceText)
+                                .keyboardType(.numberPad)
+                            TextField("手数料", text: $draft.feeText)
+                                .keyboardType(.numberPad)
+                            Stepper("枚数 \(draft.quantity)", value: $draft.quantity, in: 1...20)
+                            TextField("座席・整理番号", text: $draft.seatText, axis: .vertical)
+                                .lineLimit(2...4)
+                        }
                     }
                 }
 
@@ -647,7 +652,9 @@ struct AddTicketPlanView: View {
 
         plan.title = draft.trimmedTitle
         plan.subtitle = draft.trimmedSubtitle
-        plan.stateKey = draft.createsTicketAttempt ? draft.statusKey : "planned"
+        if !editsPlanOnly {
+            plan.stateKey = draft.createsTicketAttempt ? draft.statusKey : "planned"
+        }
         plan.startsAt = draft.startsAt
         plan.endsAt = draft.endsAt
         plan.opensAt = draft.opensAt
@@ -661,7 +668,9 @@ struct AddTicketPlanView: View {
         plan.event?.updatedAt = now
 
         let attemptForScheduling: TicketAttempt?
-        if draft.createsTicketAttempt {
+        if editsPlanOnly {
+            attemptForScheduling = nil
+        } else if draft.createsTicketAttempt {
             let attempt = existingAttempt ?? TicketAttempt(createdAt: now, plan: plan)
             applyDraft(to: attempt, plan: plan, now: now)
             if existingAttempt == nil {
@@ -680,7 +689,7 @@ struct AddTicketPlanView: View {
 
         do {
             try modelContext.save()
-            if let existingAttempt, !draft.createsTicketAttempt {
+            if !editsPlanOnly, let existingAttempt, !draft.createsTicketAttempt {
                 TicketNotificationScheduler.cancel(plan: plan, attempt: existingAttempt)
             }
             Task {
@@ -907,8 +916,14 @@ private struct TicketPlanDraft {
         opensAt = plan.opensAt
         venueName = plan.venueNameSnapshot
         officialURL = plan.officialURL
-        createsTicketAttempt = attempt != nil
         memo = plan.memo
+
+        guard entryMode == .ticketSchedule else {
+            createsTicketAttempt = false
+            return
+        }
+
+        createsTicketAttempt = attempt != nil
 
         guard let attempt else { return }
         flowKey = TicketFlowDefinition.inferredKey(statusKey: attempt.statusKey, entryRouteKey: attempt.entryRouteKey)
@@ -933,7 +948,6 @@ private struct TicketPlanDraft {
         quantity = attempt.quantity
         seatText = attempt.seatText
         purchaseURL = attempt.purchaseURL
-        memo = attempt.memo.isEmpty ? plan.memo : attempt.memo
     }
 
     var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
