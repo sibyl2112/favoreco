@@ -38,6 +38,7 @@ struct AddTicketPlanView: View {
     @State private var validationError = ""
     @State private var targetSelectionMode: TargetSelectionMode = .new
     @State private var selectedEventID: UUID?
+    @State private var isShowingInterestedEventPicker = false
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     private let editingPlan: Plan?
     private let targetEvent: ExperienceEvent?
@@ -116,12 +117,34 @@ struct AddTicketPlanView: View {
                                     description: Text("先にクイック登録するか、新しく対象を登録してください。")
                                 )
                             } else {
-                                Picker("作品・対象", selection: $selectedEventID) {
-                                    Text("選択してください").tag(Optional<UUID>.none)
-                                    ForEach(interestedEvents) { event in
-                                        Text(eventTargetLabel(event)).tag(Optional(event.id))
+                                Button {
+                                    isShowingInterestedEventPicker = true
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: selectedInterestedEvent?.category?.iconSymbol ?? "magnifyingglass")
+                                            .frame(width: 28)
+
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(selectedInterestedEvent?.title ?? "作品・対象を検索")
+                                                .font(FavorecoTypography.bodyStrong)
+                                                .foregroundStyle(.primary)
+                                                .lineLimit(2)
+
+                                            if let selectedInterestedEvent {
+                                                Text(selectedInterestedEvent.category?.name ?? "未分類")
+                                                    .font(FavorecoTypography.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.tertiary)
                                     }
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                             }
                         } else {
                             Text("作品・施設などの対象と予定を同時に登録します。")
@@ -310,6 +333,15 @@ struct AddTicketPlanView: View {
             } message: {
                 Text(validationError)
             }
+            .sheet(isPresented: $isShowingInterestedEventPicker) {
+                InterestedEventPicker(
+                    events: interestedEvents,
+                    selectedEventID: selectedEventID
+                ) { event in
+                    selectedEventID = event.id
+                    isShowingInterestedEventPicker = false
+                }
+            }
         }
     }
 
@@ -321,13 +353,6 @@ struct AddTicketPlanView: View {
     private func accountLabel(_ account: TicketAccount) -> String {
         let holder = account.accountName.isEmpty ? "名義未設定" : account.accountName
         return "\(account.serviceName) / \(holder)"
-    }
-
-    private func eventTargetLabel(_ event: ExperienceEvent) -> String {
-        guard let categoryName = event.category?.name, !categoryName.isEmpty else {
-            return event.title
-        }
-        return "\(event.title) / \(categoryName)"
     }
 
     private func save() {
@@ -538,6 +563,90 @@ struct DateToggleRow: View {
                     .labelsHidden()
             }
         }
+    }
+}
+
+private struct InterestedEventPicker: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let events: [ExperienceEvent]
+    let selectedEventID: UUID?
+    let onSelect: (ExperienceEvent) -> Void
+
+    @State private var searchText = ""
+
+    private var filteredEvents: [ExperienceEvent] {
+        let query = normalized(searchText)
+        guard !query.isEmpty else { return events }
+        return events.filter { event in
+            normalized(event.title).contains(query)
+                || normalized(event.seriesName).contains(query)
+                || normalized(event.category?.name ?? "").contains(query)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if filteredEvents.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                } else {
+                    List(filteredEvents) { event in
+                        Button {
+                            onSelect(event)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: event.category?.iconSymbol ?? "rectangle.stack")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 28)
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(event.title)
+                                        .font(FavorecoTypography.bodyStrong)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(2)
+
+                                    Text(eventDescription(event))
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+
+                                Spacer()
+                                if event.id == selectedEventID {
+                                    Image(systemName: "checkmark")
+                                        .font(.body.weight(.semibold))
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("気になるから選ぶ")
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "タイトル・シリーズ・ジャンル")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func eventDescription(_ event: ExperienceEvent) -> String {
+        let description = [event.category?.name, event.seriesName.isEmpty ? nil : event.seriesName]
+            .compactMap { $0 }
+            .joined(separator: " / ")
+        return description.isEmpty ? "未分類" : description
+    }
+
+    private func normalized(_ value: String) -> String {
+        value
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
     }
 }
 
