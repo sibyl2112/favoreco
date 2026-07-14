@@ -969,6 +969,7 @@ struct AddVisitView: View {
 
     private func save() {
         let now = Date()
+        var attendedAttempt: TicketAttempt?
         let visit = Visit(
             visitedAt: draft.visitedAt,
             endedAt: inheritedEndedAt,
@@ -1001,6 +1002,8 @@ struct AddVisitView: View {
                !["lost", "skipped"].contains(attempt.statusKey) {
                 attempt.statusKey = "attended"
                 attempt.updatedAt = now
+                attempt.notificationSettingsRaw = ""
+                attendedAttempt = attempt
             }
         }
         modelContext.insert(visit)
@@ -1010,6 +1013,9 @@ struct AddVisitView: View {
         do {
             try modelContext.save()
             if let sourcePlan {
+                if let attendedAttempt {
+                    TicketNotificationScheduler.cancel(plan: sourcePlan, attempt: attendedAttempt)
+                }
                 TicketNotificationScheduler.cancel(plan: sourcePlan, attempt: nil)
             }
             Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
