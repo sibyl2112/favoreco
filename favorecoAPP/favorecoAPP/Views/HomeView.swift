@@ -29,6 +29,8 @@ struct HomeView: View {
     @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
     @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var categoryLayoutModeRaw = HomeCategoryLayoutMode.horizontal.rawValue
     @State private var isShowingSettings = false
+    @State private var isShowingAttentionList = false
+    @State private var selectedUpcomingPlanIndex = 0
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -54,18 +56,6 @@ struct HomeView: View {
         Array(visibleVisits.prefix(8))
     }
 
-    /// 記録・予定・締切・Inbox がいずれも無い＝Homeに出す中身が無い状態。
-    private var isHomeContentEmpty: Bool {
-        visibleVisits.isEmpty && attentionItems.isEmpty && interestedEvents.isEmpty && unresolvedInboxItems.isEmpty
-    }
-
-    private var upcomingVisits: [Visit] {
-        let now = Calendar.current.startOfDay(for: Date())
-        return visibleVisits
-            .filter { $0.visitedAt >= now }
-            .sorted { $0.visitedAt < $1.visitedAt }
-    }
-
     private var upcomingPlans: [Plan] {
         let now = Date()
         return plans
@@ -74,7 +64,7 @@ struct HomeView: View {
     }
 
     private var upcomingItemCount: Int {
-        upcomingPlans.count + upcomingVisits.count
+        upcomingPlans.count
     }
 
     private var currentYearVisitCount: Int {
@@ -88,35 +78,6 @@ struct HomeView: View {
 
         if items.count < 5 {
             items.append(contentsOf: membershipAttentionItems.prefix(5 - items.count))
-        }
-
-        if items.count < 5 {
-            let planItems = upcomingPlans.prefix(5 - items.count).map { plan in
-                HomeAttentionItem(
-                    icon: "calendar.badge.clock",
-                    title: plan.title.isEmpty ? "予定" : plan.title,
-                    subtitle: "公演 \(attentionDateFormatter.string(from: plan.startsAt))",
-                    dueDate: plan.startsAt,
-                    plan: plan,
-                    tint: themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88"),
-                    priority: 20
-                )
-            }
-            items.append(contentsOf: planItems)
-        }
-
-        if items.count < 5 {
-            let visitItems = upcomingVisits.prefix(5 - items.count).map { visit in
-                HomeAttentionItem(
-                    icon: "calendar.badge.clock",
-                    title: visit.event?.title.isEmpty == false ? visit.event?.title ?? "予定" : "予定",
-                    subtitle: visit.visitedAt.formatted(date: .long, time: .omitted),
-                    dueDate: visit.visitedAt,
-                    tint: themePalette.categoryColor(hex: visit.event?.category?.colorHex ?? "#147C88"),
-                    priority: 30
-                )
-            }
-            items.append(contentsOf: visitItems)
         }
 
         return Array(items.sorted { lhs, rhs in
@@ -276,43 +237,39 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // 実機比較中: ヘッダー直下で横1段 / 4列を切り替える。
+                    upcomingPlansSection
+
+                    if showsAttention {
+                        attentionSection
+                    }
+
+                    // 実機比較中: 横1段 / 4列を設定から切り替える。
                     if showsCategories {
                         categorySection
                     }
-                    hero
-                    crossGenreMiniStats
 
-                    // 正本で確定した固定順。空セクションは表示しない。
-                    // 1. 次の予定・締切
-                    if showsAttention && !attentionItems.isEmpty {
-                        attentionSection
-                    }
-                    // 2. 体験ギャラリー
                     if showsExperienceGallery && !recentVisits.isEmpty {
                         experienceGallerySection
                     }
-                    // 3. 気になる
+
                     if showsInbox && (!interestedEvents.isEmpty || !unresolvedInboxItems.isEmpty) {
                         inboxSection
                     }
-                    // 4. 最近の記録
+
                     if showsRecentRecords && !visibleVisits.isEmpty {
                         recentSection
                     }
-                    // 5. 統計サマリ（任意表示）
+
                     if showsStatsSummary && !visibleVisits.isEmpty {
                         statsSummarySection
                     }
-                    // 6. お気に入り・ベスト（任意表示）
+
                     if showsFavorites {
                         favoritesSection
                     }
 
-                    // すべて空のときだけ、単一のプレースホルダーで導線を示す
-                    if isHomeContentEmpty {
-                        homeEmptyState
-                    }
+                    crossGenreMiniStats
+
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
@@ -332,30 +289,13 @@ struct HomeView: View {
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()
         }
+        .sheet(isPresented: $isShowingAttentionList) {
+            HomeAttentionListView(items: attentionItems)
+        }
         .task {
             try? LegacyInboxMigrationService.migrateIfNeeded(in: modelContext)
         }
         }
-    }
-
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("favoreco")
-                .font(FavorecoTypography.appLogo)
-                .foregroundStyle(.primary)
-            Text("観た・行った・体験したを、")
-                .font(FavorecoTypography.heroLead)
-            Text("美しく一生残す。")
-                .font(FavorecoTypography.heroTitle)
-            if isHomeContentEmpty {
-                Text("まずは体験ジャンルを選んで、記録の器を育てていきます。")
-                    .font(FavorecoTypography.body)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var crossGenreMiniStats: some View {
@@ -380,6 +320,79 @@ struct HomeView: View {
             )
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private var upcomingPlansSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("次の予定")
+                    .font(FavorecoTypography.sectionTitle)
+
+                Spacer()
+
+                if !upcomingPlans.isEmpty {
+                    Button("予定一覧") {
+                        NotificationCenter.default.post(name: .openFavorecoPlanList, object: nil)
+                    }
+                    .font(FavorecoTypography.captionStrong)
+                }
+            }
+
+            switch upcomingPlans.count {
+            case 0:
+                VStack(alignment: .leading, spacing: 12) {
+                    EmptyStateRow(
+                        icon: "calendar.badge.plus",
+                        title: "次の予定はありません",
+                        message: "行きたい作品や場所が決まったら、予定を立てておけます。"
+                    )
+
+                    Button {
+                        NotificationCenter.default.post(name: .openFavorecoPlanCreation, object: nil)
+                    } label: {
+                        Label("予定を立てる", systemImage: "plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+            case 1:
+                NavigationLink {
+                    PlanDetailView(plan: upcomingPlans[0])
+                } label: {
+                    HomeUpcomingPlanCard(plan: upcomingPlans[0])
+                }
+                .buttonStyle(.plain)
+
+            default:
+                TabView(selection: $selectedUpcomingPlanIndex) {
+                    ForEach(Array(upcomingPlans.enumerated()), id: \.element.id) { index, plan in
+                        NavigationLink {
+                            PlanDetailView(plan: plan)
+                        } label: {
+                            HomeUpcomingPlanCard(plan: plan)
+                        }
+                        .buttonStyle(.plain)
+                        .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: 156)
+
+                Text("\(min(selectedUpcomingPlanIndex + 1, upcomingPlans.count)) / \(upcomingPlans.count)")
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .accessibilityLabel("予定 \(min(selectedUpcomingPlanIndex + 1, upcomingPlans.count))件目、全\(upcomingPlans.count)件")
+            }
+        }
+        .onChange(of: upcomingPlans.count) { _, count in
+            if count == 0 {
+                selectedUpcomingPlanIndex = 0
+            } else if selectedUpcomingPlanIndex >= count {
+                selectedUpcomingPlanIndex = count - 1
+            }
+        }
     }
 
     private var categorySection: some View {
@@ -439,13 +452,18 @@ struct HomeView: View {
             sectionHeader("アテンション", count: attentionItems.count)
 
             if attentionItems.isEmpty {
-                EmptyStateRow(
-                    icon: "bell.badge",
-                    title: "今すぐ確認することはありません",
-                    message: "今後は予定、申込締切、当落、リマインダーをここにまとめます。"
-                )
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.title3)
+                        .foregroundStyle(Color.green)
+                    Text("対応が必要なお知らせはありません")
+                        .font(FavorecoTypography.bodyStrong)
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else {
-                ForEach(attentionItems) { item in
+                ForEach(attentionItems.prefix(2)) { item in
                     if let plan = item.plan {
                         NavigationLink {
                             PlanDetailView(plan: plan)
@@ -456,6 +474,14 @@ struct HomeView: View {
                     } else {
                         AttentionRow(item: item)
                     }
+                }
+
+                if attentionItems.count > 2 {
+                    Button("ほか\(attentionItems.count - 2)件") {
+                        isShowingAttentionList = true
+                    }
+                    .font(FavorecoTypography.captionStrong)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
         }
@@ -566,14 +592,6 @@ struct HomeView: View {
         }
     }
 
-    private var homeEmptyState: some View {
-        EmptyStateRow(
-            icon: "sparkles",
-            title: "最初の記録を始めましょう",
-            message: "予定・締切や最近の思い出がここにまとまります。下のカテゴリから体験を記録してみましょう。"
-        )
-    }
-
     private func sectionHeader(_ title: String, count: Int) -> some View {
         HStack {
             Text(title)
@@ -626,6 +644,75 @@ private struct InterestedEventRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct HomeUpcomingPlanCard: View {
+    let plan: Plan
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    private var tint: Color {
+        themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88")
+    }
+
+    private var dateText: String {
+        plan.startsAt.formatted(
+            .dateTime
+                .locale(Locale(identifier: "ja_JP"))
+                .month(.defaultDigits)
+                .day()
+                .weekday(.abbreviated)
+                .hour()
+                .minute()
+        )
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: plan.category?.iconSymbol ?? "calendar")
+                .font(.title2)
+                .foregroundStyle(tint)
+                .frame(width: 48, height: 48)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(plan.category?.name ?? "予定")
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(tint)
+
+                Text(plan.title.isEmpty ? plan.event?.title ?? "予定" : plan.title)
+                    .font(FavorecoTypography.cardTitle)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                Label(dateText, systemImage: "calendar")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                if !plan.venueNameSnapshot.isEmpty {
+                    Label(plan.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(tint.opacity(0.18), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -695,6 +782,39 @@ private struct AttentionRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct HomeAttentionListView: View {
+    @Environment(\.dismiss) private var dismiss
+    let items: [HomeAttentionItem]
+
+    var body: some View {
+        NavigationStack {
+            List(items) { item in
+                if let plan = item.plan {
+                    NavigationLink {
+                        PlanDetailView(plan: plan)
+                    } label: {
+                        AttentionRow(item: item)
+                    }
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .listRowBackground(Color.clear)
+                } else {
+                    AttentionRow(item: item)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                        .listRowBackground(Color.clear)
+                }
+            }
+            .listStyle(.plain)
+            .navigationTitle("お知らせ")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+        }
     }
 }
 
@@ -1046,4 +1166,9 @@ private struct EmptyStateRow: View {
 #Preview {
     HomeView()
         .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self], inMemory: true)
+}
+
+extension Notification.Name {
+    static let openFavorecoPlanList = Notification.Name("openFavorecoPlanList")
+    static let openFavorecoPlanCreation = Notification.Name("openFavorecoPlanCreation")
 }

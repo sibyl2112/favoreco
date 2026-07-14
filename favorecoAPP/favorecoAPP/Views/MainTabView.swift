@@ -10,6 +10,20 @@ import SwiftData
 import UIKit
 import Charts
 
+private enum CalendarDisplayMode: String, CaseIterable, Identifiable {
+    case calendar
+    case planList
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .calendar: "カレンダー"
+        case .planList: "予定一覧"
+        }
+    }
+}
+
 struct MainTabView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @AppStorage(AppStorageKeys.defaultGenreMode) private var defaultGenreMode = "lastUsed"
@@ -25,6 +39,7 @@ struct MainTabView: View {
     @State private var isShowingQuickRegistration = false
     @State private var pendingCreateAction: CreateAction?
     @State private var selectedCategoryForRecord: RecordCategory?
+    @State private var calendarDisplayMode: CalendarDisplayMode = .calendar
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -57,7 +72,7 @@ struct MainTabView: View {
                     }
                     .tag(MainTab.records)
 
-                CalendarView()
+                CalendarView(displayMode: $calendarDisplayMode)
                     .tabItem {
                         Label("カレンダー", systemImage: "calendar")
                     }
@@ -98,6 +113,13 @@ struct MainTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoStats)) { _ in
             selectedTab = .stats
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openFavorecoPlanList)) { _ in
+            calendarDisplayMode = .planList
+            selectedTab = .calendar
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openFavorecoPlanCreation)) { _ in
+            isShowingAddPlan = true
         }
         .task {
             if opensPreviousMonthlyReport || opensPreviousYearlyReport {
@@ -316,6 +338,7 @@ private struct RecordsView: View {
 }
 
 private struct CalendarView: View {
+    @Binding var displayMode: CalendarDisplayMode
     @Query(sort: \Visit.visitedAt, order: .forward) private var visits: [Visit]
     @Query(sort: \Plan.startsAt, order: .forward) private var plans: [Plan]
     @AppStorage(AppStorageKeys.showsExternalCalendarEvents) private var showsExternalCalendarEvents = true
@@ -379,6 +402,19 @@ private struct CalendarView: View {
             .map { $0 }
     }
 
+    private var allUpcomingPlans: [Plan] {
+        let now = Date()
+        return plans
+            .filter { !$0.isArchived && $0.endsAt >= now }
+            .sorted { $0.startsAt < $1.startsAt }
+    }
+
+    private var upcomingPlanGroups: [(month: Date, plans: [Plan])] {
+        Dictionary(grouping: allUpcomingPlans) { $0.startsAt.startOfMonth }
+            .map { (month: $0.key, plans: $0.value.sorted { $0.startsAt < $1.startsAt }) }
+            .sorted { $0.month < $1.month }
+    }
+
     private var upcomingExternalEvents: [ExternalCalendarEvent] {
         let now = Date()
         return externalCalendarStore.events
@@ -405,12 +441,23 @@ private struct CalendarView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    monthHeader
-                    externalCalendarControl
-                    weekdayHeader
-                    monthGrid
-                    selectedDaySection
-                    upcomingSection
+                    Picker("表示", selection: $displayMode) {
+                        ForEach(CalendarDisplayMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if displayMode == .calendar {
+                        monthHeader
+                        externalCalendarControl
+                        weekdayHeader
+                        monthGrid
+                        selectedDaySection
+                        upcomingSection
+                    } else {
+                        planListSection
+                    }
                 }
                 .padding(20)
             }
@@ -470,6 +517,36 @@ private struct CalendarView: View {
                     .frame(width: 36, height: 36)
             }
             .buttonStyle(.bordered)
+        }
+    }
+
+    private var planListSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if upcomingPlanGroups.isEmpty {
+                PlaceholderRow(
+                    icon: "calendar.badge.plus",
+                    title: "今後の予定はありません",
+                    message: "Homeまたは中央の＋から予定を立てられます。"
+                )
+                .padding(14)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                ForEach(upcomingPlanGroups, id: \.month) { group in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(japaneseYearMonth(group.month))
+                            .font(FavorecoTypography.sectionTitle)
+
+                        ForEach(group.plans) { plan in
+                            NavigationLink {
+                                PlanDetailView(plan: plan)
+                            } label: {
+                                PlanSummaryRow(plan: plan)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
         }
     }
 
