@@ -28,16 +28,22 @@ enum ExternalCalendarSyncService {
     @MainActor
     static func remove(plan: Plan) async throws -> ExternalCalendarSyncResult {
         let identifier = ExternalCalendarLinkStore.identifier(for: plan)
+        return try await remove(identifier: identifier, planID: plan.id)
+    }
+
+    @MainActor
+    static func remove(identifier: String, planID: UUID) async throws -> ExternalCalendarSyncResult {
+        let identifier = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !identifier.isEmpty else { return .eventNotFound }
 
         let store = EKEventStore()
         guard try await requestAccess(using: store) else { return .permissionDenied }
         guard let event = store.event(withIdentifier: identifier) else {
-            ExternalCalendarLinkStore.clear(planID: plan.id)
+            ExternalCalendarLinkStore.clear(planID: planID)
             return .eventNotFound
         }
         try store.remove(event, span: .thisEvent, commit: true)
-        ExternalCalendarLinkStore.clear(planID: plan.id)
+        ExternalCalendarLinkStore.clear(planID: planID)
         return .updated
     }
 
@@ -115,6 +121,10 @@ enum ExternalCalendarLinkStore {
 
     nonisolated static func hasLink(planID: UUID) -> Bool {
         !(storedLinks()[planID.uuidString] ?? "").isEmpty
+    }
+
+    nonisolated static func identifier(planID: UUID) -> String {
+        storedLinks()[planID.uuidString] ?? ""
     }
 
     nonisolated private static func storedLinks() -> [String: String] {

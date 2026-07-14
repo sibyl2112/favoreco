@@ -15,6 +15,8 @@ struct EventDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.favorecoThemePalette) private var themePalette
+    @EnvironmentObject private var purchaseManager: PurchaseManager
+    @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     @State private var isShowingAddVisit = false
     @State private var isShowingAddPlan = false
     @State private var isShowingEditEvent = false
@@ -142,11 +144,36 @@ struct EventDetailView: View {
 
     private func deleteThisEvent() {
         do {
-            try RecordDeletionService.deleteEvent(event, in: modelContext)
+            let result = try RecordDeletionService.deleteEvent(event, in: modelContext)
+            reconcileExternalCalendarAfterDeletion(result.externalCalendarTargets)
             dismiss()
         } catch {
             actionErrorMessage = "この対象を削除できませんでした。もう一度お試しください。"
             assertionFailure("Failed to delete event: \(error)")
+        }
+    }
+
+    private func reconcileExternalCalendarAfterDeletion(
+        _ targets: [RecordDeletionService.ExternalCalendarDeletionTarget]
+    ) {
+        guard !targets.isEmpty else { return }
+        let removesExternalEvents = purchaseManager.currentPlan.includesSync
+            && automaticallyUpdatesExternalCalendar
+
+        guard removesExternalEvents else {
+            for target in targets {
+                ExternalCalendarLinkStore.clear(planID: target.planID)
+            }
+            return
+        }
+
+        Task {
+            for target in targets {
+                _ = try? await ExternalCalendarSyncService.remove(
+                    identifier: target.eventIdentifier,
+                    planID: target.planID
+                )
+            }
         }
     }
 

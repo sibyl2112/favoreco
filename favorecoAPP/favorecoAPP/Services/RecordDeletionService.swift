@@ -12,6 +12,15 @@ import Foundation
 import SwiftData
 
 enum RecordDeletionService {
+    struct ExternalCalendarDeletionTarget {
+        let planID: UUID
+        let eventIdentifier: String
+    }
+
+    struct EventDeletionResult {
+        let externalCalendarTargets: [ExternalCalendarDeletionTarget]
+    }
+
     struct ArchivedDeletionResult {
         let eventCount: Int
         let visitCount: Int
@@ -42,7 +51,7 @@ enum RecordDeletionService {
     /// Event の .cascade で Visit / Plan（さらに各 Visit の PhotoBlob、Plan の TicketAttempt）が連鎖削除される。
     /// inverse 未定義の EventPersonLink（event 参照・各 visit 参照）と、外部 Plan.visit 参照はここで後始末する。
     @MainActor
-    static func deleteEvent(_ event: ExperienceEvent, in context: ModelContext) throws {
+    static func deleteEvent(_ event: ExperienceEvent, in context: ModelContext) throws -> EventDeletionResult {
         let eventID = event.id
         let allLinks = (try? context.fetch(FetchDescriptor<EventPersonLink>())) ?? []
         let allPlans = (try? context.fetch(FetchDescriptor<Plan>())) ?? []
@@ -53,6 +62,15 @@ enum RecordDeletionService {
                 planID: plan.id,
                 attemptIDs: (plan.ticketAttempts ?? []).map(\.id)
             )
+        }
+        let externalCalendarTargets = ownedPlans.compactMap { plan -> ExternalCalendarDeletionTarget? in
+            let storedIdentifier = ExternalCalendarLinkStore.identifier(planID: plan.id)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let legacyIdentifier = plan.externalCalendarEventIdentifier
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let identifier = storedIdentifier.isEmpty ? legacyIdentifier : storedIdentifier
+            guard !identifier.isEmpty else { return nil }
+            return ExternalCalendarDeletionTarget(planID: plan.id, eventIdentifier: identifier)
         }
 
         // 配下 Visit を参照する Plan.visit を解除（Event 配下の Plan は cascade 対象だが、外部参照も安全に外す）
@@ -73,6 +91,8 @@ enum RecordDeletionService {
             }
             TicketNotificationScheduler.cancel(planID: target.planID, attemptID: nil)
         }
+
+        return EventDeletionResult(externalCalendarTargets: externalCalendarTargets)
     }
 
     /// 非表示済みのモデルだけを完全削除する。ジャンルは非表示設定として保持する。
