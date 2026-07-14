@@ -10,7 +10,11 @@ import UserNotifications
 
 enum TicketAccountNotificationScheduler {
     static func cancel(account: TicketAccount) {
-        let identifiers = staleIdentifierCandidates(accountID: account.id)
+        cancel(accountID: account.id)
+    }
+
+    static func cancel(accountID: UUID) {
+        let identifiers = staleIdentifierCandidates(accountID: accountID)
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
         center.removeDeliveredNotifications(withIdentifiers: identifiers)

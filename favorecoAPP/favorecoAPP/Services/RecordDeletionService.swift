@@ -119,21 +119,9 @@ enum RecordDeletionService {
         let archivedPlaces = places.filter(\.isArchived)
         let archivedSocialAccounts = socialAccounts.filter(\.isArchived)
         let externalCalendarTargets = externalCalendarTargets(for: archivedPlans)
-
-        for plan in archivedPlans {
-            for attempt in plan.ticketAttempts ?? [] {
-                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
-            }
-            TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
-        }
-        for attempt in archivedAttempts where attempt.plan.map({ !archivedPlanIDs.contains($0.id) }) == true {
-            if let plan = attempt.plan {
-                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
-            }
-        }
-        for account in archivedAccounts {
-            TicketAccountNotificationScheduler.cancel(account: account)
-        }
+        let archivedPlanNotificationIDs = archivedPlans.map(\.id)
+        let archivedAttemptNotificationIDs = archivedAttempts.map(\.id)
+        let archivedAccountNotificationIDs = archivedAccounts.map(\.id)
 
         let archivedLinks = links.filter { link in
             link.isArchived
@@ -162,6 +150,16 @@ enum RecordDeletionService {
 
         try context.save()
         ThumbnailLoader.purge()
+
+        for attemptID in archivedAttemptNotificationIDs {
+            TicketNotificationScheduler.cancel(attemptID: attemptID)
+        }
+        for planID in archivedPlanNotificationIDs {
+            TicketNotificationScheduler.cancel(planID: planID, attemptID: nil)
+        }
+        for accountID in archivedAccountNotificationIDs {
+            TicketAccountNotificationScheduler.cancel(accountID: accountID)
+        }
 
         return ArchivedDeletionResult(
             eventCount: archivedEvents.count,
@@ -194,20 +192,13 @@ enum RecordDeletionService {
         let accounts = try context.fetch(FetchDescriptor<TicketAccount>())
         let attempts = try context.fetch(FetchDescriptor<TicketAttempt>())
         let externalCalendarTargets = externalCalendarTargets(for: plans)
+        let planNotificationIDs = plans.map(\.id)
+        let attemptNotificationIDs = attempts.map(\.id)
+        let accountNotificationIDs = accounts.map(\.id)
 
         let deletedModelCount = categories.count + events.count + visits.count
             + inboxItems.count + photos.count + socialAccounts.count + people.count
             + links.count + places.count + plans.count + accounts.count + attempts.count
-
-        for plan in plans {
-            for attempt in plan.ticketAttempts ?? [] {
-                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
-            }
-            TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
-        }
-        for account in accounts {
-            TicketAccountNotificationScheduler.cancel(account: account)
-        }
 
         // 親を先に削除し、親を持たない孤立モデルだけを個別削除する。
         for link in links { context.delete(link) }
@@ -247,6 +238,16 @@ enum RecordDeletionService {
         try context.save()
         URLCache.shared.removeAllCachedResponses()
         ThumbnailLoader.purge()
+
+        for attemptID in attemptNotificationIDs {
+            TicketNotificationScheduler.cancel(attemptID: attemptID)
+        }
+        for planID in planNotificationIDs {
+            TicketNotificationScheduler.cancel(planID: planID, attemptID: nil)
+        }
+        for accountID in accountNotificationIDs {
+            TicketAccountNotificationScheduler.cancel(accountID: accountID)
+        }
 
         UserDefaults.standard.set(false, forKey: AppStorageKeys.hasCompletedGenreOnboarding)
 

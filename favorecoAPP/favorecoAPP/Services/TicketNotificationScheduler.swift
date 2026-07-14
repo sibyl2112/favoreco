@@ -27,6 +27,13 @@ enum TicketNotificationScheduler {
         center.removeDeliveredNotifications(withIdentifiers: staleIdentifiers)
     }
 
+    static func cancel(attemptID: UUID) {
+        let center = UNUserNotificationCenter.current()
+        let staleIdentifiers = staleAttemptIdentifierCandidates(attemptID: attemptID)
+        center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
+        center.removeDeliveredNotifications(withIdentifiers: staleIdentifiers)
+    }
+
     static func reschedule(plan: Plan, attempt: TicketAttempt?) async {
         let center = UNUserNotificationCenter.current()
         let specs = notificationSpecs(plan: plan, attempt: attempt)
@@ -207,21 +214,25 @@ enum TicketNotificationScheduler {
 
     private static func staleIdentifierCandidates(planID: UUID, attemptID: UUID?) -> [String] {
         if let attemptID {
-            let prefix = "ticket.\(attemptID.uuidString)"
-            return [
-                "\(prefix).applicationStart",
-                "\(prefix).applicationDeadline.dayBefore",
-                "\(prefix).applicationDeadline.hourBefore",
-                "\(prefix).lotteryResult",
-                "\(prefix).paymentDeadline.dayBefore",
-                "\(prefix).paymentDeadline.hourBefore",
-                "\(prefix).ticketIssue",
-            ]
+            return staleAttemptIdentifierCandidates(attemptID: attemptID)
         }
 
         return [
             "plan.\(planID.uuidString).performance.previousDay",
             "plan.\(planID.uuidString).performance.sameDay",
+        ]
+    }
+
+    private static func staleAttemptIdentifierCandidates(attemptID: UUID) -> [String] {
+        let prefix = "ticket.\(attemptID.uuidString)"
+        return [
+            "\(prefix).applicationStart",
+            "\(prefix).applicationDeadline.dayBefore",
+            "\(prefix).applicationDeadline.hourBefore",
+            "\(prefix).lotteryResult",
+            "\(prefix).paymentDeadline.dayBefore",
+            "\(prefix).paymentDeadline.hourBefore",
+            "\(prefix).ticketIssue",
         ]
     }
 
