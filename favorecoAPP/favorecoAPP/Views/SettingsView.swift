@@ -896,7 +896,6 @@ struct DisplaySettingsView: View {
     @AppStorage(AppStorageKeys.showsHomeRecentRecords) private var showsHomeRecentRecords = true
     @AppStorage(AppStorageKeys.showsHomeCategories) private var showsHomeCategories = true
     @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsHomeStatsSummary = false
-    @AppStorage(AppStorageKeys.showsHomeFavorites) private var showsHomeFavorites = false
     @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
     @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
     @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
@@ -908,12 +907,11 @@ struct DisplaySettingsView: View {
         Form {
             Section("Home表示") {
                 Toggle("アテンション", isOn: $showsHomeAttention)
-                Toggle("体験ギャラリー", isOn: $showsHomeExperienceGallery)
+                Toggle("最近の思い出", isOn: $showsHomeExperienceGallery)
                 Toggle("気になる", isOn: $showsHomeInbox)
                 Toggle("最近の記録", isOn: $showsHomeRecentRecords)
                 Toggle("ジャンル一覧", isOn: $showsHomeCategories)
                 Toggle("統計サマリ", isOn: $showsHomeStatsSummary)
-                Toggle("お気に入り/ベスト", isOn: $showsHomeFavorites)
             }
 
             Section("外観") {
@@ -968,7 +966,7 @@ struct DisplaySettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("表示設定")
+        .navigationTitle("表示・外観")
         .navigationBarTitleDisplayMode(.inline)
     }
 

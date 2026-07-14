@@ -25,7 +25,6 @@ struct HomeView: View {
     @AppStorage(AppStorageKeys.showsHomeRecentRecords) private var showsRecentRecords = true
     @AppStorage(AppStorageKeys.showsHomeCategories) private var showsCategories = true
     @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsStatsSummary = false
-    @AppStorage(AppStorageKeys.showsHomeFavorites) private var showsFavorites = false
     @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
     @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var categoryLayoutModeRaw = HomeCategoryLayoutMode.horizontal.rawValue
     @State private var isShowingSettings = false
@@ -264,10 +263,6 @@ struct HomeView: View {
                         statsSummarySection
                     }
 
-                    if showsFavorites {
-                        favoritesSection
-                    }
-
                     crossGenreMiniStats
 
                 }
@@ -489,7 +484,7 @@ struct HomeView: View {
 
     private var experienceGallerySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("体験ギャラリー", count: recentVisits.count)
+            sectionHeader("最近の思い出", count: recentVisits.count)
 
             if recentVisits.isEmpty {
                 EmptyStateRow(
@@ -578,17 +573,6 @@ struct HomeView: View {
                 SummaryMetricCard(title: "記録", value: "\(visibleVisits.count)", icon: "sparkles.rectangle.stack")
                 SummaryMetricCard(title: "ジャンル", value: "\(visibleCategories.count)", icon: "square.grid.2x2")
             }
-        }
-    }
-
-    private var favoritesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("お気に入り/ベスト", count: 0)
-            EmptyStateRow(
-                icon: "star",
-                title: "ベスト候補はまだありません",
-                message: "評価やお気に入り機能が入ると、年間ベスト候補をここに表示します。"
-            )
         }
     }
 
