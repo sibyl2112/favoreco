@@ -9,7 +9,7 @@ import Foundation
 import UserNotifications
 
 enum TicketNotificationScheduler {
-    static func scheduledIdentifiers(plan: Plan, attempt: TicketAttempt?) -> [String] {
+    static func scheduledAttemptIdentifiers(plan: Plan, attempt: TicketAttempt) -> [String] {
         notificationSpecs(plan: plan, attempt: attempt).map(\.identifier)
     }
 
@@ -22,7 +22,7 @@ enum TicketNotificationScheduler {
 
     static func reschedule(plan: Plan, attempt: TicketAttempt?) async {
         let center = UNUserNotificationCenter.current()
-        let identifiers = scheduledIdentifiers(plan: plan, attempt: attempt)
+        let specs = notificationSpecs(plan: plan, attempt: attempt)
         let staleIdentifiers = staleIdentifierCandidates(planID: plan.id, attemptID: attempt?.id)
 
         center.removePendingNotificationRequests(withIdentifiers: staleIdentifiers)
@@ -37,7 +37,7 @@ enum TicketNotificationScheduler {
             return
         }
 
-        for spec in notificationSpecs(plan: plan, attempt: attempt) where identifiers.contains(spec.identifier) {
+        for spec in specs {
             guard spec.fireDate > Date() else { continue }
 
             let content = UNMutableNotificationContent()
@@ -56,16 +56,16 @@ enum TicketNotificationScheduler {
     }
 
     private static func notificationSpecs(plan: Plan, attempt: TicketAttempt?) -> [TicketNotificationSpec] {
-        var specs: [TicketNotificationSpec] = []
-
-        if UserDefaults.standard.bool(forKey: AppStorageKeys.notificationPerformanceReminderEnabled) {
-            specs.append(contentsOf: performanceReminderSpecs(plan: plan))
-        }
-
         guard let attempt else {
-            return specs
+            guard UserDefaults.standard.bool(
+                forKey: AppStorageKeys.notificationPerformanceReminderEnabled
+            ) else {
+                return []
+            }
+            return performanceReminderSpecs(plan: plan)
         }
 
+        var specs: [TicketNotificationSpec] = []
         if UserDefaults.standard.bool(forKey: AppStorageKeys.notificationApplicationStartEnabled),
            attempt.saleStartAt != Date.distantPast {
             specs.append(

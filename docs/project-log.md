@@ -6446,3 +6446,31 @@ iOS 18対応のためにUI全体を古い表現へ固定せず、主な利用環
 ### 残課題
 - 取得済みフローの詳細状態を参加済みにして保存し、申込通知が残らないことを実機確認する
 - 参加済み申込を持つ予定でも、公演前日/当日通知のON/OFF設定が予定単位で反映されることを確認する
+
+## 2026-07-15: 予定通知と申込通知の保存IDを分離
+
+### 変更概要
+- 予定前日・当日通知と、申込開始・締切・当落・入金・発券通知の生成経路を分離
+- `TicketAttempt.notificationSettingsRaw`には、その申込に属する通知IDだけを保存するよう変更
+- 申込の作成、編集、状態変更、アーカイブ復元の全保存経路を申込専用APIへ統一
+
+### 変更意図
+申込単位の通知メタデータに予定本体の通知IDが混ざると、申込の終了・削除・復元時に公演前日/当日通知まで対象に見えるため。予定と申込の通知所有権をID名前空間どおりに揃え、今後の同期・バックアップでも扱いを明確にする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/TicketNotificationScheduler.swift
+- favorecoAPP/favorecoAPP/Services/TicketAttemptStatusUpdater.swift
+- favorecoAPP/favorecoAPP/Views/EditTicketAttemptView.swift
+- favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift
+- docs/project-log.md
+
+### 確認結果（実機 / ビルド）
+- スケジューラ分離後のiOS 18最低対象、iOS 26.5 SDK汎用Simulatorビルド成功
+- 保存経路切替後のiOS 18最低対象、iOS 26.5 SDK汎用iOSデバイスビルド成功
+- 2回目のSimulatorビルドはCoreSimulatorService切断とSwiftDataマクロ用sandbox異常で失敗し、コードエラーではないことを汎用iOSビルド成功で切り分け
+- 旧`scheduledIdentifiers`参照が残っていないことを検索で確認
+- 実機確認は未実施
+
+### 残課題
+- 申込通知ONかつ公演通知ONの予定を作成し、申込メタデータに`ticket.`で始まるIDだけが保存されることを確認する
+- 申込だけを参加済みまたは削除にしても、公演前日/当日通知が残ることを実機確認する

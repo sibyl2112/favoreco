@@ -25,7 +25,7 @@ enum TicketAttemptStatusUpdater {
         if isTerminal {
             attempt.notificationSettingsRaw = ""
         } else {
-            attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
+            attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledAttemptIdentifiers(
                 plan: plan,
                 attempt: attempt
             ).joined(separator: ",")
@@ -81,7 +81,7 @@ enum TicketAttemptStatusUpdater {
         if TicketStatusDefinition.isTerminal(attempt.statusKey) {
             attempt.notificationSettingsRaw = ""
         } else {
-            attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledIdentifiers(
+            attempt.notificationSettingsRaw = TicketNotificationScheduler.scheduledAttemptIdentifiers(
                 plan: plan,
                 attempt: attempt
             ).joined(separator: ",")

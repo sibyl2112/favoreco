@@ -211,7 +211,7 @@ struct EditTicketAttemptView: View {
         let isTerminal = TicketStatusDefinition.isTerminal(attempt.statusKey)
         attempt.notificationSettingsRaw = isTerminal
             ? ""
-            : TicketNotificationScheduler.scheduledIdentifiers(
+            : TicketNotificationScheduler.scheduledAttemptIdentifiers(
                 plan: plan,
                 attempt: attempt
             ).joined(separator: ",")

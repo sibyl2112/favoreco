@@ -692,7 +692,7 @@ struct AddTicketPlanView: View {
 
     private func notificationSettingsRaw(for attempt: TicketAttempt, plan: Plan) -> String {
         guard !TicketStatusDefinition.isTerminal(attempt.statusKey) else { return "" }
-        return TicketNotificationScheduler.scheduledIdentifiers(
+        return TicketNotificationScheduler.scheduledAttemptIdentifiers(
             plan: plan,
             attempt: attempt
         ).joined(separator: ",")
