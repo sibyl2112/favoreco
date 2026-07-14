@@ -14,13 +14,30 @@ struct AddTicketPlanView: View {
         case ticketSchedule
     }
 
+    private enum TargetSelectionMode: String, CaseIterable, Identifiable {
+        case new
+        case interested
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .new: "新しく登録"
+            case .interested: "気になるから選ぶ"
+            }
+        }
+    }
+
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
+    @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
     @State private var draft = TicketPlanDraft()
     @State private var validationError = ""
+    @State private var targetSelectionMode: TargetSelectionMode = .new
+    @State private var selectedEventID: UUID?
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     private let editingPlan: Plan?
     private let targetEvent: ExperienceEvent?
@@ -63,14 +80,66 @@ struct AddTicketPlanView: View {
         activeAccounts.first { $0.id == draft.accountID }
     }
 
+    private var interestedEvents: [ExperienceEvent] {
+        events.filter { !$0.isArchived && $0.stateKey == "interested" }
+    }
+
+    private var selectedInterestedEvent: ExperienceEvent? {
+        interestedEvents.first { $0.id == selectedEventID }
+    }
+
+    private var resolvedTargetEvent: ExperienceEvent? {
+        targetEvent ?? selectedInterestedEvent
+    }
+
+    private var allowsTargetSelection: Bool {
+        editingPlan == nil && targetEvent == nil
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if allowsTargetSelection {
+                    Section("予定の対象") {
+                        Picker("登録方法", selection: $targetSelectionMode) {
+                            ForEach(TargetSelectionMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        if targetSelectionMode == .interested {
+                            if interestedEvents.isEmpty {
+                                ContentUnavailableView(
+                                    "気になる対象がありません",
+                                    systemImage: "heart",
+                                    description: Text("先にクイック登録するか、新しく対象を登録してください。")
+                                )
+                            } else {
+                                Picker("作品・対象", selection: $selectedEventID) {
+                                    Text("選択してください").tag(Optional<UUID>.none)
+                                    ForEach(interestedEvents) { event in
+                                        Text(eventTargetLabel(event)).tag(Optional(event.id))
+                                    }
+                                }
+                            }
+                        } else {
+                            Text("作品・施設などの対象と予定を同時に登録します。")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 Section("予定の基本情報") {
-                    Picker("ジャンル", selection: $draft.categoryID) {
-                        Text("未設定").tag(Optional<UUID>.none)
-                        ForEach(visibleCategories) { category in
-                            Text(category.name).tag(Optional(category.id))
+                    if let event = resolvedTargetEvent {
+                        LabeledContent("ジャンル", value: event.category?.name ?? "未設定")
+                    } else {
+                        Picker("ジャンル", selection: $draft.categoryID) {
+                            Text("未設定").tag(Optional<UUID>.none)
+                            ForEach(visibleCategories) { category in
+                                Text(category.name).tag(Optional(category.id))
+                            }
                         }
                     }
 
@@ -220,7 +289,20 @@ struct AddTicketPlanView: View {
                     draft.opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: newValue) ?? newValue
                 }
             }
-            .alert("日付を確認してください", isPresented: Binding(
+            .onChange(of: targetSelectionMode) { _, newValue in
+                if newValue == .new {
+                    if selectedEventID != nil {
+                        draft.clearTarget()
+                        draft.setInitialCategoryIfNeeded(visibleCategories)
+                    }
+                    selectedEventID = nil
+                }
+            }
+            .onChange(of: selectedEventID) { _, _ in
+                guard let event = selectedInterestedEvent else { return }
+                draft.applyTarget(event)
+            }
+            .alert("入力内容を確認してください", isPresented: Binding(
                 get: { !validationError.isEmpty },
                 set: { if !$0 { validationError = "" } }
             )) {
@@ -241,7 +323,20 @@ struct AddTicketPlanView: View {
         return "\(account.serviceName) / \(holder)"
     }
 
+    private func eventTargetLabel(_ event: ExperienceEvent) -> String {
+        guard let categoryName = event.category?.name, !categoryName.isEmpty else {
+            return event.title
+        }
+        return "\(event.title) / \(categoryName)"
+    }
+
     private func save() {
+        if allowsTargetSelection,
+           targetSelectionMode == .interested,
+           selectedInterestedEvent == nil {
+            validationError = "予定を追加する作品・対象を選んでください。"
+            return
+        }
         if let validationMessage = draft.validationMessage {
             validationError = validationMessage
             return
@@ -256,6 +351,7 @@ struct AddTicketPlanView: View {
     }
 
     private func create(now: Date) {
+        let event = resolvedTargetEvent ?? createTargetEvent(now: now)
         let plan = Plan(
             title: draft.trimmedTitle,
             subtitle: draft.trimmedSubtitle,
@@ -270,13 +366,12 @@ struct AddTicketPlanView: View {
             memo: draft.trimmedMemo,
             createdAt: now,
             updatedAt: now,
-            category: targetEvent?.category ?? selectedCategory,
-            event: targetEvent
+            category: event.category ?? selectedCategory,
+            event: event
         )
         modelContext.insert(plan)
-        targetEvent?.stateKey = "active"
-        targetEvent?.updatedAt = now
-        onSave?()
+        event.stateKey = "active"
+        event.updatedAt = now
 
         var attemptForScheduling: TicketAttempt?
         if draft.createsTicketAttempt {
@@ -314,6 +409,7 @@ struct AddTicketPlanView: View {
             Task {
                 await TicketNotificationScheduler.reschedule(plan: plan, attempt: attemptForScheduling)
             }
+            onSave?()
             dismiss()
         } catch {
             modelContext.rollback()
@@ -322,7 +418,23 @@ struct AddTicketPlanView: View {
         }
     }
 
+    private func createTargetEvent(now: Date) -> ExperienceEvent {
+        let event = ExperienceEvent(
+            title: draft.trimmedTitle,
+            officialURL: draft.trimmedOfficialURL,
+            stateKey: "active",
+            createdAt: now,
+            updatedAt: now,
+            category: selectedCategory
+        )
+        modelContext.insert(event)
+        return event
+    }
+
     private func update(plan: Plan, now: Date) {
+        if plan.event == nil {
+            plan.event = createTargetEvent(now: now)
+        }
         let existingAttempt = latestAttempt(for: plan)
 
         plan.title = draft.trimmedTitle
@@ -336,7 +448,9 @@ struct AddTicketPlanView: View {
         plan.sourceURL = draft.trimmedOfficialURL
         plan.memo = draft.trimmedMemo
         plan.updatedAt = now
-        plan.category = selectedCategory
+        plan.category = plan.event?.category ?? selectedCategory
+        plan.event?.stateKey = "active"
+        plan.event?.updatedAt = now
 
         let attemptForScheduling: TicketAttempt?
         if draft.createsTicketAttempt {
@@ -637,6 +751,19 @@ private struct TicketPlanDraft {
         categoryID = categories.first { category in
             category.enabledUnitsRaw.components(separatedBy: ",").contains("ticketPlan")
         }?.id ?? categories.first?.id
+    }
+
+    mutating func applyTarget(_ event: ExperienceEvent) {
+        categoryID = event.category?.id
+        title = event.title
+        officialURL = event.officialURL
+    }
+
+    mutating func clearTarget() {
+        categoryID = nil
+        title = ""
+        subtitle = ""
+        officialURL = ""
     }
 
     mutating func applyFlowDefaults(_ key: String) {
