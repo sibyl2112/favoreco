@@ -833,6 +833,8 @@ struct AddVisitView: View {
             return pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
             return draft.hasTicketPlan ? .entered : .optional
+        case "officialInfo":
+            return event.officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .optional : .entered
         case "advanced":
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
