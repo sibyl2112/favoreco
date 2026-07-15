@@ -186,7 +186,7 @@ struct AddExperienceView: View {
                 coverPhotoPath: $coverPhotoPath
             )
         case "goshuinBook":
-            goshuinBookFields(
+            ExperienceGoshuinBookUnitEditor(
                 sizeKey: $draft.goshuinBookSizeKey,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey
             )
@@ -209,7 +209,7 @@ struct AddExperienceView: View {
                 placeholder: template.memoPlaceholder
             )
         case "advanced":
-            AdvancedUnitEditor(entries: $draft.advancedEntries)
+            ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
             PendingUnitView(unit: unit)
         }
@@ -490,7 +490,7 @@ struct EditExperienceView: View {
                 coverPhotoPath: $coverPhotoPath
             )
         case "goshuinBook":
-            goshuinBookFields(
+            ExperienceGoshuinBookUnitEditor(
                 sizeKey: $draft.goshuinBookSizeKey,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey
             )
@@ -513,7 +513,7 @@ struct EditExperienceView: View {
                 placeholder: template.memoPlaceholder
             )
         case "advanced":
-            AdvancedUnitEditor(entries: $draft.advancedEntries)
+            ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
             PendingUnitView(unit: unit)
         }
@@ -816,7 +816,7 @@ struct AddVisitView: View {
                 coverPhotoPath: $coverPhotoPath
             )
         case "goshuinBook":
-            goshuinBookFields(
+            ExperienceGoshuinBookUnitEditor(
                 sizeKey: $draft.goshuinBookSizeKey,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey
             )
@@ -850,7 +850,7 @@ struct AddVisitView: View {
         case "money":
             ExperienceMoneyUnitEditor(amountText: $draft.amountText)
         case "advanced":
-            AdvancedUnitEditor(entries: $draft.advancedEntries)
+            ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         case "officialInfo":
             ExperienceOfficialInfoReferenceView()
         default:
@@ -1370,41 +1370,6 @@ private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnit
     }
 }
 
-private func goshuinBookFields(sizeKey: Binding<String>, aspectRatioKey: Binding<String>) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
-        Picker("御朱印帳サイズ", selection: sizeKey) {
-            ForEach(GoshuinBookSize.all) { size in
-                Text("\(size.name)（\(size.displaySize)）").tag(size.key)
-            }
-        }
-
-        let selectedSize = GoshuinBookSize.option(for: sizeKey.wrappedValue)
-        VStack(alignment: .leading, spacing: 4) {
-            Text(selectedSize.note)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-            Text("御朱印写真はこのサイズ比に合わせて表示します。見開きや横向きの場合は、ここでサイズを変えてから写真を追加してください。")
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-    .onAppear {
-        if sizeKey.wrappedValue.isEmpty {
-            sizeKey.wrappedValue = GoshuinBookSize.standard.key
-        }
-        if aspectRatioKey.wrappedValue.isEmpty {
-            aspectRatioKey.wrappedValue = EyecatchAspectRatio.goshuinStandard.key
-        }
-    }
-    .onChange(of: sizeKey.wrappedValue) { _, newValue in
-        let size = GoshuinBookSize.option(for: newValue)
-        aspectRatioKey.wrappedValue = size.key == GoshuinBookSize.wide.key
-            ? EyecatchAspectRatio.labelLandscape.key
-            : EyecatchAspectRatio.goshuinStandard.key
-    }
-}
-
 private func parsedCurrencyAmount(from text: String) -> Decimal {
     let normalized = text
         .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1417,45 +1382,6 @@ private func parsedCurrencyAmount(from text: String) -> Decimal {
 private func formattedCurrencyAmount(_ amount: Decimal) -> String {
     guard amount != Decimal(0) else { return "" }
     return NSDecimalNumber(decimal: amount).stringValue
-}
-
-private struct AdvancedUnitEditor: View {
-    @Binding var entries: [AdvancedFieldEntry]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if entries.isEmpty {
-                Text("ジャンル固有の項目を自由に追加できます。例: 精米歩合、所要時間、購入店舗、同行者メモなど。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                ForEach($entries) { $entry in
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("項目名（例: 所要時間）", text: $entry.label)
-                        TextField("値（例: 90分）", text: $entry.value, axis: .vertical)
-                            .lineLimit(1...3)
-
-                        Button(role: .destructive) {
-                            entries.removeAll { $0.id == entry.id }
-                        } label: {
-                            Label("この項目を削除", systemImage: "minus.circle")
-                        }
-                        .font(FavorecoTypography.caption)
-                    }
-                    .padding(.vertical, 6)
-                }
-            }
-
-            Button {
-                entries.append(AdvancedFieldEntry())
-            } label: {
-                Label("項目を追加", systemImage: "plus.circle")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-        }
-    }
 }
 
 private enum RecordUnitStatus {
