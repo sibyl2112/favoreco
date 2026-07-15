@@ -191,6 +191,8 @@ struct MainTabView: View {
 }
 
 struct MainScreenHeader: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     let title: String
     var usesBrandFont = false
 
@@ -199,9 +201,10 @@ struct MainScreenHeader: View {
             Text(title)
                 .font(
                     usesBrandFont
-                        ? FavorecoTypography.latinDisplay(34, weight: .semibold, relativeTo: .largeTitle)
+                        ? FavorecoTypography.latinDisplay(34, weight: .bold, relativeTo: .largeTitle)
                         : FavorecoTypography.jpSans(30, weight: .bold, relativeTo: .title)
                 )
+                .foregroundStyle(usesBrandFont ? FavorecoTypography.brandColor(for: colorScheme) : Color.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
                 .layoutPriority(1)
@@ -236,7 +239,7 @@ struct MainToolbarActions: View {
             Button {
                 isShowingSettings = true
             } label: {
-                ProfileAvatarView(data: profileImageData, size: 34)
+                ProfileAvatarView(data: profileImageData, size: 38)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -589,7 +592,7 @@ private struct RecordsView: View {
             VStack(spacing: 0) {
                 MainScreenHeader(title: "記録")
                     .padding(.horizontal, 20)
-                    .padding(.top, 2)
+                    .padding(.top, -4)
                     .padding(.bottom, 6)
 
                 recordToolbar
@@ -887,7 +890,7 @@ private struct CalendarView: View {
             VStack(spacing: 0) {
                 MainScreenHeader(title: "カレンダー")
                     .padding(.horizontal, 20)
-                    .padding(.top, 2)
+                    .padding(.top, -4)
                     .padding(.bottom, 6)
 
                 ScrollView {
@@ -1571,7 +1574,7 @@ private struct StatsView: View {
             VStack(spacing: 0) {
                 MainScreenHeader(title: "統計")
                     .padding(.horizontal, 20)
-                    .padding(.top, 2)
+                    .padding(.top, -4)
                     .padding(.bottom, 6)
 
                 ScrollView {

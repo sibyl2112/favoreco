@@ -203,9 +203,9 @@ struct HomeView: View {
 
         NavigationStack {
             VStack(spacing: 0) {
-                MainScreenHeader(title: "favoreco", usesBrandFont: true)
+                MainScreenHeader(title: "Favoreco", usesBrandFont: true)
                     .padding(.horizontal, 20)
-                    .padding(.top, 2)
+                    .padding(.top, -4)
                     .padding(.bottom, 6)
 
                 ScrollView {
@@ -285,7 +285,8 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("次の予定")
-                    .font(FavorecoTypography.sectionTitle)
+                    .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .headline))
+                    .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
 
                 Spacer()
 
@@ -299,21 +300,12 @@ struct HomeView: View {
 
             switch items.count {
             case 0:
-                VStack(alignment: .leading, spacing: 12) {
-                    EmptyStateRow(
-                        icon: "calendar.badge.plus",
-                        title: "次の予定はありません",
-                        message: "行きたい作品や場所が決まったら、予定を立てておけます。"
-                    )
-
-                    Button {
-                        NotificationCenter.default.post(name: .openFavorecoPlanCreation, object: nil)
-                    } label: {
-                        Label("予定を立てる", systemImage: "plus")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
+                Button {
+                    NotificationCenter.default.post(name: .openFavorecoPlanCreation, object: nil)
+                } label: {
+                    HomeUpcomingEmptyCard()
                 }
+                .buttonStyle(.plain)
 
             case 1:
                 upcomingItemLink(items[0])
@@ -322,11 +314,12 @@ struct HomeView: View {
                 TabView(selection: $selectedUpcomingPlanIndex) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         upcomingItemLink(item)
-                        .tag(index)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                            .tag(index)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 156)
+                .frame(height: 224)
 
                 Text("\(min(selectedUpcomingPlanIndex + 1, items.count)) / \(items.count)")
                     .font(FavorecoTypography.captionStrong)
@@ -349,7 +342,7 @@ struct HomeView: View {
         switch item {
         case .plan(let plan):
             NavigationLink {
-                PlanDetailView(plan: plan)
+                HomePlanDestination(planID: plan.id)
             } label: {
                 HomeUpcomingPlanCard(plan: plan)
             }
@@ -406,16 +399,33 @@ struct HomeView: View {
     }
 
     private var homeBackground: some View {
-        LinearGradient(
-            stops: [
-                .init(color: Color(.systemGroupedBackground), location: 0),
-                .init(color: themePalette.globalTint.opacity(colorScheme == .dark ? 0.09 : 0.055), location: 0.34),
-                .init(color: Color(hex: "#D8C6AE").opacity(colorScheme == .dark ? 0.05 : 0.10), location: 0.68),
-                .init(color: Color(.systemGroupedBackground), location: 1),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        ZStack {
+            Color(colorScheme == .dark ? .systemGroupedBackground : .init(red: 0.988, green: 0.972, blue: 0.945, alpha: 1))
+
+            LinearGradient(
+                stops: [
+                    .init(color: Color(hex: "#F1D8D2").opacity(colorScheme == .dark ? 0.08 : 0.34), location: 0),
+                    .init(color: Color(hex: "#F8F3E8").opacity(colorScheme == .dark ? 0.03 : 0.18), location: 0.25),
+                    .init(color: Color(hex: "#D6E3DF").opacity(colorScheme == .dark ? 0.06 : 0.18), location: 0.56),
+                    .init(color: Color(hex: "#E9D4C9").opacity(colorScheme == .dark ? 0.08 : 0.30), location: 0.80),
+                    .init(color: Color(hex: "#F4DAD6").opacity(colorScheme == .dark ? 0.07 : 0.28), location: 1),
+                ],
+                startPoint: .topTrailing,
+                endPoint: .bottomLeading
+            )
+
+            LinearGradient(
+                colors: [
+                    Color.clear,
+                    themePalette.globalTint.opacity(colorScheme == .dark ? 0.025 : 0.035),
+                    Color.clear,
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            HomePaperGrainOverlay(isDark: colorScheme == .dark)
+        }
         .ignoresSafeArea()
     }
 
@@ -559,7 +569,8 @@ struct HomeView: View {
     private func sectionHeader(_ title: String, count: Int) -> some View {
         HStack {
             Text(title)
-                .font(FavorecoTypography.sectionTitle)
+                .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .headline))
+                .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
             Spacer()
             Text("\(count)")
                 .font(FavorecoTypography.captionStrong)
@@ -612,11 +623,11 @@ private struct InterestedEventRow: View {
 }
 
 private struct HomeUpcomingPlanCard: View {
-    let plan: Plan
+    let plan: HomePlanSnapshot
     @Environment(\.favorecoThemePalette) private var themePalette
 
     private var tint: Color {
-        themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88")
+        themePalette.categoryColor(hex: plan.categoryColorHex)
     }
 
     private var dateText: String {
@@ -632,45 +643,24 @@ private struct HomeUpcomingPlanCard: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: plan.category?.iconSymbol ?? "calendar")
-                .font(.title2)
-                .foregroundStyle(tint)
-                .frame(width: 48, height: 48)
-                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        HomeUpcomingHeroLayout(posterAspectRatio: CGFloat(plan.posterAspectRatio)) {
+            HomeUpcomingPoster(
+                imageData: plan.posterData,
+                fallbackIcon: plan.categoryIcon,
+                tint: tint
+            )
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(plan.category?.name ?? "予定")
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(tint)
-
-                Text(plan.title.isEmpty ? plan.event?.title ?? "予定" : plan.title)
-                    .font(FavorecoTypography.cardTitle)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-
-                Label(dateText, systemImage: "calendar")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                if !plan.venueNameSnapshot.isEmpty {
-                    Label(plan.venueNameSnapshot, systemImage: "mappin.and.ellipse")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .padding(.top, 4)
+            HomeUpcomingHeroDetails(
+                categoryName: plan.categoryName,
+                title: plan.title,
+                subtitle: plan.subtitle.isEmpty ? plan.organizerName : plan.subtitle,
+                dateText: dateText,
+                venueName: plan.venueName,
+                tint: tint,
+                actionTitle: "予定を見る"
+            )
         }
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-        .padding(16)
+        .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -678,6 +668,7 @@ private struct HomeUpcomingPlanCard: View {
         }
         .accessibilityElement(children: .combine)
     }
+
 }
 
 private struct HomeUpcomingVisitCard: View {
@@ -701,51 +692,204 @@ private struct HomeUpcomingVisitCard: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: visit.categoryIcon)
-                .font(.title2)
-                .foregroundStyle(tint)
-                .frame(width: 48, height: 48)
-                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        HomeUpcomingHeroLayout(posterAspectRatio: CGFloat(visit.eyecatchAspectRatio)) {
+            HomeUpcomingPoster(
+                imageData: visit.photo?.data,
+                fallbackIcon: visit.categoryIcon,
+                tint: tint
+            )
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(visit.categoryName)
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(tint)
-
-                Text(visit.title)
-                    .font(FavorecoTypography.cardTitle)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-
-                Label(dateText, systemImage: "calendar")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                if !visit.venueName.isEmpty {
-                    Label(visit.venueName, systemImage: "mappin.and.ellipse")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .padding(.top, 4)
+            HomeUpcomingHeroDetails(
+                categoryName: visit.categoryName,
+                title: visit.title,
+                subtitle: "",
+                dateText: dateText,
+                venueName: visit.venueName,
+                tint: tint,
+                actionTitle: "記録を見る"
+            )
         }
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-        .padding(16)
+        .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(tint.opacity(0.18), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
+    }
+
+}
+
+private struct HomeUpcomingHeroLayout: Layout {
+    let posterAspectRatio: CGFloat
+    private let posterFraction: CGFloat = 0.34
+    private let maximumPosterWidth: CGFloat = 112
+    private let spacing: CGFloat = 14
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+        let width = proposal.width ?? 340
+        let availableWidth = max(0, width - spacing)
+        let posterWidth = min(maximumPosterWidth, availableWidth * posterFraction)
+        let detailsWidth = availableWidth - posterWidth
+        let safeRatio = max(0.6, posterAspectRatio)
+        let posterHeight = posterWidth / safeRatio
+        let detailsSize = subviews[1].sizeThatFits(
+            ProposedViewSize(width: detailsWidth, height: posterHeight)
+        )
+        return CGSize(width: width, height: max(posterHeight, detailsSize.height))
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        guard subviews.count == 2 else { return }
+        let availableWidth = max(0, bounds.width - spacing)
+        let posterWidth = min(maximumPosterWidth, availableWidth * posterFraction)
+        let detailsWidth = availableWidth - posterWidth
+        let safeRatio = max(0.6, posterAspectRatio)
+        let posterHeight = posterWidth / safeRatio
+
+        subviews[0].place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: posterWidth, height: posterHeight)
+        )
+        subviews[1].place(
+            at: CGPoint(x: bounds.minX + posterWidth + spacing, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: detailsWidth, height: max(posterHeight, bounds.height))
+        )
+    }
+}
+
+private struct HomeUpcomingPoster: View {
+    let imageData: Data?
+    let fallbackIcon: String
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            Group {
+                if let imageData, let image = UIImage(data: imageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        tint.opacity(0.14)
+                        Image(systemName: fallbackIcon)
+                            .font(.system(size: 34, weight: .medium))
+                            .foregroundStyle(tint)
+                    }
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
+            .background(tint.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+    }
+}
+
+private struct HomeUpcomingHeroDetails: View {
+    let categoryName: String
+    let title: String
+    let subtitle: String
+    let dateText: String
+    let venueName: String
+    let tint: Color
+    let actionTitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(categoryName)
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(tint)
+
+            Text(title)
+                .font(FavorecoTypography.jpSerif(19, weight: .bold, relativeTo: .headline))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Label(dateText, systemImage: "calendar")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            if !venueName.isEmpty {
+                Label(venueName, systemImage: "mappin.and.ellipse")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "book.pages")
+                Text(actionTitle)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+            }
+            .font(FavorecoTypography.captionStrong)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .overlay {
+                Capsule().stroke(tint.opacity(0.55), lineWidth: 1)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct HomeUpcomingEmptyCard: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "calendar.badge.plus")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(themePalette.globalTint)
+
+            VStack(spacing: 5) {
+                Text("次の予定はありません")
+                    .font(FavorecoTypography.cardTitle)
+                    .foregroundStyle(.primary)
+                Text("行きたい作品や場所が決まったら、予定を立てておけます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Label("予定を立てる", systemImage: "plus")
+                .font(FavorecoTypography.bodyStrong)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(themePalette.globalTint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 274, maxHeight: 274)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(themePalette.globalTint.opacity(0.18), lineWidth: 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -1261,6 +1405,22 @@ private struct HomeVisitSummaryRow: View {
     }
 }
 
+private struct HomePlanDestination: View {
+    @Query private var plans: [Plan]
+
+    init(planID: UUID) {
+        _plans = Query(filter: #Predicate<Plan> { $0.id == planID })
+    }
+
+    var body: some View {
+        if let plan = plans.first {
+            PlanDetailView(plan: plan)
+        } else {
+            ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+        }
+    }
+}
+
 private struct HomeVisitDestination: View {
     @Query private var visits: [Visit]
 
@@ -1465,6 +1625,43 @@ private struct EmptyStateRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct HomePaperGrainOverlay: View {
+    let isDark: Bool
+
+    var body: some View {
+        Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
+            let spacing: CGFloat = 4
+            let columns = Int(ceil(size.width / spacing))
+            let rows = Int(ceil(size.height / spacing))
+            let color = isDark ? Color.white.opacity(0.13) : Color.black.opacity(0.14)
+
+            for row in 0...rows {
+                for column in 0...columns {
+                    let seed = (column * 73 + row * 151 + column * row * 19) % 101
+                    guard seed < 46 else { continue }
+
+                    let offsetX = CGFloat((seed * 7) % 9) / 9 * 1.6
+                    let offsetY = CGFloat((seed * 11) % 9) / 9 * 1.6
+                    let side: CGFloat = seed.isMultiple(of: 5) ? 1.05 : 0.65
+                    let rect = CGRect(
+                        x: CGFloat(column) * spacing + offsetX,
+                        y: CGFloat(row) * spacing + offsetY,
+                        width: side,
+                        height: side
+                    )
+                    var grain = Path()
+                    grain.addRect(rect)
+                    context.fill(grain, with: .color(color))
+                }
+            }
+        }
+        .blendMode(isDark ? .screen : .multiply)
+        .opacity(isDark ? 0.10 : 0.16)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

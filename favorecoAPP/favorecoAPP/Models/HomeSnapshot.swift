@@ -44,7 +44,7 @@ struct HomeSnapshot {
             HomeVisitSnapshot(visit: $0, peopleSummary: peopleSummary(for: $0, links: personLinks))
         }
         let upcomingItems = (
-            upcomingPlans.map(HomeUpcomingItem.plan)
+            upcomingPlans.map { HomeUpcomingItem.plan(HomePlanSnapshot(plan: $0)) }
                 + futureVisitSnapshots.map(HomeUpcomingItem.visit)
         )
         .sorted { $0.startsAt < $1.startsAt }
@@ -158,6 +158,37 @@ struct HomePhotoSnapshot {
     }
 }
 
+struct HomePlanSnapshot: Identifiable {
+    let id: UUID
+    let title: String
+    let subtitle: String
+    let categoryName: String
+    let categoryIcon: String
+    let categoryColorHex: String
+    let startsAt: Date
+    let venueName: String
+    let organizerName: String
+    let posterData: Data?
+    let posterAspectRatio: Double
+
+    init(plan: Plan) {
+        let category = plan.category ?? plan.event?.category
+        id = plan.id
+        title = plan.title.isEmpty ? plan.event?.title ?? "予定" : plan.title
+        subtitle = plan.subtitle
+        categoryName = category?.name ?? "予定"
+        categoryIcon = category?.iconSymbol ?? "calendar"
+        categoryColorHex = category?.colorHex ?? "#147C88"
+        startsAt = plan.startsAt
+        venueName = plan.venueNameSnapshot
+        organizerName = plan.organizerNameSnapshot.isEmpty
+            ? plan.event?.organizerNameSnapshot ?? ""
+            : plan.organizerNameSnapshot
+        posterData = plan.event?.eyecatchData
+        posterAspectRatio = EyecatchAspectRatio.recommended(for: category).value
+    }
+}
+
 struct HomeInterestedEventSnapshot: Identifiable {
     let id: UUID
     let title: String
@@ -199,7 +230,7 @@ struct HomeInboxItemSnapshot: Identifiable {
 }
 
 enum HomeUpcomingItem: Identifiable {
-    case plan(Plan)
+    case plan(HomePlanSnapshot)
     case visit(HomeVisitSnapshot)
 
     var id: String {

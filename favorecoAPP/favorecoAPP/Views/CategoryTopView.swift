@@ -12,6 +12,7 @@ import UIKit
 struct CategoryTopView: View {
     let category: RecordCategory
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.favorecoThemePalette) private var themePalette
     @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \RecordCategory.sortOrder) private var allCategories: [RecordCategory]
@@ -32,7 +33,8 @@ struct CategoryTopView: View {
             VStack(alignment: .leading, spacing: 24) {
                 GenreNavigationStrip(
                     categories: snapshot.visibleCategories,
-                    selectedCategoryID: category.id
+                    selectedCategoryID: category.id,
+                    onSelectAll: { dismiss() }
                 )
                 hero(snapshot: snapshot, recordTemplate: recordTemplate)
                 stats(snapshot: snapshot)
