@@ -5,6 +5,38 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-15: 記録入力の写真エディタ本体を分離
+
+### 変更概要
+
+- 写真選択、カメラ、取込進捗、枚数制限、容量表示を `ExperiencePhotoUnitEditor.swift` へ移動
+- 保存前/保存済み写真グリッドとカバー代替選択を写真エディタへ集約
+- 追加・編集・既存対象への回追加の3画面で同じ `PhotoUnitEditor` を共用
+
+### 変更意図
+
+記録入力Viewから写真機能の状態と非同期処理を分離し、写真の不具合や大量取込時の改善を他の入力ユニットへ影響させず行えるようにするため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/ExperiencePhotoUnitEditor.swift`
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/00-開発状況と残課題.md`
+
+### 確認結果
+
+- Debug / Releaseのgeneric iOS Simulatorビルド成功（iOS 18 deployment、iOS 26.5 SDK）
+- 写真0件/1件/複数件、無料上限/上限なし、取込中/待機中の表示分岐をコード確認
+- 圧縮品質、追加開始方法、カバー代替、50枚以上の容量注意が移動前と同一であることを確認
+- `AddExperienceView.swift` が約3,100行から約2,600行まで縮小
+- 既知の警告は `favorecoAPPApp.swift` の既存の未使用 `try?` のみ
+
+### 残課題
+
+- 実機でカメラ、複数写真選択、進捗、上限、カバー変更、削除を確認する
+- 次はOCR入力と人物・団体入力を専用ファイルへ分離する
+
 ## 2026-07-15: 記録入力の写真サムネイルUIを分離
 
 ### 変更概要

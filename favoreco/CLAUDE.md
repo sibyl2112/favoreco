@@ -163,6 +163,7 @@ DEBUGビルドの設定 > 開発にはStoreKit購入結果/無料版/Pro/Premium
 - 記録詳細は `ExperienceDetailSnapshot.make` で写真、対象/当日の人物、`VisitUnitFields`、評価、天気、チケット状態、金額、住所優先Map URL、カレンダー場所を描画ごとに1回だけ解決する。写真は明示カバーを先頭、残りを作成順とし、各SectionとカレンダーDraftは同じSnapshotを使う。
 - 記録入力の写真は `PendingPhoto` を保存前Draftとし、選択画像を1600px以内へ縮小して設定品質でJPEG圧縮してから保持する。入力中は `PhotoBlob` を作らず、保存確定時だけ `makePhotoBlob(visit:)` でモデル化する。
 - 記録入力の写真サムネイルは `ExperiencePhotoThumbnail.swift` に閉じ込める。保存前/保存済みの両方を `ThumbnailLoader` の420pxサムネイルで表示し、原寸DataをSwiftUIのグリッドへ直接展開しない。カバー選択と削除操作は親の写真エディタへクロージャで返す。
+- 記録入力の写真欄は `ExperiencePhotoUnitEditor.swift` の `PhotoUnitEditor` を追加・編集・既存対象への回追加で共用する。写真選択、カメラ、取込進捗、プラン別枚数制限、50枚以上の容量注意、カバー代替選択をこのViewに閉じ込め、親画面はDraft Bindingだけを渡す。
 - SNSアカウント入力はID/URLどちらも許容する。外部遷移時は `SocialPlatform` でURLに解決する。ジャンル別SNSは `SocialAccount.category` にoptionalで紐付け、未指定は全体プロフィールとする。
 - 初回ジャンル選択とカテゴリseedでは、表示ジャンルが0件にならないよう `CategoryPresetSeeder.ensureAtLeastOneActiveCategory` を必ず通す。すべて非表示になった場合は先頭の標準カテゴリを復帰させる。
 - ジャンル管理の非表示は削除ではなく `RecordCategory.isArchived` の切り替えとする。記録済みデータは残し、Home/追加導線/ジャンル切替の入口から外す。記録・予定・SNS紐付けがある自作ジャンルの削除要求も同じ非表示へ安全にフォールバックする。完全削除は関連が0件の自作ジャンルだけに限定し、組み込みジャンルは削除不可。最後の1ジャンルはUI上で非表示/削除できない。
