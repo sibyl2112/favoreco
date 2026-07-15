@@ -5,6 +5,37 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-15: 対象詳細の履歴・代表写真集計をSnapshotへ集約
+
+### 変更概要
+
+- 対象詳細の体験履歴、最新記録日、平均評価、記録件数を `EventDetailSnapshot` へ集約
+- 代表写真候補と写真有無を、並び替え済み履歴から1回の写真走査で解決
+- Hero、統計、履歴、削除確認が同じSnapshotを使うように変更
+
+### 変更意図
+
+対象詳細の再描画ごとに履歴のsort、評価のfilter/reduce、写真全件走査が重複する状態を解消し、記録・写真が増えた時の負荷を抑えるため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Models/EventDetailSnapshot.swift`
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/00-開発状況と残課題.md`
+
+### 確認結果
+
+- Debug / Releaseのgeneric iOS Simulatorビルド成功（iOS 18 deployment、iOS 26.5 SDK）
+- 代表写真の優先順位（対象で明示指定した写真 > 対象アイキャッチ > 最新回から明示カバー/先頭写真）をコード確認
+- 0件時の最新日・平均評価は従来どおり `-`、履歴は従来どおり新しい順であることを確認
+- 既知の警告は `favorecoAPPApp.swift` の既存の未使用 `try?` のみ
+
+### 残課題
+
+- 実機で対象アイキャッチ、記録写真の自動代表、明示代表写真を切り替えて表示を確認する
+- 記録詳細の表示集計を次の実装単位で点検する
+
 ## 2026-07-15: ジャンルトップ集計をSnapshotへ集約
 
 ### 変更概要

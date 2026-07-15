@@ -37,27 +37,21 @@ struct EventDetailView: View {
         CategoryRecordTemplate.template(for: category)
     }
 
-    private var visits: [Visit] {
-        (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
-    }
-
-    private var representativePhoto: PhotoBlob? {
-        EventRepresentativePhotoResolver.photo(for: event)
-    }
-
     var body: some View {
+        let snapshot = EventDetailSnapshot.make(event: event)
+
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                hero
+                hero(snapshot: snapshot)
                 eventMemoSection
-                stats
-                visitHistory
+                stats(snapshot: snapshot)
+                visitHistory(snapshot: snapshot)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle(eventTitle)
+        .navigationTitle(snapshot.eventTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -68,7 +62,7 @@ struct EventDetailView: View {
                         Label("対象情報・画像を編集", systemImage: "pencil")
                     }
 
-                    if EventRepresentativePhotoResolver.hasPhotos(event) {
+                    if snapshot.hasPhotos {
                         Button {
                             isShowingRepresentativePhotoPicker = true
                         } label: {
@@ -118,7 +112,7 @@ struct EventDetailView: View {
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("「\(eventTitle)」と、ひもづく記録 \(visits.count) 件（写真を含む）をすべて削除します。取り消せません。")
+            Text("「\(snapshot.eventTitle)」と、ひもづく記録 \(snapshot.visitCount) 件（写真を含む）をすべて削除します。取り消せません。")
         }
         .alert("処理に失敗しました", isPresented: Binding(
             get: { actionErrorMessage != nil },
@@ -177,9 +171,9 @@ struct EventDetailView: View {
         }
     }
 
-    private var hero: some View {
+    private func hero(snapshot: EventDetailSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let representativePhoto {
+            if let representativePhoto = snapshot.representativePhoto {
                 RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 1200)
                     .aspectRatio(16 / 9, contentMode: .fill)
                     .frame(maxWidth: .infinity)
@@ -201,7 +195,7 @@ struct EventDetailView: View {
                     .background(accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(eventTitle)
+                    Text(snapshot.eventTitle)
                         .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
                         .fixedSize(horizontal: false, vertical: true)
                     Text(category?.name ?? "未分類")
@@ -246,11 +240,11 @@ struct EventDetailView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private var stats: some View {
+    private func stats(snapshot: EventDetailSnapshot) -> some View {
         HStack(spacing: 12) {
-            StatSummaryTile(title: "記録", value: "\(visits.count)")
-            StatSummaryTile(title: "最新", value: latestVisitText)
-            StatSummaryTile(title: template.ratingLabel, value: averageRatingText)
+            StatSummaryTile(title: "記録", value: "\(snapshot.visitCount)")
+            StatSummaryTile(title: "最新", value: snapshot.latestVisitText)
+            StatSummaryTile(title: template.ratingLabel, value: snapshot.averageRatingText)
         }
     }
 
@@ -294,21 +288,21 @@ struct EventDetailView: View {
         }
     }
 
-    private var visitHistory: some View {
+    private func visitHistory(snapshot: EventDetailSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("履歴")
                     .font(FavorecoTypography.sectionTitle)
                 Spacer()
-                Text("\(visits.count)")
+                Text("\(snapshot.visitCount)")
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
             }
 
-            if visits.isEmpty {
+            if snapshot.visits.isEmpty {
                 EventEmptyState(icon: "calendar.badge.plus", message: "この対象の回はまだありません。")
             } else {
-                ForEach(visits) { visit in
+                ForEach(snapshot.visits) { visit in
                     NavigationLink {
                         ExperienceDetailView(visit: visit)
                     } label: {
@@ -320,59 +314,46 @@ struct EventDetailView: View {
         }
     }
 
-    private var eventTitle: String {
-        event.title.isEmpty ? "記録" : event.title
-    }
-
-    private var latestVisitText: String {
-        guard let latestVisit = visits.first else {
-            return "-"
-        }
-        return latestVisit.visitedAt.formatted(date: .numeric, time: .omitted)
-    }
-
-    private var averageRatingText: String {
-        let ratedVisits = visits.filter { $0.overallRating > 0 }
-        guard !ratedVisits.isEmpty else {
-            return "-"
-        }
-
-        let total = ratedVisits.reduce(0) { $0 + $1.overallRating }
-        return String(format: "%.1f", total / Double(ratedVisits.count))
-    }
 }
 
 enum EventRepresentativePhotoResolver {
     static func photo(for event: ExperienceEvent) -> PhotoBlob? {
-        let photos = allPhotos(in: event)
-        if !event.representativeEyecatchPath.isEmpty,
-           let selected = photos.first(where: { $0.relativePath == event.representativeEyecatchPath }) {
-            return selected
-        }
-        if event.eyecatchData != nil {
-            return nil
-        }
-        for visit in sortedVisits(event) {
-            let visitPhotos = photoItems(in: visit)
-            if !visit.eyecatchPath.isEmpty,
-               let cover = visitPhotos.first(where: { $0.relativePath == visit.eyecatchPath }) {
-                return cover
-            }
-            if let first = visitPhotos.first { return first }
-        }
-        return nil
+        resolve(for: event, sortedVisits: sortedVisits(event)).photo
     }
 
-    static func hasPhotos(_ event: ExperienceEvent) -> Bool {
-        !allPhotos(in: event).isEmpty
+    static func resolve(
+        for event: ExperienceEvent,
+        sortedVisits: [Visit]
+    ) -> (photo: PhotoBlob?, photos: [PhotoBlob]) {
+        var photos: [PhotoBlob] = []
+        var automaticPhoto: PhotoBlob?
+        for visit in sortedVisits {
+            let visitPhotos = photoItems(in: visit)
+            photos.append(contentsOf: visitPhotos)
+            if automaticPhoto == nil {
+                if !visit.eyecatchPath.isEmpty,
+                   let cover = visitPhotos.first(where: { $0.relativePath == visit.eyecatchPath }) {
+                    automaticPhoto = cover
+                } else {
+                    automaticPhoto = visitPhotos.first
+                }
+            }
+        }
+
+        let photo: PhotoBlob?
+        if !event.representativeEyecatchPath.isEmpty,
+           let selected = photos.first(where: { $0.relativePath == event.representativeEyecatchPath }) {
+            photo = selected
+        } else if event.eyecatchData != nil {
+            photo = nil
+        } else {
+            photo = automaticPhoto
+        }
+        return (photo, photos)
     }
 
     static func allPhotos(in event: ExperienceEvent) -> [PhotoBlob] {
-        var photos: [PhotoBlob] = []
-        for visit in sortedVisits(event) {
-            photos.append(contentsOf: photoItems(in: visit))
-        }
-        return photos
+        resolve(for: event, sortedVisits: sortedVisits(event)).photos
     }
 
     private static func sortedVisits(_ event: ExperienceEvent) -> [Visit] {
