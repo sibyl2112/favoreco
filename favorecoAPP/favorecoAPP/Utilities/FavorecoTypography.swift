@@ -52,6 +52,12 @@ enum FavorecoTypography {
     private static let jpSerifName = "Noto Serif JP"
     private static let latinDisplayName = "Cormorant Garamond"
 
+    static func brandColor(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? Color(red: 0.84, green: 0.88, blue: 0.91)
+            : Color(red: 25 / 255, green: 39 / 255, blue: 53 / 255)
+    }
+
     static var effectiveStyle: AppFontStyle {
         let rawStyle = UserDefaults.standard.string(forKey: AppStorageKeys.fontStyle) ?? ""
         let style = AppFontStyle(rawValue: rawStyle) ?? .standard

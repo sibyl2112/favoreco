@@ -29,33 +29,39 @@ struct CategoryTopView: View {
             visits: allVisits
         )
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                GenreNavigationStrip(
-                    categories: snapshot.visibleCategories,
-                    selectedCategoryID: category.id,
-                    onSelectAll: { dismiss() }
-                )
-                hero(snapshot: snapshot, recordTemplate: recordTemplate)
-                stats(snapshot: snapshot)
-                eventSection(snapshot: snapshot, recordTemplate: recordTemplate)
-                recentVisits(snapshot: snapshot)
-            }
+        VStack(spacing: 0) {
+            MainScreenHeader(
+                title: "Favoreco",
+                usesBrandFont: true,
+                centeredTitle: category.name.isEmpty ? "ジャンル" : category.name,
+                usesCompactBrand: true,
+                onLeadingTap: { dismiss() }
+            )
             .padding(.horizontal, 20)
-            .padding(.vertical, 24)
+            .padding(.top, -4)
+            .padding(.bottom, 6)
+
+            MainHeaderDivider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    GenreNavigationStrip(
+                        categories: snapshot.visibleCategories,
+                        selectedCategoryID: category.id,
+                        onSelectAll: { dismiss() }
+                    )
+                    hero(snapshot: snapshot, recordTemplate: recordTemplate)
+                    stats(snapshot: snapshot)
+                    eventSection(snapshot: snapshot, recordTemplate: recordTemplate)
+                    recentVisits(snapshot: snapshot)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
+            }
         }
         .background(categoryBackground)
-        .navigationTitle(category.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isShowingAddExperience = true
-                } label: {
-                    Label("記録を追加", systemImage: "plus")
-                }
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingAddExperience) {
             AddExperienceView(category: category)
         }

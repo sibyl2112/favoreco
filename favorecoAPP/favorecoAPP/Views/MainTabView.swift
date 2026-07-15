@@ -195,25 +195,72 @@ struct MainScreenHeader: View {
 
     let title: String
     var usesBrandFont = false
+    var centeredTitle: String? = nil
+    var usesCompactBrand = false
+    var onLeadingTap: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(title)
-                .font(
-                    usesBrandFont
-                        ? FavorecoTypography.latinDisplay(34, weight: .bold, relativeTo: .largeTitle)
-                        : FavorecoTypography.jpSans(30, weight: .bold, relativeTo: .title)
-                )
-                .foregroundStyle(usesBrandFont ? FavorecoTypography.brandColor(for: colorScheme) : Color.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-                .layoutPriority(1)
-                .accessibilityAddTraits(.isHeader)
+        ZStack {
+            if let centeredTitle {
+                Text(centeredTitle)
+                    .font(FavorecoTypography.jpSerif(20, weight: .bold, relativeTo: .title3))
+                    .tracking(5)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .padding(.horizontal, 112)
+                    .accessibilityAddTraits(.isHeader)
+            }
 
-            Spacer(minLength: 8)
-            MainToolbarActions()
+            HStack(alignment: .center, spacing: 12) {
+                if let onLeadingTap {
+                    Button(action: onLeadingTap) {
+                        leadingTitle
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Homeへ戻る")
+                } else {
+                    leadingTitle
+                        .accessibilityAddTraits(.isHeader)
+                }
+
+                Spacer(minLength: 8)
+                MainToolbarActions()
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 48)
+    }
+
+    private var leadingTitle: some View {
+        Text(title)
+            .font(
+                usesBrandFont
+                    ? FavorecoTypography.latinDisplay(
+                        34,
+                        weight: usesCompactBrand ? .semibold : .bold,
+                        relativeTo: usesCompactBrand ? .headline : .largeTitle
+                    )
+                    : FavorecoTypography.jpSans(30, weight: .bold, relativeTo: .title)
+            )
+            .foregroundStyle(
+                usesBrandFont
+                    ? FavorecoTypography.brandColor(for: colorScheme).opacity(usesCompactBrand ? 0.78 : 1)
+                    : Color.primary
+            )
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .layoutPriority(1)
+    }
+}
+
+struct MainHeaderDivider: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    var body: some View {
+        Rectangle()
+            .fill(themePalette.globalTint.opacity(colorScheme == .dark ? 0.26 : 0.18))
+            .frame(height: 1)
     }
 }
 

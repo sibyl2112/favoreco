@@ -58,7 +58,7 @@ struct GenreNavigationStrip: View {
                 scrollToSelection(with: proxy, animated: true)
             }
         }
-        .frame(height: 44)
+        .frame(height: 40)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("ジャンルを選ぶ")
     }
@@ -104,13 +104,13 @@ struct GenreNavigationStrip: View {
             .foregroundStyle(isSelected ? Color.white : Color.primary)
             .lineLimit(1)
             .padding(.horizontal, 14)
-            .frame(height: 40)
+            .frame(height: 36)
             .background(isSelected ? tint : Color.clear)
             .overlay(alignment: .leading) {
                 if showsLeadingDivider {
                     Rectangle()
                         .fill(isSelected ? Color.white.opacity(0.28) : Color.primary.opacity(0.16))
-                        .frame(width: 1, height: 24)
+                        .frame(width: 1, height: 22)
                 }
             }
             .contentShape(Rectangle())

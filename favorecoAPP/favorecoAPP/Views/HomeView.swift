@@ -208,10 +208,13 @@ struct HomeView: View {
                     .padding(.top, -4)
                     .padding(.bottom, 6)
 
+                MainHeaderDivider()
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         if showsCategories {
                             categorySection(categories: snapshot.visibleCategories)
+                                .padding(.bottom, -8)
                         }
 
                         upcomingPlansSection(items: snapshot.upcomingItems)
@@ -285,7 +288,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("次の予定")
-                    .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .headline))
+                    .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
                     .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
 
                 Spacer()
@@ -311,20 +314,39 @@ struct HomeView: View {
                 upcomingItemLink(items[0])
 
             default:
-                TabView(selection: $selectedUpcomingPlanIndex) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        upcomingItemLink(item)
-                            .frame(maxHeight: .infinity, alignment: .top)
-                            .tag(index)
+                GeometryReader { geometry in
+                    let cardWidth = max(0, geometry.size.width - 36)
+
+                    ScrollView(.horizontal) {
+                        LazyHStack(alignment: .top, spacing: 10) {
+                            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                                upcomingItemLink(item)
+                                    .frame(width: cardWidth, alignment: .top)
+                                    .id(index)
+                            }
+                        }
+                        .scrollTargetLayout()
+                    }
+                    .contentMargins(.horizontal, 18, for: .scrollContent)
+                    .scrollIndicators(.hidden)
+                    .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+                    .scrollPosition(id: selectedUpcomingPlanPosition)
+                }
+                .frame(height: 206)
+
+                HStack(spacing: 7) {
+                    ForEach(items.indices, id: \.self) { index in
+                        Circle()
+                            .fill(
+                                index == selectedUpcomingPlanIndex
+                                    ? themePalette.globalTint
+                                    : Color.secondary.opacity(0.28)
+                            )
+                            .frame(width: 7, height: 7)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 224)
-
-                Text("\(min(selectedUpcomingPlanIndex + 1, items.count)) / \(items.count)")
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .accessibilityElement(children: .ignore)
                     .accessibilityLabel("予定 \(min(selectedUpcomingPlanIndex + 1, items.count))件目、全\(items.count)件")
             }
         }
@@ -335,6 +357,17 @@ struct HomeView: View {
                 selectedUpcomingPlanIndex = count - 1
             }
         }
+    }
+
+    private var selectedUpcomingPlanPosition: Binding<Int?> {
+        Binding(
+            get: { selectedUpcomingPlanIndex },
+            set: { newValue in
+                if let newValue {
+                    selectedUpcomingPlanIndex = newValue
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -559,7 +592,7 @@ struct HomeView: View {
     private func sectionHeader(_ title: String, count: Int) -> some View {
         HStack {
             Text(title)
-                .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .headline))
+                .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
                 .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
             Spacer()
             Text("\(count)")
