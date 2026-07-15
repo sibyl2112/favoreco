@@ -174,16 +174,20 @@ struct EventDetailView: View {
     private func hero(snapshot: EventDetailSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             if let representativePhoto = snapshot.representativePhoto {
-                RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 1200)
-                    .aspectRatio(16 / 9, contentMode: .fill)
+                RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 1200, contentMode: .fit)
+                    .aspectRatio(representativeAspectRatio, contentMode: .fit)
+                    .frame(maxWidth: 240)
                     .frame(maxWidth: .infinity)
+                    .background(accentColor.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else if let data = event.eyecatchData, let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
-                    .aspectRatio(16 / 9, contentMode: .fill)
+                    .scaledToFit()
+                    .aspectRatio(representativeAspectRatio, contentMode: .fit)
+                    .frame(maxWidth: 240)
                     .frame(maxWidth: .infinity)
+                    .background(accentColor.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
@@ -238,6 +242,10 @@ struct EventDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var representativeAspectRatio: CGFloat {
+        CGFloat(EyecatchAspectRatio.recommended(for: category).value)
     }
 
     private func stats(snapshot: EventDetailSnapshot) -> some View {
@@ -370,6 +378,7 @@ enum EventRepresentativePhotoResolver {
 struct RepresentativePhotoImage: View {
     let photo: PhotoBlob
     let maxPixelSize: CGFloat
+    var contentMode: ContentMode = .fill
     @State private var image: UIImage?
 
     var body: some View {
@@ -377,7 +386,7 @@ struct RepresentativePhotoImage: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .aspectRatio(contentMode: contentMode)
             } else {
                 Rectangle()
                     .fill(Color(.secondarySystemFill))

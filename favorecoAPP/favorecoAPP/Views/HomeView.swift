@@ -853,7 +853,7 @@ private struct HomeUpcomingPoster: View {
                 if let imageData, let image = UIImage(data: imageData) {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFit()
                 } else {
                     ZStack {
                         tint.opacity(0.14)
@@ -1285,9 +1285,8 @@ private struct ExperienceGalleryCard: View {
                 if let thumbnailImage {
                     Image(uiImage: thumbnailImage)
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFit()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
                 } else {
                     Rectangle()
                         .fill(categoryColor.opacity(0.18))
@@ -1316,8 +1315,9 @@ private struct ExperienceGalleryCard: View {
                 }
                 .padding(10)
             }
-            .aspectRatio(CGFloat(visit.eyecatchAspectRatio), contentMode: .fill)
+            .aspectRatio(CGFloat(visit.eyecatchAspectRatio), contentMode: .fit)
             .frame(maxWidth: .infinity)
+            .background(categoryColor.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 6) {
@@ -1467,8 +1467,9 @@ private struct HomeVisitSummaryRow: View {
         if let thumbnailImage {
             Image(uiImage: thumbnailImage)
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(width: 64, height: thumbnailHeight)
+                .background(categoryColor.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {
             Image(systemName: visit.categoryIcon)

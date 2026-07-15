@@ -156,13 +156,16 @@ enum DebugDataSeeder {
     }
 
     private static func sampleImage(for category: RecordCategory, title: String, index: Int) -> SampleImage {
-        let resourceName = "\(category.templateKey)-\((index % 3) + 1)"
-        let resourceURL = Bundle.main.url(forResource: resourceName, withExtension: "png")
-            ?? Bundle.main.url(
-                forResource: resourceName,
-                withExtension: "png",
-                subdirectory: "Resources/DebugSampleImages"
-            )
+        let resourceIndex = category.templateKey == "movie" ? index + 1 : (index % 3) + 1
+        let resourceName = "\(category.templateKey)-\(resourceIndex)"
+        let resourceURL = ["jpg", "png"].lazy.compactMap { fileExtension in
+            Bundle.main.url(forResource: resourceName, withExtension: fileExtension)
+                ?? Bundle.main.url(
+                    forResource: resourceName,
+                    withExtension: fileExtension,
+                    subdirectory: "Resources/DebugSampleImages"
+                )
+        }.first
         if let url = resourceURL,
            let data = try? Data(contentsOf: url),
            let normalized = normalizedJPEG(from: data) {
@@ -277,7 +280,18 @@ enum DebugDataSeeder {
         let titles: [String]
         switch category.templateKey {
         case "movie":
-            titles = ["雨の日のシネマ", "夜明けの余韻", "銀幕の約束", "海辺のフィルム", "午後三時の映画館", "星降るロードショー", "小さな名画座", "週末の字幕", "月灯りのラストシーン", "深夜のリバイバル"]
+            titles = [
+                "マトリックス",
+                "シン・エヴァンゲリオン劇場版",
+                "秒速5センチメートル",
+                "スター・ウォーズ／マンダロリアン・アンド・グローグ",
+                "悪夢ちゃん The 夢ovie",
+                "TITANE／チタン",
+                "【推しの子】The Final Act",
+                "名探偵コナン 紺青の拳",
+                "国宝",
+                "気狂いピエロ"
+            ]
         case "theater":
             titles = ["夜明けの劇場", "ハムレット", "ガラスの街", "春待つ舞台", "雨音のカーテンコール", "小劇場の記憶", "赤い椅子の物語", "二幕目の手紙", "余白の台詞", "千秋楽の花束"]
         case "book":

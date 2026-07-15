@@ -94,7 +94,7 @@ private struct PhotoThumbnail: View {
                 if let image {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFill()
+                        .scaledToFit()
                 } else {
                     Image(systemName: "photo")
                         .font(.title2)
@@ -103,8 +103,9 @@ private struct PhotoThumbnail: View {
                         .background(Color(.secondarySystemGroupedBackground))
                 }
             }
-            .aspectRatio(CGFloat(aspectRatio), contentMode: .fill)
+            .aspectRatio(CGFloat(aspectRatio), contentMode: .fit)
             .frame(maxWidth: .infinity)
+            .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             Button(role: .destructive, action: onDelete) {

@@ -29,9 +29,9 @@ struct EyecatchAspectRatio: Identifiable, Hashable, Codable {
     static let cinemaPoster = EyecatchAspectRatio(
         key: "cinemaPoster",
         name: "映画ポスター",
-        width: 2,
-        height: 3,
-        note: "映画のポスター/キービジュアル向き"
+        width: 1,
+        height: 1.414,
+        note: "日本の映画ポスター/B判に近い比率"
     )
 
     static let bSeriesPoster = EyecatchAspectRatio(

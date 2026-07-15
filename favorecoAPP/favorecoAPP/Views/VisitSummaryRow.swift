@@ -149,8 +149,9 @@ struct VisitSummaryRow: View {
         if let thumbnailImage {
             Image(uiImage: thumbnailImage)
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
                 .frame(width: 64, height: thumbnailHeight)
+                .background(categoryColor.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {
             Image(systemName: category?.iconSymbol ?? "sparkles.rectangle.stack")

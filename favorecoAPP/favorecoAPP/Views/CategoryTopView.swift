@@ -216,14 +216,16 @@ private struct EventRow: View {
             } label: {
                 HStack(spacing: 12) {
                     if let representativePhoto {
-                        RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 220)
-                            .frame(width: 68, height: 68)
+                        RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 220, contentMode: .fit)
+                            .frame(width: 68, height: representativeImageHeight)
+                            .background(Color(.secondarySystemFill))
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     } else if let data = event.eyecatchData, let image = UIImage(data: data) {
                         Image(uiImage: image)
                             .resizable()
-                            .scaledToFill()
-                            .frame(width: 68, height: 68)
+                            .scaledToFit()
+                            .frame(width: 68, height: representativeImageHeight)
+                            .background(Color(.secondarySystemFill))
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
 
@@ -262,6 +264,11 @@ private struct EventRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var representativeImageHeight: CGFloat {
+        let ratio = EyecatchAspectRatio.recommended(for: event.category).value
+        return min(96, max(68, 68 / CGFloat(ratio)))
     }
 }
 

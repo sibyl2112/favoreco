@@ -136,17 +136,19 @@ struct ExperienceDetailView: View {
                 sectionTitle("写真")
 
                 if snapshot.photos.count == 1, let firstPhoto = snapshot.photos.first {
-                    RepresentativePhotoImage(photo: firstPhoto, maxPixelSize: 1600)
-                        .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fill)
+                    RepresentativePhotoImage(photo: firstPhoto, maxPixelSize: 1600, contentMode: .fit)
+                        .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fit)
                         .frame(maxWidth: .infinity)
+                        .background(Color(.secondarySystemFill))
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 10)], spacing: 10) {
                         ForEach(snapshot.photos) { photo in
                             ZStack(alignment: .bottomLeading) {
-                                RepresentativePhotoImage(photo: photo, maxPixelSize: 720)
-                                    .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fill)
+                                RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fit)
+                                    .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fit)
                                     .frame(maxWidth: .infinity)
+                                    .background(Color(.secondarySystemFill))
                                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 if photo.relativePath == visit.eyecatchPath {
                                     Label("カバー", systemImage: "star.fill")
