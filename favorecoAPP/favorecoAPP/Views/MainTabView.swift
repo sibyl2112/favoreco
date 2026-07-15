@@ -199,8 +199,8 @@ struct MainScreenHeader: View {
             Text(title)
                 .font(
                     usesBrandFont
-                        ? FavorecoTypography.latinDisplay(30, weight: .semibold, relativeTo: .largeTitle)
-                        : FavorecoTypography.jpSans(28, weight: .bold, relativeTo: .title)
+                        ? FavorecoTypography.latinDisplay(34, weight: .semibold, relativeTo: .largeTitle)
+                        : FavorecoTypography.jpSans(30, weight: .bold, relativeTo: .title)
                 )
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -225,7 +225,7 @@ struct MainToolbarActions: View {
                 isShowingNotifications = true
             } label: {
                 Image(systemName: "bell")
-                    .font(.body.weight(.semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -236,7 +236,7 @@ struct MainToolbarActions: View {
             Button {
                 isShowingSettings = true
             } label: {
-                ProfileAvatarView(data: profileImageData, size: 30)
+                ProfileAvatarView(data: profileImageData, size: 34)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -589,8 +589,8 @@ private struct RecordsView: View {
             VStack(spacing: 0) {
                 MainScreenHeader(title: "記録")
                     .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    .padding(.bottom, 8)
+                    .padding(.top, 2)
+                    .padding(.bottom, 6)
 
                 recordToolbar
 
@@ -887,8 +887,8 @@ private struct CalendarView: View {
             VStack(spacing: 0) {
                 MainScreenHeader(title: "カレンダー")
                     .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    .padding(.bottom, 8)
+                    .padding(.top, 2)
+                    .padding(.bottom, 6)
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
@@ -1571,8 +1571,8 @@ private struct StatsView: View {
             VStack(spacing: 0) {
                 MainScreenHeader(title: "統計")
                     .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    .padding(.bottom, 8)
+                    .padding(.top, 2)
+                    .padding(.bottom, 6)
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {

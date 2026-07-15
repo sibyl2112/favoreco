@@ -205,8 +205,8 @@ struct HomeView: View {
             VStack(spacing: 0) {
                 MainScreenHeader(title: "favoreco", usesBrandFont: true)
                     .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    .padding(.bottom, 8)
+                    .padding(.top, 2)
+                    .padding(.bottom, 6)
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
