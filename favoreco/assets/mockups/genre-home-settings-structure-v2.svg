@@ -1,0 +1,218 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1660" viewBox="0 0 2400 1660">
+  <defs>
+    <style>
+      .sans{font-family:"Noto Sans JP","Hiragino Sans",sans-serif;fill:#262322}
+      .serif{font-family:"Noto Serif JP","Hiragino Mincho ProN",serif;fill:#262322}
+      .latin{font-family:"Cormorant Garamond",Georgia,serif;fill:#262322}
+      .boardTitle{font-size:38px;font-weight:600}.boardSub{font-size:17px;fill:#766e69}
+      .cap{font-size:19px;font-weight:700}.nav{font-size:19px;font-weight:700}.hero{font-size:24px;font-weight:700}
+      .sec{font-size:15px;font-weight:700}.body{font-size:13px}.small{font-size:11px}.tiny{font-size:9px}
+      .muted{fill:#756e69}.white{fill:#fff}.line{stroke:#e6ddd7;stroke-width:1.4}
+      .card{fill:#fff;stroke:#e5ddd7;stroke-width:1.4}.glass{fill:#fff;fill-opacity:.78;stroke:#fff;stroke-opacity:.92;stroke-width:1.5}
+      .phone{fill:#fbfaf8;stroke:#cfc6c0;stroke-width:3}.screen{fill:#f6f3f0}.tab{fill:#fff;stroke:#ddd5d0;stroke-width:1.3}
+    </style>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#5b4b42" flood-opacity=".12"/></filter>
+    <linearGradient id="homeWash" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7ecef"/><stop offset=".48" stop-color="#eef5f2"/><stop offset="1" stop-color="#f7f0e5"/></linearGradient>
+    <linearGradient id="theater" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6e1f36"/><stop offset="1" stop-color="#a85061"/></linearGradient>
+    <linearGradient id="museum" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#65725f"/><stop offset="1" stop-color="#a6b19f"/></linearGradient>
+    <linearGradient id="live" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#075e68"/><stop offset="1" stop-color="#22a7b1"/></linearGradient>
+    <linearGradient id="movie" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#292b33"/><stop offset="1" stop-color="#656b7a"/></linearGradient>
+    <linearGradient id="sake" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9b5e1c"/><stop offset="1" stop-color="#d59c56"/></linearGradient>
+    <linearGradient id="outing" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1e6d50"/><stop offset="1" stop-color="#6ea98c"/></linearGradient>
+    <linearGradient id="goshuin" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8f3440"/><stop offset="1" stop-color="#c96d72"/></linearGradient>
+    <linearGradient id="book" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#3f587e"/><stop offset="1" stop-color="#7f9abc"/></linearGradient>
+    <symbol id="phone" viewBox="0 0 360 680">
+      <rect class="phone" x="0" y="0" width="360" height="680" rx="50" filter="url(#shadow)"/>
+      <rect class="screen" x="15" y="20" width="330" height="640" rx="38"/>
+      <rect x="137" y="29" width="86" height="22" rx="11" fill="#171717"/>
+      <text x="32" y="45" class="sans tiny">9:41</text>
+      <circle cx="318" cy="40" r="3" fill="#222"/><rect x="326" y="36" width="9" height="7" rx="2" fill="#222"/>
+    </symbol>
+    <symbol id="bottomNav" viewBox="0 0 330 58">
+      <rect class="tab" x="0" y="0" width="330" height="58" rx="22"/>
+      <text x="25" y="40" class="sans tiny">Home</text><text x="91" y="40" class="sans tiny muted">記録</text>
+      <circle cx="165" cy="12" r="25" fill="currentColor"/><text x="159" y="19" class="sans hero white">＋</text>
+      <text x="205" y="40" class="sans tiny muted">カレンダー</text><text x="286" y="40" class="sans tiny muted">統計</text>
+    </symbol>
+  </defs>
+
+  <rect width="2400" height="1660" fill="#f4f0ed"/>
+  <text x="90" y="62" class="latin boardTitle">favoreco</text>
+  <text x="223" y="62" class="sans" font-size="30" font-weight="700">Home・各ジャンル・設定　構造ラフ v2</text>
+  <text x="90" y="96" class="sans boardSub">最新決定を優先：Homeは ジャンル選択 → これから行く予定 → チケットスケジュール → アテンション。ジャンルは専用エキスパート表示。</text>
+
+  <!-- 1 Home -->
+  <g transform="translate(70 145)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">1. Home</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 61)">
+      <text x="0" y="22" class="latin" font-size="29" font-weight="600">favoreco</text><text x="285" y="21" class="sans body">●</text>
+      <rect x="0" y="36" width="308" height="76" rx="16" fill="url(#homeWash)" stroke="#fff"/>
+      <text x="14" y="61" class="sans body" font-weight="600">観た・行った・体験したを、</text><text x="14" y="92" class="serif hero">美しく一生残す。</text>
+      <text x="0" y="137" class="sans sec">ジャンルを選ぶ</text>
+      <g transform="translate(0 148)">
+        <circle cx="18" cy="18" r="17" fill="#8B2F45"/><text x="12" y="22" class="sans tiny white">劇</text>
+        <circle cx="58" cy="18" r="17" fill="#7D8C78"/><text x="52" y="22" class="sans tiny white">展</text>
+        <circle cx="98" cy="18" r="17" fill="#147C88"/><text x="92" y="22" class="sans tiny white">音</text>
+        <circle cx="138" cy="18" r="17" fill="#3B3D4A"/><text x="132" y="22" class="sans tiny white">映</text>
+        <circle cx="178" cy="18" r="17" fill="#B8792F"/><text x="172" y="22" class="sans tiny white">酒</text>
+        <circle cx="218" cy="18" r="17" fill="#2E7D60"/><text x="212" y="22" class="sans tiny white">出</text>
+        <circle cx="258" cy="18" r="17" fill="#A24C55"/><text x="252" y="22" class="sans tiny white">印</text>
+        <circle cx="298" cy="18" r="17" fill="#536C95"/><text x="292" y="22" class="sans tiny white">本</text>
+      </g>
+      <text x="0" y="209" class="sans sec">これから行く予定</text><text x="258" y="209" class="sans small muted">予定一覧 ›</text>
+      <rect x="0" y="220" width="308" height="91" rx="15" fill="#fff" stroke="#e3d8d3"/>
+      <rect x="10" y="230" width="72" height="71" rx="11" fill="url(#theater)"/><text x="22" y="253" class="sans tiny white">観劇</text><text x="22" y="285" class="serif body white">緞帳</text>
+      <text x="94" y="246" class="sans small" fill="#8B2F45">次の予定</text><text x="94" y="267" class="sans body" font-weight="700">夏のミュージカル</text><text x="94" y="289" class="sans small muted">7月18日 13:00　帝都劇場</text><circle cx="286" cy="286" r="3" fill="#8B2F45"/><circle cx="296" cy="286" r="3" fill="#d5cac5"/>
+      <text x="0" y="338" class="sans sec">チケットスケジュール</text><text x="268" y="338" class="sans small muted">すべて ›</text>
+      <rect x="0" y="349" width="308" height="64" rx="13" class="card"/><rect x="10" y="359" width="42" height="44" rx="10" fill="#f5e8eb"/>
+      <text x="22" y="377" class="sans tiny" fill="#8B2F45">7/15</text><text x="20" y="394" class="sans tiny" fill="#8B2F45">当落</text><text x="64" y="374" class="sans body" font-weight="700">先行抽選 結果発表</text><text x="64" y="396" class="sans small muted">Blue Orbit Tour　18:00</text>
+      <text x="0" y="440" class="sans sec">アテンション</text><rect x="0" y="450" width="308" height="52" rx="13" fill="#fff8ee" stroke="#ead8bd"/>
+      <text x="12" y="472" class="sans small" fill="#9b5e1c">● 入金期限まであと2日</text><text x="12" y="491" class="sans tiny muted">忘れると体験を失う項目を最大2件表示</text>
+      <text x="0" y="529" class="sans sec">最近の思い出</text>
+      <rect x="0" y="540" width="92" height="62" rx="10" fill="url(#museum)"/><rect x="101" y="540" width="92" height="62" rx="10" fill="url(#live)"/><rect x="202" y="540" width="106" height="62" rx="10" fill="url(#sake)"/>
+      <g transform="translate(-11 577)" style="color:#8B2F45"><use href="#bottomNav" width="330" height="58"/></g>
+    </g>
+  </g>
+
+  <!-- 2 Theater -->
+  <g transform="translate(545 145)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">2. 観劇</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 62)">
+      <text x="0" y="20" class="serif nav">観劇⌄</text><text x="294" y="20" class="sans hero" fill="#8B2F45">＋</text>
+      <rect x="0" y="34" width="308" height="130" rx="17" fill="url(#theater)"/><rect x="14" y="48" width="78" height="102" rx="9" fill="#f5e8e5" opacity=".86"/>
+      <path d="M18 50 Q53 85 88 50 L88 145 L18 145Z" fill="#6c1d31" opacity=".9"/><text x="106" y="65" class="sans small white">NEXT PERFORMANCE</text><text x="106" y="91" class="serif hero white">星降る劇場</text><text x="106" y="114" class="sans small white">7/18 13:00　帝都劇場</text><rect x="106" y="128" width="72" height="22" rx="11" fill="#d4a55f"/><text x="120" y="143" class="sans tiny white">発券待ち</text>
+      <text x="0" y="190" class="sans sec">チケット要対応</text><rect x="0" y="201" width="308" height="56" rx="13" class="card"/><text x="12" y="223" class="sans small" fill="#8B2F45">当落発表　7/15 18:00</text><text x="12" y="243" class="sans tiny muted">FC先行「星降る劇場」　すべて見る ›</text>
+      <text x="0" y="283" class="sans sec">申込・観劇予定</text><rect x="0" y="294" width="148" height="72" rx="13" class="card"/><text x="12" y="315" class="sans tiny" fill="#8B2F45">7/18</text><text x="12" y="337" class="sans body" font-weight="700">星降る劇場</text><text x="12" y="354" class="sans tiny muted">観劇予定</text><rect x="160" y="294" width="148" height="72" rx="13" class="card"/><text x="172" y="315" class="sans tiny" fill="#8B2F45">8/02</text><text x="172" y="337" class="sans body" font-weight="700">白夜の夢</text><text x="172" y="354" class="sans tiny muted">申込中</text>
+      <text x="0" y="395" class="sans sec">観劇ライブラリ</text>
+      <rect x="0" y="406" width="308" height="79" rx="13" class="card"/><rect x="10" y="416" width="48" height="59" rx="6" fill="#8B2F45"/><text x="70" y="430" class="sans body" font-weight="700">ハムレット</text><text x="70" y="451" class="sans small muted">最終観劇 6/20　★★★★★</text><text x="70" y="470" class="sans tiny" fill="#8B2F45">3回観劇　赤羽・大阪 ほか</text>
+      <rect x="0" y="493" width="308" height="66" rx="13" class="card"/><rect x="10" y="503" width="48" height="46" rx="6" fill="#c79259"/><text x="70" y="519" class="sans body" font-weight="700">夏の夜の夢</text><text x="70" y="541" class="sans small muted">最終観劇 5/08　★★★★☆</text>
+      <text x="0" y="584" class="sans sec">今年の観劇　<tspan class="latin" font-size="22">18</tspan> 回</text>
+      <g transform="translate(-11 577)" style="color:#8B2F45"><use href="#bottomNav" width="330" height="58"/></g>
+    </g>
+  </g>
+
+  <!-- 3 Museum -->
+  <g transform="translate(1020 145)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">3. 美術展</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 62)">
+      <text x="0" y="20" class="serif nav">美術展⌄</text><text x="294" y="20" class="sans hero" fill="#7D8C78">＋</text>
+      <rect x="0" y="34" width="308" height="126" rx="17" fill="url(#museum)"/><circle cx="63" cy="97" r="40" fill="#d7b483" opacity=".85"/><rect x="28" y="73" width="70" height="49" fill="#eef0e8" opacity=".72"/>
+      <text x="118" y="62" class="sans small white">終了まであと7日</text><text x="118" y="89" class="serif hero white">静寂の色彩</text><text x="118" y="112" class="sans small white">青凪美術館</text><text x="118" y="137" class="sans tiny white">4/20 ━━━━━●━━ 7/15</text>
+      <text x="0" y="188" class="sans sec">会期・チケットスケジュール</text>
+      <rect x="0" y="199" width="308" height="63" rx="13" class="card"/><text x="12" y="221" class="sans body" font-weight="700">光の建築展</text><text x="12" y="242" class="sans small muted">7/22まで　日時指定済み</text><rect x="232" y="214" width="62" height="23" rx="11" fill="#edf1eb"/><text x="243" y="230" class="sans tiny" fill="#65725f">チケット済</text>
+      <text x="0" y="289" class="sans sec">開催中・これから行きたい</text><rect x="0" y="300" width="94" height="108" rx="11" class="card"/><rect x="8" y="308" width="78" height="70" rx="7" fill="#93a68d"/><text x="9" y="394" class="sans tiny">静寂の色彩</text><rect x="107" y="300" width="94" height="108" rx="11" class="card"/><rect x="115" y="308" width="78" height="70" rx="7" fill="#d3b589"/><text x="116" y="394" class="sans tiny">光の建築展</text><rect x="214" y="300" width="94" height="108" rx="11" class="card"/><rect x="222" y="308" width="78" height="70" rx="7" fill="#71818a"/><text x="223" y="394" class="sans tiny">水と記憶</text>
+      <text x="0" y="436" class="sans sec">最近観た展覧会</text><rect x="0" y="447" width="308" height="58" rx="13" class="card"/><text x="12" y="470" class="sans body" font-weight="700">モネ 睡蓮のとき</text><text x="12" y="491" class="sans tiny muted">6/28　国立西洋美術館</text>
+      <text x="0" y="533" class="sans sec">アーティスト　　美術館・ギャラリー</text><text x="0" y="558" class="sans sec">印象に残った作品ギャラリー</text><rect x="0" y="567" width="72" height="34" rx="7" fill="#95a889"/><rect x="80" y="567" width="72" height="34" rx="7" fill="#d4aa76"/><rect x="160" y="567" width="72" height="34" rx="7" fill="#8796a0"/>
+      <g transform="translate(-11 577)" style="color:#7D8C78"><use href="#bottomNav" width="330" height="58"/></g>
+    </g>
+  </g>
+
+  <!-- 4 Live -->
+  <g transform="translate(1495 145)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">4. ライブ</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 62)">
+      <text x="0" y="20" class="serif nav">ライブ⌄</text><text x="294" y="20" class="sans hero" fill="#147C88">＋</text>
+      <rect x="0" y="34" width="308" height="130" rx="17" fill="url(#live)"/><path d="M20 145 L80 55 L138 145 M76 145 L145 51 L210 145 M150 145 L232 55 L292 145" stroke="#bceff2" stroke-width="4" opacity=".32"/>
+      <text x="18" y="63" class="sans small white">NEXT LIVE</text><text x="18" y="92" class="serif hero white">Blue Orbit Tour</text><text x="18" y="116" class="sans small white">7/24　横浜アリーナ</text><rect x="18" y="129" width="66" height="22" rx="11" fill="#e3f6f6"/><text x="31" y="144" class="sans tiny" fill="#075e68">当選</text>
+      <text x="0" y="190" class="sans sec">チケット要対応</text><rect x="0" y="201" width="308" height="56" rx="13" class="card"/><text x="12" y="223" class="sans small" fill="#147C88">一般販売　7/17 10:00</text><text x="12" y="243" class="sans tiny muted">Summer Echo Festival　すべて見る ›</text>
+      <text x="0" y="283" class="sans sec">参戦予定</text><rect x="0" y="294" width="148" height="72" rx="13" class="card"/><text x="12" y="316" class="sans tiny" fill="#147C88">7/24</text><text x="12" y="338" class="sans body" font-weight="700">Blue Orbit</text><text x="12" y="355" class="sans tiny muted">横浜・発券待ち</text><rect x="160" y="294" width="148" height="72" rx="13" class="card"/><text x="172" y="316" class="sans tiny" fill="#147C88">8/09</text><text x="172" y="338" class="sans body" font-weight="700">Echo Fes</text><text x="172" y="355" class="sans tiny muted">千葉・申込中</text>
+      <text x="0" y="395" class="sans sec">ライブライブラリ</text><rect x="0" y="406" width="308" height="79" rx="13" class="card"/><rect x="10" y="416" width="58" height="59" rx="8" fill="url(#live)"/><text x="80" y="430" class="sans body" font-weight="700">RADWIMPS</text><text x="80" y="451" class="sans small muted">4回参戦　写真18枚</text><text x="80" y="470" class="sans tiny" fill="#147C88">セトリあり　グッズ2件</text><rect x="0" y="493" width="308" height="66" rx="13" class="card"/><rect x="10" y="503" width="58" height="46" rx="8" fill="#224c5c"/><text x="80" y="519" class="sans body" font-weight="700">Harmony Tour</text><text x="80" y="541" class="sans small muted">2回参戦　東京・大阪</text>
+      <text x="0" y="584" class="sans sec">今年の参戦　<tspan class="latin" font-size="22">12</tspan> 回</text>
+      <g transform="translate(-11 577)" style="color:#147C88"><use href="#bottomNav" width="330" height="58"/></g>
+    </g>
+  </g>
+
+  <!-- 5 Movie -->
+  <g transform="translate(1970 145)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">5. 映画</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 62)">
+      <text x="0" y="20" class="serif nav">映画⌄</text><text x="294" y="20" class="sans hero" fill="#3B3D4A">＋</text>
+      <rect x="0" y="34" width="308" height="132" rx="17" fill="url(#movie)"/><rect x="18" y="48" width="73" height="105" rx="7" fill="#d6b277"/><circle cx="54" cy="88" r="20" fill="#3a4355"/>
+      <text x="108" y="63" class="sans small white">次に観る映画</text><text x="108" y="91" class="serif hero white">夜明けの静寂</text><text x="108" y="115" class="sans small white">7/20　あと6日</text><rect x="108" y="130" width="70" height="22" rx="11" fill="#fff" opacity=".85"/><text x="121" y="145" class="sans tiny" fill="#3B3D4A">鑑賞予定</text>
+      <text x="0" y="192" class="sans sec">観たい映画</text><rect x="0" y="203" width="68" height="102" rx="7" fill="#8894a3"/><rect x="78" y="203" width="68" height="102" rx="7" fill="#b27a63"/><rect x="156" y="203" width="68" height="102" rx="7" fill="#4d6176"/><rect x="234" y="203" width="68" height="102" rx="7" fill="#c4a55f"/>
+      <text x="0" y="333" class="sans sec">観た映画</text><text x="235" y="333" class="sans small muted">3列・ポスター</text>
+      <g transform="translate(0 344)"><rect width="94" height="136" rx="8" fill="#343b48"/><rect x="107" width="94" height="136" rx="8" fill="#9a6b55"/><rect x="214" width="94" height="136" rx="8" fill="#617789"/><text x="8" y="126" class="sans tiny white">★★★★★</text><text x="115" y="126" class="sans tiny white">★★★★☆</text><text x="222" y="126" class="sans tiny white">★★★★★</text></g>
+      <text x="0" y="508" class="sans sec">コレクション</text><rect x="0" y="519" width="148" height="56" rx="12" class="card"/><text x="12" y="541" class="sans body" font-weight="700">心に残るSF</text><text x="12" y="561" class="sans tiny muted">8作品</text><rect x="160" y="519" width="148" height="56" rx="12" class="card"/><text x="172" y="541" class="sans body" font-weight="700">もう一度観たい</text><text x="172" y="561" class="sans tiny muted">12作品</text>
+      <g transform="translate(-11 577)" style="color:#3B3D4A"><use href="#bottomNav" width="330" height="58"/></g>
+    </g>
+  </g>
+
+  <!-- 6 Sake -->
+  <g transform="translate(70 870)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">6. 酒</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 62)">
+      <text x="0" y="20" class="serif nav">酒⌄</text><text x="294" y="20" class="sans hero" fill="#B8792F">＋</text>
+      <rect x="0" y="35" width="308" height="34" rx="17" fill="#eee4d6"/><text x="12" y="57" class="sans tiny" fill="#9b5e1c">すべて　 日本酒　 ビール　 ワイン　 ウイスキー</text>
+      <rect x="0" y="82" width="308" height="137" rx="17" fill="url(#sake)"/><rect x="26" y="98" width="46" height="105" rx="16" fill="#e7dbc8"/><rect x="35" y="87" width="28" height="25" rx="4" fill="#463b32"/><rect x="32" y="135" width="34" height="44" rx="4" fill="#fff" opacity=".8"/>
+      <text x="95" y="111" class="sans small white">最近飲んだお酒</text><text x="95" y="141" class="serif hero white">雨音 純米吟醸</text><text x="95" y="165" class="sans small white">日本酒　16%　京都</text><text x="95" y="190" class="sans tiny white">7/10　Bar Oak　★★★★★</text>
+      <text x="0" y="246" class="sans sec">気になる酒</text><rect x="0" y="257" width="92" height="75" rx="11" class="card"/><text x="10" y="279" class="sans body" font-weight="700">白露</text><text x="10" y="300" class="sans tiny muted">日本酒</text><rect x="105" y="257" width="92" height="75" rx="11" class="card"/><text x="115" y="279" class="sans body" font-weight="700">North Ale</text><text x="115" y="300" class="sans tiny muted">ビール</text><rect x="210" y="257" width="98" height="75" rx="11" class="card"/><text x="220" y="279" class="sans body" font-weight="700">Bourgogne</text><text x="220" y="300" class="sans tiny muted">ワイン</text>
+      <text x="0" y="361" class="sans sec">飲んだ銘柄</text><text x="247" y="361" class="sans small muted">ボトル棚</text>
+      <g transform="translate(0 372)"><rect width="94" height="129" rx="10" class="card"/><rect x="33" y="12" width="28" height="79" rx="11" fill="#5d6b39"/><text x="10" y="111" class="sans tiny">雨音</text><text x="10" y="124" class="sans tiny muted">3回</text><rect x="107" width="94" height="129" rx="10" class="card"/><rect x="140" y="12" width="28" height="79" rx="11" fill="#8b4f31"/><text x="117" y="111" class="sans tiny">Barrel No.8</text><rect x="214" width="94" height="129" rx="10" class="card"/><rect x="247" y="12" width="28" height="79" rx="11" fill="#d0a54f"/><text x="224" y="111" class="sans tiny">Hazy Moon</text></g>
+      <text x="0" y="528" class="sans sec">最近のテイスティング</text><rect x="0" y="539" width="308" height="43" rx="11" class="card"/><text x="12" y="565" class="sans small">7/10　雨音　Bar Oak　★★★★★</text>
+      <g transform="translate(-11 577)" style="color:#B8792F"><use href="#bottomNav" width="330" height="58"/></g>
+    </g>
+  </g>
+
+  <!-- 7 Outing -->
+  <g transform="translate(545 870)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">7. おでかけ施設</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 62)">
+      <text x="0" y="20" class="serif nav">おでかけ施設⌄</text><text x="294" y="20" class="sans hero" fill="#2E7D60">＋</text>
+      <rect x="0" y="34" width="308" height="123" rx="17" fill="url(#outing)"/><circle cx="55" cy="85" r="26" fill="#dfe8bb"/><path d="M0 132 Q65 90 128 132 T260 126 T308 132 V157 H0Z" fill="#275e48" opacity=".9"/>
+      <text x="118" y="62" class="sans small white">これからのおでかけ</text><text x="118" y="89" class="serif hero white">海辺の水族館</text><text x="118" y="113" class="sans small white">7/21　晴れ　友人と</text><text x="118" y="137" class="sans tiny white">チケット購入済み</text>
+      <text x="0" y="184" class="sans sec">チケットスケジュール</text><rect x="0" y="195" width="308" height="53" rx="13" class="card"/><text x="12" y="217" class="sans body" font-weight="700">夏季入園予約</text><text x="12" y="237" class="sans tiny muted">7/16 10:00 予約開始</text>
+      <text x="0" y="276" class="sans sec">お気に入り施設</text><rect x="0" y="287" width="148" height="75" rx="12" class="card"/><rect x="8" y="295" width="50" height="59" rx="8" fill="#75a78f"/><text x="68" y="318" class="sans small" font-weight="700">海辺の</text><text x="68" y="337" class="sans small" font-weight="700">水族館</text><rect x="160" y="287" width="148" height="75" rx="12" class="card"/><rect x="168" y="295" width="50" height="59" rx="8" fill="#8ba45e"/><text x="228" y="318" class="sans small" font-weight="700">森の</text><text x="228" y="337" class="sans small" font-weight="700">植物園</text>
+      <text x="0" y="391" class="sans sec">最近行った施設・訪問アルバム</text><rect x="0" y="402" width="308" height="83" rx="13" class="card"/><rect x="10" y="412" width="102" height="63" rx="8" fill="#4f8790"/><text x="124" y="430" class="sans body" font-weight="700">星空水族館</text><text x="124" y="451" class="sans small muted">6/29　写真24枚</text><text x="124" y="470" class="sans tiny muted">クラゲ・イルカショー</text>
+      <text x="0" y="513" class="sans sec">写真ギャラリー</text><rect x="0" y="524" width="72" height="55" rx="8" fill="#77aabb"/><rect x="80" y="524" width="72" height="55" rx="8" fill="#5e867c"/><rect x="160" y="524" width="72" height="55" rx="8" fill="#b7c884"/><rect x="240" y="524" width="68" height="55" rx="8" fill="#6a9e94"/>
+      <g transform="translate(-11 577)" style="color:#2E7D60"><use href="#bottomNav" width="330" height="58"/></g>
+    </g>
+  </g>
+
+  <!-- 8 Goshuin -->
+  <g transform="translate(1020 870)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">8. 御朱印</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 62)">
+      <text x="0" y="20" class="serif nav">御朱印⌄</text><text x="294" y="20" class="sans hero" fill="#A24C55">＋</text>
+      <rect x="0" y="34" width="308" height="142" rx="17" fill="url(#goshuin)"/><rect x="21" y="45" width="82" height="119" rx="5" fill="#fffaf2"/><text x="42" y="76" class="serif body" fill="#222">奉拝</text><text x="48" y="105" class="serif hero" fill="#222">神</text><circle cx="76" cy="129" r="18" fill="none" stroke="#c83d3d" stroke-width="4"/>
+      <text x="120" y="63" class="sans small white">最近いただいた印</text><text x="120" y="91" class="serif hero white">明治神宮</text><text x="120" y="115" class="sans small white">7/5　東京都</text><text x="120" y="139" class="sans tiny white">旅の御朱印帳　直書き</text>
+      <rect x="0" y="190" width="308" height="34" rx="17" fill="#f3e5e5"/><text x="20" y="212" class="sans tiny" fill="#8f3440">すべて　 御朱印　 御城印　 御船印</text>
+      <text x="0" y="251" class="sans sec">最近いただいた</text><rect x="0" y="262" width="72" height="102" rx="6" fill="#fff" stroke="#e6d6cd"/><circle cx="36" cy="319" r="17" fill="none" stroke="#c94c4c" stroke-width="4"/><rect x="80" y="262" width="72" height="102" rx="6" fill="#fff" stroke="#e6d6cd"/><text x="100" y="316" class="serif hero">寺</text><rect x="160" y="262" width="72" height="102" rx="6" fill="#fff" stroke="#e6d6cd"/><circle cx="196" cy="319" r="17" fill="none" stroke="#c94c4c" stroke-width="4"/>
+      <text x="0" y="392" class="sans sec">使用中の御朱印帳</text><rect x="0" y="403" width="148" height="86" rx="12" class="card"/><rect x="10" y="413" width="46" height="66" rx="5" fill="#a3484f"/><text x="68" y="433" class="sans small" font-weight="700">旅の御朱印帳</text><text x="68" y="454" class="sans tiny muted">12印</text><text x="68" y="472" class="sans tiny" fill="#A24C55">使用中</text><rect x="160" y="403" width="148" height="86" rx="12" class="card"/><rect x="170" y="413" width="46" height="66" rx="5" fill="#3c3a39"/><text x="228" y="433" class="sans small" font-weight="700">寺院巡り</text><text x="228" y="454" class="sans tiny muted">8印</text>
+      <text x="0" y="518" class="sans sec">地図</text><rect x="0" y="529" width="145" height="48" rx="10" fill="#efe8df"/><text x="12" y="558" class="sans small">12都府県・38か所</text><text x="160" y="518" class="sans sec">行きたい寺社</text><rect x="160" y="529" width="148" height="48" rx="10" class="card"/><text x="172" y="558" class="sans small">出雲大社 ほか3件</text>
+      <g transform="translate(-11 577)" style="color:#A24C55"><use href="#bottomNav" width="330" height="58"/></g>
+    </g>
+  </g>
+
+  <!-- 9 Books -->
+  <g transform="translate(1495 870)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">9. 書籍</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 62)">
+      <text x="0" y="20" class="serif nav">書籍⌄</text><text x="294" y="20" class="sans hero" fill="#536C95">＋</text>
+      <text x="0" y="56" class="sans sec">読書中</text><rect x="0" y="67" width="308" height="119" rx="15" fill="url(#book)"/><rect x="18" y="80" width="68" height="93" rx="5" fill="#f5e9ce"/><text x="30" y="116" class="serif body">余白の</text><text x="36" y="139" class="serif body">記憶</text><text x="104" y="98" class="serif hero white">余白の記憶</text><text x="104" y="122" class="sans small white">山野 智子</text><rect x="104" y="140" width="155" height="8" rx="4" fill="#d8e1ef"/><rect x="104" y="140" width="88" height="8" rx="4" fill="#fff"/><text x="104" y="167" class="sans tiny white">読書中　56%</text>
+      <text x="0" y="214" class="sans sec">気になる・積読</text><g transform="translate(0 225)"><rect width="62" height="91" rx="5" fill="#b7886f"/><rect x="72" width="62" height="91" rx="5" fill="#7289a7"/><rect x="144" width="62" height="91" rx="5" fill="#d1ad68"/><rect x="216" width="62" height="91" rx="5" fill="#7c8a76"/></g>
+      <text x="0" y="345" class="sans sec">最近読んだ本</text><g transform="translate(0 356)"><rect width="86" height="124" rx="6" fill="#405b7f"/><text x="10" y="106" class="sans tiny white">静かな科学</text><text x="10" y="119" class="sans tiny white">★★★★★</text><rect x="98" width="86" height="124" rx="6" fill="#a77a5f"/><text x="108" y="106" class="sans tiny white">街と記憶</text><text x="108" y="119" class="sans tiny white">★★★★☆</text><rect x="196" width="86" height="124" rx="6" fill="#6b7d91"/><text x="206" y="106" class="sans tiny white">青い時間</text><text x="206" y="119" class="sans tiny white">★★★★★</text></g>
+      <text x="0" y="509" class="sans sec">シリーズ・コレクション</text><rect x="0" y="520" width="148" height="56" rx="12" class="card"/><text x="12" y="544" class="sans body" font-weight="700">旅の本</text><text x="12" y="564" class="sans tiny muted">7冊</text><rect x="160" y="520" width="148" height="56" rx="12" class="card"/><text x="172" y="544" class="sans body" font-weight="700">読み返したい</text><text x="172" y="564" class="sans tiny muted">12冊</text>
+      <g transform="translate(-11 577)" style="color:#536C95"><use href="#bottomNav" width="330" height="58"/></g>
+    </g>
+  </g>
+
+  <!-- 10 Settings -->
+  <g transform="translate(1970 870)">
+    <text x="180" y="-18" text-anchor="middle" class="sans cap">10. 設定</text><use href="#phone" width="360" height="680"/>
+    <g transform="translate(26 62)">
+      <text x="130" y="20" class="sans nav">設定</text><text x="276" y="20" class="sans small" fill="#8B2F45">閉じる</text>
+      <g transform="translate(0 40)">
+        <text x="0" y="14" class="sans tiny muted">マイ</text><rect x="0" y="22" width="308" height="67" rx="13" class="card"/><text x="14" y="47" class="sans body">●　プロフィール</text><line x1="14" y1="56" x2="294" y2="56" class="line"/><text x="14" y="79" class="sans body">▣　登録情報・連携</text>
+        <text x="0" y="111" class="sans tiny muted">表示</text><rect x="0" y="119" width="308" height="39" rx="12" class="card"/><text x="14" y="144" class="sans body">Aa　表示設定　　　　　　　　　›</text>
+        <text x="0" y="180" class="sans tiny muted">ジャンル</text><rect x="0" y="188" width="308" height="67" rx="13" class="card"/><text x="14" y="213" class="sans body">▦　ジャンル管理　　　　　　　›</text><line x1="14" y1="222" x2="294" y2="222" class="line"/><text x="14" y="245" class="sans body">✓　初回ジャンル選択をやり直す</text>
+        <text x="0" y="277" class="sans tiny muted">記録・入力補助</text><rect x="0" y="285" width="308" height="39" rx="12" class="card"/><text x="14" y="310" class="sans body">✦　記録・入力補助　　　　　　›</text>
+        <text x="0" y="346" class="sans tiny muted">通知</text><rect x="0" y="354" width="308" height="39" rx="12" class="card"/><text x="14" y="379" class="sans body">○　通知設定　　　　　　　　　›</text>
+        <text x="0" y="415" class="sans tiny muted">データ管理</text><rect x="0" y="423" width="308" height="39" rx="12" class="card"/><text x="14" y="448" class="sans body">▤　データ管理　　　　　　　　›</text>
+        <text x="0" y="484" class="sans tiny muted">同期・バックアップ</text><rect x="0" y="492" width="308" height="39" rx="12" class="card"/><text x="14" y="517" class="sans body">☁　同期・バックアップ　　　　›</text>
+        <rect x="0" y="541" width="148" height="39" rx="12" class="card"/><text x="12" y="566" class="sans small">♛ 課金・プラン ›</text><rect x="160" y="541" width="148" height="39" rx="12" class="card"/><text x="172" y="566" class="sans small">？リンク・サポート ›</text>
+      </g>
+    </g>
+  </g>
+
+  <text x="90" y="1625" class="sans boardSub">Fonts: Cormorant Garamond / Noto Sans JP / Noto Serif JP　　Base: white Liquid Glass　　Genre accents follow the current preset colors.</text>
+</svg>
