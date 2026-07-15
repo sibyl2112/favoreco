@@ -31,68 +31,15 @@ struct HomeView: View {
     @State private var isShowingAttentionList = false
     @State private var selectedUpcomingPlanIndex = 0
 
-    private var visibleCategories: [RecordCategory] {
-        categories.filter { !$0.isArchived }
-    }
-
     private var categoryLayoutMode: HomeCategoryLayoutMode {
         HomeCategoryLayoutMode(rawValue: categoryLayoutModeRaw) ?? .horizontal
     }
 
-    private var unresolvedInboxItems: [InboxItem] {
-        inboxItems.filter { $0.state == "unresolved" }
-    }
-
-    private var interestedEvents: [ExperienceEvent] {
-        events.filter { !$0.isArchived && $0.stateKey == "interested" }
-    }
-
-    private var visibleVisits: [Visit] {
-        visits.filter { $0.event?.isArchived != true }
-    }
-
-    private var recentVisits: [Visit] {
-        Array(visibleVisits.prefix(8))
-    }
-
-    private var upcomingPlans: [Plan] {
-        let now = Date()
-        return plans
-            .filter { !$0.isArchived && $0.endsAt >= now }
-            .sorted { $0.startsAt < $1.startsAt }
-    }
-
-    private var upcomingItems: [HomeUpcomingItem] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let linkedVisitIDs = Set(upcomingPlans.compactMap { $0.visit?.id })
-        let futureVisits = visibleVisits.filter { visit in
-            calendar.startOfDay(for: visit.visitedAt) >= today
-                && !linkedVisitIDs.contains(visit.id)
-        }
-
-        return (
-            upcomingPlans.map(HomeUpcomingItem.plan)
-                + futureVisits.map(HomeUpcomingItem.visit)
-        )
-        .sorted { $0.startsAt < $1.startsAt }
-    }
-
-    private var upcomingItemCount: Int {
-        upcomingItems.count
-    }
-
-    private var currentYearVisitCount: Int {
-        let calendar = Calendar.current
-        let year = calendar.component(.year, from: Date())
-        return visibleVisits.filter { calendar.component(.year, from: $0.visitedAt) == year }.count
-    }
-
-    private var attentionItems: [HomeAttentionItem] {
-        var items = ticketAttentionItems
+    private func attentionItems(for snapshot: HomeSnapshot) -> [HomeAttentionItem] {
+        var items = ticketAttentionItems(for: snapshot.activeTicketAttempts)
 
         if items.count < 5 {
-            items.append(contentsOf: membershipAttentionItems.prefix(5 - items.count))
+            items.append(contentsOf: membershipAttentionItems(for: snapshot.expiringTicketAccounts).prefix(5 - items.count))
         }
 
         return Array(items.sorted { lhs, rhs in
@@ -103,13 +50,8 @@ struct HomeView: View {
         }.prefix(5))
     }
 
-    private var ticketAttentionItems: [HomeAttentionItem] {
-        ticketAttempts
-            .filter { attempt in
-                !attempt.isArchived
-                    && attempt.plan?.isArchived != true
-                    && !["lost", "attended", "skipped"].contains(attempt.statusKey)
-            }
+    private func ticketAttentionItems(for attempts: [TicketAttempt]) -> [HomeAttentionItem] {
+        attempts
             .flatMap { ticketAttentionItems(for: $0) }
             .sorted { lhs, rhs in
                 if lhs.priority != rhs.priority {
@@ -121,20 +63,11 @@ struct HomeView: View {
             .map { $0 }
     }
 
-    private var membershipAttentionItems: [HomeAttentionItem] {
-        let now = Date()
-        let warningLimit = Calendar.current.date(byAdding: .day, value: 45, to: now) ?? now
-
-        return ticketAccounts
-            .filter { account in
-                !account.isArchived
-                    && account.renewalNotify
-                    && account.expiryDate != Date.distantPast
-                    && account.expiryDate >= now
-                    && account.expiryDate <= warningLimit
-            }
+    private func membershipAttentionItems(for accounts: [TicketAccount]) -> [HomeAttentionItem] {
+        accounts
             .map { account in
                 HomeAttentionItem(
+                    id: "membership-\(account.id.uuidString)-expiry",
                     icon: "person.text.rectangle",
                     title: account.serviceName.isEmpty ? "会員期限" : account.serviceName,
                     subtitle: "期限 \(attentionDateFormatter.string(from: account.expiryDate))",
@@ -160,6 +93,7 @@ struct HomeView: View {
 
         if attempt.saleStartAt > now {
             items.append(ticketAttention(
+                id: "ticket-\(attempt.id.uuidString)-sale-start",
                 icon: "ticket",
                 label: "申込開始",
                 title: title,
@@ -172,6 +106,7 @@ struct HomeView: View {
 
         if attempt.applyDeadlineAt > now {
             items.append(ticketAttention(
+                id: "ticket-\(attempt.id.uuidString)-apply-deadline",
                 icon: "hourglass",
                 label: "申込締切",
                 title: title,
@@ -184,6 +119,7 @@ struct HomeView: View {
 
         if attempt.resultAnnounceAt > now {
             items.append(ticketAttention(
+                id: "ticket-\(attempt.id.uuidString)-result",
                 icon: "checkmark.seal",
                 label: "当落発表",
                 title: title,
@@ -196,6 +132,7 @@ struct HomeView: View {
 
         if attempt.paymentDeadlineAt > now {
             items.append(ticketAttention(
+                id: "ticket-\(attempt.id.uuidString)-payment",
                 icon: "yensign.circle",
                 label: "入金締切",
                 title: title,
@@ -208,6 +145,7 @@ struct HomeView: View {
 
         if attempt.issueStartAt > now {
             items.append(ticketAttention(
+                id: "ticket-\(attempt.id.uuidString)-issue-start",
                 icon: "ticket.fill",
                 label: "発券開始",
                 title: title,
@@ -222,6 +160,7 @@ struct HomeView: View {
     }
 
     private func ticketAttention(
+        id: String,
         icon: String,
         label: String,
         title: String,
@@ -231,6 +170,7 @@ struct HomeView: View {
         priority: Int
     ) -> HomeAttentionItem {
         HomeAttentionItem(
+            id: id,
             icon: icon,
             title: title,
             subtitle: "\(label) \(attentionDateFormatter.string(from: date))",
@@ -249,37 +189,52 @@ struct HomeView: View {
     }
 
     var body: some View {
+        let snapshot = HomeSnapshot.make(
+            categories: categories,
+            events: events,
+            visits: visits,
+            inboxItems: inboxItems,
+            plans: plans,
+            ticketAttempts: ticketAttempts,
+            ticketAccounts: ticketAccounts
+        )
+        let attentionItems = attentionItems(for: snapshot)
+
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    upcomingPlansSection
+                    upcomingPlansSection(items: snapshot.upcomingItems)
 
                     if showsAttention {
-                        attentionSection
+                        attentionSection(items: attentionItems)
                     }
 
                     // 実機比較中: 横1段 / 4列を設定から切り替える。
                     if showsCategories {
-                        categorySection
+                        categorySection(categories: snapshot.visibleCategories)
                     }
 
-                    if showsExperienceGallery && !recentVisits.isEmpty {
-                        experienceGallerySection
+                    if showsExperienceGallery && !snapshot.recentVisits.isEmpty {
+                        experienceGallerySection(visits: snapshot.recentVisits)
                     }
 
-                    if showsInbox && (!interestedEvents.isEmpty || !unresolvedInboxItems.isEmpty) {
-                        inboxSection
+                    if showsInbox && (!snapshot.interestedEvents.isEmpty || !snapshot.unresolvedInboxItems.isEmpty) {
+                        inboxSection(
+                            interestedEvents: snapshot.interestedEvents,
+                            unresolvedInboxItems: snapshot.unresolvedInboxItems,
+                            categories: snapshot.visibleCategories
+                        )
                     }
 
-                    if showsRecentRecords && !visibleVisits.isEmpty {
-                        recentSection
+                    if showsRecentRecords && !snapshot.visibleVisits.isEmpty {
+                        recentSection(visits: snapshot.visibleVisits)
                     }
 
-                    if showsStatsSummary && !visibleVisits.isEmpty {
-                        statsSummarySection
+                    if showsStatsSummary && !snapshot.visibleVisits.isEmpty {
+                        statsSummarySection(snapshot: snapshot)
                     }
 
-                    crossGenreMiniStats
+                    crossGenreMiniStats(snapshot: snapshot)
 
                 }
                 .padding(.horizontal, 20)
@@ -309,22 +264,22 @@ struct HomeView: View {
         }
     }
 
-    private var crossGenreMiniStats: some View {
+    private func crossGenreMiniStats(snapshot: HomeSnapshot) -> some View {
         HStack(spacing: 10) {
             HomeMiniStatCell(
-                value: "\(upcomingItemCount)",
+                value: "\(snapshot.upcomingItemCount)",
                 label: "今後の予定",
                 icon: "calendar.badge.clock",
                 tint: Color(hex: "#147C88")
             )
             HomeMiniStatCell(
-                value: "\(currentYearVisitCount)",
+                value: "\(snapshot.currentYearVisitCount)",
                 label: "今年の記録",
                 icon: "sparkles.rectangle.stack",
                 tint: Color(hex: "#8B2F45")
             )
             HomeMiniStatCell(
-                value: "\(visibleVisits.count)",
+                value: "\(snapshot.visibleVisits.count)",
                 label: "総記録数",
                 icon: "chart.bar.fill",
                 tint: Color(hex: "#B8792F")
@@ -333,7 +288,7 @@ struct HomeView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var upcomingPlansSection: some View {
+    private func upcomingPlansSection(items: [HomeUpcomingItem]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("次の予定")
@@ -341,7 +296,7 @@ struct HomeView: View {
 
                 Spacer()
 
-                if !upcomingItems.isEmpty {
+                if !items.isEmpty {
                     Button("予定一覧") {
                         NotificationCenter.default.post(name: .openFavorecoPlanList, object: nil)
                     }
@@ -349,7 +304,7 @@ struct HomeView: View {
                 }
             }
 
-            switch upcomingItems.count {
+            switch items.count {
             case 0:
                 VStack(alignment: .leading, spacing: 12) {
                     EmptyStateRow(
@@ -368,11 +323,11 @@ struct HomeView: View {
                 }
 
             case 1:
-                upcomingItemLink(upcomingItems[0])
+                upcomingItemLink(items[0])
 
             default:
                 TabView(selection: $selectedUpcomingPlanIndex) {
-                    ForEach(Array(upcomingItems.enumerated()), id: \.element.id) { index, item in
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         upcomingItemLink(item)
                         .tag(index)
                     }
@@ -380,14 +335,14 @@ struct HomeView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .frame(height: 156)
 
-                Text("\(min(selectedUpcomingPlanIndex + 1, upcomingItems.count)) / \(upcomingItems.count)")
+                Text("\(min(selectedUpcomingPlanIndex + 1, items.count)) / \(items.count)")
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .accessibilityLabel("予定 \(min(selectedUpcomingPlanIndex + 1, upcomingItems.count))件目、全\(upcomingItems.count)件")
+                    .accessibilityLabel("予定 \(min(selectedUpcomingPlanIndex + 1, items.count))件目、全\(items.count)件")
             }
         }
-        .onChange(of: upcomingItems.count) { _, count in
+        .onChange(of: items.count) { _, count in
             if count == 0 {
                 selectedUpcomingPlanIndex = 0
             } else if selectedUpcomingPlanIndex >= count {
@@ -416,28 +371,28 @@ struct HomeView: View {
         }
     }
 
-    private var categorySection: some View {
+    private func categorySection(categories: [RecordCategory]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("ジャンル", count: visibleCategories.count)
+            sectionHeader("ジャンル", count: categories.count)
 
-            if visibleCategories.isEmpty {
+            if categories.isEmpty {
                 EmptyStateRow(
                     icon: "square.grid.2x2",
                     title: "何もありません",
                     message: "設定からジャンルを選び直すと、記録の入口が表示されます。"
                 )
             } else if categoryLayoutMode == .horizontal {
-                horizontalCategoryLayout
+                horizontalCategoryLayout(categories: categories)
             } else {
-                gridCategoryLayout
+                gridCategoryLayout(categories: categories)
             }
         }
     }
 
-    private var horizontalCategoryLayout: some View {
+    private func horizontalCategoryLayout(categories: [RecordCategory]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(alignment: .top, spacing: 12) {
-                categoryLinks
+                categoryLinks(categories: categories)
             }
             .padding(.trailing, 20)
         }
@@ -445,20 +400,20 @@ struct HomeView: View {
         .accessibilityLabel("ジャンル一覧 横スクロール")
     }
 
-    private var gridCategoryLayout: some View {
+    private func gridCategoryLayout(categories: [RecordCategory]) -> some View {
         LazyVGrid(
             columns: Array(repeating: GridItem(.flexible(minimum: 60), spacing: 8), count: 4),
             alignment: .leading,
             spacing: 12
         ) {
-            categoryLinks
+            categoryLinks(categories: categories)
         }
         .accessibilityLabel("ジャンル一覧 4列表示")
     }
 
     @ViewBuilder
-    private var categoryLinks: some View {
-        ForEach(visibleCategories) { category in
+    private func categoryLinks(categories: [RecordCategory]) -> some View {
+        ForEach(categories) { category in
             NavigationLink {
                 CategoryTopView(category: category)
             } label: {
@@ -468,11 +423,11 @@ struct HomeView: View {
         }
     }
 
-    private var attentionSection: some View {
+    private func attentionSection(items: [HomeAttentionItem]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("アテンション", count: attentionItems.count)
+            sectionHeader("アテンション", count: items.count)
 
-            if attentionItems.isEmpty {
+            if items.isEmpty {
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle")
                         .font(.title3)
@@ -484,7 +439,7 @@ struct HomeView: View {
                 .padding(14)
                 .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else {
-                ForEach(attentionItems.prefix(2)) { item in
+                ForEach(items.prefix(2)) { item in
                     if let plan = item.plan {
                         NavigationLink {
                             PlanDetailView(plan: plan)
@@ -497,8 +452,8 @@ struct HomeView: View {
                     }
                 }
 
-                if attentionItems.count > 2 {
-                    Button("ほか\(attentionItems.count - 2)件") {
+                if items.count > 2 {
+                    Button("ほか\(items.count - 2)件") {
                         isShowingAttentionList = true
                     }
                     .font(FavorecoTypography.captionStrong)
@@ -508,11 +463,11 @@ struct HomeView: View {
         }
     }
 
-    private var experienceGallerySection: some View {
+    private func experienceGallerySection(visits: [Visit]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("最近の思い出", count: recentVisits.count)
+            sectionHeader("最近の思い出", count: visits.count)
 
-            if recentVisits.isEmpty {
+            if visits.isEmpty {
                 EmptyStateRow(
                     icon: "photo.on.rectangle.angled",
                     title: "ギャラリーはまだ空です",
@@ -521,7 +476,7 @@ struct HomeView: View {
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
-                        ForEach(recentVisits) { visit in
+                        ForEach(visits) { visit in
                             NavigationLink {
                                 ExperienceDetailView(visit: visit)
                             } label: {
@@ -536,18 +491,18 @@ struct HomeView: View {
         }
     }
 
-    private var recentSection: some View {
+    private func recentSection(visits: [Visit]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("最近の記録", count: visibleVisits.count)
+            sectionHeader("最近の記録", count: visits.count)
 
-            if visibleVisits.isEmpty {
+            if visits.isEmpty {
                 EmptyStateRow(
                     icon: "sparkles.rectangle.stack",
                     title: "記録はまだありません",
                     message: "下部の「追加」から体験済みの記録を登録できます。"
                 )
             } else {
-                ForEach(visibleVisits.prefix(5)) { visit in
+                ForEach(visits.prefix(5)) { visit in
                     NavigationLink {
                         ExperienceDetailView(visit: visit)
                     } label: {
@@ -559,7 +514,11 @@ struct HomeView: View {
         }
     }
 
-    private var inboxSection: some View {
+    private func inboxSection(
+        interestedEvents: [ExperienceEvent],
+        unresolvedInboxItems: [InboxItem],
+        categories: [RecordCategory]
+    ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("気になる", count: interestedEvents.count + unresolvedInboxItems.count)
 
@@ -583,7 +542,7 @@ struct HomeView: View {
                     NavigationLink {
                         InboxDetailView(item: item)
                     } label: {
-                        InboxItemRow(item: item, categories: visibleCategories)
+                        InboxItemRow(item: item, categories: categories)
                     }
                     .buttonStyle(.plain)
                 }
@@ -591,13 +550,13 @@ struct HomeView: View {
         }
     }
 
-    private var statsSummarySection: some View {
+    private func statsSummarySection(snapshot: HomeSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("統計サマリ", count: visibleVisits.count)
+            sectionHeader("統計サマリ", count: snapshot.visibleVisits.count)
 
             HStack(spacing: 12) {
-                SummaryMetricCard(title: "記録", value: "\(visibleVisits.count)", icon: "sparkles.rectangle.stack")
-                SummaryMetricCard(title: "ジャンル", value: "\(visibleCategories.count)", icon: "square.grid.2x2")
+                SummaryMetricCard(title: "記録", value: "\(snapshot.visibleVisits.count)", icon: "sparkles.rectangle.stack")
+                SummaryMetricCard(title: "ジャンル", value: "\(snapshot.visibleCategories.count)", icon: "square.grid.2x2")
             }
         }
     }
@@ -654,29 +613,6 @@ private struct InterestedEventRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
-private enum HomeUpcomingItem: Identifiable {
-    case plan(Plan)
-    case visit(Visit)
-
-    var id: String {
-        switch self {
-        case .plan(let plan):
-            return "plan-\(plan.id.uuidString)"
-        case .visit(let visit):
-            return "visit-\(visit.id.uuidString)"
-        }
-    }
-
-    var startsAt: Date {
-        switch self {
-        case .plan(let plan):
-            return plan.startsAt
-        case .visit(let visit):
-            return visit.visitedAt
-        }
     }
 }
 
@@ -823,7 +759,7 @@ private struct HomeUpcomingVisitCard: View {
 }
 
 private struct HomeAttentionItem: Identifiable {
-    let id = UUID()
+    let id: String
     let icon: String
     let title: String
     let subtitle: String
