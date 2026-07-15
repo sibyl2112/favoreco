@@ -5,6 +5,36 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-15: ジャンルトップ集計をSnapshotへ集約
+
+### 変更概要
+
+- 有効ジャンル、対象、記録、対象ごとの記録件数・最新記録日を `CategoryTopSnapshot` へ集約
+- Hero、統計、対象一覧、最近の記録へ同じSnapshotを渡し、computed propertyと対象行ごとのfilter/sortを削除
+- 既存対象への回追加シートをBoolean表示から `sheet(item:)` へ変更し、選択対象がない空シートを防止
+
+### 変更意図
+
+対象や記録が増えた時もジャンルトップの再描画コストを増やしにくくし、画面内の全セクションが同じ抽出結果を使うようにするため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Models/CategoryTopSnapshot.swift`
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/00-開発状況と残課題.md`
+
+### 確認結果
+
+- Debug / Releaseのgeneric iOS Simulatorビルド成功（iOS 18 deployment、iOS 26.5 SDK）
+- 0件では従来の空状態、1件以上では対象/最近の記録を従来順で最大10件表示する分岐をコード確認
+- 対象数、記録数、ユニット数、最新記録日が同じSnapshot由来であることをコード確認
+- 既知の警告は `favorecoAPPApp.swift` の既存の未使用 `try?` のみ
+
+### 残課題
+
+- 実機でジャンル切替、対象詳細遷移、既存対象への回追加、0件/1件/大量データ表示を確認する
+
 ## 2026-07-14: Home・8ジャンル・設定の構造ラフを再作成
 
 ### 変更概要

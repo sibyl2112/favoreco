@@ -17,34 +17,21 @@ struct CategoryTopView: View {
     @Query(sort: \Visit.visitedAt, order: .reverse) private var allVisits: [Visit]
     @AppStorage(AppStorageKeys.homeSelectedCategoryTemplateKey) private var homeSelectedCategoryTemplateKey = ""
     @State private var isShowingAddExperience = false
-    @State private var isShowingAddVisit = false
     @State private var selectedEventForNewVisit: ExperienceEvent?
 
-    private var visibleCategories: [RecordCategory] {
-        allCategories.filter { !$0.isArchived }
-    }
-
-    private var events: [ExperienceEvent] {
-        (category.events ?? [])
-            .filter { !$0.isArchived }
-            .sorted { $0.updatedAt > $1.updatedAt }
-    }
-
-    private var visits: [Visit] {
-        let eventIDs = Set(events.map(\.id))
-        return allVisits.filter { visit in
-            guard let event = visit.event else { return false }
-            return eventIDs.contains(event.id)
-        }
-    }
-
     var body: some View {
+        let snapshot = CategoryTopSnapshot.make(
+            category: category,
+            categories: allCategories,
+            visits: allVisits
+        )
+
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                hero
-                stats
-                eventSection
-                recentVisits
+                hero(snapshot: snapshot)
+                stats(snapshot: snapshot)
+                eventSection(snapshot: snapshot)
+                recentVisits(snapshot: snapshot)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
@@ -64,17 +51,15 @@ struct CategoryTopView: View {
         .sheet(isPresented: $isShowingAddExperience) {
             AddExperienceView(category: category)
         }
-        .sheet(isPresented: $isShowingAddVisit) {
-            if let selectedEventForNewVisit {
-                AddVisitView(event: selectedEventForNewVisit)
-            }
+        .sheet(item: $selectedEventForNewVisit) { event in
+            AddVisitView(event: event)
         }
         .onAppear {
             homeSelectedCategoryTemplateKey = category.templateKey
         }
     }
 
-    private var hero: some View {
+    private func hero(snapshot: CategoryTopSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: category.iconSymbol)
@@ -86,9 +71,9 @@ struct CategoryTopView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     GenreHeadingSwitcher(
                         currentCategory: category,
-                        categories: visibleCategories
+                        categories: snapshot.visibleCategories
                     )
-                    Text(heroMessage)
+                    Text(heroMessage(visitCount: snapshot.visitCount))
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -98,7 +83,7 @@ struct CategoryTopView: View {
             Button {
                 isShowingAddExperience = true
             } label: {
-                Label(events.isEmpty ? "最初の記録を追加" : "新しい対象を追加", systemImage: "plus.circle.fill")
+                Label(snapshot.events.isEmpty ? "最初の記録を追加" : "新しい対象を追加", systemImage: "plus.circle.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -109,54 +94,53 @@ struct CategoryTopView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private var stats: some View {
+    private func stats(snapshot: CategoryTopSnapshot) -> some View {
         HStack(spacing: 12) {
-            StatTile(title: "対象", value: "\(events.count)")
-            StatTile(title: "記録", value: "\(visits.count)")
-            StatTile(title: "ユニット", value: "\(unitCount)")
+            StatTile(title: "対象", value: "\(snapshot.eventCount)")
+            StatTile(title: "記録", value: "\(snapshot.visitCount)")
+            StatTile(title: "ユニット", value: "\(snapshot.unitCount)")
         }
     }
 
-    private var eventSection: some View {
+    private func eventSection(snapshot: CategoryTopSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("対象")
                     .font(FavorecoTypography.sectionTitle)
                 Spacer()
-                Text("\(events.count)")
+                Text("\(snapshot.eventCount)")
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
             }
 
-            if events.isEmpty {
+            if snapshot.events.isEmpty {
                 EmptyStateMessage(
                     icon: "rectangle.stack.badge.plus",
                     title: "対象はまだありません",
                     message: "最初の記録を追加すると、ここから同じ対象に回を重ねられます。"
                 )
             } else {
-                ForEach(events.prefix(10)) { event in
-                    EventRow(event: event) {
-                        selectedEventForNewVisit = event
-                        isShowingAddVisit = true
+                ForEach(snapshot.events.prefix(10)) { eventSnapshot in
+                    EventRow(snapshot: eventSnapshot) {
+                        selectedEventForNewVisit = eventSnapshot.event
                     }
                 }
             }
         }
     }
 
-    private var recentVisits: some View {
+    private func recentVisits(snapshot: CategoryTopSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("最近の記録")
                     .font(FavorecoTypography.sectionTitle)
                 Spacer()
-                Text("\(visits.count)")
+                Text("\(snapshot.visitCount)")
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
             }
 
-            if visits.isEmpty {
+            if snapshot.visits.isEmpty {
                 EmptyStateMessage(
                     icon: category.iconSymbol,
                     title: "まだ記録がありません",
@@ -164,7 +148,7 @@ struct CategoryTopView: View {
                     tint: themePalette.categoryColor(hex: category.colorHex)
                 )
             } else {
-                ForEach(visits.prefix(10)) { visit in
+                ForEach(snapshot.visits.prefix(10)) { visit in
                     NavigationLink {
                         ExperienceDetailView(visit: visit)
                     } label: {
@@ -176,15 +160,11 @@ struct CategoryTopView: View {
         }
     }
 
-    private var heroMessage: String {
-        if visits.isEmpty {
+    private func heroMessage(visitCount: Int) -> String {
+        if visitCount == 0 {
             return "まだ記録はありません。まずは1件だけ、タイトルと日付から残せます。"
         }
-        return "このカテゴリに \(visits.count) 件の記録があります。"
-    }
-
-    private var unitCount: Int {
-        category.enabledUnitsRaw.split(separator: ",").count
+        return "このカテゴリに \(visitCount) 件の記録があります。"
     }
 }
 
@@ -223,12 +203,10 @@ private struct GenreHeadingSwitcher: View {
 }
 
 private struct EventRow: View {
-    let event: ExperienceEvent
+    let snapshot: CategoryEventSnapshot
     let onAddVisit: () -> Void
 
-    private var visits: [Visit] {
-        (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
-    }
+    private var event: ExperienceEvent { snapshot.event }
 
     private var representativePhoto: PhotoBlob? {
         EventRepresentativePhotoResolver.photo(for: event)
@@ -262,9 +240,9 @@ private struct EventRow: View {
                                 Label(event.seriesName, systemImage: "rectangle.stack")
                                     .lineLimit(1)
                             }
-                            Label("\(visits.count)件", systemImage: "number")
-                            if let latestVisit = visits.first {
-                                Label(latestVisit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+                            Label("\(snapshot.visitCount)件", systemImage: "number")
+                            if let latestVisitDate = snapshot.latestVisitDate {
+                                Label(latestVisitDate.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
                             }
                         }
                         .font(FavorecoTypography.caption)

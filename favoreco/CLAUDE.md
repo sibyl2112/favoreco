@@ -158,6 +158,7 @@ DEBUGビルドの設定 > 開発にはStoreKit購入結果/無料版/Pro/Premium
 - Homeのアテンション枠はファーストビュー想定。現状は `TicketAttempt` の申込開始/申込締切/当落発表/入金締切/発券開始、`Plan` の公演予定、未来日Visit、未整理Inboxを表示する。優先度は締切/入金など期限が近いものを上にし、落選/参加済み/見送りは出さない。将来はFC・会員期限、通知リマインダー、外部カレンダー候補も同じ枠に集約する。
 - Homeの体験ギャラリーはテンションを上げる枠。現状は最近のVisitを横スクロールカードで表示し、将来は写真付き記録、これから参加する予定、年間ベスト候補を混ぜる。
 - Homeは `HomeSnapshot.make` で表示ジャンル、記録、気になる、Inbox、未来予定、チケット/会員期限対象、横断件数を描画ごとに1回だけ抽出する。各Sectionは同じSnapshotを受け取り、個別に全件filter/sortを繰り返さない。アテンション行のIDはTicketAttempt/TicketAccountと期限種別から生成し、再描画ごとのランダムIDを使わない。
+- ジャンルトップは `CategoryTopSnapshot.make` で有効ジャンル、対象、記録、対象ごとの記録件数・最新記録日を描画ごとに1回だけ抽出する。Hero、統計、対象一覧、最近の記録は同じSnapshotを受け取り、個別に全件filter/sortを繰り返さない。既存対象への回追加シートは選択した`ExperienceEvent`を`sheet(item:)`で直接渡す。
 - SNSアカウント入力はID/URLどちらも許容する。外部遷移時は `SocialPlatform` でURLに解決する。ジャンル別SNSは `SocialAccount.category` にoptionalで紐付け、未指定は全体プロフィールとする。
 - 初回ジャンル選択とカテゴリseedでは、表示ジャンルが0件にならないよう `CategoryPresetSeeder.ensureAtLeastOneActiveCategory` を必ず通す。すべて非表示になった場合は先頭の標準カテゴリを復帰させる。
 - ジャンル管理の非表示は削除ではなく `RecordCategory.isArchived` の切り替えとする。記録済みデータは残し、Home/追加導線/ジャンル切替の入口から外す。記録・予定・SNS紐付けがある自作ジャンルの削除要求も同じ非表示へ安全にフォールバックする。完全削除は関連が0件の自作ジャンルだけに限定し、組み込みジャンルは削除不可。最後の1ジャンルはUI上で非表示/削除できない。
