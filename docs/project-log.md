@@ -6927,6 +6927,33 @@ iOS 18対応のためにUI全体を古い表現へ固定せず、主な利用環
 ### 残課題
 - 正常な完全バックアップを既存データへ追加・更新し、記録件数と写真枚数が一致することを確認する
 
+## 2026-07-15: Ticket Albumワインレッド版を標準アプリアイコンへ固定
+
+### 変更概要
+- Ticket Albumと重なったチケットを表すワインレッド版を1024pxの標準アプリアイコンへ設定
+- AppIconのDark / Tinted個別画像を外し、未指定の外観はiOSの自動生成へ統一
+- Alternate App Iconsの比較案は採用せず、設定画面へアイコン選択UIを持たない構成へ確定
+
+### 変更意図
+観劇・映画・ライブなど夜の特別な体験と記録の蓄積を表すTicket Albumワインレッド版をFavorecoの主アイコンに固定する。端末上の表示を一つのブランド表現へ揃える。
+
+### 主な変更ファイル
+- favoreco/assets/app-icon/favoreco-app-icon-wine-ticket-album-1024.png
+- favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/
+- docs/00-開発状況と残課題.md
+- docs/project-log.md
+
+### 確認結果（実機 / ビルド）
+- 1024x1024のPrimaryアイコン1枚だけがAppIconセットへ登録されていることを確認
+- 生成後のInfo.plistにPrimaryアイコンだけがあり、`CFBundleAlternateIcons` / `AppIconF` がないことを確認
+- 現行コードと生成後Info.plistにAlternate App Icons関連の登録がないことを確認
+- iOS 18最低対象、iOS 26.5 SDKの署名付き汎用iOSデバイスビルド成功
+- 接続登録済みのiPhone / iPadがともに`unavailable`だったため実機インストールは未実施
+
+### 残課題
+- iPhoneをMacへ接続した状態で新ビルドをインストールし、ホーム画面、検索、通知、設定で新しいワインレッド版が表示されることを確認する
+- ライト、ダーク、色合い調整の各ホーム画面で自動生成された外観の視認性を確認する
+
 ## 2026-07-15: 設定トップを5分類のハブへ整理
 
 ### 変更概要
