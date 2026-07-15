@@ -20,7 +20,7 @@
       "internalID" : "7D0548DB-C197-4B5B-9132-90D81759B40B",
       "localizations" : [
         {
-          "description" : "ローカル全機能を永久に利用できます。同期は含みません。",
+          "description" : "標準ジャンルの拡張機能を永久に利用できます。同期と自作ジャンルは含みません。",
           "displayName" : "Favoreco ライト買い切り",
           "locale" : "ja"
         }
@@ -50,7 +50,7 @@
       "internalID" : "FA06EA16-6C64-46E1-8DC0-6505B1A1494F",
       "localizations" : [
         {
-          "description" : "ローカル全機能、同期、自動バックアップを永久に利用できます。",
+          "description" : "自作ジャンル、写真無制限、同期、自動バックアップを永久に利用できます。",
           "displayName" : "Favoreco 完全買い切り",
           "locale" : "ja"
         }
@@ -79,7 +79,7 @@
       "id" : "F57B1CA7-4869-4315-A84E-764E07D27E16",
       "localizations" : [
         {
-          "description" : "同期と自動バックアップを利用するプランです。",
+          "description" : "自作ジャンル、写真無制限、同期、自動バックアップを利用するプランです。",
           "displayName" : "Favoreco 同期プラン",
           "locale" : "ja"
         }
@@ -111,7 +111,7 @@
           ],
           "localizations" : [
             {
-              "description" : "ローカル全機能、同期、自動バックアップを1か月利用できます。",
+              "description" : "自作ジャンル、写真無制限、同期、自動バックアップを1か月利用できます。",
               "displayName" : "Favoreco 同期 月額",
               "locale" : "ja"
             }
@@ -150,7 +150,7 @@
           ],
           "localizations" : [
             {
-              "description" : "ローカル全機能、同期、自動バックアップを1年間利用できます。",
+              "description" : "自作ジャンル、写真無制限、同期、自動バックアップを1年間利用できます。",
               "displayName" : "Favoreco 同期 年額",
               "locale" : "ja"
             }

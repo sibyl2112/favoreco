@@ -1996,7 +1996,7 @@ struct BillingPlanSettingsView: View {
                 PlanHeaderRow(
                     title: "ライト買い切り",
                     price: "¥1,500",
-                    detail: "ローカル全機能を永久解放。同期は含めない。"
+                    detail: "標準ジャンルの拡張機能を永久解放。同期と自作ジャンルは含めない。"
                 )
                 PlanFeatureRow(
                     title: "詳細統計・年間まとめ",
@@ -2029,12 +2029,17 @@ struct BillingPlanSettingsView: View {
                 PlanHeaderRow(
                     title: "同期サブスク",
                     price: "月¥250 / 年¥1,500",
-                    detail: "契約中はローカル全機能と同期を利用可能。"
+                    detail: "契約中はライト機能、自作ジャンル、写真無制限と同期を利用可能。"
                 )
                 PlanFeatureRow(
                     title: "iCloud同期",
                     detail: "端末間同期、自動バックアップ、復元を扱う。",
                     systemImage: "icloud.and.arrow.up"
+                )
+                PlanFeatureRow(
+                    title: "自作ジャンル・写真無制限",
+                    detail: "自分専用のジャンルを作成し、1記録の写真枚数上限なく保存できます。",
+                    systemImage: "square.grid.2x2"
                 )
                 PlanFeatureRow(
                     title: "自動思い出レポート",
@@ -2056,7 +2061,7 @@ struct BillingPlanSettingsView: View {
                 )
                 PlanFeatureRow(
                     title: "同期も永久",
-                    detail: "ローカル全機能と同期を、サブスクリプションなしで永久利用。",
+                    detail: "ライト機能、自作ジャンル、写真無制限と同期を、サブスクリプションなしで永久利用。",
                     systemImage: "checkmark.seal"
                 )
             }
@@ -2139,9 +2144,9 @@ struct BillingPlanSettingsView: View {
     private var planDescription: String {
         switch purchaseManager.currentPlan {
         case .free: return "基本記録と無料機能を利用できます。"
-        case .lightLifetime: return "ローカル全機能を永久に利用できます。同期は含みません。"
-        case .syncSubscription: return "契約中はローカル全機能、同期、自動バックアップを利用できます。"
-        case .fullLifetime: return "ローカル全機能、同期、自動バックアップを永久に利用できます。"
+        case .lightLifetime: return "標準ジャンルの拡張機能と写真30枚を永久に利用できます。"
+        case .syncSubscription: return "契約中はライト機能、自作ジャンル、写真無制限、同期、自動バックアップを利用できます。"
+        case .fullLifetime: return "ライト機能、自作ジャンル、写真無制限、同期、自動バックアップを永久に利用できます。"
         }
     }
 }

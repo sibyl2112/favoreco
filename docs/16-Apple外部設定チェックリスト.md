@@ -75,9 +75,9 @@ Non-Consumable:
 
 | Product ID | 参考価格 | 内容 |
 |---|---:|---|
-| `com.nori.favoreco.light.lifetime` | ¥1,500 | ローカル全機能、同期なし |
+| `com.nori.favoreco.light.lifetime` | ¥1,500 | 標準ジャンルの拡張機能、写真30枚、同期なし |
 | `com.nori.favoreco.sync.lifetime.addon` | ¥5,000 | ライト所有者向け同期永久追加。単体では完全権利なし |
-| `com.nori.favoreco.full.lifetime` | ¥6,000 | 完全買い切り。ローカル全機能＋同期永久（個別合計より¥500お得） |
+| `com.nori.favoreco.full.lifetime` | ¥6,000 | 完全買い切り。自作ジャンル、写真無制限、同期永久（個別合計より¥500お得） |
 
 Auto-Renewable Subscription Group: `Favoreco Sync`
 

@@ -2557,8 +2557,8 @@ private struct PhotoUnitEditor: View {
         importTotalCount > 0
     }
 
-    private var maxPhotoCount: Int {
-        purchaseManager.currentPlan.includesLocalFullFeatures ? 30 : 10
+    private var maxPhotoCount: Int? {
+        purchaseManager.currentPlan.maximumPhotosPerRecord
     }
 
     private var selectedAspectRatio: EyecatchAspectRatio {
@@ -2569,8 +2569,12 @@ private struct PhotoUnitEditor: View {
         existingPhotos.count + pendingPhotos.count
     }
 
-    private var remainingPhotoSlots: Int {
-        max(0, maxPhotoCount - currentPhotoCount)
+    private var remainingPhotoSlots: Int? {
+        maxPhotoCount.map { max(0, $0 - currentPhotoCount) }
+    }
+
+    private var canAddPhotos: Bool {
+        remainingPhotoSlots != 0
     }
 
     var body: some View {
@@ -2579,7 +2583,7 @@ private struct PhotoUnitEditor: View {
                 Text("写真")
                     .font(FavorecoTypography.bodyStrong)
                 Spacer()
-                Text("\(currentPhotoCount)/\(maxPhotoCount)")
+                Text(photoCountLabel)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -2608,7 +2612,7 @@ private struct PhotoUnitEditor: View {
 
             if isImportingPhotos {
                 EmptyView()
-            } else if remainingPhotoSlots > 0 {
+            } else if canAddPhotos {
                 photoAddControls
             } else {
                 Label(photoLimitMessage, systemImage: "checkmark.circle")
@@ -2641,13 +2645,16 @@ private struct PhotoUnitEditor: View {
     }
 
     private var photoLimitMessage: String {
-        if purchaseManager.currentPlan.includesLocalFullFeatures {
-            return "写真上限の30枚に達しています"
-        }
+        guard let maxPhotoCount else { return "" }
         if currentPhotoCount > maxPhotoCount {
-            return "既存写真は保持します。無料枠では新しい写真を追加できません"
+            return "既存写真は保持します。現在のプランでは新しい写真を追加できません"
         }
-        return "無料枠の10枚に達しています"
+        return "写真上限の\(maxPhotoCount)枚に達しています"
+    }
+
+    private var photoCountLabel: String {
+        guard let maxPhotoCount else { return "\(currentPhotoCount)枚・上限なし" }
+        return "\(currentPhotoCount)/\(maxPhotoCount)"
     }
 
     @ViewBuilder
@@ -2742,7 +2749,12 @@ private struct PhotoUnitEditor: View {
     @MainActor
     private func appendPhotos(from items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
-        let importItems = Array(items.prefix(remainingPhotoSlots))
+        let importItems: [PhotosPickerItem]
+        if let remainingPhotoSlots {
+            importItems = Array(items.prefix(remainingPhotoSlots))
+        } else {
+            importItems = items
+        }
         importCompletedCount = 0
         importTotalCount = importItems.count
         defer {
@@ -2781,13 +2793,13 @@ private struct PhotoUnitEditor: View {
     }
 
     private func appendCapturedPhoto(_ image: UIImage) {
-        guard remainingPhotoSlots > 0, let data = image.jpegData(compressionQuality: 1) else { return }
+        guard canAddPhotos, let data = image.jpegData(compressionQuality: 1) else { return }
         let filename = "camera-\(UUID().uuidString).jpg"
         let quality = compressionQuality
         Task {
             guard let pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
                 PendingPhoto.make(from: data, filename: filename, compressionQuality: quality)
-            }).value, remainingPhotoSlots > 0 else { return }
+            }).value, canAddPhotos else { return }
             pendingPhotos.append(pendingPhoto)
             if coverPhotoPath.isEmpty {
                 coverPhotoPath = pendingPhoto.relativePath

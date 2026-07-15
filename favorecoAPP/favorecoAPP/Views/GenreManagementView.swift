@@ -78,18 +78,18 @@ struct GenreManagementView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    if purchaseManager.currentPlan.includesLocalFullFeatures {
+                    if purchaseManager.currentPlan.canCreateCustomGenres {
                         isShowingAddGenre = true
                     } else {
                         isShowingPlans = true
                     }
                 } label: {
-                    Image(systemName: purchaseManager.currentPlan.includesLocalFullFeatures ? "plus" : "lock.fill")
+                    Image(systemName: purchaseManager.currentPlan.canCreateCustomGenres ? "plus" : "lock.fill")
                 }
                 .accessibilityLabel(
-                    purchaseManager.currentPlan.includesLocalFullFeatures
+                    purchaseManager.currentPlan.canCreateCustomGenres
                         ? "自作ジャンルを追加"
-                        : "自作ジャンルはライト以上"
+                        : "自作ジャンルは同期プランまたは完全買い切り"
                 )
             }
         }
@@ -273,15 +273,15 @@ struct GenreDetailSettingsView: View {
 
             Section("ジャンル管理") {
                 Button {
-                    if purchaseManager.currentPlan.includesLocalFullFeatures {
+                    if purchaseManager.currentPlan.canCreateCustomGenres {
                         duplicateAsCustomGenre()
                     } else {
                         isShowingPlans = true
                     }
                 } label: {
                     Label(
-                        purchaseManager.currentPlan.includesLocalFullFeatures ? "この設定を複製" : "複製はライト以上",
-                        systemImage: purchaseManager.currentPlan.includesLocalFullFeatures ? "plus.square.on.square" : "lock.fill"
+                        purchaseManager.currentPlan.canCreateCustomGenres ? "この設定を複製" : "複製は同期プラン以上",
+                        systemImage: purchaseManager.currentPlan.canCreateCustomGenres ? "plus.square.on.square" : "lock.fill"
                     )
                 }
 
@@ -374,7 +374,7 @@ struct GenreDetailSettingsView: View {
     }
 
     private func duplicateAsCustomGenre() {
-        guard purchaseManager.currentPlan.includesLocalFullFeatures else {
+        guard purchaseManager.currentPlan.canCreateCustomGenres else {
             isShowingPlans = true
             return
         }
@@ -686,7 +686,7 @@ struct AddCustomGenreView: View {
     }
 
     private func save() {
-        guard purchaseManager.currentPlan.includesLocalFullFeatures else {
+        guard purchaseManager.currentPlan.canCreateCustomGenres else {
             dismiss()
             return
         }

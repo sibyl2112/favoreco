@@ -19,6 +19,16 @@ enum FavorecoPlan: String, Sendable {
 
     nonisolated var includesLocalFullFeatures: Bool { self != .free }
     nonisolated var includesSync: Bool { self == .syncSubscription || self == .fullLifetime }
+
+    nonisolated var maximumPhotosPerRecord: Int? {
+        switch self {
+        case .free: return 10
+        case .lightLifetime: return 30
+        case .syncSubscription, .fullLifetime: return nil
+        }
+    }
+
+    nonisolated var canCreateCustomGenres: Bool { includesSync }
 }
 
 enum FavorecoProductID {

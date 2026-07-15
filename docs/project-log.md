@@ -6960,3 +6960,40 @@ iOS 18対応のためにUI全体を古い表現へ固定せず、主な利用環
 ### 既知のリスク・残課題
 - App Store Connect側でも同期永久追加を¥5,000、完全買い切りを¥6,000として登録する必要がある
 - 同期永久追加単体、ライト＋同期永久追加、完全買い切り直接購入の3経路をStoreKitローカル環境で確認する
+
+## 2026-07-15: 写真上限と自作ジャンルを完全版の価値へ再配置
+
+### 変更概要
+- 写真上限を無料10枚、ライト30枚、同期サブスク/完全買い切りは上限なしへ変更
+- 自作ジャンルの新規作成と設定複製を、同期サブスク/完全買い切りへ移動
+- 無料/ライトへ権利が下がっても、既存の自作ジャンルと上限超過写真は削除せず閲覧・編集可能な状態を維持
+- 課金画面とStoreKit商品説明を新しい境界へ更新
+
+### 変更意図
+標準ジャンルだけでも深く使えるライト買い切りを維持しつつ、自分専用の構造と大量写真を完全版の明確な価値にするため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/PurchaseManager.swift
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift
+- favorecoAPP/favorecoAPP/Views/GenreManagementView.swift
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift
+- favorecoAPP/favorecoAPP/Configuration/Favoreco.storekit
+- favoreco/CLAUDE.md
+- docs/15-実機総合確認手順.md
+- docs/16-Apple外部設定チェックリスト.md
+- docs/project-log.md
+
+### 影響する画面・機能
+- 記録追加/編集の写真ユニット
+- 設定 > ジャンル管理
+- 設定 > 課金・プラン
+- StoreKitの商品説明とプラン別機能ゲート
+
+### 確認結果（実機 / ビルド）
+- 写真上限と自作ジャンル権利を`FavorecoPlan`へ集約し、各追加入口が同じ判定を参照することをコード確認
+- sandbox内ビルドはSwiftDataマクロサーバーの起動制限で失敗したが、制限外ではiOS 18最低対象、iOS 26.5 SDKの汎用iOSデバイスビルド成功
+- 実機確認は未実施
+
+### 既知のリスク・残課題
+- DEBUG権利切替で無料10枚、ライト30枚、同期/完全の上限なし表示と追加動作を実機確認する
+- ライト状態で既存自作ジャンルを編集でき、新規作成/複製だけがロックされることを実機確認する
