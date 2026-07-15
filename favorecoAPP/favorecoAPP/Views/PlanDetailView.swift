@@ -268,7 +268,7 @@ struct PlanDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             planSectionTitle("基本情報")
             PlanInfoRow(icon: "calendar", title: "日時", value: dateRangeText)
-            if plan.opensAt != Date.distantPast {
+            if plan.usesOpeningTime, plan.opensAt != Date.distantPast {
                 PlanInfoRow(icon: "door.left.hand.open", title: "開場", value: plan.opensAt.formatted(date: .omitted, time: .shortened))
             }
             if !plan.venueNameSnapshot.isEmpty {
@@ -403,7 +403,7 @@ struct PlanDetailView: View {
                 ? plan.placeMaster?.address ?? plan.venueNameSnapshot
                 : plan.venueNameSnapshot,
             notes: notes,
-            startDate: plan.startsAt,
+            startDate: plan.calendarStartsAt,
             endDate: plan.endsAt
         )
     }

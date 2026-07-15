@@ -316,33 +316,46 @@ private struct RecordTargetSelectionView: View {
                             description: Text(searchText.isEmpty ? "上のボタンから新しい対象を登録できます。" : "タイトルやシリーズ名を変えて検索してください。")
                         )
                     } else {
-                        ForEach(matchingEvents) { event in
-                            Button {
-                                onSelect(.existing(event))
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: event.category?.iconSymbol ?? "rectangle.stack")
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 28)
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(event.title.isEmpty ? "名称未設定" : event.title)
-                                            .font(FavorecoTypography.bodyStrong)
-                                            .foregroundStyle(.primary)
-                                        if !event.seriesName.isEmpty {
-                                            Text(event.seriesName)
-                                                .font(FavorecoTypography.caption)
+                        ScrollView(.vertical, showsIndicators: true) {
+                            LazyVStack(spacing: 0) {
+                                ForEach(matchingEvents) { event in
+                                    Button {
+                                        onSelect(.existing(event))
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: event.category?.iconSymbol ?? "rectangle.stack")
                                                 .foregroundStyle(.secondary)
-                                                .lineLimit(1)
+                                                .frame(width: 28)
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(event.title.isEmpty ? "名称未設定" : event.title)
+                                                    .font(FavorecoTypography.bodyStrong)
+                                                    .foregroundStyle(.primary)
+                                                if !event.seriesName.isEmpty {
+                                                    Text(event.seriesName)
+                                                        .font(FavorecoTypography.caption)
+                                                        .foregroundStyle(.secondary)
+                                                        .lineLimit(1)
+                                                }
+                                            }
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(.tertiary)
                                         }
+                                        .padding(.vertical, 12)
+                                        .contentShape(Rectangle())
                                     }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.tertiary)
+                                    .buttonStyle(.plain)
+
+                                    if event.id != matchingEvents.last?.id {
+                                        Divider()
+                                            .padding(.leading, 40)
+                                    }
                                 }
                             }
-                            .buttonStyle(.plain)
                         }
+                        .frame(height: min(CGFloat(matchingEvents.count) * 64, 320))
+                        .scrollIndicators(.visible)
                     }
                 } header: {
                     Text(searchText.isEmpty ? "最近の作品・対象" : "検索結果")

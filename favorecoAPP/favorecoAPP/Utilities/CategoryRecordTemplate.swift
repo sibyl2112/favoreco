@@ -7,6 +7,23 @@
 
 import Foundation
 
+extension RecordCategory {
+    var usesOpeningTime: Bool {
+        templateKey == "theater" || templateKey == "live"
+    }
+}
+
+extension Plan {
+    var usesOpeningTime: Bool {
+        category?.usesOpeningTime == true
+    }
+
+    var calendarStartsAt: Date {
+        guard usesOpeningTime, opensAt != Date.distantPast else { return startsAt }
+        return opensAt
+    }
+}
+
 struct CategoryRecordTemplate {
     let targetSectionTitle: String
     let titlePlaceholder: String

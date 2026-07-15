@@ -65,10 +65,10 @@ enum ExternalCalendarSyncService {
         event.title = plan.title.isEmpty ? "予定" : plan.title
         let address = plan.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         event.location = address.isEmpty ? plan.venueNameSnapshot : address
-        event.startDate = plan.startsAt
-        event.endDate = plan.endsAt > plan.startsAt
+        event.startDate = plan.calendarStartsAt
+        event.endDate = plan.endsAt > plan.calendarStartsAt
             ? plan.endsAt
-            : Calendar.current.date(byAdding: .hour, value: 2, to: plan.startsAt) ?? plan.startsAt
+            : Calendar.current.date(byAdding: .hour, value: 2, to: plan.calendarStartsAt) ?? plan.calendarStartsAt
         event.notes = notes(for: plan)
     }
 

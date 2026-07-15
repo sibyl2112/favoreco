@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct AddTicketPlanView: View {
     enum EntryMode {
@@ -86,6 +87,10 @@ struct AddTicketPlanView: View {
 
     private var selectedCategory: RecordCategory? {
         visibleCategories.first { $0.id == draft.categoryID }
+    }
+
+    private var usesOpeningTime: Bool {
+        (resolvedTargetEvent?.category ?? selectedCategory)?.usesOpeningTime == true
     }
 
     private var selectedAccount: TicketAccount? {
@@ -271,9 +276,11 @@ struct AddTicketPlanView: View {
                     if selectedExistingPlan == nil {
                         TextField("公演・イベント名", text: $draft.title)
                         TextField("サブタイトル（任意）", text: $draft.subtitle)
-                        DatePicker("開始", selection: $draft.startsAt)
-                        DatePicker("終了", selection: $draft.endsAt)
-                        DatePicker("開場", selection: $draft.opensAt)
+                        if usesOpeningTime {
+                            FiveMinuteDateTimeRow(title: "開場", selection: openingTimeBinding)
+                        }
+                        FiveMinuteDateTimeRow(title: "開始", selection: startTimeBinding)
+                        FiveMinuteDateTimeRow(title: "終了", selection: endTimeBinding)
                         TextField("会場", text: $draft.venueName)
                         TextField("公式URL", text: $draft.officialURL)
                             .keyboardType(.URL)
@@ -413,14 +420,6 @@ struct AddTicketPlanView: View {
                     draft.setInitialCategoryIfNeeded(visibleCategories)
                 }
             }
-            .onChange(of: draft.startsAt) { _, newValue in
-                if draft.endsAt < newValue {
-                    draft.endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: newValue) ?? newValue
-                }
-                if draft.opensAt > newValue {
-                    draft.opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: newValue) ?? newValue
-                }
-            }
             .onChange(of: targetSelectionMode) { _, newValue in
                 selectedEventID = nil
                 selectedPlanID = nil
@@ -484,6 +483,37 @@ struct AddTicketPlanView: View {
         return draft.createsTicketAttempt ? "チケットスケジュール" : "予定を立てる"
     }
 
+    private var openingTimeBinding: Binding<Date> {
+        Binding(
+            get: { draft.opensAt },
+            set: { newValue in
+                let opening = newValue.roundedToNearestFiveMinutes()
+                let start = Calendar.current.date(byAdding: .minute, value: 30, to: opening) ?? opening
+                draft.opensAt = opening
+                draft.startsAt = start
+                draft.endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: start) ?? start
+            }
+        )
+    }
+
+    private var startTimeBinding: Binding<Date> {
+        Binding(
+            get: { draft.startsAt },
+            set: { newValue in
+                let start = newValue.roundedToNearestFiveMinutes()
+                draft.startsAt = start
+                draft.endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: start) ?? start
+            }
+        )
+    }
+
+    private var endTimeBinding: Binding<Date> {
+        Binding(
+            get: { draft.endsAt },
+            set: { draft.endsAt = $0.roundedToNearestFiveMinutes() }
+        )
+    }
+
     private func accountLabel(_ account: TicketAccount) -> String {
         let holder = account.accountName.isEmpty ? "名義未設定" : account.accountName
         return "\(account.serviceName) / \(holder)"
@@ -518,7 +548,7 @@ struct AddTicketPlanView: View {
             validationError = "予定を追加する作品・対象を選んでください。"
             return
         }
-        if let validationMessage = draft.validationMessage {
+        if let validationMessage = draft.validationMessage(usesOpeningTime: usesOpeningTime) {
             validationError = validationMessage
             return
         }
@@ -542,7 +572,7 @@ struct AddTicketPlanView: View {
             stateKey: "planned",
             startsAt: draft.startsAt,
             endsAt: draft.endsAt,
-            opensAt: draft.opensAt,
+            opensAt: usesOpeningTime ? draft.opensAt : Date.distantPast,
             venueNameSnapshot: draft.trimmedVenueName,
             officialURL: draft.trimmedOfficialURL,
             sourceURL: draft.trimmedOfficialURL,
@@ -640,7 +670,7 @@ struct AddTicketPlanView: View {
         plan.subtitle = draft.trimmedSubtitle
         plan.startsAt = draft.startsAt
         plan.endsAt = draft.endsAt
-        plan.opensAt = draft.opensAt
+        plan.opensAt = usesOpeningTime ? draft.opensAt : Date.distantPast
         plan.venueNameSnapshot = draft.trimmedVenueName
         plan.officialURL = draft.trimmedOfficialURL
         plan.sourceURL = draft.trimmedOfficialURL
@@ -760,10 +790,93 @@ struct DateToggleRow: View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(title, isOn: $isOn)
             if isOn {
-                DatePicker(title, selection: $date)
-                    .labelsHidden()
+                FiveMinuteDateTimeRow(title: title, selection: $date, showsLabel: false)
             }
         }
+    }
+}
+
+private struct FiveMinuteDateTimeRow: View {
+    let title: String
+    @Binding var selection: Date
+    var showsLabel = true
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if showsLabel {
+                Text(title)
+            }
+            Spacer(minLength: 8)
+            DatePicker(
+                title,
+                selection: $selection,
+                displayedComponents: .date
+            )
+            .labelsHidden()
+            .environment(\.locale, Locale(identifier: "ja_JP"))
+            .fixedSize()
+
+            FiveMinuteTimePicker(selection: $selection, accessibilityLabel: title)
+                .frame(width: 92, height: 34)
+        }
+    }
+}
+
+private struct FiveMinuteTimePicker: UIViewRepresentable {
+    @Binding var selection: Date
+    let accessibilityLabel: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIView(context: Context) -> UIDatePicker {
+        let picker = UIDatePicker()
+        picker.datePickerMode = .time
+        picker.preferredDatePickerStyle = .compact
+        picker.minuteInterval = 5
+        picker.locale = Locale(identifier: "ja_JP")
+        picker.accessibilityLabel = accessibilityLabel
+        picker.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
+        return picker
+    }
+
+    func updateUIView(_ picker: UIDatePicker, context: Context) {
+        context.coordinator.parent = self
+        let roundedSelection = selection.roundedToNearestFiveMinutes()
+        if abs(picker.date.timeIntervalSince(roundedSelection)) >= 1 {
+            picker.setDate(roundedSelection, animated: false)
+        }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var parent: FiveMinuteTimePicker
+
+        init(parent: FiveMinuteTimePicker) {
+            self.parent = parent
+        }
+
+        @objc func valueChanged(_ sender: UIDatePicker) {
+            let calendar = Calendar.current
+            let components = calendar.dateComponents([.hour, .minute], from: sender.date)
+            guard let hour = components.hour,
+                  let minute = components.minute,
+                  let updated = calendar.date(
+                    bySettingHour: hour,
+                    minute: minute,
+                    second: 0,
+                    of: parent.selection
+                  ) else { return }
+            parent.selection = updated
+        }
+    }
+}
+
+private extension Date {
+    func roundedToNearestFiveMinutes() -> Date {
+        let interval: TimeInterval = 5 * 60
+        return Date(timeIntervalSinceReferenceDate: (timeIntervalSinceReferenceDate / interval).rounded() * interval)
     }
 }
 
@@ -857,9 +970,9 @@ private struct TicketPlanDraft {
     var categoryID: UUID?
     var title = ""
     var subtitle = ""
-    var startsAt = Date()
-    var endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: Date()) ?? Date()
-    var opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: Date()) ?? Date()
+    var startsAt = Date().roundedToNearestFiveMinutes()
+    var endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: Date().roundedToNearestFiveMinutes()) ?? Date()
+    var opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: Date().roundedToNearestFiveMinutes()) ?? Date()
     var venueName = ""
     var officialURL = ""
     var createsTicketAttempt = true
@@ -871,7 +984,7 @@ private struct TicketPlanDraft {
     var ticketSite = ""
     var holderName = ""
     var hasSaleStart = false
-    var saleStartAt = Date()
+    var saleStartAt = Date().roundedToNearestFiveMinutes()
     var hasApplyDeadline = true
     var applyDeadlineAt = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
     var hasResultAnnounce = false
@@ -973,11 +1086,11 @@ private struct TicketPlanDraft {
         !trimmedTitle.isEmpty
     }
 
-    var validationMessage: String? {
+    func validationMessage(usesOpeningTime: Bool) -> String? {
         if endsAt < startsAt {
             return "終了日時は開始日時以降にしてください。"
         }
-        if opensAt > startsAt {
+        if usesOpeningTime && opensAt > startsAt {
             return "開場日時は開始日時以前にしてください。"
         }
         guard createsTicketAttempt else { return nil }
@@ -1088,7 +1201,7 @@ private struct TicketPlanDraft {
     }
 
     mutating func clearTarget() {
-        let now = Date()
+        let now = Date().roundedToNearestFiveMinutes()
         categoryID = nil
         title = ""
         subtitle = ""
