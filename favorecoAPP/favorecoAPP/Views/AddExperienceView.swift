@@ -8,7 +8,6 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
-import MapKit
 
 struct AddExperienceView: View {
     let category: RecordCategory
@@ -78,7 +77,7 @@ struct AddExperienceView: View {
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
-                PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
+                ExperiencePlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
                     let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
                     draft.apply(place: candidate, preservingVenueName: preservesVenueName)
                 }
@@ -136,11 +135,34 @@ struct AddExperienceView: View {
     private func addContent(for unit: RecordUnitDefinition) -> some View {
         switch unit.id {
         case "basic":
-            targetFields
-            Divider()
-            visitFields
+            ExperienceBasicUnitEditor(
+                template: template,
+                title: $draft.title,
+                seriesName: $draft.seriesName,
+                visitedAt: $draft.visitedAt,
+                venueName: venueNameBinding,
+                venueAddress: venueAddressBinding,
+                overallRating: $draft.overallRating,
+                latitude: draft.latitude,
+                longitude: draft.longitude,
+                placeMasters: placeMasters,
+                usesPlaceSuggestions: usesInputSuggestionDictionary,
+                usesMapSearchAssist: usesMapSearchAssist,
+                ratingText: draft.ratingLabel,
+                onSelectPlace: { draft.apply(placeMaster: $0) },
+                onOpenPlaceSearch: { isShowingPlaceSearch = true }
+            )
         case "officialInfo":
-            officialInfoFields
+            ExperienceOfficialInfoUnitEditor(
+                officialURL: $draft.officialURL,
+                title: $draft.title,
+                seriesName: $draft.seriesName,
+                visitedAt: $draft.visitedAt,
+                venueName: venueNameBinding,
+                venueAddress: venueAddressBinding,
+                pendingPeople: $pendingPeople,
+                advancedEntries: $draft.advancedEntries
+            )
         case "people":
             PeopleUnitEditor(
                 existingLinks: [],
@@ -185,52 +207,6 @@ struct AddExperienceView: View {
         default:
             PendingUnitView(unit: unit)
         }
-    }
-
-    private var targetFields: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(template.targetSectionTitle)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-            TextField(template.titlePlaceholder, text: $draft.title)
-            TextField(template.seriesPlaceholder, text: $draft.seriesName)
-        }
-    }
-
-    private var visitFields: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(template.visitSectionTitle)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-            DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
-            TextField(template.venuePlaceholder, text: venueNameBinding)
-            placeSuggestionList(
-                suggestions: usesInputSuggestionDictionary ? placeSuggestions(for: draft.venueName, from: placeMasters) : [],
-                onSelect: { draft.apply(placeMaster: $0) }
-            )
-            placeSearchAssist(
-                isEnabled: usesMapSearchAssist,
-                venueName: draft.venueName,
-                address: venueAddressBinding,
-                latitude: draft.latitude,
-                longitude: draft.longitude,
-                action: { isShowingPlaceSearch = true }
-            )
-            ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
-        }
-    }
-
-    private var officialInfoFields: some View {
-        URLImportAssistEditor(
-            officialURL: $draft.officialURL,
-            title: $draft.title,
-            seriesName: $draft.seriesName,
-            visitedAt: $draft.visitedAt,
-            venueName: venueNameBinding,
-            venueAddress: venueAddressBinding,
-            pendingPeople: $pendingPeople,
-            advancedEntries: $draft.advancedEntries
-        )
     }
 
     private var venueNameBinding: Binding<String> {
@@ -419,7 +395,7 @@ struct EditExperienceView: View {
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
-                PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
+                ExperiencePlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
                     let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
                     draft.apply(place: candidate, preservingVenueName: preservesVenueName)
                 }
@@ -470,11 +446,34 @@ struct EditExperienceView: View {
     private func editContent(for unit: RecordUnitDefinition) -> some View {
         switch unit.id {
         case "basic":
-            targetFields
-            Divider()
-            visitFields
+            ExperienceBasicUnitEditor(
+                template: template,
+                title: $draft.title,
+                seriesName: $draft.seriesName,
+                visitedAt: $draft.visitedAt,
+                venueName: venueNameBinding,
+                venueAddress: venueAddressBinding,
+                overallRating: $draft.overallRating,
+                latitude: draft.latitude,
+                longitude: draft.longitude,
+                placeMasters: placeMasters,
+                usesPlaceSuggestions: usesInputSuggestionDictionary,
+                usesMapSearchAssist: usesMapSearchAssist,
+                ratingText: draft.ratingLabel,
+                onSelectPlace: { draft.apply(placeMaster: $0) },
+                onOpenPlaceSearch: { isShowingPlaceSearch = true }
+            )
         case "officialInfo":
-            officialInfoFields
+            ExperienceOfficialInfoUnitEditor(
+                officialURL: $draft.officialURL,
+                title: $draft.title,
+                seriesName: $draft.seriesName,
+                visitedAt: $draft.visitedAt,
+                venueName: venueNameBinding,
+                venueAddress: venueAddressBinding,
+                pendingPeople: $pendingPeople,
+                advancedEntries: $draft.advancedEntries
+            )
         case "people":
             PeopleUnitEditor(
                 existingLinks: visiblePersonLinks,
@@ -519,52 +518,6 @@ struct EditExperienceView: View {
         default:
             PendingUnitView(unit: unit)
         }
-    }
-
-    private var targetFields: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(template.targetSectionTitle)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-            TextField(template.titlePlaceholder, text: $draft.title)
-            TextField(template.seriesPlaceholder, text: $draft.seriesName)
-        }
-    }
-
-    private var visitFields: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(template.visitSectionTitle)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-            DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
-            TextField(template.venuePlaceholder, text: venueNameBinding)
-            placeSuggestionList(
-                suggestions: usesInputSuggestionDictionary ? placeSuggestions(for: draft.venueName, from: placeMasters) : [],
-                onSelect: { draft.apply(placeMaster: $0) }
-            )
-            placeSearchAssist(
-                isEnabled: usesMapSearchAssist,
-                venueName: draft.venueName,
-                address: venueAddressBinding,
-                latitude: draft.latitude,
-                longitude: draft.longitude,
-                action: { isShowingPlaceSearch = true }
-            )
-            ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
-        }
-    }
-
-    private var officialInfoFields: some View {
-        URLImportAssistEditor(
-            officialURL: $draft.officialURL,
-            title: $draft.title,
-            seriesName: $draft.seriesName,
-            visitedAt: $draft.visitedAt,
-            venueName: venueNameBinding,
-            venueAddress: venueAddressBinding,
-            pendingPeople: $pendingPeople,
-            advancedEntries: $draft.advancedEntries
-        )
     }
 
     private var venueNameBinding: Binding<String> {
@@ -778,7 +731,7 @@ struct AddVisitView: View {
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
-                PlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
+                ExperiencePlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
                     let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
                     draft.apply(place: candidate, preservingVenueName: preservesVenueName)
                 }
@@ -844,9 +797,23 @@ struct AddVisitView: View {
     private func visitContent(for unit: RecordUnitDefinition) -> some View {
         switch unit.id {
         case "basic":
-            eventSummary
-            Divider()
-            visitFields
+            ExperienceBasicUnitEditor(
+                template: template,
+                eventTitle: event.title,
+                eventSeriesName: event.seriesName,
+                visitedAt: $draft.visitedAt,
+                venueName: venueNameBinding,
+                venueAddress: venueAddressBinding,
+                overallRating: $draft.overallRating,
+                latitude: draft.latitude,
+                longitude: draft.longitude,
+                placeMasters: placeMasters,
+                usesPlaceSuggestions: usesInputSuggestionDictionary,
+                usesMapSearchAssist: usesMapSearchAssist,
+                ratingText: draft.ratingLabel,
+                onSelectPlace: { draft.apply(placeMaster: $0) },
+                onOpenPlaceSearch: { isShowingPlaceSearch = true }
+            )
         case "memo":
             memoEditor
         case "photos":
@@ -893,46 +860,9 @@ struct AddVisitView: View {
         case "advanced":
             AdvancedUnitEditor(entries: $draft.advancedEntries)
         case "officialInfo":
-            Text("公式URLや参考リンクは対象詳細で編集します。")
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
+            ExperienceOfficialInfoReferenceView()
         default:
             PendingUnitView(unit: unit)
-        }
-    }
-
-    private var eventSummary: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(event.title.isEmpty ? "記録" : event.title)
-                .font(FavorecoTypography.bodyStrong)
-            if !event.seriesName.isEmpty {
-                Text(event.seriesName)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var visitFields: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(template.visitSectionTitle)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-            DatePicker(template.dateLabel, selection: $draft.visitedAt, displayedComponents: .date)
-            TextField(template.venuePlaceholder, text: venueNameBinding)
-            placeSuggestionList(
-                suggestions: usesInputSuggestionDictionary ? placeSuggestions(for: draft.venueName, from: placeMasters) : [],
-                onSelect: { draft.apply(placeMaster: $0) }
-            )
-            placeSearchAssist(
-                isEnabled: usesMapSearchAssist,
-                venueName: draft.venueName,
-                address: venueAddressBinding,
-                latitude: draft.latitude,
-                longitude: draft.longitude,
-                action: { isShowingPlaceSearch = true }
-            )
-            ratingSlider(label: template.ratingLabel, value: $draft.overallRating, text: draft.ratingLabel)
         }
     }
 
@@ -1447,417 +1377,6 @@ private func normalizedPlaceText(_ value: String) -> String {
         .replacingOccurrences(of: "　", with: "")
 }
 
-private func placeSuggestions(for query: String, from placeMasters: [PlaceMaster]) -> [PlaceMaster] {
-    let normalizedQuery = normalizedPlaceText(query)
-    guard !normalizedQuery.isEmpty else { return [] }
-    return placeMasters
-        .filter { !$0.isArchived }
-        .filter { place in
-            normalizedPlaceText(place.name).contains(normalizedQuery)
-                || place.normalizedName.contains(normalizedQuery)
-                || normalizedPlaceText(place.reading).contains(normalizedQuery)
-                || normalizedPlaceText(place.aliasesRaw).contains(normalizedQuery)
-        }
-        .prefix(4)
-        .map { $0 }
-}
-
-@ViewBuilder
-private func placeSuggestionList(
-    suggestions: [PlaceMaster],
-    onSelect: @escaping (PlaceMaster) -> Void
-) -> some View {
-    if !suggestions.isEmpty {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("登録済みの場所")
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-            ForEach(suggestions) { place in
-                Button {
-                    onSelect(place)
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "mappin.and.ellipse")
-                            .foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(place.name)
-                                .foregroundStyle(.primary)
-                            if !place.address.isEmpty {
-                                Text(place.address)
-                                    .font(FavorecoTypography.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        Image(systemName: "arrow.up.left")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-@ViewBuilder
-private func placeSearchAssist(
-    isEnabled: Bool,
-    venueName: String,
-    address: Binding<String>,
-    latitude: Double,
-    longitude: Double,
-    action: @escaping () -> Void
-) -> some View {
-    if isEnabled {
-        TextField("住所（地図では住所を優先）", text: address)
-            .textContentType(.fullStreetAddress)
-        Button(action: action) {
-            Label("Apple Mapsから会場を選択", systemImage: "map")
-        }
-        PlaceMapPreview(
-            venueName: venueName,
-            address: address.wrappedValue,
-            latitude: latitude,
-            longitude: longitude
-        )
-    }
-}
-
-private struct PlaceMapPreview: View {
-    let venueName: String
-    let address: String
-    let latitude: Double
-    let longitude: Double
-    @State private var resolvedCoordinate: CLLocationCoordinate2D?
-
-    private var explicitCoordinate: CLLocationCoordinate2D? {
-        guard latitude != 0 || longitude != 0 else { return nil }
-        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
-
-    private var coordinate: CLLocationCoordinate2D? {
-        explicitCoordinate ?? resolvedCoordinate
-    }
-
-    private var geocodeKey: String {
-        "\(address)|\(latitude)|\(longitude)"
-    }
-
-    var body: some View {
-        if let coordinate {
-            Map(initialPosition: .region(MKCoordinateRegion(
-                center: coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
-            ))) {
-                Marker(venueName.isEmpty ? address : venueName, coordinate: coordinate)
-            }
-            .frame(height: 170)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .accessibilityLabel("\(venueName.isEmpty ? address : venueName)の地図")
-        }
-        EmptyView()
-            .task(id: geocodeKey) {
-                guard explicitCoordinate == nil else {
-                    resolvedCoordinate = nil
-                    return
-                }
-                let query = address.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !query.isEmpty else {
-                    resolvedCoordinate = nil
-                    return
-                }
-                try? await Task.sleep(for: .milliseconds(500))
-                guard !Task.isCancelled else { return }
-                let placemarks = try? await CLGeocoder().geocodeAddressString(query)
-                guard !Task.isCancelled else { return }
-                resolvedCoordinate = placemarks?.first?.location?.coordinate
-            }
-    }
-}
-
-private struct URLImportAssistEditor: View {
-    @EnvironmentObject private var purchaseManager: PurchaseManager
-    @Binding var officialURL: String
-    @Binding var title: String
-    @Binding var seriesName: String
-    @Binding var visitedAt: Date
-    @Binding var venueName: String
-    @Binding var venueAddress: String
-    @Binding var pendingPeople: [PendingPersonLink]
-    @Binding var advancedEntries: [AdvancedFieldEntry]
-
-    @AppStorage(AppStorageKeys.usesURLImportAssist) private var usesURLImportAssist = true
-    @State private var candidate: URLMetadataCandidate?
-    @State private var isLoading = false
-    @State private var errorMessage = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TextField("公式URL（任意）", text: $officialURL)
-                .textInputAutocapitalization(.never)
-                .keyboardType(.URL)
-
-            if usesURLImportAssist {
-                Button {
-                    Task { await fetchMetadata() }
-                } label: {
-                    if isLoading {
-                        Label("候補を取得中", systemImage: "hourglass")
-                    } else {
-                        Label("URLから候補を取得", systemImage: "link.badge.plus")
-                    }
-                }
-                .disabled(isLoading || officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                if let candidate {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("取得したタイトル")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                        Text(candidate.title)
-                            .font(FavorecoTypography.bodyStrong)
-                            .textSelection(.enabled)
-                        HStack {
-                            Button("タイトルに反映") {
-                                title = candidate.title
-                            }
-                            .buttonStyle(.bordered)
-                            Button("シリーズ名に反映") {
-                                seriesName = candidate.title
-                            }
-                            .buttonStyle(.bordered)
-                        }
-
-                        if purchaseManager.currentPlan.includesLocalFullFeatures {
-                            structuredCandidates(candidate)
-                        } else {
-                            Label("日時・会場・人物候補はPro以上", systemImage: "lock.fill")
-                                .font(FavorecoTypography.captionStrong)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                if !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .onChange(of: officialURL) { _, _ in
-            candidate = nil
-            errorMessage = ""
-        }
-        .onChange(of: usesURLImportAssist) { _, isEnabled in
-            if !isEnabled {
-                candidate = nil
-                errorMessage = ""
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func structuredCandidates(_ candidate: URLMetadataCandidate) -> some View {
-        if candidate.eventDate != nil || !candidate.venueName.isEmpty || !candidate.venueAddress.isEmpty || !candidate.contributors.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(structuredCandidateTitle(candidate.structuredType))
-                    .font(FavorecoTypography.captionStrong)
-
-                if let date = candidate.eventDate {
-                    Button {
-                        applyStructuredDate(date, candidate: candidate)
-                    } label: {
-                        Label(
-                            "\(candidate.structuredDateLabel): \(formattedStructuredDate(date, type: candidate.structuredType))",
-                            systemImage: "calendar"
-                        )
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                if !candidate.venueName.isEmpty || !candidate.venueAddress.isEmpty {
-                    Button {
-                        if !candidate.venueName.isEmpty { venueName = candidate.venueName }
-                        if !candidate.venueAddress.isEmpty { venueAddress = candidate.venueAddress }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Label(candidate.venueName.isEmpty ? "住所を反映" : candidate.venueName, systemImage: "mappin.and.ellipse")
-                            if !candidate.venueAddress.isEmpty {
-                                Text(candidate.venueAddress)
-                                    .font(FavorecoTypography.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                ForEach(candidate.contributors) { contributor in
-                    Button {
-                        appendContributor(contributor)
-                    } label: {
-                        Label("\(contributor.roleName): \(contributor.name)", systemImage: "person.badge.plus")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(hasContributor(contributor))
-                }
-            }
-        } else {
-            Text("このページには利用できる構造化データがありません。")
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func structuredCandidateTitle(_ type: String) -> String {
-        switch type {
-        case "Book": return "書籍の構造化候補"
-        case "Movie": return "映画の構造化候補"
-        default: return "イベントの構造化候補"
-        }
-    }
-
-    private func formattedStructuredDate(_ date: Date, type: String) -> String {
-        type == "Event"
-            ? date.formatted(date: .long, time: .shortened)
-            : date.formatted(date: .long, time: .omitted)
-    }
-
-    private func applyStructuredDate(_ date: Date, candidate: URLMetadataCandidate) {
-        if candidate.structuredType == "Event" {
-            visitedAt = date
-            return
-        }
-        let label = candidate.structuredDateLabel
-        let value = date.formatted(date: .long, time: .omitted)
-        if let index = advancedEntries.firstIndex(where: { $0.trimmedLabel == label }) {
-            advancedEntries[index].value = value
-        } else {
-            advancedEntries.append(AdvancedFieldEntry(label: label, value: value))
-        }
-    }
-
-    private func hasContributor(_ contributor: URLContributorCandidate) -> Bool {
-        pendingPeople.contains {
-            normalizedPersonName($0.name) == normalizedPersonName(contributor.name) && $0.role.key == contributor.roleKey
-        }
-    }
-
-    private func appendContributor(_ contributor: URLContributorCandidate) {
-        guard !hasContributor(contributor) else { return }
-        pendingPeople.append(
-            PendingPersonLink(name: contributor.name, role: PersonRoleOption.option(for: contributor.roleKey))
-        )
-    }
-
-    @MainActor
-    private func fetchMetadata() async {
-        isLoading = true
-        candidate = nil
-        errorMessage = ""
-        defer { isLoading = false }
-        do {
-            let result = try await URLMetadataService.fetch(
-                from: officialURL,
-                includesStructuredData: purchaseManager.currentPlan.includesLocalFullFeatures
-            )
-            candidate = result
-        } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription ?? "候補を取得できませんでした。"
-        }
-    }
-}
-
-private struct PlaceSearchView: View {
-    let initialQuery: String
-    let onSelect: (PlaceSearchCandidate) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var query: String
-    @State private var results: [PlaceSearchCandidate] = []
-    @State private var isSearching = false
-    @State private var errorMessage = ""
-
-    init(initialQuery: String, onSelect: @escaping (PlaceSearchCandidate) -> Void) {
-        self.initialQuery = initialQuery
-        self.onSelect = onSelect
-        _query = State(initialValue: initialQuery)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if isSearching {
-                    ProgressView("検索中")
-                } else if !errorMessage.isEmpty {
-                    ContentUnavailableView(
-                        "検索できませんでした",
-                        systemImage: "wifi.exclamationmark",
-                        description: Text(errorMessage)
-                    )
-                } else if results.isEmpty {
-                    ContentUnavailableView(
-                        "会場を検索",
-                        systemImage: "map",
-                        description: Text("会場名や住所を入力してください")
-                    )
-                } else {
-                    List(results) { candidate in
-                        Button {
-                            onSelect(candidate)
-                            dismiss()
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(candidate.name)
-                                    .font(FavorecoTypography.bodyStrong)
-                                    .foregroundStyle(.primary)
-                                if !candidate.address.isEmpty {
-                                    Text(candidate.address)
-                                        .font(FavorecoTypography.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("会場を選択")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "会場名・住所")
-            .onSubmit(of: .search) {
-                Task { await search() }
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
-            .task {
-                guard !initialQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                await search()
-            }
-        }
-    }
-
-    @MainActor
-    private func search() async {
-        isSearching = true
-        errorMessage = ""
-        defer { isSearching = false }
-        do {
-            results = try await PlaceSearchService.search(query: query)
-        } catch {
-            results = []
-            errorMessage = "通信状態を確認して、もう一度お試しください。"
-        }
-    }
-}
-
 private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnitDefinition] {
     let definitions = RecordUnitDefinition.definitions(for: category?.enabledUnitsRaw ?? "")
     let fallbackDefinitions = RecordUnitDefinition.definitions(for: "basic,officialInfo,memo")
@@ -1869,18 +1388,6 @@ private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnit
         guard !seenIDs.contains(definition.id) else { return false }
         seenIDs.insert(definition.id)
         return true
-    }
-}
-
-private func ratingSlider(label: String, value: Binding<Double>, text: String) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(text)
-                .foregroundStyle(.secondary)
-        }
-        Slider(value: value, in: 0...5, step: 0.5)
     }
 }
 

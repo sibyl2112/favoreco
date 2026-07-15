@@ -5,6 +5,48 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-15: 記録入力の基本情報・公式情報ユニットを分離
+
+### 変更概要
+
+- 対象名、シリーズ、日付、場所候補、住所優先Map、評価を `ExperienceBasicUnitEditor.swift` へ移動
+- 公式URL、URLメタデータ取得、Pro構造化候補の反映を `ExperienceOfficialInfoUnitEditor.swift` へ移動
+- 記録追加、保存済み記録編集、既存対象への回追加で同じ基本情報Viewを共用
+- 既存対象への回追加では、従来どおり対象名を参照表示し、公式情報は対象詳細で編集する案内だけを表示
+
+### 変更意図
+
+基本情報と外部情報取得の表示責務を長大な記録入力Viewから分け、ジャンル別入力やMap・URL取込の改善を保存処理へ波及させず進められるようにするため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`
+- `favorecoAPP/favorecoAPP/Views/ExperienceBasicUnitEditor.swift`
+- `favorecoAPP/favorecoAPP/Views/ExperienceOfficialInfoUnitEditor.swift`
+- `favoreco/CLAUDE.md`
+- `docs/00-開発状況と残課題.md`
+
+### 影響する画面・機能
+
+- 記録追加、記録編集、既存対象への回追加の基本情報ユニット
+- 登録済み場所候補、Apple Maps検索、住所優先のMapプレビュー
+- 公式URLからのタイトル、シリーズ、日時、会場、人物候補反映
+- 保存モデル、保存順序、場所マスター解決、URL候補の課金判定には変更なし
+
+### 確認結果（実機 / ビルド）
+
+- iOS 18最低対象、iOS 26.5 SDKのDebug汎用iOSデバイスビルド成功
+- iOS 18最低対象、iOS 26.5 SDKのRelease汎用iOSデバイスビルド成功
+- `AddExperienceView.swift` が約2,100行から約1,630行へ縮小
+- 実機目視は未実施
+
+### 既知のリスク・残課題
+
+- 実機で新規・編集・回追加の場所候補選択、住所優先Map、評価保存を確認する
+- URLからタイトル、日時、会場、人物候補を反映し、編集後も保存されることを確認する
+- AppIcon作業中の未割当画像警告は今回の変更対象外
+- 次はメモ、チケット、金額ユニットの重複を整理する
+
 ## 2026-07-15: 記録入力のOCR・人物ユニットを分離
 
 ### 変更概要
