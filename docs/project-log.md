@@ -5,6 +5,37 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-15: 記録入力の写真サムネイルUIを分離
+
+### 変更概要
+
+- 追加予定写真と保存済み写真の非同期サムネイル読込を `ExperiencePhotoThumbnail.swift` へ移動
+- カバー選択、削除、プレースホルダー表示を共通のサムネイルViewへ集約
+- `ThumbnailLoader`の420pxキャッシュを使う既存動作を維持
+
+### 変更意図
+
+写真Dataの読込と画像Viewの再描画を巨大な記録入力Viewから分離し、写真枚数が増えた場合のUI責務を局所化するため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/ExperiencePhotoThumbnail.swift`
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/00-開発状況と残課題.md`
+
+### 確認結果
+
+- Debug / Releaseのgeneric iOS Simulatorビルド成功（iOS 18 deployment、iOS 26.5 SDK）
+- 写真0件/1件/複数件、保存前/保存済み、カバーあり/なしの分岐をコード確認
+- キャッシュキー、カバー設定、削除コールバックが移動前と同一であることを確認
+- 既知の警告は `favorecoAPPApp.swift` の既存の未使用 `try?` のみ
+
+### 残課題
+
+- 実機で大量写真のサムネイル表示、スクロール、カバー変更、削除を確認する
+- 次は `PhotoUnitEditor` 本体を専用ファイルへ分離する
+
 ## 2026-07-15: 記録入力の写真DraftをViewから分離
 
 ### 変更概要
