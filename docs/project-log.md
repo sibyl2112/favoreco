@@ -5,6 +5,37 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-15: 記録入力の写真DraftをViewから分離
+
+### 変更概要
+
+- 保存前写真のデータ、ファイル名、寸法、相対パスを `PendingPhoto` へ集約
+- 1600px以内への縮小とJPEG圧縮を `PendingExperiencePhoto.swift` へ移動
+- 保存確定時だけ `PhotoBlob` を生成する既存フローを維持
+
+### 変更意図
+
+約3,100行の記録入力Viewから画像処理と保存前データ構造を分離し、写真エディタUIの分割と大量写真処理の改善を安全に進められるようにするため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Models/PendingExperiencePhoto.swift`
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/00-開発状況と残課題.md`
+
+### 確認結果
+
+- Debug / Releaseのgeneric iOS Simulatorビルド成功（iOS 18 deployment、iOS 26.5 SDK）
+- 追加・編集・既存対象への回追加が同じ`PendingPhoto`を参照することをコード確認
+- 入力中に`PhotoBlob`を作らず、保存時だけ変換することを確認
+- 既知の警告は `favorecoAPPApp.swift` の既存の未使用 `try?` のみ
+
+### 残課題
+
+- 実機で10枚/50枚の写真選択、進捗表示、カバー選択、保存、再編集を確認する
+- 次は `PhotoUnitEditor` とサムネイルUIを専用ファイルへ分離する
+
 ## 2026-07-15: 記録詳細の表示データをSnapshotへ集約
 
 ### 変更概要

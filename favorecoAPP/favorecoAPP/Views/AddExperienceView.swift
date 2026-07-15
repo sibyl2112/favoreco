@@ -9,7 +9,6 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 import UIKit
-import ImageIO
 import MapKit
 
 struct AddExperienceView: View {
@@ -1860,37 +1859,6 @@ private struct PlaceSearchView: View {
     }
 }
 
-private struct PendingPhoto: Identifiable, Sendable {
-    let id = UUID()
-    var data: Data
-    var originalFilename: String
-    var width: Int
-    var height: Int
-
-    var image: UIImage? {
-        UIImage(data: data)
-    }
-
-    var relativePath: String {
-        "local/\(id.uuidString).jpg"
-    }
-
-    func makePhotoBlob(visit: Visit) -> PhotoBlob {
-        PhotoBlob(
-            relativePath: relativePath,
-            originalFilename: originalFilename,
-            mediaKind: "photo",
-            purpose: "memory",
-            byteCount: data.count,
-            width: width,
-            height: height,
-            createdAt: Date(),
-            data: data,
-            visit: visit
-        )
-    }
-}
-
 private struct PendingPersonLink: Identifiable {
     let id = UUID()
     var name: String
@@ -2971,32 +2939,6 @@ private struct PhotoThumbnail: View {
             }
             .padding(5)
         }
-    }
-}
-
-private extension PendingPhoto {
-    nonisolated static func make(from data: Data, filename: String, compressionQuality: Double) -> PendingPhoto? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: 1600,
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
-        }
-        let safeQuality = min(max(compressionQuality, 0.5), 0.95)
-        guard let compressedData = UIImage(cgImage: cgImage).jpegData(compressionQuality: safeQuality) else {
-            return nil
-        }
-
-        return PendingPhoto(
-            data: compressedData,
-            originalFilename: filename,
-            width: cgImage.width,
-            height: cgImage.height
-        )
     }
 }
 
