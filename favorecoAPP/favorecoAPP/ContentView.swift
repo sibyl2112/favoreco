@@ -17,11 +17,14 @@ struct ContentView: View {
     @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
     @AppStorage(AppStorageKeys.fontWeight) private var fontWeightRaw = AppFontWeight.standard.rawValue
     @AppStorage(AppStorageKeys.lastSeenReleaseVersion) private var lastSeenReleaseVersion = ""
+    @AppStorage(AppStorageKeys.localStoreStartupError) private var localStoreStartupError = ""
     @State private var presentedReleaseNote: AppReleaseNote?
 
     var body: some View {
         Group {
-            if hasCompletedGenreOnboarding {
+            if !localStoreStartupError.isEmpty {
+                LocalStoreRecoveryView(errorMessage: localStoreStartupError)
+            } else if hasCompletedGenreOnboarding {
                 MainTabView()
             } else {
                 GenreOnboardingView()
@@ -54,6 +57,7 @@ struct ContentView: View {
     }
 
     private func prepareReleaseUpdateIfNeeded() {
+        guard localStoreStartupError.isEmpty else { return }
         let currentVersion = AppReleaseNotes.currentVersion
         guard !currentVersion.isEmpty else { return }
 

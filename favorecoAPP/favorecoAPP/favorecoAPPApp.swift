@@ -23,6 +23,10 @@ struct favorecoAPPApp: App {
             ContentView()
                 .environmentObject(PurchaseManager.shared)
                 .task {
+                    let localStoreStartupError = UserDefaults.standard.string(
+                        forKey: AppStorageKeys.localStoreStartupError
+                    ) ?? ""
+                    guard localStoreStartupError.isEmpty else { return }
                     await CategoryPresetSeeder.seedIfNeeded(in: sharedModelContainer.mainContext)
                     try? TicketNotificationMetadataMigrationService.normalize(
                         in: sharedModelContainer.mainContext

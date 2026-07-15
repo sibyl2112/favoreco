@@ -6897,3 +6897,30 @@ iOS 18対応のためにUI全体を古い表現へ固定せず、主な利用環
 
 ### 残課題
 - 公式URLがある/ない既存対象の両方で回追加を開き、見出しの`入力済み / 任意`を実機確認する
+## 2026-07-15: ローカル保存ストア失敗時の安全な復旧画面を追加
+
+### 変更概要
+- SwiftDataの永続ローカルストア生成失敗時の`fatalError`を、UI起動専用メモリコンテナへのフォールバックに変更
+- フォールバック中は通常UIの代わりに復旧画面を表示し、再起動、エラーコピー、公式サポートを案内
+- フォールバック中の標準ジャンルseed、通知移行、自動バックアップを停止
+
+### 変更意図
+以前起動時クラッシュが発生したのと同じ永続ストア生成経路に強制終了が残っていた。ストアを自動削除すると本当のデータ喪失になり、空の通常画面へ入れると新規記録や空バックアップの上書きを誘発するため、データ非変更のブロッキング復旧画面に止める。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/CloudSyncService.swift
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift
+- favorecoAPP/favorecoAPP/ContentView.swift
+- favorecoAPP/favorecoAPP/Views/LocalStoreRecoveryView.swift
+- favoreco/CLAUDE.md
+- docs/project-log.md
+
+### 確認結果（実機 / ビルド）
+- 永続ストア失敗フラグ中に通常UIと起動時データ処理の両方を停止することをコードで確認
+- iOS 18最低対象、iOS 26.5 SDKの汎用iOSデバイスビルド成功
+- 実機確認は未実施
+
+### 残課題
+- 実ストアを壊さず復旧画面を再現できるDEBUG専用診断スイッチの追加を検討する
+- 実機で通常起動が従来通り継続することを確認する

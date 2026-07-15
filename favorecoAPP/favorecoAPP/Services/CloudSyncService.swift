@@ -25,6 +25,7 @@ enum FavorecoModelContainerBootstrap {
             && EntitlementAccess.canUseSyncFeatures
         defaults.set(false, forKey: AppStorageKeys.iCloudSyncActiveAtLaunch)
         defaults.set("", forKey: AppStorageKeys.iCloudSyncStartupError)
+        defaults.set("", forKey: AppStorageKeys.localStoreStartupError)
 
         if wantsCloudSync {
             do {
@@ -49,7 +50,18 @@ enum FavorecoModelContainerBootstrap {
             )
             return try ModelContainer(for: schema, configurations: [localConfiguration])
         } catch {
-            fatalError("Could not create local ModelContainer: \(error)")
+            defaults.set(error.localizedDescription, forKey: AppStorageKeys.localStoreStartupError)
+
+            do {
+                let emergencyConfiguration = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: true,
+                    cloudKitDatabase: .none
+                )
+                return try ModelContainer(for: schema, configurations: [emergencyConfiguration])
+            } catch {
+                preconditionFailure("Could not create emergency ModelContainer: \(error)")
+            }
         }
     }
 }
