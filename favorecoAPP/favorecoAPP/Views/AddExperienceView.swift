@@ -2553,6 +2553,8 @@ private struct PhotoUnitEditor: View {
     @State private var importCompletedCount = 0
     @State private var importTotalCount = 0
 
+    private let largePhotoNoticeThreshold = 50
+
     private var isImportingPhotos: Bool {
         importTotalCount > 0
     }
@@ -2565,8 +2567,26 @@ private struct PhotoUnitEditor: View {
         EyecatchAspectRatio.option(for: aspectRatioKey, category: category)
     }
 
+    private var activeExistingPhotos: [PhotoBlob] {
+        existingPhotos.filter { !deletedPhotoIDs.contains($0.id) }
+    }
+
     private var currentPhotoCount: Int {
-        existingPhotos.count + pendingPhotos.count
+        activeExistingPhotos.count + pendingPhotos.count
+    }
+
+    private var currentPhotoBytes: Int64 {
+        let existingBytes = activeExistingPhotos.reduce(Int64(0)) {
+            $0 + Int64(max($1.byteCount, 0))
+        }
+        let pendingBytes = pendingPhotos.reduce(Int64(0)) {
+            $0 + Int64($1.data.count)
+        }
+        return existingBytes + pendingBytes
+    }
+
+    private var showsLargePhotoNotice: Bool {
+        currentPhotoCount >= largePhotoNoticeThreshold
     }
 
     private var remainingPhotoSlots: Int? {
@@ -2608,6 +2628,17 @@ private struct PhotoUnitEditor: View {
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
+            }
+
+            if maxPhotoCount == nil, showsLargePhotoNotice {
+                Label {
+                    Text("写真はこのまま追加できます。枚数が多い記録は、取り込み・完全バックアップ・初回同期に時間がかかる場合があります（現在約\(formattedPhotoBytes)）。")
+                } icon: {
+                    Image(systemName: "externaldrive.badge.exclamationmark")
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             if isImportingPhotos {
@@ -2655,6 +2686,10 @@ private struct PhotoUnitEditor: View {
     private var photoCountLabel: String {
         guard let maxPhotoCount else { return "\(currentPhotoCount)枚・上限なし" }
         return "\(currentPhotoCount)/\(maxPhotoCount)"
+    }
+
+    private var formattedPhotoBytes: String {
+        ByteCountFormatter.string(fromByteCount: currentPhotoBytes, countStyle: .file)
     }
 
     @ViewBuilder
@@ -2712,7 +2747,7 @@ private struct PhotoUnitEditor: View {
 
     private var photoGrid: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
-            ForEach(existingPhotos) { photo in
+            ForEach(activeExistingPhotos) { photo in
                 SavedPhotoThumbnail(
                     photo: photo,
                     title: "保存済み",
@@ -2785,7 +2820,7 @@ private struct PhotoUnitEditor: View {
 
     private func selectFallbackCover(excluding path: String) {
         guard coverPhotoPath == path else { return }
-        coverPhotoPath = existingPhotos
+        coverPhotoPath = activeExistingPhotos
             .first(where: { $0.relativePath != path })?
             .relativePath
             ?? pendingPhotos.first(where: { $0.relativePath != path })?.relativePath
