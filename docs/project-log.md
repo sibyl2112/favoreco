@@ -5,6 +5,47 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-15: 記録入力のOCR・人物ユニットを分離
+
+### 変更概要
+
+- OCR文字解析、Pro候補抽出、画像選択、読み取り状態を `ExperienceOCRUnitEditor.swift` へ移動
+- 人物リンクDraft、役割候補、名称正規化、候補表示、追加/削除UIを `ExperiencePeopleUnitEditor.swift` へ移動
+- 記録追加、保存済み記録編集、既存対象への回追加が同じ専用Viewを共用する構成を維持
+
+### 変更意図
+
+長大な記録入力ViewからOCRと人物管理の状態・表示責務を分け、今後のOCR精度改善や人物候補UI変更を基本情報・写真・保存処理へ波及させず進められるようにするため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`
+- `favorecoAPP/favorecoAPP/Views/ExperienceOCRUnitEditor.swift`
+- `favorecoAPP/favorecoAPP/Views/ExperiencePeopleUnitEditor.swift`
+- `favoreco/CLAUDE.md`
+- `docs/00-開発状況と残課題.md`
+
+### 影響する画面・機能
+
+- 記録追加、記録編集、既存対象への回追加のOCR・取込ユニット
+- 同3画面の人物・団体ユニット
+- URL構造化候補から人物・団体を追加する処理
+- 保存モデル、保存順序、候補判定ルールには変更なし
+
+### 確認結果（実機 / ビルド）
+
+- iOS 18最低対象、iOS 26.5 SDKのDebug汎用iOSデバイスビルド成功
+- iOS 18最低対象、iOS 26.5 SDKのRelease汎用iOSデバイスビルド成功
+- OCR候補種別、無料/Pro分岐、人物役割一覧、空白を無視する名称正規化が移動前と同一であることをコード確認
+- `AddExperienceView.swift` が約2,600行から約2,100行へ縮小
+- 実機目視は未実施
+
+### 既知のリスク・残課題
+
+- 実機でOCR画像選択、基本OCR追記、Pro候補反映、OCR設定OFFを確認する
+- 人物候補、役割追加、保存済みリンク削除、URL候補からの人物追加を3つの保存経路で確認する
+- 次は基本情報・公式情報の責務を点検し、挙動を維持したまま分割できる範囲を決める
+
 ## 2026-07-15: 記録入力の写真エディタ本体を分離
 
 ### 変更概要
