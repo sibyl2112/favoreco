@@ -14,6 +14,7 @@ enum DebugDataSeeder {
     private static let debugPhotoPrefix = "debug/sample-"
     private static let defaultSampleCountPerCategory = 10
     private static let movieSampleCount = 13
+    private static let theaterSampleCount = 15
 
     @MainActor
     @discardableResult
@@ -55,7 +56,7 @@ enum DebugDataSeeder {
                     category: category
                 )
                 let unitFields = VisitUnitFields(
-                    ocrText: sampleOCRText(for: category, title: title),
+                    ocrText: sampleOCRText(for: category, title: title, index: sampleIndex),
                     eyecatchAspectRatioKey: EyecatchAspectRatio.recommended(for: category).key,
                     goshuinBookSizeKey: category.templateKey == "goshuin" ? sampleGoshuinBookSizeKey(index: sampleIndex) : "",
                     advancedEntries: sampleAdvancedEntries(for: category, index: sampleIndex)
@@ -310,7 +311,12 @@ enum DebugDataSeeder {
                 "ムーラン・ルージュ！ザ・ミュージカル",
                 "パリの恋人",
                 "RENT JAPAN TOUR 2018",
-                "CITY HUNTER／Fire Fever!"
+                "CITY HUNTER／Fire Fever!",
+                "美女と野獣",
+                "カラーパープル",
+                "ラ・ボエーム ニューヨーク愛の歌",
+                "オペラ座の怪人",
+                "アルプススタンドのはしの方"
             ]
         case "book":
             titles = [
@@ -342,7 +348,11 @@ enum DebugDataSeeder {
     }
 
     private static func sampleCount(for category: RecordCategory) -> Int {
-        category.templateKey == "movie" ? movieSampleCount : defaultSampleCountPerCategory
+        switch category.templateKey {
+        case "movie": movieSampleCount
+        case "theater": theaterSampleCount
+        default: defaultSampleCountPerCategory
+        }
     }
 
     private static func sampleSeries(for category: RecordCategory, index: Int) -> String {
@@ -382,9 +392,11 @@ enum DebugDataSeeder {
         }
     }
 
-    private static func sampleOCRText(for category: RecordCategory, title: String) -> String {
+    private static func sampleOCRText(for category: RecordCategory, title: String, index: Int) -> String {
         switch category.templateKey {
-        case "theater", "museum", "live", "movie":
+        case "theater":
+            return sampleTheaterOCRText(title: title, index: index)
+        case "museum", "live", "movie":
             return "\(title)\n開場 17:30 / 開演 18:30\n電子チケット控え"
         case "book":
             return "\(title)\n気になった一節と読了メモ"
@@ -392,6 +404,43 @@ enum DebugDataSeeder {
             return "\(title)\n参拝日と御朱印の控え"
         default:
             return ""
+        }
+    }
+
+    private static func sampleTheaterOCRText(title: String, index: Int) -> String {
+        switch index {
+        case 10:
+            return """
+            Disney
+            BEAUTY AND THE BEAST
+            """
+        case 11:
+            return """
+            カラーパープル
+            ゴールデングローブ賞 Wノミネート
+            不朽の名作がミュージカルとしてよみがえる！
+            2.9 (Fri) 魂の歌声が心を揺さぶる
+            """
+        case 12:
+            return """
+            ラ・ボエーム ニューヨーク愛の歌
+            新たな感動、圧巻の歌声！ミュージカルに生まれ変わったオペラ最高傑作！
+            夢に生きた 愛にもがいた 永遠を信じた
+            格差、貧困、マイノリティー
+            苦境を前に声の限り命を燃やす、若者たちの青春賛歌
+            """
+        case 13:
+            return "The Phantom of the Opera"
+        case 14:
+            return """
+            アルプススタンドのはしの方
+            小野莉奈 / 平井亜門 / 西本まりん / 中村守里 / 黒木ひかり / 平井珠生
+            そこは、輝けない私たちのちょっとだけ輝かしい特等席。
+            第15回 大阪アジアン映画祭 正式出品作品
+            カラー / 16:9 / 5.1ch / 75分
+            """
+        default:
+            return "\(title)\n開場 17:30 / 開演 18:30\n電子チケット控え"
         }
     }
 
