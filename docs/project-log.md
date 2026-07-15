@@ -6924,3 +6924,39 @@ iOS 18対応のためにUI全体を古い表現へ固定せず、主な利用環
 ### 残課題
 - 実ストアを壊さず復旧画面を再現できるDEBUG専用診断スイッチの追加を検討する
 - 実機で通常起動が従来通り継続することを確認する
+
+## 2026-07-15: 完全買い切りのセット割引と権利判定を確定
+
+### 変更概要
+- ライト所有者向け同期永久追加を¥4,500から¥5,000へ変更
+- 直接の完全買い切り¥6,000を、個別購入合計¥6,500より¥500お得なセットとして表示
+- 完全権利の条件を、完全買い切りの直接所有、またはライト買い切りと同期永久追加の両方の所有へ限定
+- 同期永久追加だけでは完全権利にならないようStoreKit 2の判定を修正
+
+### 変更意図
+ライトと完全買い切りの差を同期だけに見せず、最初から完全買い切りを選ぶ明確な価格メリットを作る。同時に、ライト所有者は後から同期を永久追加できる経路を維持する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/PurchaseManager.swift
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift
+- favorecoAPP/favorecoAPP/Configuration/Favoreco.storekit
+- favoreco/CLAUDE.md
+- docs/15-実機総合確認手順.md
+- docs/16-Apple外部設定チェックリスト.md
+- docs/project-log.md
+
+### 影響する画面・機能
+- 設定 > 課金・プラン
+- StoreKit 2の権利判定と有料機能ゲート
+- iCloud同期・自動バックアップの利用可否
+- 詳細統計の有料案内文
+
+### 確認結果（実機 / ビルド）
+- `Favoreco.storekit`がJSONとして妥当であることを確認
+- iOS 18最低対象、iOS 26.5 SDKの汎用iOSデバイスビルド成功
+- 実機およびStoreKit Transaction Managerでの購入組み合わせ確認は未実施
+
+### 既知のリスク・残課題
+- App Store Connect側でも同期永久追加を¥5,000、完全買い切りを¥6,000として登録する必要がある
+- 同期永久追加単体、ライト＋同期永久追加、完全買い切り直接購入の3経路をStoreKitローカル環境で確認する

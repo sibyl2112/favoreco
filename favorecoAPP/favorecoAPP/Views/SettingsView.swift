@@ -238,7 +238,7 @@ private struct DeveloperSettingsView: View {
                     Text("無料").tag(FavorecoPlan.free.rawValue)
                     Text("ライト買い切り").tag(FavorecoPlan.lightLifetime.rawValue)
                     Text("同期プラン").tag(FavorecoPlan.syncSubscription.rawValue)
-                    Text("フル買い切り").tag(FavorecoPlan.fullLifetime.rawValue)
+                    Text("完全買い切り").tag(FavorecoPlan.fullLifetime.rawValue)
                 }
                 .onChange(of: debugPlanOverride) { _, newValue in
                     Task {
@@ -2048,15 +2048,15 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("フル買い切り") {
+            Section("完全買い切り") {
                 PlanHeaderRow(
-                    title: "フル買い切り",
+                    title: "完全買い切り",
                     price: "¥6,000",
-                    detail: "ライト¥1,500 + 同期永久¥4,500。どの購入ルートでも合計が揃う頭金方式。"
+                    detail: "ライト¥1,500 + 同期永久追加¥5,000の通常合計¥6,500から、セットで¥500お得。"
                 )
                 PlanFeatureRow(
                     title: "同期も永久",
-                    detail: "ローカル全機能と同期を永久解放する最上位候補。",
+                    detail: "ローカル全機能と同期を、サブスクリプションなしで永久利用。",
                     systemImage: "checkmark.seal"
                 )
             }
@@ -2067,23 +2067,29 @@ struct BillingPlanSettingsView: View {
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    if !purchaseManager.ownsLightLifetime,
+                    if purchaseManager.currentPlan != .fullLifetime,
+                       !purchaseManager.ownsLightLifetime,
                        let product = purchaseManager.product(id: FavorecoProductID.lightLifetime) {
                         StorePurchaseRow(title: "ライト買い切り", product: product)
                     }
-                    if let product = purchaseManager.product(id: FavorecoProductID.syncMonthly) {
+                    if purchaseManager.currentPlan != .fullLifetime,
+                       let product = purchaseManager.product(id: FavorecoProductID.syncMonthly) {
                         StorePurchaseRow(title: "同期 月額", product: product)
                     }
-                    if let product = purchaseManager.product(id: FavorecoProductID.syncYearly) {
+                    if purchaseManager.currentPlan != .fullLifetime,
+                       let product = purchaseManager.product(id: FavorecoProductID.syncYearly) {
                         StorePurchaseRow(title: "同期 年額", product: product)
                     }
                     if purchaseManager.ownsLightLifetime,
+                       !purchaseManager.ownsSyncLifetimeAddon,
+                       purchaseManager.currentPlan != .fullLifetime,
                        let product = purchaseManager.product(id: FavorecoProductID.syncLifetimeAddon) {
                         StorePurchaseRow(title: "同期永久を追加", product: product)
                     }
                     if !purchaseManager.ownsLightLifetime,
+                       purchaseManager.currentPlan != .fullLifetime,
                        let product = purchaseManager.product(id: FavorecoProductID.fullLifetime) {
-                        StorePurchaseRow(title: "フル買い切り", product: product)
+                        StorePurchaseRow(title: "完全買い切り（¥500お得）", product: product)
                     }
                 }
                 Button {

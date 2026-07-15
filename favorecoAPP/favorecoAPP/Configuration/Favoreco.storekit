@@ -30,7 +30,7 @@
       "type" : "NonConsumable"
     },
     {
-      "displayPrice" : "4500",
+      "displayPrice" : "5000",
       "familyShareable" : false,
       "internalID" : "A8E810B5-D443-46EC-8114-C0502BE0EF98",
       "localizations" : [
@@ -51,12 +51,12 @@
       "localizations" : [
         {
           "description" : "ローカル全機能、同期、自動バックアップを永久に利用できます。",
-          "displayName" : "Favoreco フル買い切り",
+          "displayName" : "Favoreco 完全買い切り",
           "locale" : "ja"
         }
       ],
       "productID" : "com.nori.favoreco.full.lifetime",
-      "referenceName" : "Favoreco Full Lifetime",
+      "referenceName" : "Favoreco Complete Lifetime",
       "type" : "NonConsumable"
     }
   ],

@@ -1345,7 +1345,7 @@ private struct StatsView: View {
             if !purchaseManager.currentPlan.includesLocalFullFeatures {
                 StatsLockedFeatureCard(
                     title: "詳細統計",
-                    message: "ジャンル別の回数や傾向は、ライト買い切り・同期プラン・フル買い切りで利用できます。",
+                    message: "ジャンル別の回数や傾向は、ライト買い切り・同期プラン・完全買い切りで利用できます。",
                     systemImage: "chart.bar.xaxis",
                     requirement: "ライト以上"
                 )

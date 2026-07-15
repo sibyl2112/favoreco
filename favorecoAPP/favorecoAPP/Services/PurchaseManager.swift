@@ -13,7 +13,7 @@ enum FavorecoPlan: String, Sendable {
         case .free: return "無料"
         case .lightLifetime: return "ライト買い切り"
         case .syncSubscription: return "同期プラン"
-        case .fullLifetime: return "フル買い切り"
+        case .fullLifetime: return "完全買い切り"
         }
     }
 
@@ -51,6 +51,7 @@ final class PurchaseManager: ObservableObject {
     @Published private(set) var products: [Product] = []
     @Published private(set) var currentPlan: FavorecoPlan = .free
     @Published private(set) var ownsLightLifetime = false
+    @Published private(set) var ownsSyncLifetimeAddon = false
     @Published private(set) var isLoading = false
     @Published private(set) var message = ""
 
@@ -150,8 +151,9 @@ final class PurchaseManager: ObservableObject {
         }
 
         ownsLightLifetime = activeProductIDs.contains(FavorecoProductID.lightLifetime)
+        ownsSyncLifetimeAddon = activeProductIDs.contains(FavorecoProductID.syncLifetimeAddon)
         if activeProductIDs.contains(FavorecoProductID.fullLifetime)
-            || activeProductIDs.contains(FavorecoProductID.syncLifetimeAddon) {
+            || (ownsLightLifetime && ownsSyncLifetimeAddon) {
             currentPlan = .fullLifetime
         } else if activeProductIDs.contains(FavorecoProductID.syncMonthly)
             || activeProductIDs.contains(FavorecoProductID.syncYearly) {

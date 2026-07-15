@@ -76,8 +76,8 @@ Non-Consumable:
 | Product ID | 参考価格 | 内容 |
 |---|---:|---|
 | `com.nori.favoreco.light.lifetime` | ¥1,500 | ローカル全機能、同期なし |
-| `com.nori.favoreco.sync.lifetime.addon` | ¥4,500 | ライト所有者向け同期永久追加 |
-| `com.nori.favoreco.full.lifetime` | ¥6,000 | ローカル全機能＋同期永久 |
+| `com.nori.favoreco.sync.lifetime.addon` | ¥5,000 | ライト所有者向け同期永久追加。単体では完全権利なし |
+| `com.nori.favoreco.full.lifetime` | ¥6,000 | 完全買い切り。ローカル全機能＋同期永久（個別合計より¥500お得） |
 
 Auto-Renewable Subscription Group: `Favoreco Sync`
 
@@ -103,7 +103,9 @@ Auto-Renewable Subscription Group: `Favoreco Sync`
 
 - Sandbox Testerを作成
 - 月額購入、年額購入、買い切り、復元、期限切れ、返金/取消を確認
-- ライト購入後だけ同期永久追加を表示することを確認
+- 同期永久追加だけを購入しても完全権利にならないことを確認
+- ライト購入後だけ同期永久追加を表示し、両方の購入後に完全権利になることを確認
+- 完全買い切りを直接購入すると完全権利になることを確認
 - サブスク失効後も既存データが残ることを確認
 - TestFlightではXcodeのStoreKit ConfigurationではなくApp Store Connect商品を使う
 - TestFlightビルドでCloudKit Production環境を確認
