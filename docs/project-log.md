@@ -7023,3 +7023,45 @@ iOS 18対応のためにUI全体を古い表現へ固定せず、主な利用環
 
 ### 残課題
 - DEBUG権利を4段階で切り替え、表示が即時更新されることを実機確認する
+
+## 2026-07-15: 課金名称・価格とPro写真無制限を確定
+
+### 変更概要
+- 利用者向けプラン名を無料版 / Pro / Premium / Premium永久版へ統一
+- Proを¥2,500の買い切りとし、ローカル写真を1記録あたり上限なしへ変更
+- Premiumを月¥250 / 年¥2,000、Premium永久版を¥6,000へ変更
+- Pro所有者向けPremium永久アップグレードを¥3,500とし、どの購入経路でも合計¥6,000に統一
+- StoreKit商品IDと内部enum名は既存購入互換のため変更せず、表示名・説明・価格だけを更新
+
+### 変更意図
+思い出を保存するアプリで、購入済みPro利用者へ写真の選別を強いる境界を避けるため。Premiumは写真枚数ではなく、自作ジャンル、iCloud同期、自動バックアップ、自動思い出レポートなど、記録を端末間で安全に育てる価値で訴求する。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Services/PurchaseManager.swift
+- favorecoAPP/favorecoAPP/Views/AddExperienceView.swift
+- favorecoAPP/favorecoAPP/Views/GenreManagementView.swift
+- favorecoAPP/favorecoAPP/Views/MainTabView.swift
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift
+- favorecoAPP/favorecoAPP/Configuration/Favoreco.storekit
+- favoreco/CLAUDE.md
+- docs/15-実機総合確認手順.md
+- docs/16-Apple外部設定チェックリスト.md
+- docs/project-log.md
+
+### 影響する画面・機能
+- 設定 > 課金・プラン
+- DEBUG権利切替と権利診断
+- 記録追加/編集の写真選択上限
+- 統計、URL取込、OCR、表示設定、自作ジャンルの有料案内
+- StoreKitローカル購入とApp Store Connect登録資料
+
+### 確認結果（実機 / ビルド）
+- 無料版だけ写真上限10枚、Pro/Premium/Premium永久版は上限なしを共通権利モデルで判定することをコード確認
+- StoreKit Configurationの5商品について商品名と日本価格をJSON検証
+- iOS 18最低対象、iOS 26.5 SDKの汎用iOSデバイスビルド成功
+- 実機確認は未実施
+
+### 既知のリスク・残課題
+- App Store Connectで商品を作成する前に、商品名、価格、サブスクリプショングループを今回の正本と最終突合する
+- DEBUG権利切替で無料版10枚、Pro/Premium/Premium永久版の上限なし表示と追加動作を実機確認する
+- 大量写真は課金上限では止めず、容量表示、逐次圧縮、サムネイル読み込みで性能を守る

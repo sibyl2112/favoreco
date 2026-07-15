@@ -15,13 +15,13 @@
   ],
   "products" : [
     {
-      "displayPrice" : "1500",
+      "displayPrice" : "2500",
       "familyShareable" : false,
       "internalID" : "7D0548DB-C197-4B5B-9132-90D81759B40B",
       "localizations" : [
         {
-          "description" : "標準ジャンルの拡張機能を永久に利用できます。同期と自作ジャンルは含みません。",
-          "displayName" : "Favoreco ライト買い切り",
+          "description" : "ローカルの拡張機能と写真無制限を永久に利用できます。同期と自作ジャンルは含みません。",
+          "displayName" : "Favoreco Pro",
           "locale" : "ja"
         }
       ],
@@ -30,13 +30,13 @@
       "type" : "NonConsumable"
     },
     {
-      "displayPrice" : "5000",
+      "displayPrice" : "3500",
       "familyShareable" : false,
       "internalID" : "A8E810B5-D443-46EC-8114-C0502BE0EF98",
       "localizations" : [
         {
-          "description" : "ライト買い切りへ同期と自動バックアップの永久利用権を追加します。",
-          "displayName" : "Favoreco 同期永久追加",
+          "description" : "Favoreco ProからPremium 永久版へアップグレードします。",
+          "displayName" : "Favoreco Premium 永久アップグレード",
           "locale" : "ja"
         }
       ],
@@ -50,8 +50,8 @@
       "internalID" : "FA06EA16-6C64-46E1-8DC0-6505B1A1494F",
       "localizations" : [
         {
-          "description" : "自作ジャンル、写真無制限、同期、自動バックアップを永久に利用できます。",
-          "displayName" : "Favoreco 完全買い切り",
+          "description" : "Pro機能、自作ジャンル、同期、自動バックアップを永久に利用できます。",
+          "displayName" : "Favoreco Premium 永久版",
           "locale" : "ja"
         }
       ],
@@ -79,8 +79,8 @@
       "id" : "F57B1CA7-4869-4315-A84E-764E07D27E16",
       "localizations" : [
         {
-          "description" : "自作ジャンル、写真無制限、同期、自動バックアップを利用するプランです。",
-          "displayName" : "Favoreco 同期プラン",
+          "description" : "Pro機能、自作ジャンル、同期、自動バックアップを利用するプランです。",
+          "displayName" : "Favoreco Premium",
           "locale" : "ja"
         }
       ],
@@ -111,8 +111,8 @@
           ],
           "localizations" : [
             {
-              "description" : "自作ジャンル、写真無制限、同期、自動バックアップを1か月利用できます。",
-              "displayName" : "Favoreco 同期 月額",
+              "description" : "Pro機能、自作ジャンル、同期、自動バックアップを1か月利用できます。",
+              "displayName" : "Favoreco Premium 月額",
               "locale" : "ja"
             }
           ],
@@ -132,8 +132,8 @@
           "billingPlans" : [
             {
               "billingPlanType" : "BILLED_UPFRONT",
-              "commitmentDisplayPrice" : "1500",
-              "displayPrice" : "1500",
+              "commitmentDisplayPrice" : "2000",
+              "displayPrice" : "2000",
               "internalID" : "37B13D0E",
               "isEnabled" : true
             }
@@ -141,7 +141,7 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "1500",
+          "displayPrice" : "2000",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "4B85AFF6-1C3F-4264-A99E-9908202F96D5",
@@ -150,8 +150,8 @@
           ],
           "localizations" : [
             {
-              "description" : "自作ジャンル、写真無制限、同期、自動バックアップを1年間利用できます。",
-              "displayName" : "Favoreco 同期 年額",
+              "description" : "Pro機能、自作ジャンル、同期、自動バックアップを1年間利用できます。",
+              "displayName" : "Favoreco Premium 年額",
               "locale" : "ja"
             }
           ],

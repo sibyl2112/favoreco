@@ -10,10 +10,10 @@ enum FavorecoPlan: String, Sendable {
 
     nonisolated var displayName: String {
         switch self {
-        case .free: return "無料"
-        case .lightLifetime: return "ライト買い切り"
-        case .syncSubscription: return "同期プラン"
-        case .fullLifetime: return "完全買い切り"
+        case .free: return "無料版"
+        case .lightLifetime: return "Pro"
+        case .syncSubscription: return "Premium"
+        case .fullLifetime: return "Premium 永久版"
         }
     }
 
@@ -23,8 +23,7 @@ enum FavorecoPlan: String, Sendable {
     nonisolated var maximumPhotosPerRecord: Int? {
         switch self {
         case .free: return 10
-        case .lightLifetime: return 30
-        case .syncSubscription, .fullLifetime: return nil
+        case .lightLifetime, .syncSubscription, .fullLifetime: return nil
         }
     }
 

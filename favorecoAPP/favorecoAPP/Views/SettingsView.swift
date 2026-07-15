@@ -235,10 +235,10 @@ private struct DeveloperSettingsView: View {
             Section("権利・表示") {
                 Picker("テスト権利", selection: $debugPlanOverride) {
                     Text("StoreKit購入結果").tag("storekit")
-                    Text("無料").tag(FavorecoPlan.free.rawValue)
-                    Text("ライト買い切り").tag(FavorecoPlan.lightLifetime.rawValue)
-                    Text("同期プラン").tag(FavorecoPlan.syncSubscription.rawValue)
-                    Text("完全買い切り").tag(FavorecoPlan.fullLifetime.rawValue)
+                    Text("無料版").tag(FavorecoPlan.free.rawValue)
+                    Text("Pro").tag(FavorecoPlan.lightLifetime.rawValue)
+                    Text("Premium").tag(FavorecoPlan.syncSubscription.rawValue)
+                    Text("Premium 永久版").tag(FavorecoPlan.fullLifetime.rawValue)
                 }
                 .onChange(of: debugPlanOverride) { _, newValue in
                     Task {
@@ -248,7 +248,7 @@ private struct DeveloperSettingsView: View {
 
                 LabeledContent("現在の権利", value: purchaseManager.currentPlan.displayName)
 
-                LabeledContent("ライト機能", value: accessLabel(purchaseManager.currentPlan.includesLocalFullFeatures))
+                LabeledContent("Pro機能", value: accessLabel(purchaseManager.currentPlan.includesLocalFullFeatures))
                 LabeledContent("写真上限", value: photoLimitLabel)
                 LabeledContent("自作ジャンル", value: accessLabel(purchaseManager.currentPlan.canCreateCustomGenres))
                 LabeledContent("同期", value: accessLabel(purchaseManager.currentPlan.includesSync))
@@ -395,7 +395,7 @@ struct RecordInputAssistSettingsView: View {
                 Label(
                     purchaseManager.currentPlan.includesLocalFullFeatures
                         ? "URLの日時・会場候補を利用できます"
-                        : "URLの日時・会場候補はライト以上",
+                        : "URLの日時・会場候補はPro以上",
                     systemImage: purchaseManager.currentPlan.includesLocalFullFeatures ? "checkmark.circle" : "lock.fill"
                 )
                 .font(FavorecoTypography.captionStrong)
@@ -406,7 +406,7 @@ struct RecordInputAssistSettingsView: View {
                 Label(
                     purchaseManager.currentPlan.includesLocalFullFeatures
                         ? "高度OCRの項目候補を利用できます"
-                        : "高度OCRの項目候補はライト以上",
+                        : "高度OCRの項目候補はPro以上",
                     systemImage: purchaseManager.currentPlan.includesLocalFullFeatures ? "checkmark.circle" : "lock.fill"
                 )
                 .font(FavorecoTypography.captionStrong)
@@ -802,7 +802,7 @@ struct NotificationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if !purchaseManager.currentPlan.includesSync {
-                    Label("思い出レポート通知は同期プラン以上", systemImage: "lock.fill")
+                    Label("思い出レポート通知はPremium限定", systemImage: "lock.fill")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -810,7 +810,7 @@ struct NotificationSettingsView: View {
             .disabled(!masterEnabled)
 
             Section("現在の実装範囲") {
-                Text("通知タイプ別の設定保存、iOS通知許可、予定・申込・FC/会員期限、同期プランの月刊Favoreco通知まで接続しています。")
+                Text("通知タイプ別の設定保存、iOS通知許可、予定・申込・FC/会員期限、Premiumの月刊Favoreco通知まで接続しています。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -980,7 +980,7 @@ struct DisplaySettingsView: View {
                     }
                 } else {
                     LabeledContent("配色", value: FavorecoThemeMode.categoryAccent.name)
-                    Label("全体統一テーマはライト以上", systemImage: "lock.fill")
+                    Label("全体統一テーマはPro以上", systemImage: "lock.fill")
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.secondary)
                 }
@@ -1057,7 +1057,7 @@ private struct FontStyleSettingsView: View {
             } footer: {
                 Text(canChangeFont
                      ? "英字の見出しには、どの設定でも Cormorant Garamond を使います。"
-                     : "フォント変更はライト買い切り以上で利用できます。標準表示は無料で使えます。")
+                     : "フォント変更はPro以上で利用できます。標準表示は無料で使えます。")
             }
 
             Section {
@@ -1072,7 +1072,7 @@ private struct FontStyleSettingsView: View {
                 Text("文字の太さ")
             } footer: {
                 if !canChangeFont {
-                    Text("文字の太さ変更はライト買い切り以上で利用できます。")
+                    Text("文字の太さ変更はPro以上で利用できます。")
                 } else {
                     Text("本文と見出しの強弱を保ったまま、アプリ全体の文字を調整します。")
                 }
@@ -1932,7 +1932,7 @@ struct SyncBackupSettingsView: View {
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                 if !purchaseManager.currentPlan.includesSync {
-                    Label("自動更新は同期プラン以上", systemImage: "lock.fill")
+                    Label("自動更新はPremium限定", systemImage: "lock.fill")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -2008,11 +2008,11 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("ライト買い切り") {
+            Section("Pro") {
                 PlanHeaderRow(
-                    title: "ライト買い切り",
-                    price: "¥1,500",
-                    detail: "標準ジャンルの拡張機能を永久解放。同期と自作ジャンルは含めない。"
+                    title: "Favoreco Pro",
+                    price: "¥2,500",
+                    detail: "ローカルの記録機能を永久解放。同期と自作ジャンルは含めない。"
                 )
                 PlanFeatureRow(
                     title: "詳細統計・年間まとめ",
@@ -2030,8 +2030,8 @@ struct BillingPlanSettingsView: View {
                     systemImage: "link.badge.plus"
                 )
                 PlanFeatureRow(
-                    title: "写真上限",
-                    detail: "1記録あたり30枚まで保存。無料枠は10枚まで。",
+                    title: "ローカル写真無制限",
+                    detail: "1記録の枚数上限なく、この端末へ写真を保存できます。",
                     systemImage: "photo.stack"
                 )
                 PlanFeatureRow(
@@ -2041,11 +2041,11 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("同期プラン") {
+            Section("Premium") {
                 PlanHeaderRow(
-                    title: "同期サブスク",
-                    price: "月¥250 / 年¥1,500",
-                    detail: "契約中はライト機能、自作ジャンル、写真無制限と同期を利用可能。"
+                    title: "Favoreco Premium",
+                    price: "月¥250 / 年¥2,000",
+                    detail: "契約中はPro機能、自作ジャンル、同期と自動バックアップを利用可能。"
                 )
                 PlanFeatureRow(
                     title: "iCloud同期",
@@ -2053,8 +2053,8 @@ struct BillingPlanSettingsView: View {
                     systemImage: "icloud.and.arrow.up"
                 )
                 PlanFeatureRow(
-                    title: "自作ジャンル・写真無制限",
-                    detail: "自分専用のジャンルを作成し、1記録の写真枚数上限なく保存できます。",
+                    title: "自作ジャンル",
+                    detail: "自分専用のジャンルを作成し、記録項目や表示を整えられます。",
                     systemImage: "square.grid.2x2"
                 )
                 PlanFeatureRow(
@@ -2069,15 +2069,15 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("完全買い切り") {
+            Section("Premium 永久版") {
                 PlanHeaderRow(
-                    title: "完全買い切り",
+                    title: "Favoreco Premium 永久版",
                     price: "¥6,000",
-                    detail: "ライト¥1,500 + 同期永久追加¥5,000の通常合計¥6,500から、セットで¥500お得。"
+                    detail: "Pro購入後は¥3,500でアップグレードでき、どちらの購入経路でも合計¥6,000。"
                 )
                 PlanFeatureRow(
-                    title: "同期も永久",
-                    detail: "ライト機能、自作ジャンル、写真無制限と同期を、サブスクリプションなしで永久利用。",
+                    title: "Premium機能を永久利用",
+                    detail: "Pro機能、自作ジャンル、同期と自動バックアップを、サブスクリプションなしで利用できます。",
                     systemImage: "checkmark.seal"
                 )
             }
@@ -2091,26 +2091,26 @@ struct BillingPlanSettingsView: View {
                     if purchaseManager.currentPlan != .fullLifetime,
                        !purchaseManager.ownsLightLifetime,
                        let product = purchaseManager.product(id: FavorecoProductID.lightLifetime) {
-                        StorePurchaseRow(title: "ライト買い切り", product: product)
+                        StorePurchaseRow(title: "Favoreco Pro", product: product)
                     }
                     if purchaseManager.currentPlan != .fullLifetime,
                        let product = purchaseManager.product(id: FavorecoProductID.syncMonthly) {
-                        StorePurchaseRow(title: "同期 月額", product: product)
+                        StorePurchaseRow(title: "Premium 月額", product: product)
                     }
                     if purchaseManager.currentPlan != .fullLifetime,
                        let product = purchaseManager.product(id: FavorecoProductID.syncYearly) {
-                        StorePurchaseRow(title: "同期 年額", product: product)
+                        StorePurchaseRow(title: "Premium 年額", product: product)
                     }
                     if purchaseManager.ownsLightLifetime,
                        !purchaseManager.ownsSyncLifetimeAddon,
                        purchaseManager.currentPlan != .fullLifetime,
                        let product = purchaseManager.product(id: FavorecoProductID.syncLifetimeAddon) {
-                        StorePurchaseRow(title: "同期永久を追加", product: product)
+                        StorePurchaseRow(title: "Premium 永久版へアップグレード", product: product)
                     }
                     if !purchaseManager.ownsLightLifetime,
                        purchaseManager.currentPlan != .fullLifetime,
                        let product = purchaseManager.product(id: FavorecoProductID.fullLifetime) {
-                        StorePurchaseRow(title: "完全買い切り（¥500お得）", product: product)
+                        StorePurchaseRow(title: "Premium 永久版", product: product)
                     }
                 }
                 Button {
@@ -2160,9 +2160,9 @@ struct BillingPlanSettingsView: View {
     private var planDescription: String {
         switch purchaseManager.currentPlan {
         case .free: return "基本記録と無料機能を利用できます。"
-        case .lightLifetime: return "標準ジャンルの拡張機能と写真30枚を永久に利用できます。"
-        case .syncSubscription: return "契約中はライト機能、自作ジャンル、写真無制限、同期、自動バックアップを利用できます。"
-        case .fullLifetime: return "ライト機能、自作ジャンル、写真無制限、同期、自動バックアップを永久に利用できます。"
+        case .lightLifetime: return "Pro機能とローカル写真無制限を永久に利用できます。"
+        case .syncSubscription: return "契約中はPro機能、自作ジャンル、同期、自動バックアップを利用できます。"
+        case .fullLifetime: return "Pro機能、自作ジャンル、同期、自動バックアップを永久に利用できます。"
         }
     }
 }

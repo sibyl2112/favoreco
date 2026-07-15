@@ -1345,9 +1345,9 @@ private struct StatsView: View {
             if !purchaseManager.currentPlan.includesLocalFullFeatures {
                 StatsLockedFeatureCard(
                     title: "詳細統計",
-                    message: "ジャンル別の回数や傾向は、ライト買い切り・同期プラン・完全買い切りで利用できます。",
+                    message: "ジャンル別の回数や傾向は、ProまたはPremiumで利用できます。",
                     systemImage: "chart.bar.xaxis",
-                    requirement: "ライト以上"
+                    requirement: "Pro以上"
                 )
             } else if categoryStats.isEmpty {
                 PlaceholderRow(
@@ -1397,7 +1397,7 @@ private struct StatsView: View {
                     title: "推移・構成グラフ",
                     message: "直近12か月の記録推移と、ジャンル構成を見返せます。",
                     systemImage: "chart.xyaxis.line",
-                    requirement: "ライト以上"
+                    requirement: "Pro以上"
                 )
             } else if visibleVisits.isEmpty {
                 PlaceholderRow(
@@ -1495,7 +1495,7 @@ private struct StatsView: View {
                     title: "予定・申込の詳細統計",
                     message: "今年の予定、申込済み、取得、参加、確定済み抽選の当選率をまとめます。",
                     systemImage: "ticket",
-                    requirement: "ライト以上"
+                    requirement: "Pro以上"
                 )
             } else if activePlans.isEmpty && activeAttempts.isEmpty {
                 PlaceholderRow(
@@ -1559,7 +1559,7 @@ private struct StatsView: View {
                         title: "月刊Favoreco",
                         message: "月ごとの記録を集計し、思い出カードを手動で作成・共有できます。",
                         systemImage: "sparkles",
-                        requirement: "ライト以上"
+                        requirement: "Pro以上"
                     )
                 }
 
@@ -1580,7 +1580,7 @@ private struct StatsView: View {
                         title: "年間Favoreco",
                         message: "1年分の記録を集計し、年間の思い出カードを手動で作成・共有できます。",
                         systemImage: "calendar.badge.star",
-                        requirement: "ライト以上"
+                        requirement: "Pro以上"
                     )
                 }
 
@@ -1623,7 +1623,7 @@ private struct StatsView: View {
                         title: "毎月・毎年届く思い出レポート",
                         message: "同期済みの記録から、前月の月刊と前年の年間Favorecoを自動で提案します。",
                         systemImage: "wand.and.stars",
-                        requirement: "同期プラン以上"
+                        requirement: "Premium限定"
                     )
                 }
             }

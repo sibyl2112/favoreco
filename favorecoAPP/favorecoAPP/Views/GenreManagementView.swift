@@ -89,7 +89,7 @@ struct GenreManagementView: View {
                 .accessibilityLabel(
                     purchaseManager.currentPlan.canCreateCustomGenres
                         ? "自作ジャンルを追加"
-                        : "自作ジャンルは同期プランまたは完全買い切り"
+                        : "自作ジャンルはPremiumで利用できます"
                 )
             }
         }
@@ -280,7 +280,7 @@ struct GenreDetailSettingsView: View {
                     }
                 } label: {
                     Label(
-                        purchaseManager.currentPlan.canCreateCustomGenres ? "この設定を複製" : "複製は同期プラン以上",
+                        purchaseManager.currentPlan.canCreateCustomGenres ? "この設定を複製" : "複製はPremium限定",
                         systemImage: purchaseManager.currentPlan.canCreateCustomGenres ? "plus.square.on.square" : "lock.fill"
                     )
                 }

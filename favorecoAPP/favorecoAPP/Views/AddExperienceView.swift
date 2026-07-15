@@ -1633,7 +1633,7 @@ private struct URLImportAssistEditor: View {
                         if purchaseManager.currentPlan.includesLocalFullFeatures {
                             structuredCandidates(candidate)
                         } else {
-                            Label("日時・会場・人物候補はライト以上", systemImage: "lock.fill")
+                            Label("日時・会場・人物候補はPro以上", systemImage: "lock.fill")
                                 .font(FavorecoTypography.captionStrong)
                                 .foregroundStyle(.secondary)
                         }
@@ -2286,7 +2286,7 @@ private struct OCRUnitEditor: View {
                 }
             }
         } else {
-            Label("項目候補への振り分けはライト以上", systemImage: "lock.fill")
+            Label("項目候補への振り分けはPro以上", systemImage: "lock.fill")
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(.secondary)
         }
