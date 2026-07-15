@@ -248,6 +248,11 @@ private struct DeveloperSettingsView: View {
 
                 LabeledContent("現在の権利", value: purchaseManager.currentPlan.displayName)
 
+                LabeledContent("ライト機能", value: accessLabel(purchaseManager.currentPlan.includesLocalFullFeatures))
+                LabeledContent("写真上限", value: photoLimitLabel)
+                LabeledContent("自作ジャンル", value: accessLabel(purchaseManager.currentPlan.canCreateCustomGenres))
+                LabeledContent("同期", value: accessLabel(purchaseManager.currentPlan.includesSync))
+
                 Picker("Homeジャンル表示", selection: $debugHomeCategoryLayout) {
                     ForEach(HomeCategoryLayoutMode.allCases) { mode in
                         Text(mode.displayName).tag(mode.rawValue)
@@ -300,6 +305,17 @@ private struct DeveloperSettingsView: View {
         }
         .navigationTitle("開発者メニュー")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var photoLimitLabel: String {
+        guard let limit = purchaseManager.currentPlan.maximumPhotosPerRecord else {
+            return "上限なし"
+        }
+        return "1記録\(limit)枚"
+    }
+
+    private func accessLabel(_ isAvailable: Bool) -> String {
+        isAvailable ? "利用可能" : "ロック"
     }
 
     private func insertDebugData() {
