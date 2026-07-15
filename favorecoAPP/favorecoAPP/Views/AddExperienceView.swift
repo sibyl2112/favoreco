@@ -201,7 +201,10 @@ struct AddExperienceView: View {
         case "money":
             moneyFields(amountText: $draft.amountText)
         case "memo":
-            memoEditor
+            ExperienceMemoUnitEditor(
+                text: $draft.note,
+                placeholder: template.memoPlaceholder
+            )
         case "advanced":
             AdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
@@ -224,19 +227,6 @@ struct AddExperienceView: View {
         } set: { value in
             draft.venueAddress = value
             draft.clearPlaceCoordinates()
-        }
-    }
-
-    private var memoEditor: some View {
-        ZStack(alignment: .topLeading) {
-            if draft.note.isEmpty {
-                Text(template.memoPlaceholder)
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 8)
-                    .padding(.leading, 5)
-            }
-            TextEditor(text: $draft.note)
-                .frame(minHeight: 120)
         }
     }
 
@@ -512,7 +502,10 @@ struct EditExperienceView: View {
         case "money":
             moneyFields(amountText: $draft.amountText)
         case "memo":
-            memoEditor
+            ExperienceMemoUnitEditor(
+                text: $draft.note,
+                placeholder: template.memoPlaceholder
+            )
         case "advanced":
             AdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
@@ -535,19 +528,6 @@ struct EditExperienceView: View {
         } set: { value in
             draft.venueAddress = value
             draft.clearPlaceCoordinates()
-        }
-    }
-
-    private var memoEditor: some View {
-        ZStack(alignment: .topLeading) {
-            if draft.note.isEmpty {
-                Text(template.memoPlaceholder)
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 8)
-                    .padding(.leading, 5)
-            }
-            TextEditor(text: $draft.note)
-                .frame(minHeight: 120)
         }
     }
 
@@ -815,7 +795,10 @@ struct AddVisitView: View {
                 onOpenPlaceSearch: { isShowingPlaceSearch = true }
             )
         case "memo":
-            memoEditor
+            ExperienceMemoUnitEditor(
+                text: $draft.note,
+                placeholder: template.memoPlaceholder
+            )
         case "photos":
             PhotoUnitEditor(
                 existingPhotos: [],
@@ -863,19 +846,6 @@ struct AddVisitView: View {
             ExperienceOfficialInfoReferenceView()
         default:
             PendingUnitView(unit: unit)
-        }
-    }
-
-    private var memoEditor: some View {
-        ZStack(alignment: .topLeading) {
-            if draft.note.isEmpty {
-                Text(template.memoPlaceholder)
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 8)
-                    .padding(.leading, 5)
-            }
-            TextEditor(text: $draft.note)
-                .frame(minHeight: 120)
         }
     }
 

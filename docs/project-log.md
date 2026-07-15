@@ -5,6 +5,33 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-16: 記録入力のメモエディタを共通化
+
+### 変更概要
+- 記録入力用の`ExperienceMemoUnitEditor`を追加
+- 新規記録、既存対象への回追加、記録編集に重複していたメモUIを共通エディタへ置換
+- プレースホルダーをタップ対象から外し、VoiceOverの入力ラベルを追加
+
+### 変更意図
+同じメモUIの重複をなくし、今後の入力補助や表示調整を3入口へ一貫して反映できるようにするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperienceMemoUnitEditor.swift`
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/00-開発状況と残課題.md`
+
+### 影響する画面・機能
+- 新規記録、既存対象への回追加、記録編集のメモユニット
+- Draft、SwiftDataモデル、保存値には変更なし
+
+### 確認結果（実機 / ビルド）
+- iOS 26.5 SDK、最低iOS 18設定のiOS Simulator向けDebugビルド成功
+- 3入口すべてが共通エディタを参照し、旧重複実装が残っていないことをコード確認
+
+### 既知のリスク・残課題
+- iOS 26実機でプレースホルダー、キーボード表示、長文入力時のFormスクロールを確認する
+
 ## 2026-07-16: Home/ジャンルトップの共通ヘッダーを統一
 
 ### 変更概要
