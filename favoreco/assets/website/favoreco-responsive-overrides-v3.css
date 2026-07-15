@@ -1,0 +1,281 @@
+/* Favoreco landing page responsive refinements — 2026-07-15 */
+
+/* Keep the desktop header visible and pin the custom header while scrolling. */
+.fv2 {
+  overflow: clip;
+}
+
+.fv-nav {
+  position: sticky;
+  top: 0;
+}
+
+.fv-mobile-menu {
+  display: none;
+}
+
+/* Match every section's end color to the next section's start color. */
+.fv-hero {
+  background:
+    radial-gradient(circle at 82% 16%, rgba(228, 206, 169, .45), transparent 31%),
+    radial-gradient(circle at 14% 72%, rgba(208, 226, 219, .55), transparent 34%),
+    linear-gradient(180deg, #fffdf8 0%, #f8f3e9 100%);
+}
+
+.fv-intro {
+  background: linear-gradient(180deg, #f8f3e9 0%, #fffdf8 52%, #f1f5ef 100%);
+}
+
+.fv-cinema {
+  background: linear-gradient(180deg, #f1f5ef 0%, #faf4e8 48%, #f7eee7 100%);
+}
+
+.fv-outing {
+  background: linear-gradient(180deg, #f7eee7 0%, #edf7fc 48%, #f1edf3 100%);
+}
+
+.fv-theatre {
+  background: linear-gradient(180deg, #f1edf3 0%, #f9eaed 50%, #edf2f7 100%);
+}
+
+.fv-art {
+  background: linear-gradient(180deg, #edf2f7 0%, #edf5f8 48%, #e9f4f1 100%);
+}
+
+.fv-aqua {
+  background: linear-gradient(180deg, #e9f4f1 0%, #eaf6f3 52%, #faf7ef 100%);
+}
+
+.fv-workflow {
+  background: linear-gradient(180deg, #faf7ef 0%, #fffdf9 68%, #f8f4eb 100%);
+}
+
+.fv-features {
+  background: linear-gradient(180deg, #f8f4eb 0%, #f5f1e8 100%);
+}
+
+.fv-cta {
+  background:
+    radial-gradient(circle at 30% 18%, rgba(228, 204, 164, .45), transparent 35%),
+    radial-gradient(circle at 76% 82%, rgba(159, 207, 198, .38), transparent 32%),
+    linear-gradient(180deg, #f5f1e8 0%, #fffaf1 42%, #f2ede3 100%);
+}
+
+.fv-intro,
+.fv-story,
+.fv-workflow,
+.fv-features,
+.fv-cta,
+.fv-footer {
+  margin-top: -1px;
+}
+
+/* Remove the rectangular image canvas while preserving the phone silhouette. */
+.fv-device img {
+  clip-path: inset(1.15% 4.35% 1.2% 4.35% round 10% / 5.7%);
+}
+
+@media (max-width: 900px) {
+  .fv-navin {
+    position: relative;
+  }
+
+  .fv-links {
+    margin-left: auto;
+  }
+
+  .fv-mobile-menu {
+    position: relative;
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  .fv-mobile-menu summary {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid var(--fv-line);
+    border-radius: 50%;
+    background: rgba(255, 253, 248, .82);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .fv-mobile-menu summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .fv-menuicon,
+  .fv-menuicon::before,
+  .fv-menuicon::after {
+    display: block;
+    width: 18px;
+    height: 1.5px;
+    border-radius: 999px;
+    background: var(--fv-ink);
+    transition: transform .2s ease, opacity .2s ease;
+  }
+
+  .fv-menuicon {
+    position: relative;
+  }
+
+  .fv-menuicon::before,
+  .fv-menuicon::after {
+    content: "";
+    position: absolute;
+    left: 0;
+  }
+
+  .fv-menuicon::before { top: -6px; }
+  .fv-menuicon::after { top: 6px; }
+
+  .fv-mobile-menu[open] .fv-menuicon {
+    background: transparent;
+  }
+
+  .fv-mobile-menu[open] .fv-menuicon::before {
+    top: 0;
+    transform: rotate(45deg);
+  }
+
+  .fv-mobile-menu[open] .fv-menuicon::after {
+    top: 0;
+    transform: rotate(-45deg);
+  }
+
+  .fv-mobile-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    display: grid;
+    min-width: 210px;
+    padding: 10px;
+    border: 1px solid var(--fv-line);
+    border-radius: 18px;
+    background: rgba(255, 253, 248, .97);
+    box-shadow: 0 18px 45px rgba(53, 48, 39, .16);
+  }
+
+  .fv-mobile-panel a {
+    padding: 10px 12px;
+    color: #3f4146;
+    font-size: 13px;
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 560px) {
+  .fv-navin,
+  .fv-shell {
+    width: calc(100% - 32px);
+  }
+
+  .fv-navin {
+    min-height: 64px;
+    gap: 10px;
+  }
+
+  .fv-brand {
+    font-size: 21px;
+  }
+
+  .fv-links {
+    gap: 0;
+  }
+
+  .fv-navcta {
+    white-space: nowrap;
+    padding: 6px 10px !important;
+    font-size: 10px !important;
+  }
+
+  .fv-mobile-menu summary {
+    width: 40px;
+    height: 40px;
+  }
+
+  .fv-hero {
+    padding: 56px 0 72px;
+  }
+
+  .fv-heroin {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 132px;
+    gap: 14px 8px;
+    align-items: start;
+  }
+
+  .fv-heroin > div:first-child {
+    display: contents;
+  }
+
+  .fv-kicker {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: end;
+    font-size: 9px;
+    letter-spacing: .16em;
+  }
+
+  .fv-hero h1 {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    margin: 8px 0 0;
+    font-size: clamp(32px, 9.8vw, 40px);
+    line-height: 1.46;
+  }
+
+  .fv-heroart {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    margin: 0;
+  }
+
+  .fv-heroart .fv-device {
+    width: 138px;
+  }
+
+  .fv-heroart:before {
+    inset: 8% -5% 8%;
+  }
+
+  .fv-heroart .fv-caption {
+    margin-top: 4px;
+    font-size: 8px;
+    line-height: 1.4;
+  }
+
+  .fv-lead {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin: 6px 0 0;
+  }
+
+  .fv-actions {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    margin-top: 12px;
+  }
+
+  .fv-storyvisual .fv-device {
+    width: min(100%, 286px);
+  }
+}
+
+@media (max-width: 380px) {
+  .fv-heroin {
+    grid-template-columns: minmax(0, 1fr) 112px;
+  }
+
+  .fv-heroart .fv-device {
+    width: 118px;
+  }
+
+  .fv-hero h1 {
+    font-size: 31px;
+  }
+}
