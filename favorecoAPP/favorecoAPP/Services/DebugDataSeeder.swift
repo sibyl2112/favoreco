@@ -158,7 +158,9 @@ enum DebugDataSeeder {
     }
 
     private static func sampleImage(for category: RecordCategory, title: String, index: Int) -> SampleImage {
-        let resourceIndex = category.templateKey == "movie" ? index + 1 : (index % 3) + 1
+        let resourceIndex = ["movie", "book"].contains(category.templateKey)
+            ? index + 1
+            : (index % 3) + 1
         let resourceName = "\(category.templateKey)-\(resourceIndex)"
         let resourceURL = ["jpg", "png"].lazy.compactMap { fileExtension in
             Bundle.main.url(forResource: resourceName, withExtension: fileExtension)
@@ -300,7 +302,18 @@ enum DebugDataSeeder {
         case "theater":
             titles = ["夜明けの劇場", "ハムレット", "ガラスの街", "春待つ舞台", "雨音のカーテンコール", "小劇場の記憶", "赤い椅子の物語", "二幕目の手紙", "余白の台詞", "千秋楽の花束"]
         case "book":
-            titles = ["小さな旅の記録", "夜を読む", "硝子の栞", "雨上がりの本棚", "遠い町のエッセイ", "余白のノート", "海辺の短編集", "静かなページ", "月曜日の小説", "読むための午後"]
+            titles = [
+                "成瀬は都を駆け抜ける",
+                "僕のヒーローアカデミア 37",
+                "世界の歴史 1 オリエントと地中海の文明",
+                "Veil 7",
+                "すごいメモ。",
+                "余白のノート",
+                "海辺の短編集",
+                "静かなページ",
+                "月曜日の小説",
+                "読むための午後"
+            ]
         case "sake":
             titles = ["純米吟醸 霞", "山廃 月影", "初しぼり 青嵐", "大吟醸 白露", "にごり 雪待ち", "純米 原風景", "微発泡 星粒", "古酒 琥珀", "生酛 夕凪", "限定酒 花明かり"]
         case "museum":

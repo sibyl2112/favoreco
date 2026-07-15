@@ -293,7 +293,11 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = GDXKVW7W5X;
 				ENABLE_PREVIEWS = YES;
-				EXCLUDED_SOURCE_FILE_NAMES = "movie-*.jpg";
+				EXCLUDED_SOURCE_FILE_NAMES = (
+					"book-*.jpg",
+					"book-*.png",
+					"movie-*.jpg",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Favoreco;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Favorecoの予定を選択したカレンダーへ追加し、外部カレンダーの予定を重ねて表示するために使用します。";
