@@ -199,7 +199,7 @@ struct AddExperienceView: View {
                 }
             }
         case "money":
-            moneyFields(amountText: $draft.amountText)
+            ExperienceMoneyUnitEditor(amountText: $draft.amountText)
         case "memo":
             ExperienceMemoUnitEditor(
                 text: $draft.note,
@@ -500,7 +500,7 @@ struct EditExperienceView: View {
                 }
             }
         case "money":
-            moneyFields(amountText: $draft.amountText)
+            ExperienceMoneyUnitEditor(amountText: $draft.amountText)
         case "memo":
             ExperienceMemoUnitEditor(
                 text: $draft.note,
@@ -839,7 +839,7 @@ struct AddVisitView: View {
         case "ticketPlan":
             ticketPlanFields(outcomeKey: $draft.outcomeKey, seatText: $draft.seatText)
         case "money":
-            moneyFields(amountText: $draft.amountText)
+            ExperienceMoneyUnitEditor(amountText: $draft.amountText)
         case "advanced":
             AdvancedUnitEditor(entries: $draft.advancedEntries)
         case "officialInfo":
@@ -1373,17 +1373,6 @@ private func ticketPlanFields(outcomeKey: Binding<String>, seatText: Binding<Str
             .lineLimit(1...3)
 
         Text("申込、当落、入金、発券などの詳細期限は後続で専用項目に分けます。")
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-private func moneyFields(amountText: Binding<String>) -> some View {
-    VStack(alignment: .leading, spacing: 10) {
-        TextField("合計金額（例: 8500）", text: amountText)
-            .keyboardType(.numberPad)
-        Text("チケット代、購入額、交通費などの合計メモとして保存します。内訳管理は後続で追加します。")
             .font(FavorecoTypography.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
