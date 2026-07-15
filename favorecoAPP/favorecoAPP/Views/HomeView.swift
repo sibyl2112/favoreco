@@ -341,19 +341,9 @@ struct HomeView: View {
     private func upcomingItemLink(_ item: HomeUpcomingItem) -> some View {
         switch item {
         case .plan(let plan):
-            NavigationLink {
-                HomePlanDestination(planID: plan.id)
-            } label: {
-                HomeUpcomingPlanCard(plan: plan)
-            }
-            .buttonStyle(.plain)
+            HomeUpcomingPlanCard(plan: plan)
         case .visit(let visit):
-            NavigationLink {
-                HomeVisitDestination(visitID: visit.id)
-            } label: {
-                HomeUpcomingVisitCard(visit: visit)
-            }
-            .buttonStyle(.plain)
+            HomeUpcomingVisitCard(visit: visit)
         }
     }
 
@@ -624,7 +614,15 @@ private struct InterestedEventRow: View {
 
 private struct HomeUpcomingPlanCard: View {
     let plan: HomePlanSnapshot
+    @Query private var currentPlans: [Plan]
+    @State private var isShowingEditPlan = false
     @Environment(\.favorecoThemePalette) private var themePalette
+
+    init(plan: HomePlanSnapshot) {
+        self.plan = plan
+        let planID = plan.id
+        _currentPlans = Query(filter: #Predicate<Plan> { $0.id == planID })
+    }
 
     private var tint: Color {
         themePalette.categoryColor(hex: plan.categoryColorHex)
@@ -656,9 +654,33 @@ private struct HomeUpcomingPlanCard: View {
                 subtitle: plan.subtitle.isEmpty ? plan.organizerName : plan.subtitle,
                 dateText: dateText,
                 venueName: plan.venueName,
-                tint: tint,
-                actionTitle: "予定を見る"
-            )
+                tint: tint
+            ) {
+                HStack(spacing: 6) {
+                    NavigationLink {
+                        HomePlanDestination(planID: plan.id)
+                    } label: {
+                        HomeUpcomingActionLabel(
+                            title: "予定を見る",
+                            systemImage: "book.pages",
+                            tint: tint
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        isShowingEditPlan = true
+                    } label: {
+                        HomeUpcomingActionLabel(
+                            title: "編集",
+                            systemImage: "pencil",
+                            tint: tint
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(currentPlans.isEmpty)
+                }
+            }
         }
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -666,7 +688,14 @@ private struct HomeUpcomingPlanCard: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(tint.opacity(0.18), lineWidth: 1)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
+        .sheet(isPresented: $isShowingEditPlan) {
+            if let currentPlan = currentPlans.first {
+                AddTicketPlanView(plan: currentPlan, entryMode: .plan)
+            } else {
+                ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+            }
+        }
     }
 
 }
@@ -705,9 +734,19 @@ private struct HomeUpcomingVisitCard: View {
                 subtitle: "",
                 dateText: dateText,
                 venueName: visit.venueName,
-                tint: tint,
-                actionTitle: "記録を見る"
-            )
+                tint: tint
+            ) {
+                NavigationLink {
+                    HomeVisitDestination(visitID: visit.id)
+                } label: {
+                    HomeUpcomingActionLabel(
+                        title: "記録を見る",
+                        systemImage: "book.pages",
+                        tint: tint
+                    )
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -715,7 +754,7 @@ private struct HomeUpcomingVisitCard: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(tint.opacity(0.18), lineWidth: 1)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 
 }
@@ -799,14 +838,32 @@ private struct HomeUpcomingPoster: View {
     }
 }
 
-private struct HomeUpcomingHeroDetails: View {
+private struct HomeUpcomingHeroDetails<Actions: View>: View {
     let categoryName: String
     let title: String
     let subtitle: String
     let dateText: String
     let venueName: String
     let tint: Color
-    let actionTitle: String
+    let actions: Actions
+
+    init(
+        categoryName: String,
+        title: String,
+        subtitle: String,
+        dateText: String,
+        venueName: String,
+        tint: Color,
+        @ViewBuilder actions: () -> Actions
+    ) {
+        self.categoryName = categoryName
+        self.title = title
+        self.subtitle = subtitle
+        self.dateText = dateText
+        self.venueName = venueName
+        self.tint = tint
+        self.actions = actions()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -817,7 +874,8 @@ private struct HomeUpcomingHeroDetails: View {
             Text(title)
                 .font(FavorecoTypography.jpSerif(19, weight: .bold, relativeTo: .headline))
                 .foregroundStyle(.primary)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
+                .truncationMode(.tail)
 
             if !subtitle.isEmpty {
                 Text(subtitle)
@@ -838,21 +896,30 @@ private struct HomeUpcomingHeroDetails: View {
                     .lineLimit(1)
             }
 
-            HStack(spacing: 6) {
-                Image(systemName: "book.pages")
-                Text(actionTitle)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-            }
+            actions
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct HomeUpcomingActionLabel: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
             .font(FavorecoTypography.captionStrong)
             .foregroundStyle(tint)
-            .padding(.horizontal, 10)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .overlay {
                 Capsule().stroke(tint.opacity(0.55), lineWidth: 1)
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .contentShape(Capsule())
     }
 }
 
