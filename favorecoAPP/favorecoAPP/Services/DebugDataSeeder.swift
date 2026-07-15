@@ -158,7 +158,7 @@ enum DebugDataSeeder {
     }
 
     private static func sampleImage(for category: RecordCategory, title: String, index: Int) -> SampleImage {
-        let resourceIndex = ["movie", "book"].contains(category.templateKey)
+        let resourceIndex = ["movie", "theater", "book"].contains(category.templateKey)
             ? index + 1
             : (index % 3) + 1
         let resourceName = "\(category.templateKey)-\(resourceIndex)"
@@ -300,7 +300,18 @@ enum DebugDataSeeder {
                 "ショーシャンクの空に"
             ]
         case "theater":
-            titles = ["夜明けの劇場", "ハムレット", "ガラスの街", "春待つ舞台", "雨音のカーテンコール", "小劇場の記憶", "赤い椅子の物語", "二幕目の手紙", "余白の台詞", "千秋楽の花束"]
+            titles = [
+                "ジェイミー",
+                "エリザベート 10th Anniversary",
+                "ピーター・パン",
+                "CATS",
+                "SPY×FAMILY",
+                "モアナと伝説の海2",
+                "ムーラン・ルージュ！ザ・ミュージカル",
+                "パリの恋人",
+                "RENT JAPAN TOUR 2018",
+                "CITY HUNTER／Fire Fever!"
+            ]
         case "book":
             titles = [
                 "成瀬は都を駆け抜ける",

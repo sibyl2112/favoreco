@@ -297,6 +297,8 @@
 					"book-*.jpg",
 					"book-*.png",
 					"movie-*.jpg",
+					"theater-*.jpg",
+					"theater-*.png",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Favoreco;
