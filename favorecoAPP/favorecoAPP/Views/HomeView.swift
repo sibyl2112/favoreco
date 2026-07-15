@@ -202,62 +202,58 @@ struct HomeView: View {
         let attentionItems = attentionItems(for: snapshot)
 
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    if showsCategories {
-                        categorySection(categories: snapshot.visibleCategories)
+            VStack(spacing: 0) {
+                MainScreenHeader(title: "favoreco", usesBrandFont: true)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        if showsCategories {
+                            categorySection(categories: snapshot.visibleCategories)
+                        }
+
+                        upcomingPlansSection(items: snapshot.upcomingItems)
+
+                        if showsAttention {
+                            attentionSection(items: attentionItems)
+                        }
+
+                        if showsExperienceGallery && !snapshot.recentVisits.isEmpty {
+                            experienceGallerySection(visits: snapshot.recentVisits)
+                        }
+
+                        if showsInbox && (!snapshot.interestedEvents.isEmpty || !snapshot.unresolvedInboxItems.isEmpty) {
+                            inboxSection(
+                                interestedEvents: snapshot.interestedEvents,
+                                unresolvedInboxItems: snapshot.unresolvedInboxItems
+                            )
+                        }
+
+                        if showsRecentRecords && !snapshot.recentVisits.isEmpty {
+                            recentSection(visits: snapshot.recentVisits)
+                        }
+
+                        if showsStatsSummary && snapshot.visibleVisitCount > 0 {
+                            statsSummarySection(snapshot: snapshot)
+                        }
+
+                        crossGenreMiniStats(snapshot: snapshot)
                     }
-
-                    upcomingPlansSection(items: snapshot.upcomingItems)
-
-                    if showsAttention {
-                        attentionSection(items: attentionItems)
-                    }
-
-                    if showsExperienceGallery && !snapshot.recentVisits.isEmpty {
-                        experienceGallerySection(visits: snapshot.recentVisits)
-                    }
-
-                    if showsInbox && (!snapshot.interestedEvents.isEmpty || !snapshot.unresolvedInboxItems.isEmpty) {
-                        inboxSection(
-                            interestedEvents: snapshot.interestedEvents,
-                            unresolvedInboxItems: snapshot.unresolvedInboxItems
-                        )
-                    }
-
-                    if showsRecentRecords && !snapshot.recentVisits.isEmpty {
-                        recentSection(visits: snapshot.recentVisits)
-                    }
-
-                    if showsStatsSummary && snapshot.visibleVisitCount > 0 {
-                        statsSummarySection(snapshot: snapshot)
-                    }
-
-                    crossGenreMiniStats(snapshot: snapshot)
-
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 24)
             }
             .background(homeBackground)
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Text("favoreco")
-                        .font(FavorecoTypography.latinDisplay(28, weight: .semibold, relativeTo: .title2))
-                        .accessibilityAddTraits(.isHeader)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    MainToolbarActions()
-                }
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $isShowingAttentionList) {
+                HomeAttentionListView(items: attentionItems)
             }
-        .sheet(isPresented: $isShowingAttentionList) {
-            HomeAttentionListView(items: attentionItems)
-        }
-        .task {
-            try? LegacyInboxMigrationService.migrateIfNeeded(in: modelContext)
-        }
+            .task {
+                try? LegacyInboxMigrationService.migrateIfNeeded(in: modelContext)
+            }
         }
     }
 

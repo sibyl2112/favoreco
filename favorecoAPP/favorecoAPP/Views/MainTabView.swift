@@ -190,26 +190,57 @@ struct MainTabView: View {
     }
 }
 
+struct MainScreenHeader: View {
+    let title: String
+    var usesBrandFont = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(title)
+                .font(
+                    usesBrandFont
+                        ? FavorecoTypography.latinDisplay(30, weight: .semibold, relativeTo: .largeTitle)
+                        : FavorecoTypography.jpSans(28, weight: .bold, relativeTo: .title)
+                )
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .layoutPriority(1)
+                .accessibilityAddTraits(.isHeader)
+
+            Spacer(minLength: 8)
+            MainToolbarActions()
+        }
+        .frame(maxWidth: .infinity, minHeight: 48)
+    }
+}
+
 struct MainToolbarActions: View {
     @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
     @State private var isShowingNotifications = false
     @State private var isShowingSettings = false
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 2) {
             Button {
                 isShowingNotifications = true
             } label: {
                 Image(systemName: "bell")
                     .font(.body.weight(.semibold))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
             .accessibilityLabel("お知らせ")
 
             Button {
                 isShowingSettings = true
             } label: {
                 ProfileAvatarView(data: profileImageData, size: 30)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("マイ・設定")
         }
         .sheet(isPresented: $isShowingNotifications) {
@@ -556,6 +587,11 @@ private struct RecordsView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                MainScreenHeader(title: "記録")
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
+
                 recordToolbar
 
                 List {
@@ -579,12 +615,7 @@ private struct RecordsView: View {
                 }
                 .listStyle(.plain)
             }
-            .navigationTitle("記録")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    MainToolbarActions()
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $isShowingFilters) {
                 RecordFilterView(
                     categories: activeCategories,
@@ -853,46 +884,48 @@ private struct CalendarView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack(spacing: 10) {
-                        Picker("表示", selection: $displayMode) {
-                            ForEach(CalendarDisplayMode.allCases) { mode in
-                                Text(mode.title).tag(mode)
+            VStack(spacing: 0) {
+                MainScreenHeader(title: "カレンダー")
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        HStack(spacing: 10) {
+                            Picker("表示", selection: $displayMode) {
+                                ForEach(CalendarDisplayMode.allCases) { mode in
+                                    Text(mode.title).tag(mode)
+                                }
                             }
-                        }
-                        .pickerStyle(.segmented)
+                            .pickerStyle(.segmented)
 
-                        NavigationLink {
-                            TicketOverviewView()
-                        } label: {
-                            Image(systemName: "ticket")
-                                .font(.title3)
-                                .frame(width: 42, height: 32)
+                            NavigationLink {
+                                TicketOverviewView()
+                            } label: {
+                                Image(systemName: "ticket")
+                                    .font(.title3)
+                                    .frame(width: 42, height: 32)
+                            }
+                            .accessibilityLabel("予定・チケット")
                         }
-                        .accessibilityLabel("予定・チケット")
-                    }
 
-                    if displayMode == .calendar {
-                        monthHeader
-                        externalCalendarControl
-                        weekdayHeader
-                        monthGrid
-                        selectedDaySection
-                        upcomingSection
-                    } else {
-                        planListSection
+                        if displayMode == .calendar {
+                            monthHeader
+                            externalCalendarControl
+                            weekdayHeader
+                            monthGrid
+                            selectedDaySection
+                            upcomingSection
+                        } else {
+                            planListSection
+                        }
                     }
+                    .padding(20)
                 }
-                .padding(20)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("カレンダー")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    MainToolbarActions()
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .task {
                 await refreshExternalCalendarIfNeeded()
             }
@@ -1535,25 +1568,27 @@ private struct StatsView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    summaryGrid
-                    categoryStatsSection
-                    chartsSection
-                    ticketStatsSection
-                    spendingSection
-                    ratingSection
-                    reportPreviewSection
+            VStack(spacing: 0) {
+                MainScreenHeader(title: "統計")
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        summaryGrid
+                        categoryStatsSection
+                        chartsSection
+                        ticketStatsSection
+                        spendingSection
+                        ratingSection
+                        reportPreviewSection
+                    }
+                    .padding(20)
                 }
-                .padding(20)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("統計")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    MainToolbarActions()
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $isShowingAutomaticMonthlyReport) {
                 StatsReportDraftView(
                     kind: .monthly,
