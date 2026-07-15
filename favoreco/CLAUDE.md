@@ -171,6 +171,7 @@ DEBUGビルドの設定 > 開発にはStoreKit購入結果/無料版/Pro/Premium
 - 記録入力の写真サムネイルは `ExperiencePhotoThumbnail.swift` に閉じ込める。保存前/保存済みの両方を `ThumbnailLoader` の420pxサムネイルで表示し、原寸DataをSwiftUIのグリッドへ直接展開しない。カバー選択と削除操作は親の写真エディタへクロージャで返す。
 - 記録入力のメモ欄は `ExperienceMemoUnitEditor.swift` に閉じ込め、新規記録、既存対象への回追加、記録編集で同じプレースホルダー付きTextEditorを使う。入力値は各Draftの`note`へBindingし、保存モデルや保存タイミングは親Viewが管理する。
 - 記録入力の金額欄は `ExperienceMoneyUnitEditor.swift` に閉じ込め、新規記録、既存対象への回追加、記録編集で同じ数値入力と補足説明を使う。入力値は各Draftの`amountText`へBindingし、Decimal変換と保存は親Viewが行う。
+- 記録入力の簡易チケット欄は `ExperienceTicketUnitEditor.swift` に閉じ込める。体験記録側では`outcomeKey`と`seatText`だけを扱い、申込、当落、入金、発券などの期限と複数申込は`Plan`/`TicketAttempt`の予定・チケット画面を正本とする。
 - 記録入力の写真欄は `ExperiencePhotoUnitEditor.swift` の `PhotoUnitEditor` を追加・編集・既存対象への回追加で共用する。写真選択、カメラ、取込進捗、プラン別枚数制限、50枚以上の容量注意、カバー代替選択をこのViewに閉じ込め、親画面はDraft Bindingだけを渡す。
 - SNSアカウント入力はID/URLどちらも許容する。外部遷移時は `SocialPlatform` でURLに解決する。ジャンル別SNSは `SocialAccount.category` にoptionalで紐付け、未指定は全体プロフィールとする。
 - 初回ジャンル選択とカテゴリseedでは、表示ジャンルが0件にならないよう `CategoryPresetSeeder.ensureAtLeastOneActiveCategory` を必ず通す。すべて非表示になった場合は先頭の標準カテゴリを復帰させる。

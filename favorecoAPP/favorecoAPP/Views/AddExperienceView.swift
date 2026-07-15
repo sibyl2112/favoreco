@@ -171,7 +171,10 @@ struct AddExperienceView: View {
                 personMasters: personMasters
             )
         case "ticketPlan":
-            ticketPlanFields(outcomeKey: $draft.outcomeKey, seatText: $draft.seatText)
+            ExperienceTicketUnitEditor(
+                outcomeKey: $draft.outcomeKey,
+                seatText: $draft.seatText
+            )
         case "photos":
             PhotoUnitEditor(
                 existingPhotos: [],
@@ -472,7 +475,10 @@ struct EditExperienceView: View {
                 personMasters: personMasters
             )
         case "ticketPlan":
-            ticketPlanFields(outcomeKey: $draft.outcomeKey, seatText: $draft.seatText)
+            ExperienceTicketUnitEditor(
+                outcomeKey: $draft.outcomeKey,
+                seatText: $draft.seatText
+            )
         case "photos":
             PhotoUnitEditor(
                 existingPhotos: visibleExistingPhotos,
@@ -837,7 +843,10 @@ struct AddVisitView: View {
                 personMasters: personMasters
             )
         case "ticketPlan":
-            ticketPlanFields(outcomeKey: $draft.outcomeKey, seatText: $draft.seatText)
+            ExperienceTicketUnitEditor(
+                outcomeKey: $draft.outcomeKey,
+                seatText: $draft.seatText
+            )
         case "money":
             ExperienceMoneyUnitEditor(amountText: $draft.amountText)
         case "advanced":
@@ -1361,24 +1370,6 @@ private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnit
     }
 }
 
-private func ticketPlanFields(outcomeKey: Binding<String>, seatText: Binding<String>) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
-        Picker("状態", selection: outcomeKey) {
-            ForEach(TicketPlanOption.all) { option in
-                Text(option.name).tag(option.key)
-            }
-        }
-
-        TextField("座席・チケットメモ（例: 1階A列12番 / 整理番号B120）", text: seatText, axis: .vertical)
-            .lineLimit(1...3)
-
-        Text("申込、当落、入金、発券などの詳細期限は後続で専用項目に分けます。")
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
 private func goshuinBookFields(sizeKey: Binding<String>, aspectRatioKey: Binding<String>) -> some View {
     VStack(alignment: .leading, spacing: 12) {
         Picker("御朱印帳サイズ", selection: sizeKey) {
@@ -1464,28 +1455,6 @@ private struct AdvancedUnitEditor: View {
             }
             .buttonStyle(.bordered)
         }
-    }
-}
-
-private struct TicketPlanOption: Identifiable {
-    let key: String
-    let name: String
-
-    var id: String { key }
-
-    static let all: [TicketPlanOption] = [
-        TicketPlanOption(key: "", name: "未設定"),
-        TicketPlanOption(key: "planned", name: "予定"),
-        TicketPlanOption(key: "applied", name: "申込中"),
-        TicketPlanOption(key: "won", name: "当選"),
-        TicketPlanOption(key: "paid", name: "入金済み"),
-        TicketPlanOption(key: "ticketed", name: "発券済み"),
-        TicketPlanOption(key: "attended", name: "参加済み"),
-        TicketPlanOption(key: "canceled", name: "中止・キャンセル")
-    ]
-
-    static func name(for key: String) -> String {
-        all.first(where: { $0.key == key })?.name ?? key
     }
 }
 
