@@ -190,6 +190,37 @@ struct MainTabView: View {
     }
 }
 
+struct MainToolbarActions: View {
+    @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
+    @State private var isShowingNotifications = false
+    @State private var isShowingSettings = false
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Button {
+                isShowingNotifications = true
+            } label: {
+                Image(systemName: "bell")
+                    .font(.body.weight(.semibold))
+            }
+            .accessibilityLabel("お知らせ")
+
+            Button {
+                isShowingSettings = true
+            } label: {
+                ProfileAvatarView(data: profileImageData, size: 30)
+            }
+            .accessibilityLabel("マイ・設定")
+        }
+        .sheet(isPresented: $isShowingNotifications) {
+            AppNotificationCenterView()
+        }
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView()
+        }
+    }
+}
+
 private enum RecordEntryDestination: Identifiable {
     case new(RecordCategory)
     case existing(ExperienceEvent)
@@ -445,19 +476,81 @@ private enum MainTab: Hashable {
 
 private struct RecordsView: View {
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
+    @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @State private var searchText = ""
+    @State private var selectedCategoryID: UUID?
+    @State private var periodFilter: RecordPeriodFilter = .all
+    @State private var photoFilterEnabled = false
+    @State private var sortOrder: RecordSortOrder = .newest
+    @State private var isShowingFilters = false
 
     private var visibleVisits: [Visit] {
-        visits.filter { $0.event?.isArchived != true }
+        let calendar = Calendar.current
+        let now = Date()
+        let filtered = visits.filter { visit in
+            guard visit.event?.isArchived != true else { return false }
+            if let selectedCategoryID, visit.event?.category?.id != selectedCategoryID {
+                return false
+            }
+            switch periodFilter {
+            case .all:
+                break
+            case .thisMonth:
+                guard calendar.isDate(visit.visitedAt, equalTo: now, toGranularity: .month) else { return false }
+            case .thisYear:
+                guard calendar.isDate(visit.visitedAt, equalTo: now, toGranularity: .year) else { return false }
+            }
+            if photoFilterEnabled,
+               !(visit.photos ?? []).contains(where: { $0.mediaKind == "photo" && $0.hasStoredData }) {
+                return false
+            }
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return true }
+            let searchableText = [
+                visit.event?.title ?? "",
+                visit.event?.seriesName ?? "",
+                visit.venueNameSnapshot,
+                visit.note,
+            ].joined(separator: " ")
+            return searchableText.localizedCaseInsensitiveContains(query)
+        }
+
+        return filtered.sorted { lhs, rhs in
+            switch sortOrder {
+            case .newest:
+                lhs.visitedAt > rhs.visitedAt
+            case .oldest:
+                lhs.visitedAt < rhs.visitedAt
+            case .recentlyUpdated:
+                lhs.updatedAt > rhs.updatedAt
+            }
+        }
+    }
+
+    private var activeFilterCount: Int {
+        var count = 0
+        if selectedCategoryID != nil { count += 1 }
+        if periodFilter != .all { count += 1 }
+        if photoFilterEnabled { count += 1 }
+        if sortOrder != .newest { count += 1 }
+        return count
+    }
+
+    private var activeCategories: [RecordCategory] {
+        categories.filter { !$0.isArchived }
     }
 
     var body: some View {
         NavigationStack {
-            List {
+            VStack(spacing: 0) {
+                recordToolbar
+
+                List {
                 if visibleVisits.isEmpty {
                     PlaceholderRow(
-                        icon: "rectangle.stack",
-                        title: "記録はまだありません",
-                        message: "下部の「追加」から最初の記録を追加できます。"
+                        icon: activeFilterCount > 0 || !searchText.isEmpty ? "line.3.horizontal.decrease.circle" : "rectangle.stack",
+                        title: activeFilterCount > 0 || !searchText.isEmpty ? "条件に合う記録がありません" : "記録はまだありません",
+                        message: activeFilterCount > 0 || !searchText.isEmpty ? "検索語やフィルターを変更してください。" : "下部の「追加」から最初の記録を追加できます。"
                     )
                 } else {
                     ForEach(visibleVisits) { visit in
@@ -470,17 +563,175 @@ private struct RecordsView: View {
                         .listRowSeparator(.hidden)
                     }
                 }
+                }
+                .listStyle(.plain)
             }
-            .listStyle(.plain)
             .navigationTitle("記録")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        TicketOverviewView()
-                    } label: {
-                        Image(systemName: "ticket")
+                    MainToolbarActions()
+                }
+            }
+            .sheet(isPresented: $isShowingFilters) {
+                RecordFilterView(
+                    categories: activeCategories,
+                    selectedCategoryID: $selectedCategoryID,
+                    periodFilter: $periodFilter,
+                    photoFilterEnabled: $photoFilterEnabled,
+                    sortOrder: $sortOrder
+                )
+            }
+        }
+    }
+
+    private var recordToolbar: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("タイトル・会場・メモを検索", text: $searchText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityLabel("検索をクリア")
                     }
-                    .accessibilityLabel("予定・チケット")
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 42)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                Button {
+                    isShowingFilters = true
+                } label: {
+                    Image(systemName: activeFilterCount > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                        .font(.title3)
+                        .frame(width: 42, height: 42)
+                        .overlay(alignment: .topTrailing) {
+                            if activeFilterCount > 0 {
+                                Text("\(activeFilterCount)")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(width: 18, height: 18)
+                                    .background(Color.accentColor, in: Circle())
+                                    .offset(x: 5, y: -5)
+                            }
+                        }
+                }
+                .accessibilityLabel("記録を絞り込む")
+            }
+
+            HStack {
+                Text("\(visibleVisits.count)件")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                NavigationLink {
+                    TicketOverviewView()
+                } label: {
+                    Label("予定・チケット", systemImage: "ticket")
+                        .font(FavorecoTypography.captionStrong)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+        .background(Color(.systemBackground))
+    }
+}
+
+private enum RecordPeriodFilter: String, CaseIterable, Identifiable {
+    case all
+    case thisMonth
+    case thisYear
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all: "すべて"
+        case .thisMonth: "今月"
+        case .thisYear: "今年"
+        }
+    }
+}
+
+private enum RecordSortOrder: String, CaseIterable, Identifiable {
+    case newest
+    case oldest
+    case recentlyUpdated
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .newest: "新しい順"
+        case .oldest: "古い順"
+        case .recentlyUpdated: "最近更新した順"
+        }
+    }
+}
+
+private struct RecordFilterView: View {
+    @Environment(\.dismiss) private var dismiss
+    let categories: [RecordCategory]
+    @Binding var selectedCategoryID: UUID?
+    @Binding var periodFilter: RecordPeriodFilter
+    @Binding var photoFilterEnabled: Bool
+    @Binding var sortOrder: RecordSortOrder
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("ジャンル") {
+                    Picker("ジャンル", selection: $selectedCategoryID) {
+                        Text("すべて").tag(UUID?.none)
+                        ForEach(categories) { category in
+                            Label(category.name, systemImage: category.iconSymbol)
+                                .tag(Optional(category.id))
+                        }
+                    }
+                }
+
+                Section("期間") {
+                    Picker("期間", selection: $periodFilter) {
+                        ForEach(RecordPeriodFilter.allCases) { filter in
+                            Text(filter.title).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("内容") {
+                    Toggle("写真がある記録だけ", isOn: $photoFilterEnabled)
+                }
+
+                Section("並び順") {
+                    Picker("並び順", selection: $sortOrder) {
+                        ForEach(RecordSortOrder.allCases) { order in
+                            Text(order.title).tag(order)
+                        }
+                    }
+                }
+
+                Section {
+                    Button("すべての条件をクリア") {
+                        selectedCategoryID = nil
+                        periodFilter = .all
+                        photoFilterEnabled = false
+                        sortOrder = .newest
+                    }
+                }
+            }
+            .navigationTitle("記録を絞り込む")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
                 }
             }
         }
@@ -591,12 +842,23 @@ private struct CalendarView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Picker("表示", selection: $displayMode) {
-                        ForEach(CalendarDisplayMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
+                    HStack(spacing: 10) {
+                        Picker("表示", selection: $displayMode) {
+                            ForEach(CalendarDisplayMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
                         }
+                        .pickerStyle(.segmented)
+
+                        NavigationLink {
+                            TicketOverviewView()
+                        } label: {
+                            Image(systemName: "ticket")
+                                .font(.title3)
+                                .frame(width: 42, height: 32)
+                        }
+                        .accessibilityLabel("予定・チケット")
                     }
-                    .pickerStyle(.segmented)
 
                     if displayMode == .calendar {
                         monthHeader
@@ -615,12 +877,7 @@ private struct CalendarView: View {
             .navigationTitle("カレンダー")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        TicketOverviewView()
-                    } label: {
-                        Image(systemName: "ticket")
-                    }
-                    .accessibilityLabel("チケット一覧")
+                    MainToolbarActions()
                 }
             }
             .task {
@@ -1279,6 +1536,11 @@ private struct StatsView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("統計")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    MainToolbarActions()
+                }
+            }
             .navigationDestination(isPresented: $isShowingAutomaticMonthlyReport) {
                 StatsReportDraftView(
                     kind: .monthly,

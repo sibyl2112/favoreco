@@ -25,9 +25,7 @@ struct HomeView: View {
     @AppStorage(AppStorageKeys.showsHomeRecentRecords) private var showsRecentRecords = true
     @AppStorage(AppStorageKeys.showsHomeCategories) private var showsCategories = true
     @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsStatsSummary = false
-    @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
     @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var categoryLayoutModeRaw = HomeCategoryLayoutMode.horizontal.rawValue
-    @State private var isShowingSettings = false
     @State private var isShowingAttentionList = false
     @State private var selectedUpcomingPlanIndex = 0
 
@@ -241,20 +239,18 @@ struct HomeView: View {
                 .padding(.vertical, 24)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("favoreco")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Text("favoreco")
+                        .font(FavorecoTypography.latinDisplay(28, weight: .semibold, relativeTo: .title2))
+                        .accessibilityAddTraits(.isHeader)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingSettings = true
-                    } label: {
-                        ProfileAvatarView(data: profileImageData, size: 30)
-                    }
-                    .accessibilityLabel("マイ・設定")
+                    MainToolbarActions()
                 }
             }
-        .sheet(isPresented: $isShowingSettings) {
-            SettingsView()
-        }
         .sheet(isPresented: $isShowingAttentionList) {
             HomeAttentionListView(items: attentionItems)
         }
@@ -857,6 +853,135 @@ private struct HomeAttentionListView: View {
                 }
             }
         }
+    }
+}
+
+struct AppNotificationCenterView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.favorecoThemePalette) private var themePalette
+    @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
+    @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
+
+    private var items: [HomeAttentionItem] {
+        let now = Date()
+        let warningLimit = Calendar.current.date(byAdding: .day, value: 45, to: now) ?? now
+        let attempts = ticketAttempts.filter { attempt in
+            !attempt.isArchived
+                && attempt.plan?.isArchived != true
+                && !["lost", "attended", "skipped"].contains(attempt.statusKey)
+        }
+        let accounts = ticketAccounts.filter { account in
+            !account.isArchived
+                && account.renewalNotify
+                && account.expiryDate != Date.distantPast
+                && account.expiryDate >= now
+                && account.expiryDate <= warningLimit
+        }
+
+        var result = attempts.flatMap { attentionItems(for: $0, now: now) }
+        result.append(contentsOf: accounts.map { account in
+            HomeAttentionItem(
+                id: "membership-\(account.id.uuidString)-expiry",
+                icon: "person.text.rectangle",
+                title: account.serviceName.isEmpty ? "会員期限" : account.serviceName,
+                subtitle: "期限 \(dateText(account.expiryDate))",
+                dueDate: account.expiryDate,
+                tint: Color(hex: account.colorHex),
+                priority: 8
+            )
+        })
+        return result.sorted { lhs, rhs in
+            lhs.priority == rhs.priority ? lhs.dueDate < rhs.dueDate : lhs.priority < rhs.priority
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if items.isEmpty {
+                    ContentUnavailableView(
+                        "お知らせはありません",
+                        systemImage: "bell",
+                        description: Text("申込期限や入金、発券、会員期限などをここで確認できます。")
+                    )
+                } else {
+                    List(items) { item in
+                        if let plan = item.plan {
+                            NavigationLink {
+                                PlanDetailView(plan: plan)
+                            } label: {
+                                AttentionRow(item: item)
+                            }
+                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .listRowBackground(Color.clear)
+                        } else {
+                            AttentionRow(item: item)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                                .listRowBackground(Color.clear)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("お知らせ")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func attentionItems(for attempt: TicketAttempt, now: Date) -> [HomeAttentionItem] {
+        let plan = attempt.plan
+        let title = plan?.title.isEmpty == false ? plan?.title ?? "予定" : "予定"
+        let tint = themePalette.categoryColor(hex: plan?.category?.colorHex ?? "#147C88")
+        var result: [HomeAttentionItem] = []
+
+        appendAttention(&result, if: attempt.saleStartAt > now, attempt: attempt, suffix: "sale-start", icon: "ticket", label: "申込開始", title: title, date: attempt.saleStartAt, plan: plan, tint: tint, priority: 12)
+        appendAttention(&result, if: attempt.applyDeadlineAt > now, attempt: attempt, suffix: "apply-deadline", icon: "hourglass", label: "申込締切", title: title, date: attempt.applyDeadlineAt, plan: plan, tint: .red, priority: 1)
+        appendAttention(&result, if: attempt.resultAnnounceAt > now, attempt: attempt, suffix: "result", icon: "checkmark.seal", label: "当落発表", title: title, date: attempt.resultAnnounceAt, plan: plan, tint: .purple, priority: 5)
+        appendAttention(&result, if: attempt.paymentDeadlineAt > now, attempt: attempt, suffix: "payment", icon: "yensign.circle", label: "入金締切", title: title, date: attempt.paymentDeadlineAt, plan: plan, tint: .orange, priority: 2)
+        appendAttention(&result, if: attempt.issueStartAt > now, attempt: attempt, suffix: "issue-start", icon: "ticket.fill", label: "発券開始", title: title, date: attempt.issueStartAt, plan: plan, tint: .teal, priority: 10)
+        return result
+    }
+
+    private func appendAttention(
+        _ items: inout [HomeAttentionItem],
+        if condition: Bool,
+        attempt: TicketAttempt,
+        suffix: String,
+        icon: String,
+        label: String,
+        title: String,
+        date: Date,
+        plan: Plan?,
+        tint: Color,
+        priority: Int
+    ) {
+        guard condition else { return }
+        items.append(HomeAttentionItem(
+            id: "ticket-\(attempt.id.uuidString)-\(suffix)",
+            icon: icon,
+            title: title,
+            subtitle: "\(label) \(dateText(date))",
+            dueDate: date,
+            plan: plan,
+            tint: tint,
+            priority: priority
+        ))
+    }
+
+    private func dateText(_ date: Date) -> String {
+        date.formatted(
+            .dateTime
+                .locale(Locale(identifier: "ja_JP"))
+                .month(.defaultDigits)
+                .day()
+                .hour()
+                .minute()
+        )
     }
 }
 
