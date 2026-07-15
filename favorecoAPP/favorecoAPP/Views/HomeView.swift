@@ -12,6 +12,7 @@ import UIKit
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.favorecoThemePalette) private var themePalette
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
@@ -19,6 +20,7 @@ struct HomeView: View {
     @Query(sort: \Plan.startsAt, order: .forward) private var plans: [Plan]
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
     @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
+    @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @AppStorage(AppStorageKeys.showsHomeAttention) private var showsAttention = true
     @AppStorage(AppStorageKeys.showsHomeExperienceGallery) private var showsExperienceGallery = true
     @AppStorage(AppStorageKeys.showsHomeInbox) private var showsInbox = true
@@ -194,22 +196,22 @@ struct HomeView: View {
             inboxItems: inboxItems,
             plans: plans,
             ticketAttempts: ticketAttempts,
-            ticketAccounts: ticketAccounts
+            ticketAccounts: ticketAccounts,
+            personLinks: personLinks
         )
         let attentionItems = attentionItems(for: snapshot)
 
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    if showsCategories {
+                        categorySection(categories: snapshot.visibleCategories)
+                    }
+
                     upcomingPlansSection(items: snapshot.upcomingItems)
 
                     if showsAttention {
                         attentionSection(items: attentionItems)
-                    }
-
-                    // 実機比較中: 横1段 / 4列を設定から切り替える。
-                    if showsCategories {
-                        categorySection(categories: snapshot.visibleCategories)
                     }
 
                     if showsExperienceGallery && !snapshot.recentVisits.isEmpty {
@@ -219,16 +221,15 @@ struct HomeView: View {
                     if showsInbox && (!snapshot.interestedEvents.isEmpty || !snapshot.unresolvedInboxItems.isEmpty) {
                         inboxSection(
                             interestedEvents: snapshot.interestedEvents,
-                            unresolvedInboxItems: snapshot.unresolvedInboxItems,
-                            categories: snapshot.visibleCategories
+                            unresolvedInboxItems: snapshot.unresolvedInboxItems
                         )
                     }
 
-                    if showsRecentRecords && !snapshot.visibleVisits.isEmpty {
-                        recentSection(visits: snapshot.visibleVisits)
+                    if showsRecentRecords && !snapshot.recentVisits.isEmpty {
+                        recentSection(visits: snapshot.recentVisits)
                     }
 
-                    if showsStatsSummary && !snapshot.visibleVisits.isEmpty {
+                    if showsStatsSummary && snapshot.visibleVisitCount > 0 {
                         statsSummarySection(snapshot: snapshot)
                     }
 
@@ -238,7 +239,7 @@ struct HomeView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(homeBackground)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -275,7 +276,7 @@ struct HomeView: View {
                 tint: Color(hex: "#8B2F45")
             )
             HomeMiniStatCell(
-                value: "\(snapshot.visibleVisits.count)",
+                value: "\(snapshot.visibleVisitCount)",
                 label: "総記録数",
                 icon: "chart.bar.fill",
                 tint: Color(hex: "#B8792F")
@@ -359,7 +360,7 @@ struct HomeView: View {
             .buttonStyle(.plain)
         case .visit(let visit):
             NavigationLink {
-                ExperienceDetailView(visit: visit)
+                HomeVisitDestination(visitID: visit.id)
             } label: {
                 HomeUpcomingVisitCard(visit: visit)
             }
@@ -369,8 +370,6 @@ struct HomeView: View {
 
     private func categorySection(categories: [RecordCategory]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("ジャンル", count: categories.count)
-
             if categories.isEmpty {
                 EmptyStateRow(
                     icon: "square.grid.2x2",
@@ -378,22 +377,13 @@ struct HomeView: View {
                     message: "設定からジャンルを選び直すと、記録の入口が表示されます。"
                 )
             } else if categoryLayoutMode == .horizontal {
-                horizontalCategoryLayout(categories: categories)
+                GenreNavigationStrip(categories: categories)
             } else {
                 gridCategoryLayout(categories: categories)
             }
         }
-    }
-
-    private func horizontalCategoryLayout(categories: [RecordCategory]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(alignment: .top, spacing: 12) {
-                categoryLinks(categories: categories)
-            }
-            .padding(.trailing, 20)
-        }
-        .scrollClipDisabled()
-        .accessibilityLabel("ジャンル一覧 横スクロール")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("ジャンル")
     }
 
     private func gridCategoryLayout(categories: [RecordCategory]) -> some View {
@@ -417,6 +407,20 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private var homeBackground: some View {
+        LinearGradient(
+            stops: [
+                .init(color: Color(.systemGroupedBackground), location: 0),
+                .init(color: themePalette.globalTint.opacity(colorScheme == .dark ? 0.09 : 0.055), location: 0.34),
+                .init(color: Color(hex: "#D8C6AE").opacity(colorScheme == .dark ? 0.05 : 0.10), location: 0.68),
+                .init(color: Color(.systemGroupedBackground), location: 1),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
     }
 
     private func attentionSection(items: [HomeAttentionItem]) -> some View {
@@ -459,7 +463,7 @@ struct HomeView: View {
         }
     }
 
-    private func experienceGallerySection(visits: [Visit]) -> some View {
+    private func experienceGallerySection(visits: [HomeVisitSnapshot]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("最近の思い出", count: visits.count)
 
@@ -474,7 +478,7 @@ struct HomeView: View {
                     LazyHStack(spacing: 12) {
                         ForEach(visits) { visit in
                             NavigationLink {
-                                ExperienceDetailView(visit: visit)
+                                HomeVisitDestination(visitID: visit.id)
                             } label: {
                                 ExperienceGalleryCard(visit: visit)
                             }
@@ -487,7 +491,7 @@ struct HomeView: View {
         }
     }
 
-    private func recentSection(visits: [Visit]) -> some View {
+    private func recentSection(visits: [HomeVisitSnapshot]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("最近の記録", count: visits.count)
 
@@ -500,9 +504,9 @@ struct HomeView: View {
             } else {
                 ForEach(visits.prefix(5)) { visit in
                     NavigationLink {
-                        ExperienceDetailView(visit: visit)
+                        HomeVisitDestination(visitID: visit.id)
                     } label: {
-                        VisitSummaryRow(visit: visit)
+                        HomeVisitSummaryRow(visit: visit)
                     }
                     .buttonStyle(.plain)
                 }
@@ -511,9 +515,8 @@ struct HomeView: View {
     }
 
     private func inboxSection(
-        interestedEvents: [ExperienceEvent],
-        unresolvedInboxItems: [InboxItem],
-        categories: [RecordCategory]
+        interestedEvents: [HomeInterestedEventSnapshot],
+        unresolvedInboxItems: [HomeInboxItemSnapshot]
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("気になる", count: interestedEvents.count + unresolvedInboxItems.count)
@@ -527,7 +530,7 @@ struct HomeView: View {
             } else {
                 ForEach(interestedEvents.prefix(3)) { event in
                     NavigationLink {
-                        EventDetailView(event: event)
+                        HomeEventDestination(eventID: event.id)
                     } label: {
                         InterestedEventRow(event: event)
                     }
@@ -536,9 +539,9 @@ struct HomeView: View {
 
                 ForEach(unresolvedInboxItems.prefix(max(0, 3 - interestedEvents.count))) { item in
                     NavigationLink {
-                        InboxDetailView(item: item)
+                        HomeInboxDestination(itemID: item.id)
                     } label: {
-                        InboxItemRow(item: item, categories: categories)
+                        InboxItemRow(item: item)
                     }
                     .buttonStyle(.plain)
                 }
@@ -548,10 +551,10 @@ struct HomeView: View {
 
     private func statsSummarySection(snapshot: HomeSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("統計サマリ", count: snapshot.visibleVisits.count)
+            sectionHeader("統計サマリ", count: snapshot.visibleVisitCount)
 
             HStack(spacing: 12) {
-                SummaryMetricCard(title: "記録", value: "\(snapshot.visibleVisits.count)", icon: "sparkles.rectangle.stack")
+                SummaryMetricCard(title: "記録", value: "\(snapshot.visibleVisitCount)", icon: "sparkles.rectangle.stack")
                 SummaryMetricCard(title: "ジャンル", value: "\(snapshot.visibleCategories.count)", icon: "square.grid.2x2")
             }
         }
@@ -570,7 +573,7 @@ struct HomeView: View {
 }
 
 private struct InterestedEventRow: View {
-    let event: ExperienceEvent
+    let event: HomeInterestedEventSnapshot
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -583,15 +586,15 @@ private struct InterestedEventRow: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(event.title.isEmpty ? "無題" : event.title)
+                Text(event.title)
                     .font(FavorecoTypography.cardTitle)
                     .lineLimit(2)
 
                 HStack(spacing: 10) {
-                    if let category = event.category {
-                        Label(category.name, systemImage: category.iconSymbol)
+                    if let categoryName = event.categoryName {
+                        Label(categoryName, systemImage: event.categoryIcon ?? "square.grid.2x2")
                     }
-                    if !event.officialURL.isEmpty {
+                    if event.hasOfficialURL {
                         Label("URL", systemImage: "link")
                     }
                 }
@@ -682,15 +685,11 @@ private struct HomeUpcomingPlanCard: View {
 }
 
 private struct HomeUpcomingVisitCard: View {
-    let visit: Visit
+    let visit: HomeVisitSnapshot
     @Environment(\.favorecoThemePalette) private var themePalette
 
-    private var category: RecordCategory? {
-        visit.event?.category
-    }
-
     private var tint: Color {
-        themePalette.categoryColor(hex: category?.colorHex ?? "#147C88")
+        themePalette.categoryColor(hex: visit.categoryColorHex)
     }
 
     private var dateText: String {
@@ -707,18 +706,18 @@ private struct HomeUpcomingVisitCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: category?.iconSymbol ?? "calendar")
+            Image(systemName: visit.categoryIcon)
                 .font(.title2)
                 .foregroundStyle(tint)
                 .frame(width: 48, height: 48)
                 .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(category?.name ?? "参加予定")
+                Text(visit.categoryName)
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(tint)
 
-                Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? "予定" : "予定")
+                Text(visit.title)
                     .font(FavorecoTypography.cardTitle)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
@@ -728,8 +727,8 @@ private struct HomeUpcomingVisitCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                if !visit.venueNameSnapshot.isEmpty {
-                    Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                if !visit.venueName.isEmpty {
+                    Label(visit.venueName, systemImage: "mappin.and.ellipse")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -986,25 +985,14 @@ struct AppNotificationCenterView: View {
 }
 
 private struct ExperienceGalleryCard: View {
-    let visit: Visit
+    let visit: HomeVisitSnapshot
 
-    @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Environment(\.displayScale) private var displayScale
     @Environment(\.favorecoThemePalette) private var themePalette
     @State private var thumbnailImage: UIImage?
 
     private var categoryColor: Color {
-        themePalette.categoryColor(hex: visit.event?.category?.colorHex ?? "#147C88")
-    }
-
-    private var firstPhoto: PhotoBlob? {
-        let photos = (visit.photos ?? [])
-            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
-        if !visit.eyecatchPath.isEmpty,
-           let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
-            return cover
-        }
-        return photos.min { $0.createdAt < $1.createdAt }
+        themePalette.categoryColor(hex: visit.categoryColorHex)
     }
 
     // 190pt幅カード。scale過剰を避けるため上限クランプ。
@@ -1013,17 +1001,17 @@ private struct ExperienceGalleryCard: View {
     }
 
     // 写真ID＋表示サイズをキーに含める（サイズ違いは別キャッシュ・task再実行の判定にも使う）
-    private func cacheKey(for photo: PhotoBlob) -> String {
+    private func cacheKey(for photo: HomePhotoSnapshot) -> String {
         "\(photo.id.uuidString)@\(Int(thumbnailMaxPixel.rounded()))"
     }
 
     private var thumbnailTaskID: String? {
-        firstPhoto.map { cacheKey(for: $0) }
+        visit.photo.map { cacheKey(for: $0) }
     }
 
     @MainActor
     private func loadThumbnail() async {
-        guard let photo = firstPhoto else {
+        guard let photo = visit.photo else {
             thumbnailImage = nil
             return
         }
@@ -1039,12 +1027,8 @@ private struct ExperienceGalleryCard: View {
             ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
         }.value
         // セル再利用や写真変更後に遅れて届いた結果で、別の写真の画像を上書きしない
-        guard !Task.isCancelled, firstPhoto?.id == targetID else { return }
+        guard !Task.isCancelled, visit.photo?.id == targetID else { return }
         thumbnailImage = image
-    }
-
-    private var title: String {
-        visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
     }
 
     private var statusText: String? {
@@ -1053,27 +1037,6 @@ private struct ExperienceGalleryCard: View {
 
     private var unitFields: VisitUnitFields {
         VisitUnitFields(rawValue: visit.unitFieldsRaw)
-    }
-
-    private var eyecatchAspectRatio: Double {
-        EyecatchAspectRatio.option(
-            for: unitFields.eyecatchAspectRatioKey,
-            category: visit.event?.category
-        ).value
-    }
-
-    private var peopleSummary: String {
-        let linkedPeople = personLinks
-            .filter { link in
-                !link.isArchived && (link.event?.id == visit.event?.id || link.visit?.id == visit.id)
-            }
-            .sorted { $0.sortOrder < $1.sortOrder }
-            .prefix(2)
-            .map { link in
-                link.nameSnapshot.isEmpty ? link.person?.displayName ?? "" : link.nameSnapshot
-            }
-            .filter { !$0.isEmpty }
-        return linkedPeople.joined(separator: " / ")
     }
 
     var body: some View {
@@ -1095,7 +1058,7 @@ private struct ExperienceGalleryCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(visit.event?.category?.name ?? "記録")
+                    Text(visit.categoryName)
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.primary)
                         .padding(.horizontal, 8)
@@ -1113,12 +1076,12 @@ private struct ExperienceGalleryCard: View {
                 }
                 .padding(10)
             }
-            .aspectRatio(CGFloat(eyecatchAspectRatio), contentMode: .fill)
+            .aspectRatio(CGFloat(visit.eyecatchAspectRatio), contentMode: .fill)
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(title)
+                Text(visit.title)
                     .font(FavorecoTypography.cardTitle)
                     .lineLimit(2)
 
@@ -1126,15 +1089,15 @@ private struct ExperienceGalleryCard: View {
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
 
-                if !visit.venueNameSnapshot.isEmpty {
-                    Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                if !visit.venueName.isEmpty {
+                    Label(visit.venueName, systemImage: "mappin.and.ellipse")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
-                if !peopleSummary.isEmpty {
-                    Label(peopleSummary, systemImage: "person.2")
+                if !visit.peopleSummary.isEmpty {
+                    Label(visit.peopleSummary, systemImage: "person.2")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -1164,6 +1127,192 @@ private struct ExperienceGalleryCard: View {
     }
 }
 
+private struct HomeVisitSummaryRow: View {
+    let visit: HomeVisitSnapshot
+
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.favorecoThemePalette) private var themePalette
+    @State private var thumbnailImage: UIImage?
+
+    private var categoryColor: Color {
+        themePalette.categoryColor(hex: visit.categoryColorHex)
+    }
+
+    private var unitFields: VisitUnitFields {
+        VisitUnitFields(rawValue: visit.unitFieldsRaw)
+    }
+
+    private var thumbnailMaxPixel: CGFloat {
+        min(80 * displayScale, 480)
+    }
+
+    private var thumbnailTaskID: String? {
+        visit.photo.map { "\($0.id.uuidString)@\(Int(thumbnailMaxPixel.rounded()))" }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            thumbnail
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(visit.title)
+                        .font(FavorecoTypography.cardTitle)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+
+                    Spacer(minLength: 8)
+
+                    if let statusText = visitTicketStatusText(visit.outcomeKey) {
+                        Text(statusText)
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(categoryColor)
+                            .lineLimit(1)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    Label(visit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: unitFields.weatherSymbolName.isEmpty ? "calendar" : unitFields.weatherSymbolName)
+                    Label(visit.categoryName, systemImage: visit.categoryIcon)
+                    if !visit.venueName.isEmpty {
+                        Label(visit.venueName, systemImage: "mappin.and.ellipse")
+                    }
+                    if visit.overallRating > 0 {
+                        Label(String(format: "%.1f", visit.overallRating), systemImage: "star.fill")
+                    }
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+                if !visit.peopleSummary.isEmpty {
+                    Label(visit.peopleSummary, systemImage: "person.2")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if !visit.note.isEmpty {
+                    Text(visit.note)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if visit.amount != Decimal(0) || !unitFields.ocrText.isEmpty || !unitFields.advancedEntries.isEmpty {
+                    HStack(spacing: 6) {
+                        if visit.amount != Decimal(0) {
+                            HomeVisitBadge(text: formattedVisitAmount(visit.amount), icon: "yensign.circle")
+                        }
+                        if !unitFields.ocrText.isEmpty {
+                            HomeVisitBadge(text: "OCR", icon: "text.viewfinder")
+                        }
+                        if !unitFields.advancedEntries.isEmpty {
+                            HomeVisitBadge(text: "詳細", icon: "slider.horizontal.3")
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .task(id: thumbnailTaskID) {
+            await loadThumbnail()
+        }
+    }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        if let thumbnailImage {
+            Image(uiImage: thumbnailImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 64, height: thumbnailHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
+            Image(systemName: visit.categoryIcon)
+                .font(.title3)
+                .foregroundStyle(categoryColor)
+                .frame(width: 64, height: thumbnailHeight)
+                .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    private var thumbnailHeight: CGFloat {
+        let rawHeight = 64 / max(0.45, visit.eyecatchAspectRatio)
+        return min(96, max(56, rawHeight))
+    }
+
+    @MainActor
+    private func loadThumbnail() async {
+        guard let photo = visit.photo else {
+            thumbnailImage = nil
+            return
+        }
+        let key = "\(photo.id.uuidString)@\(Int(thumbnailMaxPixel.rounded()))"
+        if let cached = ThumbnailLoader.cached(forKey: key) {
+            thumbnailImage = cached
+            return
+        }
+        let data = photo.data
+        let maxPixel = thumbnailMaxPixel
+        let image = await Task.detached(priority: .userInitiated) {
+            ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
+        }.value
+        guard !Task.isCancelled, visit.photo?.id == photo.id else { return }
+        thumbnailImage = image
+    }
+}
+
+private struct HomeVisitDestination: View {
+    @Query private var visits: [Visit]
+
+    init(visitID: UUID) {
+        _visits = Query(filter: #Predicate<Visit> { $0.id == visitID })
+    }
+
+    var body: some View {
+        if let visit = visits.first {
+            ExperienceDetailView(visit: visit)
+        } else {
+            ContentUnavailableView("記録が見つかりません", systemImage: "trash")
+        }
+    }
+}
+
+private struct HomeEventDestination: View {
+    @Query private var events: [ExperienceEvent]
+
+    init(eventID: UUID) {
+        _events = Query(filter: #Predicate<ExperienceEvent> { $0.id == eventID })
+    }
+
+    var body: some View {
+        if let event = events.first {
+            EventDetailView(event: event)
+        } else {
+            ContentUnavailableView("対象が見つかりません", systemImage: "trash")
+        }
+    }
+}
+
+private struct HomeInboxDestination: View {
+    @Query private var items: [InboxItem]
+
+    init(itemID: UUID) {
+        _items = Query(filter: #Predicate<InboxItem> { $0.id == itemID })
+    }
+
+    var body: some View {
+        if let item = items.first {
+            InboxDetailView(item: item)
+        } else {
+            ContentUnavailableView("受信項目が見つかりません", systemImage: "trash")
+        }
+    }
+}
+
 private struct SummaryMetricCard: View {
     let title: String
     let value: String
@@ -1188,13 +1337,7 @@ private struct SummaryMetricCard: View {
 }
 
 private struct InboxItemRow: View {
-    let item: InboxItem
-    let categories: [RecordCategory]
-
-    private var categoryName: String? {
-        guard !item.targetTemplateKey.isEmpty else { return nil }
-        return categories.first(where: { $0.templateKey == item.targetTemplateKey })?.name
-    }
+    let item: HomeInboxItemSnapshot
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -1207,15 +1350,15 @@ private struct InboxItemRow: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(item.title.isEmpty ? "無題" : item.title)
+                Text(item.title)
                     .font(FavorecoTypography.cardTitle)
                     .lineLimit(2)
 
                 HStack(spacing: 10) {
-                    if let categoryName {
+                    if let categoryName = item.categoryName {
                         Label(categoryName, systemImage: "square.grid.2x2")
                     }
-                    if !item.sourceURL.isEmpty {
+                    if item.hasSourceURL {
                         Label("URL", systemImage: "link")
                     }
                     Label(item.createdAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")

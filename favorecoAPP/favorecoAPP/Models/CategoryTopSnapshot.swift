@@ -4,10 +4,12 @@ struct CategoryTopSnapshot {
     let visibleCategories: [RecordCategory]
     let events: [CategoryEventSnapshot]
     let visits: [Visit]
-    let unitCount: Int
 
     var eventCount: Int { events.count }
     var visitCount: Int { visits.count }
+    var interestedEventCount: Int {
+        events.lazy.filter { $0.event.stateKey == "interested" }.count
+    }
 
     static func make(
         category: RecordCategory,
@@ -35,8 +37,7 @@ struct CategoryTopSnapshot {
         return CategoryTopSnapshot(
             visibleCategories: visibleCategories,
             events: eventSnapshots,
-            visits: visits,
-            unitCount: category.enabledUnitsRaw.split(separator: ",").count
+            visits: visits
         )
     }
 }

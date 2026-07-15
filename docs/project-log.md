@@ -5,6 +5,141 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-15: AppIconの左右余白をさらに圧縮
+
+### 変更概要
+
+- 余白なしTicket Album水彩滲み版から左右をさらに30pxずつ詰めた版を作成
+- `AppIcon.appiconset` に `favoreco-app-icon-ticket-album-watercolor-tight-x-1024.png` を追加
+- AppIconの参照先を左右詰め版へ変更
+- 仕様正本へ現在の標準アプリアイコン状態を反映
+
+### 変更意図
+
+ホーム画面やApp Store/SNSの小サイズ表示で、左右の余白をさらに減らし、チケットアルバムの角丸四角とFモノグラムをより大きく見せるため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/Contents.json`
+- `favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/favoreco-app-icon-ticket-album-watercolor-tight-x-1024.png`
+- `favoreco/assets/icons/favoreco-ogp-icon-exploration/refined/favoreco-icon-02-f-ticket-album-watercolor-tight-x-1024.png`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 確認結果
+
+- 左右詰め版PNGが1024x1024pxであることを確認
+- ビルド確認は次に実施
+
+### 残課題
+
+- iOSビルド後、生成Info.plistのPrimary AppIcon参照と実機ホーム画面表示を確認する
+
+## 2026-07-15: Home表示中の仮データ削除クラッシュを解消
+
+### 変更概要
+- `HomeSnapshot`が保持していた削除対象のSwiftDataモデルを、表示値と遷移用UUIDだけを持つ値型スナップショットへ変更
+- 最近の思い出、最近の記録、気になる、Inbox、未来日の記録を値型データで描画
+- Homeから詳細へ移る際はUUIDを使って現在のSwiftDataモデルを再取得
+
+### 変更意図
+設定画面をHomeへ重ねた状態で仮データを削除すると、背面のHomeカードが削除済み`Visit`の`event.category`へアクセスし、SwiftDataのpersisted getterでクラッシュしていた。削除後も一時的に残るViewが無効化済みモデルへ触れない構造にして、同種の再発を防ぐため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Models/HomeSnapshot.swift`
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`
+- `docs/00-開発状況と残課題.md`
+- `favoreco/CLAUDE.md`
+- `docs/project-log.md`
+
+### 影響する画面・機能
+- Homeの次の予定、最近の思い出、最近の記録、気になる、Inbox、横断件数
+- Homeから記録詳細、対象詳細、Inbox詳細への画面遷移
+- SwiftDataの保存形式と仮データの削除条件には変更なし
+
+### 確認結果（実機 / ビルド）
+- iOS 18.6 Simulator向けDebugビルド成功
+- iOS 18.6 Simulatorで写真付き仮データ80件を追加後、設定画面から80件を削除してもクラッシュしないことを確認
+- 設定を閉じるとHomeへ戻り、手動登録した1件だけが最近の思い出・最近の記録・総件数へ残ることを確認
+- 残った記録カードから記録詳細へ遷移できることを確認
+- 修正後の新しいクラッシュレポートが生成されていないことを確認
+- `git diff --check`で空白エラーなし
+
+### 既知のリスク・残課題
+- 最近の表示用に最大8件分の写真Dataを値型スナップショットへ保持するため、大容量写真でのメモリ使用量はiOS 26実機の写真50枚負荷確認でも監視する
+- iOS 18互換確認で、記録詳細とカレンダー等の直接`Date.formatted`を使う箇所が英語日付になる問題を確認しており、別作業で日本語書式へ統一する
+- iOS 26実機で同じ仮データ追加/削除手順を再確認する
+
+## 2026-07-15: Home横断ダッシュボードとジャンル専門ライブラリを分離
+
+### 変更概要
+- Homeのジャンル入口を共通ヘッダー直下へ移し、横1段ジャンル列を基本表示にした
+- Homeとジャンルトップで共用する`GenreNavigationStrip`を追加し、ジャンルトップでは現在ジャンルを色つきアイコンと下線で表示
+- ジャンルトップのHeroを対象ライブラリ中心へ整理し、内部用のユニット件数を利用者向けの気になる件数へ変更
+- Homeへ淡いティール/ベージュ背景、ジャンルトップへ現在ジャンル色の淡い背景を追加
+
+### 変更意図
+Homeを全ジャンルの予定・期限・思い出を見る横断ダッシュボード、ジャンルトップを作品・施設・銘柄などを探す専門ライブラリとして、画面を開いた直後に役割が分かる構成へ揃えるため。ジャンル切替位置を両画面で統一し、上部中央の小さなプルダウンを探す負担も減らす。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Views/GenreNavigationStrip.swift
+- favorecoAPP/favorecoAPP/Views/HomeView.swift
+- favorecoAPP/favorecoAPP/Views/CategoryTopView.swift
+- favorecoAPP/favorecoAPP/Models/CategoryTopSnapshot.swift
+- docs/15-画面情報設計.md
+- favoreco/CLAUDE.md
+- docs/00-開発状況と残課題.md
+- docs/project-log.md
+
+### 影響する画面・機能
+- Homeの上部ジャンル入口、背景、セクション順
+- 全ジャンルトップのジャンル切替、Hero、ミニ統計、背景
+- RecordCategory / ExperienceEvent / Visitの保存形式には変更なし
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`で空白エラーなし
+- iOS 18最低対象、iOS 26.5 SDKのDebug汎用iOSデバイスビルド成功
+- iOS 18最低対象、iOS 26.5 SDKのRelease汎用iOSデバイスビルド成功
+- 横1段ジャンル列がHomeでは選択なし、ジャンルトップでは現在ジャンル選択ありで描画されることをコード確認
+- ジャンル0件/1件/複数件で、空状態または横列が安全に分岐することをコード確認
+- 実機確認は未実施
+
+### 既知のリスク・残課題
+- iOS 26実機でアイコンと名称の押下領域、横スワイプと画面縦スクロールの干渉、選択ジャンルの中央寄せを確認する
+- 基本8ジャンルとカスタムジャンル追加時に、横列の縦占有量と長いジャンル名の縮小表示を確認する
+- AppIcon作業中の未割当画像警告は今回の変更対象外
+
+## 2026-07-15: AppIconを余白なし切り出しへ調整
+
+### 変更概要
+
+- Ticket Album水彩滲み版から外側の白い余白を落とし、角丸四角のアイコン本体が1024px内で大きく見えるように再切り出し
+- `AppIcon.appiconset` に `favoreco-app-icon-ticket-album-watercolor-tight-1024.png` を追加
+- AppIconの参照先を余白なし切り出し版へ変更
+- 仕様正本と開発状況へ現在の標準アプリアイコン状態を反映
+
+### 変更意図
+
+ホーム画面やApp Store/SNSの小サイズ表示で、アイコン本体が白い余白に埋もれず、チケットアルバムとFモノグラムがより大きく認識できるようにするため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/Contents.json`
+- `favorecoAPP/favorecoAPP/Assets.xcassets/AppIcon.appiconset/favoreco-app-icon-ticket-album-watercolor-tight-1024.png`
+- `favoreco/assets/icons/favoreco-ogp-icon-exploration/refined/favoreco-icon-02-f-ticket-album-watercolor-tight-1024.png`
+- `docs/00-開発状況と残課題.md`
+- `favoreco/CLAUDE.md`
+
+### 確認結果
+
+- 余白なし切り出し版PNGが1024x1024pxであることを確認
+- `xcodebuild -project /Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP.xcodeproj -scheme favorecoAPP -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath /tmp/favoreco_tight_icon_build CODE_SIGNING_ALLOWED=NO build` が成功
+- 生成後の `Info.plist` にPrimary `AppIcon` のみが含まれ、代替アイコン登録がないことを確認
+
+### 残課題
+
+- 実機でホーム画面、検索、通知、設定、ライト/ダーク/色合い調整時の見え方を確認する
+
 ## 2026-07-15: 記録入力の基本情報・公式情報ユニットを分離
 
 ### 変更概要

@@ -13,6 +13,7 @@ struct CategoryTopView: View {
     let category: RecordCategory
 
     @Environment(\.favorecoThemePalette) private var themePalette
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \RecordCategory.sortOrder) private var allCategories: [RecordCategory]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var allVisits: [Visit]
     @AppStorage(AppStorageKeys.homeSelectedCategoryTemplateKey) private var homeSelectedCategoryTemplateKey = ""
@@ -20,6 +21,7 @@ struct CategoryTopView: View {
     @State private var selectedEventForNewVisit: ExperienceEvent?
 
     var body: some View {
+        let recordTemplate = CategoryRecordTemplate.template(for: category)
         let snapshot = CategoryTopSnapshot.make(
             category: category,
             categories: allCategories,
@@ -28,15 +30,19 @@ struct CategoryTopView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                hero(snapshot: snapshot)
+                GenreNavigationStrip(
+                    categories: snapshot.visibleCategories,
+                    selectedCategoryID: category.id
+                )
+                hero(snapshot: snapshot, recordTemplate: recordTemplate)
                 stats(snapshot: snapshot)
-                eventSection(snapshot: snapshot)
+                eventSection(snapshot: snapshot, recordTemplate: recordTemplate)
                 recentVisits(snapshot: snapshot)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(categoryBackground)
         .navigationTitle(category.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -59,7 +65,10 @@ struct CategoryTopView: View {
         }
     }
 
-    private func hero(snapshot: CategoryTopSnapshot) -> some View {
+    private func hero(
+        snapshot: CategoryTopSnapshot,
+        recordTemplate: CategoryRecordTemplate
+    ) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: category.iconSymbol)
@@ -69,11 +78,9 @@ struct CategoryTopView: View {
                     .background(themePalette.categoryColor(hex: category.colorHex).opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    GenreHeadingSwitcher(
-                        currentCategory: category,
-                        categories: snapshot.visibleCategories
-                    )
-                    Text(heroMessage(visitCount: snapshot.visitCount))
+                    Text("\(recordTemplate.targetSectionTitle)ライブラリ")
+                        .font(FavorecoTypography.jpSerif(25, weight: .bold, relativeTo: .title2))
+                    Text(libraryMessage(snapshot: snapshot))
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -83,7 +90,7 @@ struct CategoryTopView: View {
             Button {
                 isShowingAddExperience = true
             } label: {
-                Label(snapshot.events.isEmpty ? "最初の記録を追加" : "新しい対象を追加", systemImage: "plus.circle.fill")
+                Label(snapshot.events.isEmpty ? "最初の記録を追加" : "記録を追加", systemImage: "plus.circle.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -97,15 +104,18 @@ struct CategoryTopView: View {
     private func stats(snapshot: CategoryTopSnapshot) -> some View {
         HStack(spacing: 12) {
             StatTile(title: "対象", value: "\(snapshot.eventCount)")
-            StatTile(title: "記録", value: "\(snapshot.visitCount)")
-            StatTile(title: "ユニット", value: "\(snapshot.unitCount)")
+            StatTile(title: "体験済み", value: "\(snapshot.visitCount)")
+            StatTile(title: "気になる", value: "\(snapshot.interestedEventCount)")
         }
     }
 
-    private func eventSection(snapshot: CategoryTopSnapshot) -> some View {
+    private func eventSection(
+        snapshot: CategoryTopSnapshot,
+        recordTemplate: CategoryRecordTemplate
+    ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("対象")
+                Text(recordTemplate.targetSectionTitle)
                     .font(FavorecoTypography.sectionTitle)
                 Spacer()
                 Text("\(snapshot.eventCount)")
@@ -160,45 +170,24 @@ struct CategoryTopView: View {
         }
     }
 
-    private func heroMessage(visitCount: Int) -> String {
-        if visitCount == 0 {
-            return "まだ記録はありません。まずは1件だけ、タイトルと日付から残せます。"
+    private func libraryMessage(snapshot: CategoryTopSnapshot) -> String {
+        if snapshot.eventCount == 0 {
+            return "登録した対象をここへまとめ、体験を重ねていけます。"
         }
-        return "このカテゴリに \(visitCount) 件の記録があります。"
+        return "\(snapshot.eventCount)件の対象と、\(snapshot.visitCount)件の体験をまとめています。"
     }
-}
 
-private struct GenreHeadingSwitcher: View {
-    let currentCategory: RecordCategory
-    let categories: [RecordCategory]
-
-    var body: some View {
-        Menu {
-            ForEach(categories) { category in
-                if category.id == currentCategory.id {
-                    Label(category.name, systemImage: "checkmark")
-                } else {
-                    NavigationLink {
-                        CategoryTopView(category: category)
-                    } label: {
-                        Label(category.name, systemImage: category.iconSymbol)
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Text(currentCategory.name)
-                    .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
-            }
-            .foregroundStyle(.primary)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("ジャンルを切り替え")
+    private var categoryBackground: some View {
+        LinearGradient(
+            colors: [
+                themePalette.categoryColor(hex: category.colorHex).opacity(colorScheme == .dark ? 0.12 : 0.10),
+                Color(.systemGroupedBackground),
+                Color(.systemGroupedBackground),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
     }
 }
 
