@@ -160,6 +160,7 @@ DEBUGビルドの設定 > 開発にはStoreKit購入結果/無料版/Pro/Premium
 - Homeは `HomeSnapshot.make` で表示ジャンル、記録、気になる、Inbox、未来予定、チケット/会員期限対象、横断件数を描画ごとに1回だけ抽出する。各Sectionは同じSnapshotを受け取り、個別に全件filter/sortを繰り返さない。アテンション行のIDはTicketAttempt/TicketAccountと期限種別から生成し、再描画ごとのランダムIDを使わない。
 - ジャンルトップは `CategoryTopSnapshot.make` で有効ジャンル、対象、記録、対象ごとの記録件数・最新記録日を描画ごとに1回だけ抽出する。Hero、統計、対象一覧、最近の記録は同じSnapshotを受け取り、個別に全件filter/sortを繰り返さない。既存対象への回追加シートは選択した`ExperienceEvent`を`sheet(item:)`で直接渡す。
 - 対象詳細は `EventDetailSnapshot.make` で体験履歴、最新記録日、平均評価、代表写真候補を描画ごとに1回だけ抽出する。代表写真は対象で明示指定した記録写真、対象アイキャッチ、最新回から順に明示指定したカバー写真または先頭写真、の優先順位を維持する。Hero、統計、履歴、削除確認は同じSnapshotを使う。
+- 記録詳細は `ExperienceDetailSnapshot.make` で写真、対象/当日の人物、`VisitUnitFields`、評価、天気、チケット状態、金額、住所優先Map URL、カレンダー場所を描画ごとに1回だけ解決する。写真は明示カバーを先頭、残りを作成順とし、各SectionとカレンダーDraftは同じSnapshotを使う。
 - SNSアカウント入力はID/URLどちらも許容する。外部遷移時は `SocialPlatform` でURLに解決する。ジャンル別SNSは `SocialAccount.category` にoptionalで紐付け、未指定は全体プロフィールとする。
 - 初回ジャンル選択とカテゴリseedでは、表示ジャンルが0件にならないよう `CategoryPresetSeeder.ensureAtLeastOneActiveCategory` を必ず通す。すべて非表示になった場合は先頭の標準カテゴリを復帰させる。
 - ジャンル管理の非表示は削除ではなく `RecordCategory.isArchived` の切り替えとする。記録済みデータは残し、Home/追加導線/ジャンル切替の入口から外す。記録・予定・SNS紐付けがある自作ジャンルの削除要求も同じ非表示へ安全にフォールバックする。完全削除は関連が0件の自作ジャンルだけに限定し、組み込みジャンルは削除不可。最後の1ジャンルはUI上で非表示/削除できない。

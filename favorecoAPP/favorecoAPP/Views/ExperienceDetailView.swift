@@ -21,65 +21,27 @@ struct ExperienceDetailView: View {
     @State private var isShowingDeleteConfirmation = false
     @State private var deletionErrorMessage: String?
 
-    private var event: ExperienceEvent? {
-        visit.event
-    }
-
-    private var category: RecordCategory? {
-        event?.category
-    }
-
-    private var accentColor: Color {
-        themePalette.categoryColor(hex: category?.colorHex ?? "#6F8F7A")
-    }
-
-    private var template: CategoryRecordTemplate {
-        CategoryRecordTemplate.template(for: category)
-    }
-
-    private var sortedPhotos: [PhotoBlob] {
-        (visit.photos ?? [])
-            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
-            .sorted { lhs, rhs in
-                let lhsIsCover = !visit.eyecatchPath.isEmpty && lhs.relativePath == visit.eyecatchPath
-                let rhsIsCover = !visit.eyecatchPath.isEmpty && rhs.relativePath == visit.eyecatchPath
-                if lhsIsCover != rhsIsCover { return lhsIsCover }
-                return lhs.createdAt < rhs.createdAt
-            }
-    }
-
-    private var linkedPeople: [EventPersonLink] {
-        personLinks
-            .filter { link in
-                !link.isArchived && (link.event?.id == event?.id || link.visit?.id == visit.id)
-            }
-            .sorted { $0.sortOrder < $1.sortOrder }
-    }
-
-    private var eyecatchAspectRatio: Double {
-        EyecatchAspectRatio.option(
-            for: unitFields.eyecatchAspectRatioKey,
-            category: category
-        ).value
-    }
-
     var body: some View {
+        let snapshot = ExperienceDetailSnapshot.make(visit: visit, personLinks: personLinks)
+        let accentColor = themePalette.categoryColor(hex: snapshot.category?.colorHex ?? "#6F8F7A")
+        let template = CategoryRecordTemplate.template(for: snapshot.category)
+
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                hero
-                photoSection
-                goshuinBookSection
-                peopleSection
-                ocrSection
-                basicInfo
-                advancedSection
-                memoSection
+                hero(snapshot: snapshot, accentColor: accentColor)
+                photoSection(snapshot: snapshot)
+                goshuinBookSection(snapshot: snapshot)
+                peopleSection(snapshot: snapshot, accentColor: accentColor)
+                ocrSection(snapshot: snapshot)
+                basicInfo(snapshot: snapshot, template: template)
+                advancedSection(snapshot: snapshot)
+                memoSection(template: template)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle(eventTitle)
+        .navigationTitle(snapshot.eventTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -112,7 +74,7 @@ struct ExperienceDetailView: View {
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("この回の記録と写真を削除します。対象（\(eventTitle)）と他の記録は残ります。取り消せません。")
+            Text("この回の記録と写真を削除します。対象（\(snapshot.eventTitle)）と他の記録は残ります。取り消せません。")
         }
         .alert("削除に失敗しました", isPresented: Binding(
             get: { deletionErrorMessage != nil },
@@ -122,7 +84,7 @@ struct ExperienceDetailView: View {
         } message: {
             Text(deletionErrorMessage ?? "")
         }
-        .task(id: weatherTaskID) {
+        .task(id: snapshot.weatherTaskID) {
             await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext)
         }
     }
@@ -137,26 +99,26 @@ struct ExperienceDetailView: View {
         }
     }
 
-    private var hero: some View {
+    private func hero(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: category?.iconSymbol ?? "sparkles.rectangle.stack")
+                Image(systemName: snapshot.category?.iconSymbol ?? "sparkles.rectangle.stack")
                     .font(.title2)
                     .foregroundStyle(accentColor)
                     .frame(width: 44, height: 44)
                     .background(accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(eventTitle)
+                    Text(snapshot.eventTitle)
                         .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(category?.name ?? "未分類")
+                    Text(snapshot.category?.name ?? "未分類")
                         .font(FavorecoTypography.bodyStrong)
                         .foregroundStyle(accentColor)
                 }
             }
 
-            if let seriesName = event?.seriesName, !seriesName.isEmpty {
+            if let seriesName = snapshot.event?.seriesName, !seriesName.isEmpty {
                 Label(seriesName, systemImage: "rectangle.stack")
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
@@ -168,22 +130,22 @@ struct ExperienceDetailView: View {
     }
 
     @ViewBuilder
-    private var photoSection: some View {
-        if !sortedPhotos.isEmpty {
+    private func photoSection(snapshot: ExperienceDetailSnapshot) -> some View {
+        if !snapshot.photos.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("写真")
 
-                if sortedPhotos.count == 1, let firstPhoto = sortedPhotos.first {
+                if snapshot.photos.count == 1, let firstPhoto = snapshot.photos.first {
                     RepresentativePhotoImage(photo: firstPhoto, maxPixelSize: 1600)
-                        .aspectRatio(CGFloat(eyecatchAspectRatio), contentMode: .fill)
+                        .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fill)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 10)], spacing: 10) {
-                        ForEach(sortedPhotos) { photo in
+                        ForEach(snapshot.photos) { photo in
                             ZStack(alignment: .bottomLeading) {
                                 RepresentativePhotoImage(photo: photo, maxPixelSize: 720)
-                                    .aspectRatio(CGFloat(eyecatchAspectRatio), contentMode: .fill)
+                                    .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fill)
                                     .frame(maxWidth: .infinity)
                                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 if photo.relativePath == visit.eyecatchPath {
@@ -205,9 +167,9 @@ struct ExperienceDetailView: View {
     }
 
     @ViewBuilder
-    private var goshuinBookSection: some View {
-        if category?.templateKey == "goshuin", !unitFields.goshuinBookSizeKey.isEmpty {
-            let size = GoshuinBookSize.option(for: unitFields.goshuinBookSizeKey)
+    private func goshuinBookSection(snapshot: ExperienceDetailSnapshot) -> some View {
+        if snapshot.category?.templateKey == "goshuin", !snapshot.unitFields.goshuinBookSizeKey.isEmpty {
+            let size = GoshuinBookSize.option(for: snapshot.unitFields.goshuinBookSizeKey)
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("御朱印帳")
                 DetailInfoRow(
@@ -221,13 +183,13 @@ struct ExperienceDetailView: View {
     }
 
     @ViewBuilder
-    private var peopleSection: some View {
-        if !linkedPeople.isEmpty {
+    private func peopleSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
+        if !snapshot.linkedPeople.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("人物・団体")
 
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(linkedPeople) { link in
+                    ForEach(snapshot.linkedPeople) { link in
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Text(link.displayRole.isEmpty ? roleName(for: link.roleKey) : link.displayRole)
                                 .font(FavorecoTypography.caption)
@@ -248,11 +210,11 @@ struct ExperienceDetailView: View {
     }
 
     @ViewBuilder
-    private var ocrSection: some View {
-        if !unitFields.ocrText.isEmpty {
+    private func ocrSection(snapshot: ExperienceDetailSnapshot) -> some View {
+        if !snapshot.unitFields.ocrText.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("OCR・取込")
-                Text(unitFields.ocrText)
+                Text(snapshot.unitFields.ocrText)
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -261,18 +223,18 @@ struct ExperienceDetailView: View {
         }
     }
 
-    private var basicInfo: some View {
+    private func basicInfo(snapshot: ExperienceDetailSnapshot, template: CategoryRecordTemplate) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(template.visitSectionTitle)
             DetailInfoRow(icon: "calendar", title: template.dateLabel, value: visit.visitedAt.formatted(date: .long, time: .omitted))
 
-            if !unitFields.weatherSymbolName.isEmpty {
+            if !snapshot.unitFields.weatherSymbolName.isEmpty {
                 DetailInfoRow(
-                    icon: unitFields.weatherSymbolName,
+                    icon: snapshot.unitFields.weatherSymbolName,
                     title: "天気",
-                    value: weatherTemperatureText
+                    value: snapshot.weatherTemperatureText
                 )
-                if let weatherAttributionURL {
+                if let weatherAttributionURL = snapshot.weatherAttributionURL {
                     Link(destination: weatherAttributionURL) {
                         Label("Apple Weather", systemImage: "apple.logo")
                             .font(FavorecoTypography.caption)
@@ -288,7 +250,7 @@ struct ExperienceDetailView: View {
                 DetailInfoRow(icon: "signpost.right", title: "住所", value: address)
             }
 
-            if let mapURL {
+            if let mapURL = snapshot.mapURL {
                 Button {
                     openURL(mapURL)
                 } label: {
@@ -297,10 +259,10 @@ struct ExperienceDetailView: View {
                 }
             }
 
-            DetailInfoRow(icon: "star.fill", title: template.ratingLabel, value: ratingText)
+            DetailInfoRow(icon: "star.fill", title: template.ratingLabel, value: snapshot.ratingText)
 
             if !visit.outcomeKey.isEmpty {
-                DetailInfoRow(icon: "ticket", title: "チケット状態", value: ticketStatusText)
+                DetailInfoRow(icon: "ticket", title: "チケット状態", value: snapshot.ticketStatusText)
             }
 
             if !visit.seatText.isEmpty {
@@ -308,11 +270,11 @@ struct ExperienceDetailView: View {
             }
 
             if visit.amount != Decimal(0) {
-                DetailInfoRow(icon: "yensign.circle", title: "金額", value: formattedAmount)
+                DetailInfoRow(icon: "yensign.circle", title: "金額", value: snapshot.formattedAmount)
             }
 
             Button {
-                calendarDraft = makeCalendarDraft()
+                calendarDraft = makeCalendarDraft(snapshot: snapshot)
             } label: {
                 Label("カレンダーに追加", systemImage: "calendar.badge.plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -322,22 +284,13 @@ struct ExperienceDetailView: View {
         .sectionCard()
     }
 
-    private var mapURL: URL? {
-        PlaceSearchService.appleMapsURL(
-            name: visit.venueNameSnapshot,
-            address: visit.placeMaster?.address ?? "",
-            latitude: visit.latitude,
-            longitude: visit.longitude
-        )
-    }
-
     @ViewBuilder
-    private var advancedSection: some View {
-        if !unitFields.advancedEntries.isEmpty {
+    private func advancedSection(snapshot: ExperienceDetailSnapshot) -> some View {
+        if !snapshot.unitFields.advancedEntries.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("詳細オプション")
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(unitFields.advancedEntries) { entry in
+                    ForEach(snapshot.unitFields.advancedEntries) { entry in
                         if !entry.isEmpty {
                             DetailInfoRow(
                                 icon: "slider.horizontal.3",
@@ -353,7 +306,7 @@ struct ExperienceDetailView: View {
     }
 
     @ViewBuilder
-    private var memoSection: some View {
+    private func memoSection(template: CategoryRecordTemplate) -> some View {
         if !visit.note.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(template.memoSectionTitle)
@@ -371,63 +324,7 @@ struct ExperienceDetailView: View {
             .font(FavorecoTypography.sectionTitle)
     }
 
-    private var eventTitle: String {
-        guard let title = event?.title, !title.isEmpty else {
-            return "記録"
-        }
-        return title
-    }
-
-    private var ratingText: String {
-        if visit.overallRating == 0 {
-            return "未評価"
-        }
-        return String(format: "%.1f", visit.overallRating)
-    }
-
-    private var unitFields: VisitUnitFields {
-        VisitUnitFields(rawValue: visit.unitFieldsRaw)
-    }
-
-    private var weatherTaskID: String {
-        "\(visit.visitedAt.timeIntervalSinceReferenceDate)-\(visit.latitude)-\(visit.longitude)-\(unitFields.weatherSymbolName)"
-    }
-
-    private var weatherTemperatureText: String {
-        guard let high = unitFields.weatherHighCelsius,
-              let low = unitFields.weatherLowCelsius else {
-            return "記録済み"
-        }
-        return "最高 \(Int(high.rounded()))° / 最低 \(Int(low.rounded()))°"
-    }
-
-    private var weatherAttributionURL: URL? {
-        URL(string: unitFields.weatherAttributionURL)
-    }
-
-    private var ticketStatusText: String {
-        switch visit.outcomeKey {
-        case "planned": return "予定"
-        case "applied": return "申込中"
-        case "won": return "当選"
-        case "paid": return "入金済み"
-        case "ticketed": return "発券済み"
-        case "attended": return "参加済み"
-        case "canceled": return "中止・キャンセル"
-        default: return visit.outcomeKey
-        }
-    }
-
-    private var formattedAmount: String {
-        let number = NSDecimalNumber(decimal: visit.amount)
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "JPY"
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: number) ?? "¥\(number.stringValue)"
-    }
-
-    private func makeCalendarDraft() -> CalendarEventDraft {
+    private func makeCalendarDraft(snapshot: ExperienceDetailSnapshot) -> CalendarEventDraft {
         let endDate = visit.endedAt > visit.visitedAt
             ? visit.endedAt
             : Calendar.current.date(byAdding: .hour, value: 2, to: visit.visitedAt) ?? visit.visitedAt
@@ -435,33 +332,28 @@ struct ExperienceDetailView: View {
         if !visit.seatText.isEmpty {
             notes.append("座席・チケット: \(visit.seatText)")
         }
-        if !ticketStatusText.isEmpty && !visit.outcomeKey.isEmpty {
-            notes.append("チケット状態: \(ticketStatusText)")
+        if !snapshot.ticketStatusText.isEmpty && !visit.outcomeKey.isEmpty {
+            notes.append("チケット状態: \(snapshot.ticketStatusText)")
         }
         if visit.amount != Decimal(0) {
-            notes.append("金額: \(formattedAmount)")
+            notes.append("金額: \(snapshot.formattedAmount)")
         }
         if !visit.note.isEmpty {
             notes.append("")
             notes.append(visit.note)
         }
-        if let url = event?.officialURL, !url.isEmpty {
+        if let url = snapshot.event?.officialURL, !url.isEmpty {
             notes.append("")
             notes.append(url)
         }
 
         return CalendarEventDraft(
-            title: eventTitle,
-            location: preferredLocationText,
+            title: snapshot.eventTitle,
+            location: snapshot.preferredLocationText,
             notes: notes.joined(separator: "\n"),
             startDate: visit.visitedAt,
             endDate: endDate
         )
-    }
-
-    private var preferredLocationText: String {
-        let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return address.isEmpty ? visit.venueNameSnapshot : address
     }
 
     private func roleName(for roleKey: String) -> String {

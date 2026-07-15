@@ -5,6 +5,37 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-15: 記録詳細の表示データをSnapshotへ集約
+
+### 変更概要
+
+- 写真、人物・団体、`VisitUnitFields`、評価、天気、チケット状態、金額、Map URLを `ExperienceDetailSnapshot` へ集約
+- 記録詳細の各Sectionとカレンダー追加Draftが同じSnapshotを使うように変更
+- カバー写真優先、対象/当日の人物リンク、住所優先Map、天気再取得IDを維持
+
+### 変更意図
+
+記録詳細の再描画ごとに写真sort、人物filter、JSON decode、NumberFormatter、Map URL生成が各computed propertyから重複評価される状態を解消するため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Models/ExperienceDetailSnapshot.swift`
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/00-開発状況と残課題.md`
+
+### 確認結果
+
+- Debug / Releaseのgeneric iOS Simulatorビルド成功（iOS 18 deployment、iOS 26.5 SDK）
+- 写真0件/1件/複数件、人物0件/複数件、天気未取得、金額0、住所あり/なしの表示分岐をコード確認
+- 住所があればカレンダー場所とMap検索の両方で住所を優先することを確認
+- 既知の警告は `favorecoAPPApp.swift` の既存の未使用 `try?` のみ
+
+### 残課題
+
+- 実機で写真ギャラリー、人物、御朱印帳サイズ、Map、天気、カレンダー追加を確認する
+- 次は記録入力のDraft/写真処理と画面分割を点検する
+
 ## 2026-07-15: 対象詳細の履歴・代表写真集計をSnapshotへ集約
 
 ### 変更概要
