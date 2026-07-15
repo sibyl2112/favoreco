@@ -23,6 +23,12 @@ struct favorecoAPPApp: App {
             ContentView()
                 .environmentObject(PurchaseManager.shared)
                 .task {
+#if DEBUG
+                    let debugForcesRecovery = UserDefaults.standard.bool(
+                        forKey: AppStorageKeys.debugForcesLocalStoreRecovery
+                    )
+                    guard !debugForcesRecovery else { return }
+#endif
                     let localStoreStartupError = UserDefaults.standard.string(
                         forKey: AppStorageKeys.localStoreStartupError
                     ) ?? ""

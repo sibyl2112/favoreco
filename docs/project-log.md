@@ -7096,3 +7096,42 @@ iOS 18対応のためにUI全体を古い表現へ固定せず、主な利用環
 ### 既知のリスク・残課題
 - 実機で50枚連続追加時のメモリ、発熱、所要時間、表示容量を確認する
 - 容量表示は圧縮後データの概算であり、iCloud側の実使用量と完全一致しない
+
+## 2026-07-15: ローカルストア復旧画面のDEBUG診断を追加
+
+### 変更概要
+- 開発者メニューから次回起動時の復旧画面診断を有効化できるようにした
+- 診断起動中は通常UI、標準ジャンルseed、通知移行、自動バックアップを停止
+- 復旧画面にDEBUG診断であること、実データを変更していないこと、診断終了と再起動の手順を表示
+- 診断終了後もその場で通常UIへ戻さず、次の再起動で通常状態へ復帰する構成にした
+- 開発者メニュー本体を`#if DEBUG`内へ移し、DEBUG専用API参照によるReleaseビルド失敗を修正
+
+### 変更意図
+永続ストアを実際に破損させず、以前の起動クラッシュ対策で追加したブロッキング復旧画面と起動時データ処理停止を実機確認できるようにするため。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift
+- favorecoAPP/favorecoAPP/favorecoAPPApp.swift
+- favorecoAPP/favorecoAPP/ContentView.swift
+- favorecoAPP/favorecoAPP/Views/LocalStoreRecoveryView.swift
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift
+- favoreco/CLAUDE.md
+- docs/15-実機総合確認手順.md
+- docs/project-log.md
+
+### 影響する画面・機能
+- DEBUGビルドの設定 > 開発者メニュー > 診断
+- 起動時の標準ジャンルseed、通知移行、自動バックアップ
+- ローカル保存ストアを開けない場合の復旧画面
+- Releaseビルドの設定画面には影響なし
+
+### 確認結果（実機 / ビルド）
+- 診断フラグが実ストア構成と実エラー文字列を変更しないことをコード確認
+- 診断起動時に通常の起動後データ処理を停止することをコード確認
+- iOS 18最低対象、iOS 26.5 SDKのDebug汎用iOSデバイスビルド成功
+- Release構成で開発者メニュー型がコンパイル対象外になり、汎用iOSデバイスビルドが成功
+- 実機確認は未実施
+
+### 既知のリスク・残課題
+- 実機で診断開始、復旧画面、診断終了、通常再起動を一巡し、記録件数と写真が変化しないことを確認する
+- 本診断は復旧UIと起動後処理の停止を確認するもので、SwiftDataストア破損そのものは再現しない

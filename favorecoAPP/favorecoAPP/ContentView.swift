@@ -18,12 +18,24 @@ struct ContentView: View {
     @AppStorage(AppStorageKeys.fontWeight) private var fontWeightRaw = AppFontWeight.standard.rawValue
     @AppStorage(AppStorageKeys.lastSeenReleaseVersion) private var lastSeenReleaseVersion = ""
     @AppStorage(AppStorageKeys.localStoreStartupError) private var localStoreStartupError = ""
+    @AppStorage(AppStorageKeys.debugForcesLocalStoreRecovery) private var debugForcesLocalStoreRecovery = false
+    @State private var debugRecoverySimulationAtLaunch = {
+#if DEBUG
+        UserDefaults.standard.bool(forKey: AppStorageKeys.debugForcesLocalStoreRecovery)
+#else
+        false
+#endif
+    }()
     @State private var presentedReleaseNote: AppReleaseNote?
 
     var body: some View {
         Group {
-            if !localStoreStartupError.isEmpty {
-                LocalStoreRecoveryView(errorMessage: localStoreStartupError)
+            if !effectiveLocalStoreError.isEmpty {
+                LocalStoreRecoveryView(
+                    errorMessage: effectiveLocalStoreError,
+                    isDebugSimulation: debugRecoverySimulationAtLaunch,
+                    onDisableDebugSimulation: disableDebugRecoverySimulation
+                )
             } else if hasCompletedGenreOnboarding {
                 MainTabView()
             } else {
@@ -48,6 +60,18 @@ struct ContentView: View {
         AppAppearanceMode(rawValue: appearanceModeRaw) ?? .system
     }
 
+    private var effectiveLocalStoreError: String {
+        if debugRecoverySimulationAtLaunch {
+            return "DEBUG診断: ローカル保存ストアを開けない状態を安全に再現しています。実際の保存データは変更していません。"
+        }
+        return localStoreStartupError
+    }
+
+    private func disableDebugRecoverySimulation() {
+        guard debugRecoverySimulationAtLaunch else { return }
+        debugForcesLocalStoreRecovery = false
+    }
+
     private var effectiveThemePalette: FavorecoThemePalette {
         let mode = FavorecoThemeMode(rawValue: themeModeRaw) ?? .categoryAccent
         guard purchaseManager.currentPlan.includesLocalFullFeatures, mode == .unified else {
@@ -57,7 +81,7 @@ struct ContentView: View {
     }
 
     private func prepareReleaseUpdateIfNeeded() {
-        guard localStoreStartupError.isEmpty else { return }
+        guard effectiveLocalStoreError.isEmpty else { return }
         let currentVersion = AppReleaseNotes.currentVersion
         guard !currentVersion.isEmpty else { return }
 

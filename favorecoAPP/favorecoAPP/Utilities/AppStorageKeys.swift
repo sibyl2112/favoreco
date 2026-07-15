@@ -29,6 +29,7 @@ enum AppStorageKeys {
     static let iCloudSyncActiveAtLaunch = "iCloudSyncActiveAtLaunch"
     static let iCloudSyncStartupError = "iCloudSyncStartupError"
     static let localStoreStartupError = "localStoreStartupError"
+    static let debugForcesLocalStoreRecovery = "debugForcesLocalStoreRecovery"
     static let automaticBackupEnabled = "automaticBackupEnabled"
     static let automaticBackupLastCreatedAt = "automaticBackupLastCreatedAt"
     static let automaticBackupUsesICloudDrive = "automaticBackupUsesICloudDrive"

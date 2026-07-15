@@ -222,12 +222,14 @@ private struct DataSyncSettingsHubView: View {
     }
 }
 
+#if DEBUG
 private struct DeveloperSettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.debugPlanOverride) private var debugPlanOverride = "storekit"
     @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var debugHomeCategoryLayout = HomeCategoryLayoutMode.horizontal.rawValue
     @AppStorage(AppStorageKeys.lastSeenReleaseVersion) private var lastSeenReleaseVersion = ""
+    @AppStorage(AppStorageKeys.debugForcesLocalStoreRecovery) private var debugForcesLocalStoreRecovery = false
     @State private var debugMessage = ""
 
     var body: some View {
@@ -273,6 +275,13 @@ private struct DeveloperSettingsView: View {
                     debugMessage = "アプリを終了して再起動すると、更新案内が表示されます。"
                 } label: {
                     Label("次回起動で更新案内を表示", systemImage: "sparkles")
+                }
+
+                Button {
+                    debugForcesLocalStoreRecovery = true
+                    debugMessage = "アプリを終了して再起動すると、保存データを変更せず復旧画面を表示します。"
+                } label: {
+                    Label("次回起動で復旧画面を診断", systemImage: "externaldrive.badge.exclamationmark")
                 }
             }
 
@@ -338,6 +347,7 @@ private struct DeveloperSettingsView: View {
         }
     }
 }
+#endif
 
 struct RecordInputAssistSettingsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
