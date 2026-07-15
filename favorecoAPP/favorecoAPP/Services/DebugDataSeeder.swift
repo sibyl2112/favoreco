@@ -12,7 +12,8 @@ import UIKit
 enum DebugDataSeeder {
     private static let debugURLPrefix = "https://example.com/favoreco/"
     private static let debugPhotoPrefix = "debug/sample-"
-    private static let sampleCountPerCategory = 10
+    private static let defaultSampleCountPerCategory = 10
+    private static let movieSampleCount = 13
 
     @MainActor
     @discardableResult
@@ -27,11 +28,12 @@ enum DebugDataSeeder {
         let now = Date()
         var insertedVisitCount = 0
 
-        for (index, category) in categories.enumerated() {
+        for category in categories {
             category.isArchived = false
             category.updatedAt = now
 
-            for sampleIndex in 0..<sampleCountPerCategory {
+            let sampleCount = sampleCount(for: category)
+            for sampleIndex in 0..<sampleCount {
                 let sampleNumber = sampleIndex + 1
                 let title = sampleTitle(for: category, index: sampleIndex)
                 let sampleImage = sampleImage(
@@ -40,7 +42,7 @@ enum DebugDataSeeder {
                     index: sampleIndex
                 )
                 let samplePath = "\(debugPhotoPrefix)\(category.templateKey)-\(sampleNumber).jpg"
-                let createdAt = now.addingTimeInterval(TimeInterval(-((index * sampleCountPerCategory) + sampleIndex) * 86400))
+                let createdAt = now.addingTimeInterval(TimeInterval(-insertedVisitCount * 86400))
                 let event = ExperienceEvent(
                     title: title,
                     seriesName: sampleSeries(for: category, index: sampleIndex),
@@ -290,7 +292,10 @@ enum DebugDataSeeder {
                 "【推しの子】The Final Act",
                 "名探偵コナン 紺青の拳",
                 "国宝",
-                "気狂いピエロ"
+                "気狂いピエロ",
+                "ジョーカー",
+                "トップガン",
+                "ショーシャンクの空に"
             ]
         case "theater":
             titles = ["夜明けの劇場", "ハムレット", "ガラスの街", "春待つ舞台", "雨音のカーテンコール", "小劇場の記憶", "赤い椅子の物語", "二幕目の手紙", "余白の台詞", "千秋楽の花束"]
@@ -307,9 +312,13 @@ enum DebugDataSeeder {
         case "goshuin":
             titles = ["青葉神社", "白山寺", "水鏡稲荷", "月守神宮", "花霞寺", "千歳八幡宮", "風待不動尊", "椿森神社", "朝霧観音", "星川天満宮"]
         default:
-            titles = (1...sampleCountPerCategory).map { "\(category.name)のサンプル\($0)" }
+            titles = (1...defaultSampleCountPerCategory).map { "\(category.name)のサンプル\($0)" }
         }
         return titles[index % titles.count]
+    }
+
+    private static func sampleCount(for category: RecordCategory) -> Int {
+        category.templateKey == "movie" ? movieSampleCount : defaultSampleCountPerCategory
     }
 
     private static func sampleSeries(for category: RecordCategory, index: Int) -> String {
