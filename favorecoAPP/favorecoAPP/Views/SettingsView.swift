@@ -227,6 +227,7 @@ private struct DeveloperSettingsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.debugPlanOverride) private var debugPlanOverride = "storekit"
     @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var debugHomeCategoryLayout = HomeCategoryLayoutMode.horizontal.rawValue
+    @AppStorage(AppStorageKeys.lastSeenReleaseVersion) private var lastSeenReleaseVersion = ""
     @State private var debugMessage = ""
 
     var body: some View {
@@ -260,6 +261,13 @@ private struct DeveloperSettingsView: View {
                     NotificationDebugView()
                 } label: {
                     Label("チケット・通知診断", systemImage: "bell.badge")
+                }
+
+                Button {
+                    lastSeenReleaseVersion = ""
+                    debugMessage = "アプリを終了して再起動すると、更新案内が表示されます。"
+                } label: {
+                    Label("次回起動で更新案内を表示", systemImage: "sparkles")
                 }
             }
 
@@ -2201,12 +2209,13 @@ private struct PlanFeatureRow: View {
 
 struct SupportLinksView: View {
     private let officialSiteURL = URL(string: "https://ranoviqo.com")!
+    private let favorecoSiteURL = AppReleaseNotes.detailURL
 
     var body: some View {
         Form {
             Section("リンク") {
                 Link(destination: officialSiteURL) {
-                    Label("公式サイト", systemImage: "globe")
+                    Label("RANOVIQO公式サイト", systemImage: "globe")
                 }
 
                 NavigationLink {
@@ -2220,6 +2229,20 @@ struct SupportLinksView: View {
                 } label: {
                     Label("プライバシーポリシー", systemImage: "hand.raised")
                 }
+            }
+
+            Section("アプリ情報") {
+                NavigationLink {
+                    ReleaseHistoryView()
+                } label: {
+                    Label("更新履歴", systemImage: "clock.arrow.circlepath")
+                }
+
+                Link(destination: favorecoSiteURL) {
+                    Label("Favoreco公式サイト", systemImage: "arrow.up.right.square")
+                }
+
+                LabeledContent("バージョン", value: AppReleaseNotes.currentVersion)
             }
 
             Section("サポート") {

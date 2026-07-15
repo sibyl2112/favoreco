@@ -6843,3 +6843,36 @@ iOS 18対応のためにUI全体を古い表現へ固定せず、主な利用環
 ### 残課題
 - iOS 26実機で仮データの参加日を翌日以降へ変更し、Homeの`次の予定`へ即時表示されることを確認する
 - Planと紐付いたVisitを未来日にした場合、Homeへ1件だけ表示されることを確認する
+
+## 2026-07-15: 起動時の更新案内と設定内の更新履歴を追加
+
+### 変更概要
+- Marketing Versionが前回確認済みバージョンと異なる時、オンボーディング完了後の最初の起動で更新概要を1回表示
+- 新規インストールでは現在バージョンを事前記録し、初回利用時の更新案内を抑止
+- 設定 > サポートにアプリ内更新履歴、現在バージョン、Favoreco公式サイトを追加
+- 更新案内と更新履歴から`https://ranoviqo.com/favoreco/`の詳細ページへ遷移
+- DEBUG開発者メニューに、次回起動で更新案内を再表示するテスト操作を追加
+
+### 変更意図
+アップデート後に利用者が変更点へ気づける一方、同じ案内を毎回見せず、新規利用者の初回体験も妨げないようにする。短い概要はオフラインで保持し、詳細はRANOVIQOの固定URLを入口にして将来Notion等へ掲載先を変えられるようにする。
+
+### 主な変更ファイル
+- favorecoAPP/favorecoAPP/Models/AppReleaseNotes.swift
+- favorecoAPP/favorecoAPP/Views/ReleaseNotesView.swift
+- favorecoAPP/favorecoAPP/ContentView.swift
+- favorecoAPP/favorecoAPP/Views/SettingsView.swift
+- favorecoAPP/favorecoAPP/Utilities/AppStorageKeys.swift
+- favoreco/CLAUDE.md
+- docs/15-画面情報設計.md
+- docs/project-log.md
+
+### 確認結果（実機 / ビルド）
+- 第1段階の起動判定と更新案内UIをiOS 18最低対象、iOS 26.5 SDKでビルド成功
+- 設定内の更新履歴、現在バージョン、公式サイト導線を接続した最終状態でも同条件のビルド成功
+- 新規インストール、既存利用者、同一バージョン再起動の分岐をコードで確認
+- 実機確認は未実施
+
+### 残課題
+- DEBUGの`次回起動で更新案内を表示`を押してアプリを終了・再起動し、1回だけ表示されることを確認する
+- 設定 > サポート > 更新履歴と、Favoreco公式サイトへの外部遷移を確認する
+- RANOVIQO側で更新履歴ページを公開し、必要なら同URLからNotionへ転送する

@@ -7,6 +7,7 @@
 
 enum AppStorageKeys {
     static let hasCompletedGenreOnboarding = "hasCompletedGenreOnboarding"
+    static let lastSeenReleaseVersion = "lastSeenReleaseVersion"
     static let showsHomeAttention = "showsHomeAttention"
     static let showsHomeExperienceGallery = "showsHomeExperienceGallery"
     static let showsHomeInbox = "showsHomeInbox"
