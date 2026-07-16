@@ -391,7 +391,7 @@ private struct TicketOverviewRow: View {
                 }
 
                 if let plan {
-                    Label(plan.startsAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
+                    Label(FavorecoDateText.compactDateTime(plan.startsAt), systemImage: "calendar")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -407,7 +407,7 @@ private struct TicketOverviewRow: View {
 
                 if let nextAction {
                     Label(
-                        "\(nextAction.title)  \(nextAction.date.formatted(date: .numeric, time: .shortened))",
+                        "\(nextAction.title)  \(FavorecoDateText.compactDateTime(nextAction.date))",
                         systemImage: nextAction.systemImage
                     )
                     .font(FavorecoTypography.captionStrong)

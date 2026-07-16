@@ -228,7 +228,11 @@ struct ExperienceDetailView: View {
     private func basicInfo(snapshot: ExperienceDetailSnapshot, template: CategoryRecordTemplate) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(template.visitSectionTitle)
-            DetailInfoRow(icon: "calendar", title: template.dateLabel, value: visit.visitedAt.formatted(date: .long, time: .omitted))
+            DetailInfoRow(
+                icon: "calendar",
+                title: template.dateLabel,
+                value: FavorecoDateText.fullDate(visit.visitedAt)
+            )
 
             if !snapshot.unitFields.weatherSymbolName.isEmpty {
                 DetailInfoRow(

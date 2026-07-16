@@ -36,10 +36,7 @@ struct PlanDetailView: View {
     }
 
     private var dateRangeText: String {
-        if Calendar.current.isDate(plan.startsAt, inSameDayAs: plan.endsAt) {
-            return "\(plan.startsAt.formatted(date: .long, time: .shortened)) - \(plan.endsAt.formatted(date: .omitted, time: .shortened))"
-        }
-        return "\(plan.startsAt.formatted(date: .long, time: .shortened)) - \(plan.endsAt.formatted(date: .long, time: .shortened))"
+        FavorecoDateText.range(from: plan.startsAt, to: plan.endsAt)
     }
 
     private var preferredOpenDestination: TicketOpenDestination? {
@@ -239,7 +236,7 @@ struct PlanDetailView: View {
                 if let nextPlanAction {
                     PlanStatusChip(
                         icon: nextPlanAction.systemImage,
-                        text: "\(nextPlanAction.title) \(nextPlanAction.date.formatted(date: .numeric, time: .shortened))",
+                        text: "\(nextPlanAction.title) \(FavorecoDateText.compactDateTime(nextPlanAction.date))",
                         tint: nextPlanAction.isOverdue ? .red : .orange
                     )
                 }
@@ -269,7 +266,7 @@ struct PlanDetailView: View {
             planSectionTitle("基本情報")
             PlanInfoRow(icon: "calendar", title: "日時", value: dateRangeText)
             if plan.usesOpeningTime, plan.opensAt != Date.distantPast {
-                PlanInfoRow(icon: "door.left.hand.open", title: "開場", value: plan.opensAt.formatted(date: .omitted, time: .shortened))
+                PlanInfoRow(icon: "door.left.hand.open", title: "開場", value: FavorecoDateText.time(plan.opensAt))
             }
             if !plan.venueNameSnapshot.isEmpty {
                 PlanInfoRow(icon: "mappin.and.ellipse", title: "会場", value: plan.venueNameSnapshot)
@@ -539,19 +536,19 @@ private struct TicketAttemptDetailCard: View {
                 PlanInfoRow(icon: "safari", title: "購入先", value: attempt.ticketSite)
             }
             if attempt.saleStartAt != Date.distantPast {
-                PlanInfoRow(icon: "ticket", title: "開始", value: attempt.saleStartAt.formatted(date: .long, time: .shortened))
+                PlanInfoRow(icon: "ticket", title: "開始", value: FavorecoDateText.fullDateTime(attempt.saleStartAt))
             }
             if attempt.applyDeadlineAt != Date.distantPast {
-                PlanInfoRow(icon: "hourglass", title: "締切", value: attempt.applyDeadlineAt.formatted(date: .long, time: .shortened))
+                PlanInfoRow(icon: "hourglass", title: "締切", value: FavorecoDateText.fullDateTime(attempt.applyDeadlineAt))
             }
             if attempt.resultAnnounceAt != Date.distantPast {
-                PlanInfoRow(icon: "checkmark.seal", title: "当落", value: attempt.resultAnnounceAt.formatted(date: .long, time: .shortened))
+                PlanInfoRow(icon: "checkmark.seal", title: "当落", value: FavorecoDateText.fullDateTime(attempt.resultAnnounceAt))
             }
             if attempt.paymentDeadlineAt != Date.distantPast {
-                PlanInfoRow(icon: "yensign.circle", title: "入金", value: attempt.paymentDeadlineAt.formatted(date: .long, time: .shortened))
+                PlanInfoRow(icon: "yensign.circle", title: "入金", value: FavorecoDateText.fullDateTime(attempt.paymentDeadlineAt))
             }
             if attempt.issueStartAt != Date.distantPast {
-                PlanInfoRow(icon: "ticket.fill", title: "発券", value: attempt.issueStartAt.formatted(date: .long, time: .shortened))
+                PlanInfoRow(icon: "ticket.fill", title: "発券", value: FavorecoDateText.fullDateTime(attempt.issueStartAt))
             }
             if attempt.price != Decimal(0) || attempt.fee != Decimal(0) {
                 PlanInfoRow(icon: "creditcard", title: "金額", value: amountText)
@@ -653,7 +650,7 @@ private struct TicketNextActionCallout: View {
             Text(action.title)
                 .font(FavorecoTypography.captionStrong)
             Spacer(minLength: 8)
-            Text(action.date.formatted(date: .abbreviated, time: .shortened))
+            Text(FavorecoDateText.compactDateTime(action.date))
                 .font(FavorecoTypography.captionStrong)
         }
         .foregroundStyle(action.tint)
