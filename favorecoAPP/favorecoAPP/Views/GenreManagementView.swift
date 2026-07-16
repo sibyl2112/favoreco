@@ -454,8 +454,8 @@ private struct UnitRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: unit.isImplemented ? "checkmark.circle.fill" : "clock")
-                .foregroundStyle(unit.isImplemented ? .green : .secondary)
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -472,12 +472,6 @@ private struct UnitRow: View {
                 Text(unit.description)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
-
-                if !unit.isImplemented {
-                    Text("準備中")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .padding(.vertical, 4)
@@ -512,12 +506,6 @@ private struct UnitToggleRow: View {
                     Text(unit.description)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
-
-                    if !unit.isImplemented {
-                        Text("準備中")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
             .padding(.vertical, 4)

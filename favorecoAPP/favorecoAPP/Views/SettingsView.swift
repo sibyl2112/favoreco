@@ -2245,13 +2245,15 @@ private struct PlanFeatureRow: View {
 }
 
 struct SupportLinksView: View {
-    private let officialSiteURL = URL(string: "https://ranoviqo.com")!
+    private let ranoviqoSiteURL = URL(string: "https://ranoviqo.com")!
     private let favorecoSiteURL = AppReleaseNotes.detailURL
+    private let supportURL = URL(string: "https://ranoviqo.com/favoreco/support/")!
+    private let officialXURL = URL(string: "https://x.com/favorecoapp")!
 
     var body: some View {
         Form {
             Section("リンク") {
-                Link(destination: officialSiteURL) {
+                Link(destination: ranoviqoSiteURL) {
                     Label("RANOVIQO公式サイト", systemImage: "globe")
                 }
 
@@ -2283,7 +2285,7 @@ struct SupportLinksView: View {
             }
 
             Section("サポート") {
-                Link(destination: officialSiteURL) {
+                Link(destination: supportURL) {
                     Label("お問い合わせ", systemImage: "envelope")
                 }
 
@@ -2294,7 +2296,7 @@ struct SupportLinksView: View {
                 .disabled(true)
 
                 ShareLink(
-                    item: officialSiteURL,
+                    item: favorecoSiteURL,
                     subject: Text("Favoreco"),
                     message: Text("好きな体験を、ジャンルを横断して記録できるFavoreco")
                 ) {
@@ -2303,8 +2305,9 @@ struct SupportLinksView: View {
             }
 
             Section("公式SNS") {
-                Label("公式X（公開準備中）", systemImage: "arrow.up.right.square")
-                    .foregroundStyle(.secondary)
+                Link(destination: officialXURL) {
+                    Label("公式X", systemImage: "arrow.up.right.square")
+                }
             }
         }
         .navigationTitle("リンク・サポート")

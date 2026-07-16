@@ -127,7 +127,7 @@ struct AddExperienceView: View {
         case "advanced":
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
-            return .planned
+            return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         }
     }
 
@@ -211,7 +211,7 @@ struct AddExperienceView: View {
         case "advanced":
             ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
-            PendingUnitView(unit: unit)
+            ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         }
     }
 
@@ -431,7 +431,7 @@ struct EditExperienceView: View {
         case "advanced":
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
-            return .planned
+            return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         }
     }
 
@@ -515,7 +515,7 @@ struct EditExperienceView: View {
         case "advanced":
             ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
-            PendingUnitView(unit: unit)
+            ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         }
     }
 
@@ -775,7 +775,7 @@ struct AddVisitView: View {
         case "advanced":
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
-            return .planned
+            return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         }
     }
 
@@ -854,7 +854,7 @@ struct AddVisitView: View {
         case "officialInfo":
             ExperienceOfficialInfoReferenceView()
         default:
-            PendingUnitView(unit: unit)
+            ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         }
     }
 
@@ -1389,7 +1389,6 @@ private enum RecordUnitStatus {
     case required
     case entered
     case optional
-    case planned
 
     var title: String {
         switch self {
@@ -1399,8 +1398,6 @@ private enum RecordUnitStatus {
             return "入力済み"
         case .optional:
             return "任意"
-        case .planned:
-            return "準備中"
         }
     }
 
@@ -1412,8 +1409,6 @@ private enum RecordUnitStatus {
             return .green
         case .optional:
             return .secondary
-        case .planned:
-            return .orange
         }
     }
 }
@@ -1459,21 +1454,6 @@ private struct RecordUnitAccordion<Content: View>: View {
                     .padding(.vertical, 4)
                     .background(status.color.opacity(0.12), in: Capsule())
             }
-        }
-    }
-}
-
-private struct PendingUnitView: View {
-    let unit: RecordUnitDefinition
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("このユニットの入力UIは準備中です。")
-                .font(FavorecoTypography.body)
-            Text("\(unit.name)はジャンル設定には含まれています。次の実装ステップで、ここに専用項目を接続します。")
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
