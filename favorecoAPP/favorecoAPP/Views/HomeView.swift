@@ -1325,7 +1325,7 @@ private struct ExperienceGalleryCard: View {
                     .font(FavorecoTypography.cardTitle)
                     .lineLimit(2)
 
-                Label(visit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+                Label(FavorecoDateText.compactDate(visit.visitedAt), systemImage: "calendar")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
 
@@ -1412,7 +1412,7 @@ private struct HomeVisitSummaryRow: View {
                 }
 
                 HStack(spacing: 10) {
-                    Label(visit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: unitFields.weatherSymbolName.isEmpty ? "calendar" : unitFields.weatherSymbolName)
+                    Label(FavorecoDateText.compactDate(visit.visitedAt), systemImage: unitFields.weatherSymbolName.isEmpty ? "calendar" : unitFields.weatherSymbolName)
                     Label(visit.categoryName, systemImage: visit.categoryIcon)
                     if !visit.venueName.isEmpty {
                         Label(visit.venueName, systemImage: "mappin.and.ellipse")
@@ -1618,7 +1618,7 @@ private struct InboxItemRow: View {
                     if item.hasSourceURL {
                         Label("URL", systemImage: "link")
                     }
-                    Label(item.createdAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+                    Label(FavorecoDateText.compactDate(item.createdAt), systemImage: "calendar")
                 }
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)

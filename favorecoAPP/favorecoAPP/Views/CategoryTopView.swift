@@ -241,7 +241,7 @@ private struct EventRow: View {
                             }
                             Label("\(snapshot.visitCount)件", systemImage: "number")
                             if let latestVisitDate = snapshot.latestVisitDate {
-                                Label(latestVisitDate.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+                                Label(FavorecoDateText.compactDate(latestVisitDate), systemImage: "calendar")
                             }
                         }
                         .font(FavorecoTypography.caption)
@@ -299,7 +299,7 @@ private struct CategoryVisitRow: View {
                 .font(FavorecoTypography.cardTitle)
                 .lineLimit(2)
             HStack(spacing: 10) {
-                Label(visit.visitedAt.formatted(date: .numeric, time: .omitted), systemImage: "calendar")
+                Label(FavorecoDateText.compactDate(visit.visitedAt), systemImage: "calendar")
                 if !visit.venueNameSnapshot.isEmpty {
                     Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
                         .lineLimit(1)

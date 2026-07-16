@@ -171,7 +171,7 @@ struct VisitSummaryRow: View {
         var items: [VisitSummaryMetaItem] = [
             VisitSummaryMetaItem(
                 icon: unitFields.weatherSymbolName.isEmpty ? "calendar" : unitFields.weatherSymbolName,
-                text: visit.visitedAt.formatted(date: .numeric, time: .omitted)
+                text: FavorecoDateText.compactDate(visit.visitedAt)
             )
         ]
         if showsCategory, let categoryName = category?.name, !categoryName.isEmpty {

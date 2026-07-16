@@ -1425,7 +1425,7 @@ private struct PlanSummaryRow: View {
                 }
 
                 HStack(spacing: 8) {
-                    Label(plan.startsAt.formatted(date: .omitted, time: .shortened), systemImage: "clock")
+                    Label(FavorecoDateText.time(plan.startsAt), systemImage: "clock")
                     if !plan.venueNameSnapshot.isEmpty {
                         Label(plan.venueNameSnapshot, systemImage: "mappin.and.ellipse")
                     }
@@ -1448,7 +1448,7 @@ private struct PlanSummaryRow: View {
                         .lineLimit(1)
                 } else if let nextTicketAction {
                     Label(
-                        "\(nextTicketAction.title) \(nextTicketAction.date.formatted(date: .numeric, time: .shortened))",
+                        "\(nextTicketAction.title) \(FavorecoDateText.compactDateTime(nextTicketAction.date))",
                         systemImage: nextTicketAction.systemImage
                     )
                     .font(FavorecoTypography.captionStrong)
@@ -1495,7 +1495,7 @@ private struct ExternalCalendarEventRow: View {
         if event.isAllDay {
             return "終日"
         }
-        return "\(event.startDate.formatted(date: .omitted, time: .shortened)) - \(event.endDate.formatted(date: .omitted, time: .shortened))"
+        return "\(FavorecoDateText.time(event.startDate)) - \(FavorecoDateText.time(event.endDate))"
     }
 }
 
