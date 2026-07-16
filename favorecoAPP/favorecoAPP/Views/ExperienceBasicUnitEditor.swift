@@ -217,7 +217,7 @@ struct ExperienceBasicUnitEditor: View {
     }
 }
 
-private struct PlaceMapPreview: View {
+struct PlaceMapPreview: View {
     let venueName: String
     let address: String
     let latitude: Double

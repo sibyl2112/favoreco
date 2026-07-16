@@ -1292,7 +1292,7 @@ struct VisitDraft {
     }
 }
 
-private struct PlaceSnapshot {
+struct PlaceSnapshot {
     let name: String
     let address: String
     let latitude: Double
@@ -1300,7 +1300,7 @@ private struct PlaceSnapshot {
 }
 
 @MainActor
-private func resolvePlaceMaster(
+func resolvePlaceMaster(
     for snapshot: PlaceSnapshot,
     from placeMasters: [PlaceMaster],
     in modelContext: ModelContext
@@ -1349,7 +1349,7 @@ private func resolvePlaceMaster(
     return place
 }
 
-private func normalizedPlaceText(_ value: String) -> String {
+func normalizedPlaceText(_ value: String) -> String {
     value
         .trimmingCharacters(in: .whitespacesAndNewlines)
         .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)

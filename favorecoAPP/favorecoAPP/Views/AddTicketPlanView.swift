@@ -38,6 +38,7 @@ struct AddTicketPlanView: View {
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
     @Query(sort: \Plan.startsAt) private var plans: [Plan]
+    @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
     @State private var draft = TicketPlanDraft()
     @State private var validationError = ""
     @State private var targetSelectionMode: TargetSelectionMode = .new
@@ -45,6 +46,7 @@ struct AddTicketPlanView: View {
     @State private var selectedPlanID: UUID?
     @State private var isShowingInterestedEventPicker = false
     @State private var isShowingRegisteredEventPicker = false
+    @State private var isShowingPlaceSearch = false
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     private let editingPlan: Plan?
     private let targetEvent: ExperienceEvent?
@@ -281,7 +283,21 @@ struct AddTicketPlanView: View {
                         }
                         FiveMinuteDateTimeRow(title: "開始", selection: startTimeBinding)
                         FiveMinuteDateTimeRow(title: "終了", selection: endTimeBinding)
-                        TextField("会場", text: $draft.venueName)
+                        TextField("会場", text: venueNameBinding)
+                        placeSuggestionList
+                        TextField("住所（地図・カレンダーでは住所を優先）", text: venueAddressBinding)
+                            .textContentType(.fullStreetAddress)
+                        Button {
+                            isShowingPlaceSearch = true
+                        } label: {
+                            Label("Apple Mapsから会場を選択", systemImage: "map")
+                        }
+                        PlaceMapPreview(
+                            venueName: draft.venueName,
+                            address: draft.venueAddress,
+                            latitude: draft.latitude,
+                            longitude: draft.longitude
+                        )
                         TextField("公式URL", text: $draft.officialURL)
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
@@ -475,6 +491,69 @@ struct AddTicketPlanView: View {
                     isShowingRegisteredEventPicker = false
                 }
             }
+            .sheet(isPresented: $isShowingPlaceSearch) {
+                ExperiencePlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
+                    draft.apply(
+                        place: candidate,
+                        preservingVenueName: draft.shouldPreserveVenueNameForAddressSearch
+                    )
+                    isShowingPlaceSearch = false
+                }
+            }
+        }
+    }
+
+    private var venueNameBinding: Binding<String> {
+        Binding {
+            draft.venueName
+        } set: { value in
+            draft.venueName = value
+            draft.clearPlaceSelection()
+        }
+    }
+
+    private var venueAddressBinding: Binding<String> {
+        Binding {
+            draft.venueAddress
+        } set: { value in
+            draft.venueAddress = value
+            draft.clearPlaceCoordinates()
+        }
+    }
+
+    @ViewBuilder
+    private var placeSuggestionList: some View {
+        let suggestions = draft.placeSuggestions(from: placeMasters)
+        if !suggestions.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("登録済みの場所")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(suggestions) { place in
+                    Button {
+                        draft.apply(placeMaster: place)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "mappin.and.ellipse")
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(place.name)
+                                    .foregroundStyle(.primary)
+                                if !place.address.isEmpty {
+                                    Text(place.address)
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.left")
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 
@@ -580,7 +659,8 @@ struct AddTicketPlanView: View {
             createdAt: now,
             updatedAt: now,
             category: event.category ?? selectedCategory,
-            event: event
+            event: event,
+            placeMaster: resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
         )
         modelContext.insert(plan)
         event.stateKey = "active"
@@ -672,6 +752,7 @@ struct AddTicketPlanView: View {
         plan.endsAt = draft.endsAt
         plan.opensAt = usesOpeningTime ? draft.opensAt : Date.distantPast
         plan.venueNameSnapshot = draft.trimmedVenueName
+        plan.placeMaster = resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
         plan.officialURL = draft.trimmedOfficialURL
         plan.sourceURL = draft.trimmedOfficialURL
         plan.memo = draft.trimmedMemo
@@ -974,6 +1055,9 @@ private struct TicketPlanDraft {
     var endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: Date().roundedToNearestFiveMinutes()) ?? Date()
     var opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: Date().roundedToNearestFiveMinutes()) ?? Date()
     var venueName = ""
+    var venueAddress = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
     var officialURL = ""
     var createsTicketAttempt = true
     var flowKey = "lotteryPlanned"
@@ -1037,6 +1121,9 @@ private struct TicketPlanDraft {
         endsAt = plan.endsAt
         opensAt = plan.opensAt
         venueName = plan.venueNameSnapshot
+        venueAddress = plan.placeMaster?.address ?? ""
+        latitude = plan.placeMaster?.latitude ?? 0
+        longitude = plan.placeMaster?.longitude ?? 0
         officialURL = plan.officialURL
         memo = plan.memo
 
@@ -1081,6 +1168,62 @@ private struct TicketPlanDraft {
     var trimmedSeatText: String { seatText.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedPurchaseURL: String { purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var placeSnapshot: PlaceSnapshot {
+        PlaceSnapshot(
+            name: trimmedVenueName,
+            address: venueAddress,
+            latitude: latitude,
+            longitude: longitude
+        )
+    }
+
+    var mapSearchQuery: String {
+        let address = venueAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty ? trimmedVenueName : address
+    }
+
+    var shouldPreserveVenueNameForAddressSearch: Bool {
+        !trimmedVenueName.isEmpty && !venueAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    mutating func apply(place: PlaceSearchCandidate, preservingVenueName: Bool) {
+        if !preservingVenueName {
+            venueName = place.name
+        }
+        if !place.address.isEmpty {
+            venueAddress = place.address
+        }
+        latitude = place.latitude
+        longitude = place.longitude
+    }
+
+    mutating func apply(placeMaster: PlaceMaster) {
+        venueName = placeMaster.name
+        venueAddress = placeMaster.address
+        latitude = placeMaster.latitude
+        longitude = placeMaster.longitude
+    }
+
+    mutating func clearPlaceSelection() {
+        venueAddress = ""
+        latitude = 0
+        longitude = 0
+    }
+
+    mutating func clearPlaceCoordinates() {
+        latitude = 0
+        longitude = 0
+    }
+
+    func placeSuggestions(from placeMasters: [PlaceMaster]) -> [PlaceMaster] {
+        let query = normalizedPlaceText(trimmedVenueName)
+        guard !query.isEmpty else { return [] }
+        return placeMasters
+            .filter { !$0.isArchived && normalizedPlaceText($0.name).contains(query) }
+            .prefix(4)
+            .map { $0 }
+    }
 
     var canSave: Bool {
         !trimmedTitle.isEmpty
@@ -1197,6 +1340,9 @@ private struct TicketPlanDraft {
         endsAt = plan.endsAt
         opensAt = plan.opensAt
         venueName = plan.venueNameSnapshot
+        venueAddress = plan.placeMaster?.address ?? ""
+        latitude = plan.placeMaster?.latitude ?? 0
+        longitude = plan.placeMaster?.longitude ?? 0
         officialURL = plan.officialURL
     }
 
@@ -1209,6 +1355,9 @@ private struct TicketPlanDraft {
         endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: now) ?? now
         opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: now) ?? now
         venueName = ""
+        venueAddress = ""
+        latitude = 0
+        longitude = 0
         officialURL = ""
     }
 

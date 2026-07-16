@@ -271,11 +271,37 @@ struct PlanDetailView: View {
             if !plan.venueNameSnapshot.isEmpty {
                 PlanInfoRow(icon: "mappin.and.ellipse", title: "会場", value: plan.venueNameSnapshot)
             }
+            if !planAddress.isEmpty {
+                PlanInfoRow(icon: "signpost.right", title: "住所", value: planAddress)
+            }
+            if let mapURL = planMapURL {
+                Button {
+                    openURL(mapURL)
+                } label: {
+                    Label("地図で見る", systemImage: "map")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(categoryColor)
+            }
             if !plan.organizerNameSnapshot.isEmpty {
                 PlanInfoRow(icon: "building.2", title: "主催", value: plan.organizerNameSnapshot)
             }
         }
         .planSectionCard()
+    }
+
+    private var planAddress: String {
+        plan.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private var planMapURL: URL? {
+        PlaceSearchService.appleMapsURL(
+            name: plan.venueNameSnapshot,
+            address: planAddress,
+            latitude: plan.placeMaster?.latitude ?? 0,
+            longitude: plan.placeMaster?.longitude ?? 0
+        )
     }
 
     @ViewBuilder
