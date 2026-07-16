@@ -62,7 +62,7 @@ struct InboxDetailView: View {
                     LabeledContent("URL", value: item.sourceURL)
                 }
 
-                LabeledContent("作成日", value: item.createdAt.formatted(date: .numeric, time: .shortened))
+                LabeledContent("作成日", value: FavorecoDateText.fullDateTime(item.createdAt))
                 LabeledContent("状態", value: item.state == "resolved" ? "変換済み" : "未整理")
             }
 

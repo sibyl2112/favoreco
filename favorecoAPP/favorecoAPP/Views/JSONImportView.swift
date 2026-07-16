@@ -55,7 +55,7 @@ struct JSONImportView: View {
                     Label("Favorecoバックアップとして確認できました", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
                     LabeledContent("形式", value: "schema \(preview.schemaVersion)")
-                    LabeledContent("書き出し日時", value: preview.exportedAt.formatted(date: .long, time: .shortened))
+                    LabeledContent("書き出し日時", value: FavorecoDateText.fullDateTime(preview.exportedAt))
                     LabeledContent("復元対象モデル", value: "\(preview.totalModelCount)件")
                 }
 

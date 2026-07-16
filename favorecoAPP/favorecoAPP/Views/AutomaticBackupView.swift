@@ -100,7 +100,7 @@ struct AutomaticBackupView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(snapshot.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                Text(FavorecoDateText.compactDateTime(snapshot.createdAt))
                                     .foregroundStyle(.primary)
                                 Text(ByteCountFormatter.string(fromByteCount: snapshot.byteCount, countStyle: .file))
                                     .font(FavorecoTypography.caption)
@@ -124,7 +124,7 @@ struct AutomaticBackupView: View {
 
     private func createdText(_ date: Date) -> String {
         guard date != .distantPast else { return "未作成" }
-        return date.formatted(date: .abbreviated, time: .shortened)
+        return FavorecoDateText.compactDateTime(date)
     }
 
     private func createSnapshot() {
