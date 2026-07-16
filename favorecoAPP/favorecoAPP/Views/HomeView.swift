@@ -70,7 +70,7 @@ struct HomeView: View {
                     id: "membership-\(account.id.uuidString)-expiry",
                     icon: "person.text.rectangle",
                     title: account.serviceName.isEmpty ? "会員期限" : account.serviceName,
-                    subtitle: "期限 \(attentionDateFormatter.string(from: account.expiryDate))",
+                    subtitle: "期限 \(FavorecoDateText.compactDateTime(account.expiryDate))",
                     dueDate: account.expiryDate,
                     tint: Color(hex: account.colorHex),
                     priority: 8
@@ -173,19 +173,12 @@ struct HomeView: View {
             id: id,
             icon: icon,
             title: title,
-            subtitle: "\(label) \(attentionDateFormatter.string(from: date))",
+            subtitle: "\(label) \(FavorecoDateText.compactDateTime(date))",
             dueDate: date,
             plan: plan,
             tint: tint,
             priority: priority
         )
-    }
-
-    private var attentionDateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.dateFormat = "M/d HH:mm"
-        return formatter
     }
 
     var body: some View {

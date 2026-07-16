@@ -149,8 +149,8 @@ struct ExperienceOfficialInfoUnitEditor: View {
 
     private func formattedStructuredDate(_ date: Date, type: String) -> String {
         type == "Event"
-            ? date.formatted(date: .long, time: .shortened)
-            : date.formatted(date: .long, time: .omitted)
+            ? FavorecoDateText.fullDateTime(date)
+            : FavorecoDateText.fullDate(date)
     }
 
     private func applyStructuredDate(_ date: Date, candidate: URLMetadataCandidate) {
@@ -159,7 +159,7 @@ struct ExperienceOfficialInfoUnitEditor: View {
             return
         }
         let label = candidate.structuredDateLabel
-        let value = date.formatted(date: .long, time: .omitted)
+        let value = FavorecoDateText.fullDate(date)
         if let index = advancedEntries.firstIndex(where: { $0.trimmedLabel == label }) {
             advancedEntries[index].value = value
         } else {

@@ -10,6 +10,11 @@ import SwiftData
 import UIKit
 
 struct CategoryTopView: View {
+    private enum GenreDragAxis {
+        case horizontal
+        case vertical
+    }
+
     let category: RecordCategory
 
     @Environment(\.dismiss) private var dismiss
@@ -20,11 +25,22 @@ struct CategoryTopView: View {
     @AppStorage(AppStorageKeys.homeSelectedCategoryTemplateKey) private var homeSelectedCategoryTemplateKey = ""
     @State private var isShowingAddExperience = false
     @State private var selectedEventForNewVisit: ExperienceEvent?
+    @State private var selectedCategoryID: UUID
+    @State private var isShowingGenrePicker = false
+    @State private var transitionMovesForward = true
+    @State private var lowerContentDragOffset: CGFloat = 0
+    @State private var genreDragAxis: GenreDragAxis?
+
+    init(category: RecordCategory) {
+        self.category = category
+        _selectedCategoryID = State(initialValue: category.id)
+    }
 
     var body: some View {
-        let recordTemplate = CategoryRecordTemplate.template(for: category)
+        let activeCategory = currentCategory
+        let recordTemplate = CategoryRecordTemplate.template(for: activeCategory)
         let snapshot = CategoryTopSnapshot.make(
-            category: category,
+            category: activeCategory,
             categories: allCategories,
             visits: allVisits
         )
@@ -33,9 +49,10 @@ struct CategoryTopView: View {
             MainScreenHeader(
                 title: "Favoreco",
                 usesBrandFont: true,
-                centeredTitle: category.name.isEmpty ? "ジャンル" : category.name,
+                centeredTitle: activeCategory.name.isEmpty ? "ジャンル" : activeCategory.name,
                 usesCompactBrand: true,
-                onLeadingTap: { dismiss() }
+                onLeadingTap: { dismiss() },
+                onCenteredTitleTap: { isShowingGenrePicker = true }
             )
             .padding(.horizontal, 20)
             .padding(.top, -4)
@@ -43,37 +60,85 @@ struct CategoryTopView: View {
 
             MainHeaderDivider()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    GenreNavigationStrip(
-                        categories: snapshot.visibleCategories,
-                        selectedCategoryID: category.id,
-                        onSelectAll: { dismiss() }
-                    )
-                    hero(snapshot: snapshot, recordTemplate: recordTemplate)
-                    stats(snapshot: snapshot)
-                    eventSection(snapshot: snapshot, recordTemplate: recordTemplate)
-                    recentVisits(snapshot: snapshot)
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        Color.clear
+                            .frame(height: 0)
+                            .id(CategoryScrollAnchor.top)
+
+                        GenreNavigationStrip(
+                            categories: snapshot.visibleCategories,
+                            selectedCategoryID: activeCategory.id,
+                            onSelectAll: { dismiss() },
+                            onSelectCategory: { selectedCategory in
+                                switchCategory(to: selectedCategory)
+                            }
+                        )
+
+                        VStack(alignment: .leading, spacing: 24) {
+                            hero(
+                                category: activeCategory,
+                                snapshot: snapshot,
+                                recordTemplate: recordTemplate
+                            )
+
+                            VStack(alignment: .leading, spacing: 24) {
+                                stats(snapshot: snapshot)
+                                eventSection(snapshot: snapshot, recordTemplate: recordTemplate)
+                                    .id(CategoryScrollAnchor.events)
+                                recentVisits(category: activeCategory, snapshot: snapshot)
+                                    .id(CategoryScrollAnchor.recentVisits)
+                                chapterFooter(
+                                    categories: snapshot.visibleCategories,
+                                    currentCategory: activeCategory,
+                                    onSelect: { selectedCategory in
+                                        switchCategory(to: selectedCategory)
+                                        Task { @MainActor in
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                scrollProxy.scrollTo(CategoryScrollAnchor.top, anchor: .top)
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                            .contentShape(Rectangle())
+                            .offset(x: lowerContentDragOffset)
+                            .simultaneousGesture(lowerGenreSwipeGesture)
+                        }
+                        .id(activeCategory.id)
+                        .transition(categoryPageTransition)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 24)
             }
         }
-        .background(categoryBackground)
+        .background(categoryBackground(category: activeCategory))
+        .animation(.easeInOut(duration: 0.32), value: activeCategory.id)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingAddExperience) {
-            AddExperienceView(category: category)
+            AddExperienceView(category: activeCategory)
         }
         .sheet(item: $selectedEventForNewVisit) { event in
             AddVisitView(event: event)
         }
+        .confirmationDialog("ジャンルを選ぶ", isPresented: $isShowingGenrePicker, titleVisibility: .visible) {
+            ForEach(snapshot.visibleCategories) { selectableCategory in
+                Button(selectableCategory.name.isEmpty ? "無題" : selectableCategory.name) {
+                    switchCategory(to: selectableCategory)
+                }
+            }
+            Button("キャンセル", role: .cancel) {}
+        }
         .onAppear {
-            homeSelectedCategoryTemplateKey = category.templateKey
+            homeSelectedCategoryTemplateKey = activeCategory.templateKey
         }
     }
 
     private func hero(
+        category: RecordCategory,
         snapshot: CategoryTopSnapshot,
         recordTemplate: CategoryRecordTemplate
     ) -> some View {
@@ -147,7 +212,7 @@ struct CategoryTopView: View {
         }
     }
 
-    private func recentVisits(snapshot: CategoryTopSnapshot) -> some View {
+    private func recentVisits(category: RecordCategory, snapshot: CategoryTopSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("最近の記録")
@@ -185,7 +250,7 @@ struct CategoryTopView: View {
         return "\(snapshot.eventCount)件の対象と、\(snapshot.visitCount)件の体験をまとめています。"
     }
 
-    private var categoryBackground: some View {
+    private func categoryBackground(category: RecordCategory) -> some View {
         LinearGradient(
             colors: [
                 themePalette.categoryColor(hex: category.colorHex).opacity(colorScheme == .dark ? 0.12 : 0.10),
@@ -196,6 +261,255 @@ struct CategoryTopView: View {
             endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
+    }
+
+    private var currentCategory: RecordCategory {
+        visibleCategories.first(where: { $0.id == selectedCategoryID }) ?? category
+    }
+
+    private var visibleCategories: [RecordCategory] {
+        allCategories.filter { !$0.isArchived }
+    }
+
+    private var lowerGenreSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .local)
+            .onChanged { value in
+                let horizontal = value.translation.width
+                let vertical = value.translation.height
+
+                if genreDragAxis == nil {
+                    guard max(abs(horizontal), abs(vertical)) >= 12 else { return }
+                    genreDragAxis = abs(horizontal) > abs(vertical) * 1.2 ? .horizontal : .vertical
+                }
+
+                guard genreDragAxis == .horizontal else { return }
+                guard !isSystemEdgeDrag(startX: value.startLocation.x) else { return }
+
+                let direction = horizontal < 0 ? 1 : -1
+                let hasDestination = neighboringCategory(from: currentCategory, offset: direction) != nil
+                lowerContentDragOffset = hasDestination ? horizontal : horizontal * 0.18
+            }
+            .onEnded { value in
+                defer {
+                    genreDragAxis = nil
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+                        lowerContentDragOffset = 0
+                    }
+                }
+
+                guard genreDragAxis == .horizontal else { return }
+                guard !isSystemEdgeDrag(startX: value.startLocation.x) else { return }
+
+                let projected = value.predictedEndTranslation.width
+                let translation = value.translation.width
+                let shouldMove = abs(translation) >= 72 || abs(projected) >= 140
+                guard shouldMove else { return }
+
+                let offset = translation < 0 ? 1 : -1
+                guard let destination = neighboringCategory(from: currentCategory, offset: offset) else { return }
+                switchCategory(to: destination)
+            }
+    }
+
+    private var categoryPageTransition: AnyTransition {
+        if transitionMovesForward {
+            return .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            )
+        }
+        return .asymmetric(
+            insertion: .move(edge: .leading).combined(with: .opacity),
+            removal: .move(edge: .trailing).combined(with: .opacity)
+        )
+    }
+
+    private func switchCategory(to destination: RecordCategory) {
+        guard destination.id != currentCategory.id else { return }
+        let currentIndex = visibleCategories.firstIndex(where: { $0.id == currentCategory.id }) ?? 0
+        let destinationIndex = visibleCategories.firstIndex(where: { $0.id == destination.id }) ?? currentIndex
+        transitionMovesForward = destinationIndex > currentIndex
+        homeSelectedCategoryTemplateKey = destination.templateKey
+
+        withAnimation(.easeInOut(duration: 0.32)) {
+            selectedCategoryID = destination.id
+            lowerContentDragOffset = 0
+        }
+    }
+
+    private func neighboringCategory(from category: RecordCategory, offset: Int) -> RecordCategory? {
+        guard let index = visibleCategories.firstIndex(where: { $0.id == category.id }) else { return nil }
+        let destinationIndex = index + offset
+        guard visibleCategories.indices.contains(destinationIndex) else { return nil }
+        return visibleCategories[destinationIndex]
+    }
+
+    private func isSystemEdgeDrag(startX: CGFloat) -> Bool {
+        let contentWidth = max(0, UIScreen.main.bounds.width - 40)
+        return startX < 24 || startX > contentWidth - 24
+    }
+
+    @ViewBuilder
+    private func chapterFooter(
+        categories: [RecordCategory],
+        currentCategory: RecordCategory,
+        onSelect: @escaping (RecordCategory) -> Void
+    ) -> some View {
+        if let currentIndex = categories.firstIndex(where: { $0.id == currentCategory.id }) {
+            let previousCategory = currentIndex > categories.startIndex ? categories[currentIndex - 1] : nil
+            let nextIndex = currentIndex + 1
+            let nextCategory = categories.indices.contains(nextIndex) ? categories[nextIndex] : nil
+
+            if previousCategory != nil || nextCategory != nil {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("別の章へ")
+                        .font(FavorecoTypography.sectionTitle)
+
+                    HStack(alignment: .top, spacing: 12) {
+                        if let previousCategory {
+                            let previousSnapshot = CategoryTopSnapshot.make(
+                                category: previousCategory,
+                                categories: allCategories,
+                                visits: allVisits
+                            )
+                            ChapterPreviewCard(
+                                directionTitle: "前の章",
+                                category: previousCategory,
+                                snapshot: previousSnapshot,
+                                photo: chapterPreviewPhoto(in: previousSnapshot),
+                                isNext: false,
+                                action: { onSelect(previousCategory) }
+                            )
+                        }
+
+                        if let nextCategory {
+                            let nextSnapshot = CategoryTopSnapshot.make(
+                                category: nextCategory,
+                                categories: allCategories,
+                                visits: allVisits
+                            )
+                            ChapterPreviewCard(
+                                directionTitle: "次の章",
+                                category: nextCategory,
+                                snapshot: nextSnapshot,
+                                photo: chapterPreviewPhoto(in: nextSnapshot),
+                                isNext: true,
+                                action: { onSelect(nextCategory) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func chapterPreviewPhoto(in snapshot: CategoryTopSnapshot) -> PhotoBlob? {
+        for visit in snapshot.visits.prefix(6) {
+            if let photo = (visit.photos ?? [])
+                .filter({ $0.mediaKind == "photo" && $0.hasStoredData })
+                .min(by: { $0.createdAt < $1.createdAt }) {
+                return photo
+            }
+        }
+        return nil
+    }
+}
+
+private enum CategoryScrollAnchor {
+    static let top = "category-top"
+    static let events = "category-events"
+    static let recentVisits = "category-recent-visits"
+}
+
+private struct ChapterPreviewCard: View {
+    let directionTitle: String
+    let category: RecordCategory
+    let snapshot: CategoryTopSnapshot
+    let photo: PhotoBlob?
+    let isNext: Bool
+    let action: () -> Void
+
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    if !isNext {
+                        Image(systemName: "arrow.left")
+                    }
+                    Text(directionTitle)
+                    if isNext {
+                        Image(systemName: "arrow.right")
+                    }
+                }
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.secondary)
+
+                previewImage
+
+                Text(category.name.isEmpty ? "無題" : category.name)
+                    .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .headline))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(previewMessage)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2, reservesSpace: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(categoryTint.opacity(0.28), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(directionTitle)、\(category.name.isEmpty ? "無題" : category.name)")
+        .accessibilityHint("このジャンルの先頭へ移動します")
+    }
+
+    @ViewBuilder
+    private var previewImage: some View {
+        if let photo {
+            RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
+                .frame(maxWidth: .infinity)
+                .frame(height: 104)
+                .clipped()
+                .background(Color(.secondarySystemFill))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
+            ZStack {
+                LinearGradient(
+                    colors: [categoryTint.opacity(0.28), categoryTint.opacity(0.08)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                Image(systemName: category.iconSymbol)
+                    .font(.system(size: 30, weight: .semibold))
+                    .foregroundStyle(categoryTint)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 104)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
+    private var previewMessage: String {
+        if let eventSnapshot = snapshot.events.first {
+            return eventSnapshot.event.title.isEmpty ? "記録があります" : eventSnapshot.event.title
+        }
+        if snapshot.visitCount > 0 {
+            return "\(snapshot.visitCount)件の記録"
+        }
+        return "まだ記録はありません"
+    }
+
+    private var categoryTint: Color {
+        themePalette.categoryColor(hex: category.colorHex)
     }
 }
 

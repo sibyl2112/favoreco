@@ -249,7 +249,7 @@ struct NotificationDebugView: View {
             return "約\(Int(interval.timeInterval))秒後"
         case let calendar as UNCalendarNotificationTrigger:
             if let next = calendar.nextTriggerDate() {
-                return Self.dateFormatter.string(from: next)
+                return FavorecoDateText.compactDateTime(next)
             }
             return "日時指定"
         default:
@@ -258,7 +258,7 @@ struct NotificationDebugView: View {
     }
 
     private func deliveredDateText(_ date: Date) -> String {
-        "配信: " + Self.dateFormatter.string(from: date)
+        "配信: " + FavorecoDateText.compactDateTime(date)
     }
 
     private static func statusText(_ status: UNAuthorizationStatus) -> String {
@@ -272,12 +272,6 @@ struct NotificationDebugView: View {
         }
     }
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.dateFormat = "M/d(E) HH:mm"
-        return formatter
-    }()
 }
 
 #Preview {

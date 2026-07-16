@@ -30,7 +30,7 @@ struct EventDetailSnapshot {
             representativePhoto: photoResolution.photo,
             hasPhotos: !photoResolution.photos.isEmpty,
             eventTitle: event.title.isEmpty ? "記録" : event.title,
-            latestVisitText: visits.first?.visitedAt.formatted(date: .numeric, time: .omitted) ?? "-",
+            latestVisitText: visits.first.map { FavorecoDateText.compactDate($0.visitedAt) } ?? "-",
             averageRatingText: averageRatingText
         )
     }

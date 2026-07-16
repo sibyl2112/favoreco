@@ -198,18 +198,21 @@ struct MainScreenHeader: View {
     var centeredTitle: String? = nil
     var usesCompactBrand = false
     var onLeadingTap: (() -> Void)? = nil
+    var onCenteredTitleTap: (() -> Void)? = nil
 
     var body: some View {
         ZStack {
             if let centeredTitle {
-                Text(centeredTitle)
-                    .font(FavorecoTypography.jpSerif(20, weight: .bold, relativeTo: .title3))
-                    .tracking(5)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .padding(.horizontal, 112)
-                    .accessibilityAddTraits(.isHeader)
+                if let onCenteredTitleTap {
+                    Button(action: onCenteredTitleTap) {
+                        centeredTitleLabel(centeredTitle, showsChevron: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("現在のジャンルは\(centeredTitle)です。ジャンル一覧を開く")
+                } else {
+                    centeredTitleLabel(centeredTitle, showsChevron: false)
+                        .accessibilityAddTraits(.isHeader)
+                }
             }
 
             HStack(alignment: .center, spacing: 12) {
@@ -229,6 +232,22 @@ struct MainScreenHeader: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 48)
+    }
+
+    private func centeredTitleLabel(_ title: String, showsChevron: Bool) -> some View {
+        HStack(spacing: 5) {
+            Text(title)
+                .tracking(5)
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+            }
+        }
+        .font(FavorecoTypography.jpSerif(20, weight: .bold, relativeTo: .title3))
+        .foregroundStyle(.primary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.72)
+        .padding(.horizontal, 112)
     }
 
     private var leadingTitle: some View {

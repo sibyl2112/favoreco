@@ -54,7 +54,7 @@ enum OCRImportSuggestionParser {
                 results.append(OCRImportSuggestion(
                     kind: .date,
                     value: date.formatted(.iso8601.year().month().day()),
-                    displayValue: date.formatted(date: .long, time: .omitted),
+                    displayValue: FavorecoDateText.fullDate(date),
                     dateValue: date
                 ))
             }

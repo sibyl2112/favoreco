@@ -11,6 +11,7 @@ struct GenreNavigationStrip: View {
     let categories: [RecordCategory]
     var selectedCategoryID: UUID?
     var onSelectAll: (() -> Void)? = nil
+    var onSelectCategory: ((RecordCategory) -> Void)? = nil
 
     @Environment(\.favorecoThemePalette) private var themePalette
 
@@ -32,6 +33,13 @@ struct GenreNavigationStrip: View {
                     ForEach(categories) { category in
                         if category.id == selectedCategoryID {
                             genreLabel(category: category, isSelected: true, showsLeadingDivider: true)
+                        } else if let onSelectCategory {
+                            Button {
+                                onSelectCategory(category)
+                            } label: {
+                                genreLabel(category: category, isSelected: false, showsLeadingDivider: true)
+                            }
+                            .buttonStyle(.plain)
                         } else {
                             NavigationLink {
                                 CategoryTopView(category: category)
@@ -90,7 +98,11 @@ struct GenreNavigationStrip: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(category.name.isEmpty ? "無題ジャンル" : category.name)
         .accessibilityValue(isSelected ? "選択中" : "")
-        .accessibilityHint(isSelected ? "現在のジャンルです" : "ジャンルページを開きます")
+        .accessibilityHint(
+            isSelected
+                ? "現在のジャンルです"
+                : onSelectCategory == nil ? "ジャンルページを開きます" : "このジャンルへ切り替えます"
+        )
     }
 
     private func segmentLabel(

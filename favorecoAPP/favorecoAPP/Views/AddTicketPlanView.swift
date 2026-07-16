@@ -258,7 +258,7 @@ struct AddTicketPlanView: View {
                     if entryMode == .ticketSchedule, let selectedExistingPlan {
                         LabeledContent("ジャンル", value: selectedExistingPlan.category?.name ?? "未設定")
                         LabeledContent("予定", value: selectedExistingPlan.title)
-                        LabeledContent("日時", value: selectedExistingPlan.startsAt.formatted(date: .abbreviated, time: .shortened))
+                        LabeledContent("日時", value: FavorecoDateText.compactDateTime(selectedExistingPlan.startsAt))
                         if !selectedExistingPlan.venueNameSnapshot.isEmpty {
                             LabeledContent("会場", value: selectedExistingPlan.venueNameSnapshot)
                         }
@@ -520,7 +520,7 @@ struct AddTicketPlanView: View {
     }
 
     private func planSelectionDescription(_ plan: Plan) -> String {
-        let date = plan.startsAt.formatted(date: .abbreviated, time: .shortened)
+        let date = FavorecoDateText.compactDateTime(plan.startsAt)
         let title = plan.title.isEmpty ? (plan.event?.title ?? "予定") : plan.title
         guard !plan.venueNameSnapshot.isEmpty else { return "\(title) / \(date)" }
         return "\(title) / \(date) / \(plan.venueNameSnapshot)"
