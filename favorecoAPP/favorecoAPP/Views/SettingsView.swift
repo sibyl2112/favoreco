@@ -329,8 +329,8 @@ private struct DeveloperSettingsView: View {
 
     private func insertDebugData() {
         do {
-            let count = try DebugDataSeeder.insertSampleData(in: modelContext)
-            debugMessage = "仮データを\(count)件追加しました。"
+            let summary = try DebugDataSeeder.insertSampleData(in: modelContext)
+            debugMessage = summary.insertedMessage
         } catch {
             debugMessage = "仮データの追加に失敗しました。"
             assertionFailure("Failed to insert debug data: \(error)")
@@ -339,8 +339,8 @@ private struct DeveloperSettingsView: View {
 
     private func deleteDebugData() {
         do {
-            let count = try DebugDataSeeder.deleteSampleData(in: modelContext)
-            debugMessage = "仮データを\(count)件削除しました。"
+            let summary = try DebugDataSeeder.deleteSampleData(in: modelContext)
+            debugMessage = summary.deletedMessage
         } catch {
             debugMessage = "仮データの削除に失敗しました。"
             assertionFailure("Failed to delete debug data: \(error)")

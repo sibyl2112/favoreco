@@ -9,6 +9,20 @@ import Foundation
 import SwiftData
 import UIKit
 
+struct DebugSampleDataSummary {
+    let visitCount: Int
+    let planCount: Int
+    let ticketAttemptCount: Int
+
+    var insertedMessage: String {
+        "記録\(visitCount)件・未来予定\(planCount)件・チケット申込\(ticketAttemptCount)件を追加しました。"
+    }
+
+    var deletedMessage: String {
+        "記録\(visitCount)件・予定\(planCount)件・チケット申込\(ticketAttemptCount)件を削除しました。ジャンルと有効ユニット設定は残ります。"
+    }
+}
+
 enum DebugDataSeeder {
     private static let debugURLPrefix = "https://example.com/favoreco/"
     private static let debugPhotoPrefix = "debug/sample-"
@@ -18,7 +32,7 @@ enum DebugDataSeeder {
 
     @MainActor
     @discardableResult
-    static func insertSampleData(in context: ModelContext) throws -> Int {
+    static func insertSampleData(in context: ModelContext) throws -> DebugSampleDataSummary {
         try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: context)
         try deleteSampleData(in: context)
 
@@ -28,10 +42,13 @@ enum DebugDataSeeder {
         let categories = try context.fetch(categoryDescriptor)
         let now = Date()
         var insertedVisitCount = 0
+        var insertedPlanCount = 0
+        var insertedTicketAttemptCount = 0
 
-        for category in categories {
+        for (categoryIndex, category) in categories.enumerated() {
             category.isArchived = false
             category.updatedAt = now
+            var firstSampleEvent: ExperienceEvent?
 
             let sampleCount = sampleCount(for: category)
             for sampleIndex in 0..<sampleCount {
@@ -94,7 +111,41 @@ enum DebugDataSeeder {
                 context.insert(event)
                 context.insert(visit)
                 context.insert(photo)
+                if firstSampleEvent == nil {
+                    firstSampleEvent = event
+                }
                 insertedVisitCount += 1
+            }
+
+            if let firstSampleEvent {
+                let planStart = samplePlanStart(now: now, categoryIndex: categoryIndex)
+                let usesDoorTime = ["theater", "live"].contains(category.templateKey)
+                let plan = Plan(
+                    title: firstSampleEvent.title,
+                    subtitle: "デバッグ用の未来予定",
+                    planKindKey: samplePlanKind(for: category),
+                    stateKey: "planned",
+                    startsAt: planStart,
+                    endsAt: planStart.addingTimeInterval(2 * 60 * 60),
+                    opensAt: usesDoorTime ? planStart.addingTimeInterval(-30 * 60) : Date.distantPast,
+                    venueNameSnapshot: sampleVenue(for: category, index: 0),
+                    organizerNameSnapshot: sampleOrganizer(for: category),
+                    officialURL: "\(debugURLPrefix)\(category.templateKey)/plan",
+                    sourceURL: "\(debugURLPrefix)\(category.templateKey)/plan/source",
+                    memo: "Homeの次の予定、カレンダー、予定詳細を確認するデバッグ用データです。",
+                    notificationLeadTimeKey: "none",
+                    createdAt: now,
+                    updatedAt: now,
+                    category: category,
+                    event: firstSampleEvent
+                )
+                context.insert(plan)
+                insertedPlanCount += 1
+
+                if let attempt = sampleTicketAttempt(for: category, plan: plan, planStart: planStart, now: now) {
+                    context.insert(attempt)
+                    insertedTicketAttemptCount += 1
+                }
             }
         }
 
@@ -112,12 +163,38 @@ enum DebugDataSeeder {
         }
 
         try context.save()
-        return insertedVisitCount
+        return DebugSampleDataSummary(
+            visitCount: insertedVisitCount,
+            planCount: insertedPlanCount,
+            ticketAttemptCount: insertedTicketAttemptCount
+        )
     }
 
     @MainActor
     @discardableResult
-    static func deleteSampleData(in context: ModelContext) throws -> Int {
+    static func deleteSampleData(in context: ModelContext) throws -> DebugSampleDataSummary {
+        let attemptDescriptor = FetchDescriptor<TicketAttempt>()
+        let attempts = try context.fetch(attemptDescriptor)
+        let debugAttempts = attempts.filter { attempt in
+            attempt.purchaseURL.hasPrefix(debugURLPrefix)
+                || attempt.plan?.officialURL.hasPrefix(debugURLPrefix) == true
+        }
+        for attempt in debugAttempts {
+            TicketNotificationScheduler.cancel(attemptID: attempt.id)
+            context.delete(attempt)
+        }
+
+        let planDescriptor = FetchDescriptor<Plan>()
+        let plans = try context.fetch(planDescriptor)
+        let debugPlans = plans.filter { plan in
+            plan.officialURL.hasPrefix(debugURLPrefix)
+                || plan.event?.officialURL.hasPrefix(debugURLPrefix) == true
+        }
+        for plan in debugPlans {
+            TicketNotificationScheduler.cancel(planID: plan.id, attemptID: nil)
+            context.delete(plan)
+        }
+
         let visitDescriptor = FetchDescriptor<Visit>()
         let visits = try context.fetch(visitDescriptor)
         let debugVisits = visits.filter { visit in
@@ -149,7 +226,71 @@ enum DebugDataSeeder {
         }
 
         try context.save()
-        return deletedCount
+        return DebugSampleDataSummary(
+            visitCount: deletedCount,
+            planCount: debugPlans.count,
+            ticketAttemptCount: debugAttempts.count
+        )
+    }
+
+    private static func samplePlanStart(now: Date, categoryIndex: Int) -> Date {
+        let calendar = Calendar(identifier: .gregorian)
+        let futureDay = calendar.date(byAdding: .day, value: 2 + categoryIndex * 3, to: now) ?? now
+        return calendar.date(bySettingHour: 19, minute: 0, second: 0, of: futureDay) ?? futureDay
+    }
+
+    private static func samplePlanKind(for category: RecordCategory) -> String {
+        switch category.templateKey {
+        case "movie": "screening"
+        case "book": "reading"
+        case "art": "exhibition"
+        case "outing", "goshuin": "visit"
+        case "sake": "tasting"
+        default: "performance"
+        }
+    }
+
+    private static func sampleTicketAttempt(
+        for category: RecordCategory,
+        plan: Plan,
+        planStart: Date,
+        now: Date
+    ) -> TicketAttempt? {
+        switch category.templateKey {
+        case "theater":
+            return TicketAttempt(
+                statusKey: "waitingResult",
+                entryRouteKey: "lottery",
+                ticketSite: "チケットぴあ",
+                saleStartAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
+                applyDeadlineAt: now.addingTimeInterval(24 * 60 * 60),
+                resultAnnounceAt: now.addingTimeInterval(3 * 24 * 60 * 60),
+                issueStartAt: planStart.addingTimeInterval(-7 * 24 * 60 * 60),
+                price: Decimal(12_000),
+                purchaseURL: "\(debugURLPrefix)theater/ticket",
+                memo: "抽選応募予定から当落待ちまでの表示確認用です。通知は自動予約しません。",
+                createdAt: now,
+                updatedAt: now,
+                plan: plan
+            )
+        case "live":
+            return TicketAttempt(
+                statusKey: "waitingPayment",
+                entryRouteKey: "fanClub",
+                ticketSite: "イープラス",
+                resultAnnounceAt: now.addingTimeInterval(-24 * 60 * 60),
+                paymentDeadlineAt: now.addingTimeInterval(2 * 24 * 60 * 60),
+                issueStartAt: planStart.addingTimeInterval(-5 * 24 * 60 * 60),
+                price: Decimal(9_800),
+                purchaseURL: "\(debugURLPrefix)live/ticket",
+                memo: "当選後の入金待ちと発券予定の表示確認用です。通知は自動予約しません。",
+                createdAt: now,
+                updatedAt: now,
+                plan: plan
+            )
+        default:
+            return nil
+        }
     }
 
     private struct SampleImage {
