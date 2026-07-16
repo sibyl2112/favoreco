@@ -34,7 +34,7 @@ struct favorecoAPPApp: App {
                     ) ?? ""
                     guard localStoreStartupError.isEmpty else { return }
                     await CategoryPresetSeeder.seedIfNeeded(in: sharedModelContainer.mainContext)
-                    try? TicketNotificationMetadataMigrationService.normalize(
+                    _ = try? TicketNotificationMetadataMigrationService.normalize(
                         in: sharedModelContainer.mainContext
                     )
                     _ = try? AutomaticBackupService.createIfDue(in: sharedModelContainer.mainContext)

@@ -927,7 +927,7 @@ private struct CalendarView: View {
     }
 
     private var weekdaySymbols: [String] {
-        let symbols = calendar.shortStandaloneWeekdaySymbols
+        let symbols = ["日", "月", "火", "水", "木", "金", "土"]
         let startIndex = max(calendar.firstWeekday - 1, 0)
         return Array(symbols[startIndex...] + symbols[..<startIndex])
     }
@@ -1143,7 +1143,7 @@ private struct CalendarView: View {
 
     private var selectedDaySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(selectedDate.formatted(date: .long, time: .omitted))
+            Text(japaneseFullDate(selectedDate))
                 .font(FavorecoTypography.sectionTitle)
 
             if selectedDayVisits.isEmpty && selectedDayPlans.isEmpty && (!showsExternalCalendarEvents || selectedDayExternalEvents.isEmpty) {
@@ -1256,6 +1256,13 @@ private struct CalendarView: View {
         externalCalendarStore.updateAuthorizationStatus()
         guard showsExternalCalendarEvents else { return }
         await externalCalendarStore.refresh(interval: calendarFetchInterval)
+    }
+
+    private func japaneseFullDate(_ date: Date) -> String {
+        let components = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
+        let weekdayNames = ["日", "月", "火", "水", "木", "金", "土"]
+        let weekdayIndex = max(0, min((components.weekday ?? 1) - 1, weekdayNames.count - 1))
+        return "\(components.year ?? 0)年\(components.month ?? 0)月\(components.day ?? 0)日（\(weekdayNames[weekdayIndex])）"
     }
 }
 
