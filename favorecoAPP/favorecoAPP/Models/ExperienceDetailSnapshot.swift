@@ -47,6 +47,9 @@ struct ExperienceDetailSnapshot {
         let ticketStatusText = Self.ticketStatusText(for: visit.outcomeKey)
         let formattedAmount = Self.formattedAmount(visit.amount)
         let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
+        let latitude = hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0)
+        let longitude = hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
 
         return ExperienceDetailSnapshot(
             event: event,
@@ -60,7 +63,7 @@ struct ExperienceDetailSnapshot {
             ).value,
             eventTitle: event?.title.isEmpty == false ? event?.title ?? "記録" : "記録",
             ratingText: visit.overallRating == 0 ? "未評価" : String(format: "%.1f", visit.overallRating),
-            weatherTaskID: "\(visit.visitedAt.timeIntervalSinceReferenceDate)-\(visit.latitude)-\(visit.longitude)-\(unitFields.weatherSymbolName)",
+            weatherTaskID: "\(visit.visitedAt.timeIntervalSinceReferenceDate)-\(latitude)-\(longitude)-\(unitFields.weatherSymbolName)",
             weatherTemperatureText: weatherTemperatureText,
             weatherAttributionURL: URL(string: unitFields.weatherAttributionURL),
             ticketStatusText: ticketStatusText,
@@ -68,8 +71,8 @@ struct ExperienceDetailSnapshot {
             mapURL: PlaceSearchService.appleMapsURL(
                 name: visit.venueNameSnapshot,
                 address: visit.placeMaster?.address ?? "",
-                latitude: visit.latitude,
-                longitude: visit.longitude
+                latitude: latitude,
+                longitude: longitude
             ),
             preferredLocationText: address.isEmpty ? visit.venueNameSnapshot : address
         )

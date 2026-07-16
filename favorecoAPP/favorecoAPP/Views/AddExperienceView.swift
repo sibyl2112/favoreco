@@ -1027,8 +1027,9 @@ struct AddExperienceDraft {
         visitedAt = visit.visitedAt
         venueName = visit.venueNameSnapshot
         venueAddress = visit.placeMaster?.address ?? ""
-        latitude = visit.latitude
-        longitude = visit.longitude
+        let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
+        latitude = hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0)
+        longitude = hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
         overallRating = visit.overallRating
         outcomeKey = visit.outcomeKey
         seatText = visit.seatText

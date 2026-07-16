@@ -67,13 +67,16 @@ enum VisitWeatherService {
         }
 
         var fields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+        let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
+        let latitude = hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0)
+        let longitude = hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
         guard fields.weatherSymbolName.isEmpty,
               let templateKey = visit.event?.category?.templateKey,
               isEligible(
                   templateKey: templateKey,
                   visitedAt: visit.visitedAt,
-                  latitude: visit.latitude,
-                  longitude: visit.longitude
+                  latitude: latitude,
+                  longitude: longitude
               ) else {
             return
         }
@@ -81,8 +84,8 @@ enum VisitWeatherService {
         do {
             let snapshot = try await fetch(
                 visitedAt: visit.visitedAt,
-                latitude: visit.latitude,
-                longitude: visit.longitude
+                latitude: latitude,
+                longitude: longitude
             )
             guard fields.weatherSymbolName.isEmpty else { return }
             fields.weatherSymbolName = snapshot.symbolName
