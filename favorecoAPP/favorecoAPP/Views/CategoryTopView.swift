@@ -1597,7 +1597,10 @@ private struct GoshuinTopHero: View {
         }
         .frame(maxWidth: .infinity, minHeight: 168, alignment: .leading)
         .padding(14)
-        .background(GoshuinWashiBackground(accent: accent), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background {
+            GoshuinWashiBackground(accent: accent)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(accent.opacity(0.18), lineWidth: 1)
@@ -1606,8 +1609,8 @@ private struct GoshuinTopHero: View {
 
     @ViewBuilder
     private var goshuinImage: some View {
-        let size = visit.map { VisitUnitFields(rawValue: $0.unitFieldsRaw).goshuinBookSizeKey }
-            .map(GoshuinBookSize.option(for:)) ?? .standard
+        let sizeKey = visit.map { VisitUnitFields(rawValue: $0.unitFieldsRaw).goshuinBookSizeKey } ?? ""
+        let size = GoshuinBookSize.option(for: sizeKey)
         let isWide = size.key == GoshuinBookSize.wide.key
 
         ZStack(alignment: .bottomLeading) {

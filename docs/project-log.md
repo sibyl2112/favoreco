@@ -5,6 +5,30 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-16: 御朱印HeroのSwiftUI背景型エラーを修正
+
+### 変更概要
+- `View`である和紙背景を`ShapeStyle`用の`background(_:in:)`へ渡していた箇所を、Viewビルダー形式の背景と角丸クリップへ変更
+- 御朱印帳サイズ取得の静的メソッド参照を直接呼び出しへ変更し、MainActor分離警告を解消
+
+### 変更意図
+御朱印ジャンルトップ追加時に混在していたSwiftUIの背景オーバーロードを正しく使い分け、`CategoryTopView.swift`のコンパイルを通すため。同種の`GoshuinWashiBackground`利用箇所も確認し、ShapeStyle用オーバーロードへ渡していたのはHeroの1箇所だけだった。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`
+- `docs/00-開発状況と残課題.md`
+
+### 影響する画面・機能
+- 御朱印ジャンルトップのHero背景と御朱印画像枠
+- 保存モデル、他ジャンル、共有画像の和紙背景には変更なし
+
+### 確認結果（実機 / ビルド）
+- iOS 26.5 Simulator向けDebugビルド成功
+- スクリーンショットで報告された`background(_:in:fillStyle:)`の型エラーと、`GoshuinBookSize.option(for:)`のMainActor警告が解消されたことをコンパイルで確認
+
+### 既知のリスク・残課題
+- 実機で和紙背景の角丸、枠線、見開き/標準サイズの表示を確認する
+
 ## 2026-07-16: 映画・書籍・おでかけ施設のジャンルトップ共通ファーストビューを追加
 
 ### 変更概要
