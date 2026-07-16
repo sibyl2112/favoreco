@@ -173,33 +173,31 @@ enum DebugDataSeeder {
     @MainActor
     @discardableResult
     static func deleteSampleData(in context: ModelContext) throws -> DebugSampleDataSummary {
-        let attemptDescriptor = FetchDescriptor<TicketAttempt>()
-        let attempts = try context.fetch(attemptDescriptor)
-        let debugAttempts = attempts.filter { attempt in
-            attempt.purchaseURL.hasPrefix(debugURLPrefix)
-                || attempt.plan?.officialURL.hasPrefix(debugURLPrefix) == true
-        }
+        let urlPrefix = debugURLPrefix
+        let photoPrefix = debugPhotoPrefix
+
+        let attemptDescriptor = FetchDescriptor<TicketAttempt>(
+            predicate: #Predicate { $0.purchaseURL.starts(with: urlPrefix) }
+        )
+        let debugAttempts = try context.fetch(attemptDescriptor)
         for attempt in debugAttempts {
             TicketNotificationScheduler.cancel(attemptID: attempt.id)
             context.delete(attempt)
         }
 
-        let planDescriptor = FetchDescriptor<Plan>()
-        let plans = try context.fetch(planDescriptor)
-        let debugPlans = plans.filter { plan in
-            plan.officialURL.hasPrefix(debugURLPrefix)
-                || plan.event?.officialURL.hasPrefix(debugURLPrefix) == true
-        }
+        let planDescriptor = FetchDescriptor<Plan>(
+            predicate: #Predicate { $0.officialURL.starts(with: urlPrefix) }
+        )
+        let debugPlans = try context.fetch(planDescriptor)
         for plan in debugPlans {
             TicketNotificationScheduler.cancel(planID: plan.id, attemptID: nil)
             context.delete(plan)
         }
 
-        let visitDescriptor = FetchDescriptor<Visit>()
-        let visits = try context.fetch(visitDescriptor)
-        let debugVisits = visits.filter { visit in
-            visit.event?.officialURL.hasPrefix(debugURLPrefix) == true
-        }
+        let visitDescriptor = FetchDescriptor<Visit>(
+            predicate: #Predicate { $0.eyecatchPath.starts(with: photoPrefix) }
+        )
+        let debugVisits = try context.fetch(visitDescriptor)
         let deletedCount = debugVisits.count
 
         // Delete the records explicitly so category counts cannot retain orphaned visits.
@@ -207,24 +205,27 @@ enum DebugDataSeeder {
             context.delete(visit)
         }
 
-        let eventDescriptor = FetchDescriptor<ExperienceEvent>()
-        let events = try context.fetch(eventDescriptor)
-        for event in events where event.officialURL.hasPrefix(debugURLPrefix) {
+        let eventDescriptor = FetchDescriptor<ExperienceEvent>(
+            predicate: #Predicate { $0.officialURL.starts(with: urlPrefix) }
+        )
+        for event in try context.fetch(eventDescriptor) {
             context.delete(event)
         }
 
-        let inboxDescriptor = FetchDescriptor<InboxItem>()
-        let inboxItems = try context.fetch(inboxDescriptor)
-        for item in inboxItems where item.sourceURL.hasPrefix(debugURLPrefix) {
+        let inboxDescriptor = FetchDescriptor<InboxItem>(
+            predicate: #Predicate { $0.sourceURL.starts(with: urlPrefix) }
+        )
+        for item in try context.fetch(inboxDescriptor) {
             context.delete(item)
         }
 
-        let photoDescriptor = FetchDescriptor<PhotoBlob>()
-        let photos = try context.fetch(photoDescriptor)
-        for photo in photos where photo.relativePath.hasPrefix(debugPhotoPrefix) {
-            context.delete(photo)
-        }
+        try context.save()
 
+        // Visitのcascade対象外になった古い孤立写真も、画像Dataを展開せず一括削除する。
+        try context.delete(
+            model: PhotoBlob.self,
+            where: #Predicate { $0.relativePath.starts(with: photoPrefix) }
+        )
         try context.save()
         return DebugSampleDataSummary(
             visitCount: deletedCount,

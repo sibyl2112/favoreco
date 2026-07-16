@@ -231,6 +231,7 @@ private struct DeveloperSettingsView: View {
     @AppStorage(AppStorageKeys.lastSeenReleaseVersion) private var lastSeenReleaseVersion = ""
     @AppStorage(AppStorageKeys.debugForcesLocalStoreRecovery) private var debugForcesLocalStoreRecovery = false
     @State private var debugMessage = ""
+    @State private var isMutatingDebugData = false
 
     var body: some View {
         Form {
@@ -291,12 +292,14 @@ private struct DeveloperSettingsView: View {
                 } label: {
                     Label("写真付き仮データを追加", systemImage: "hammer.fill")
                 }
+                .disabled(isMutatingDebugData)
 
                 Button(role: .destructive) {
                     deleteDebugData()
                 } label: {
                     Label("仮データを削除", systemImage: "trash")
                 }
+                .disabled(isMutatingDebugData)
 
                 NavigationLink {
                     FullDataDeletionView()
@@ -309,6 +312,15 @@ private struct DeveloperSettingsView: View {
                     Text(debugMessage)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                if isMutatingDebugData {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("仮データを処理しています…")
+                    }
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
         }
@@ -338,12 +350,21 @@ private struct DeveloperSettingsView: View {
     }
 
     private func deleteDebugData() {
-        do {
-            let summary = try DebugDataSeeder.deleteSampleData(in: modelContext)
-            debugMessage = summary.deletedMessage
-        } catch {
-            debugMessage = "仮データの削除に失敗しました。"
-            assertionFailure("Failed to delete debug data: \(error)")
+        guard !isMutatingDebugData else { return }
+        isMutatingDebugData = true
+        debugMessage = ""
+
+        Task { @MainActor in
+            // ProgressViewを先に描画してからSwiftDataの削除を始める。
+            await Task.yield()
+            defer { isMutatingDebugData = false }
+            do {
+                let summary = try DebugDataSeeder.deleteSampleData(in: modelContext)
+                debugMessage = summary.deletedMessage
+            } catch {
+                debugMessage = "仮データの削除に失敗しました。"
+                assertionFailure("Failed to delete debug data: \(error)")
+            }
         }
     }
 }
