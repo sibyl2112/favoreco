@@ -2289,12 +2289,6 @@ struct SupportLinksView: View {
                     Label("お問い合わせ", systemImage: "envelope")
                 }
 
-                Button {
-                } label: {
-                    Label("レビューで応援", systemImage: "star")
-                }
-                .disabled(true)
-
                 ShareLink(
                     item: favorecoSiteURL,
                     subject: Text("Favoreco"),
