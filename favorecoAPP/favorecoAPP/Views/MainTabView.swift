@@ -1616,24 +1616,31 @@ private struct StatsView: View {
         activePlans.filter { calendar.isDate($0.startsAt, equalTo: Date(), toGranularity: .year) }
     }
 
+    private var thisYearAttempts: [TicketAttempt] {
+        activeAttempts.filter { attempt in
+            guard let startsAt = attempt.plan?.startsAt else { return false }
+            return calendar.isDate(startsAt, equalTo: Date(), toGranularity: .year)
+        }
+    }
+
     private var submittedAttempts: [TicketAttempt] {
         let submittedKeys: Set<String> = [
             "waitingResult", "won", "lost", "waitingPayment", "waitingIssue", "issued", "attended",
         ]
-        return activeAttempts.filter { submittedKeys.contains($0.statusKey) }
+        return thisYearAttempts.filter { submittedKeys.contains($0.statusKey) }
     }
 
     private var wonAttempts: [TicketAttempt] {
         let wonKeys: Set<String> = ["won", "waitingPayment", "waitingIssue", "issued", "attended"]
-        return activeAttempts.filter { wonKeys.contains($0.statusKey) }
+        return thisYearAttempts.filter { wonKeys.contains($0.statusKey) }
     }
 
     private var lostAttempts: [TicketAttempt] {
-        activeAttempts.filter { $0.statusKey == "lost" }
+        thisYearAttempts.filter { $0.statusKey == "lost" }
     }
 
     private var attendedAttempts: [TicketAttempt] {
-        activeAttempts.filter { $0.statusKey == "attended" }
+        thisYearAttempts.filter { $0.statusKey == "attended" }
     }
 
     private var winRateText: String {
@@ -1823,7 +1830,11 @@ private struct StatsView: View {
                     }
                     .chartXAxis {
                         AxisMarks(values: .stride(by: .month, count: 2)) { value in
-                            AxisValueLabel(format: .dateTime.month(.narrow))
+                            if let month = value.as(Date.self) {
+                                AxisValueLabel {
+                                    Text(FavorecoDateText.month(month))
+                                }
+                            }
                         }
                     }
                     .frame(height: 190)
@@ -1873,7 +1884,7 @@ private struct StatsView: View {
 
     private var ticketStatsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("予定・チケット")
+            Text("今年の予定・チケット")
                 .font(FavorecoTypography.sectionTitle)
 
             if !purchaseManager.currentPlan.includesLocalFullFeatures {
@@ -1883,7 +1894,7 @@ private struct StatsView: View {
                     systemImage: "ticket",
                     requirement: "Pro以上"
                 )
-            } else if activePlans.isEmpty && activeAttempts.isEmpty {
+            } else if thisYearPlans.isEmpty && thisYearAttempts.isEmpty {
                 PlaceholderRow(
                     icon: "ticket",
                     title: "予定・チケット統計はまだありません",

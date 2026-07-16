@@ -28,6 +28,10 @@ enum FavorecoDateText {
         return "\(values.month)/\(values.day)（\(values.weekday)）"
     }
 
+    static func month(_ date: Date) -> String {
+        "\(components(for: date).month)月"
+    }
+
     static func time(_ date: Date) -> String {
         let values = components(for: date)
         return String(format: "%02d:%02d", values.hour, values.minute)
