@@ -174,19 +174,25 @@ struct EventDetailView: View {
     private func hero(snapshot: EventDetailSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             if let representativePhoto = snapshot.representativePhoto {
-                RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 1200, contentMode: .fit)
+                RepresentativePhotoImage(
+                    photo: representativePhoto,
+                    maxPixelSize: 1200,
+                    contentMode: representativeContentMode
+                )
                     .aspectRatio(representativeAspectRatio, contentMode: .fit)
                     .frame(maxWidth: 240)
                     .frame(maxWidth: .infinity)
+                    .clipped()
                     .background(accentColor.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else if let data = event.eyecatchData, let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFit()
+                    .aspectRatio(contentMode: representativeContentMode)
                     .aspectRatio(representativeAspectRatio, contentMode: .fit)
                     .frame(maxWidth: 240)
                     .frame(maxWidth: .infinity)
+                    .clipped()
                     .background(accentColor.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
@@ -245,7 +251,11 @@ struct EventDetailView: View {
     }
 
     private var representativeAspectRatio: CGFloat {
-        CGFloat(EyecatchAspectRatio.recommended(for: category).value)
+        CGFloat(EyecatchAspectRatio.resolved(for: event).value)
+    }
+
+    private var representativeContentMode: ContentMode {
+        EyecatchAspectRatio.usesEyecatchFill(for: category) ? .fill : .fit
     }
 
     private func stats(snapshot: EventDetailSnapshot) -> some View {
@@ -380,11 +390,12 @@ struct RepresentativePhotoImage: View {
     let maxPixelSize: CGFloat
     var contentMode: ContentMode = .fill
     @State private var image: UIImage?
+    @State private var loadedCacheKey: String?
 
     var body: some View {
         Group {
-            if let image {
-                Image(uiImage: image)
+            if let displayedImage {
+                Image(uiImage: displayedImage)
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
             } else {
@@ -394,17 +405,29 @@ struct RepresentativePhotoImage: View {
             }
         }
         .task(id: cacheKey) {
-            image = nil
             if let cached = ThumbnailLoader.cached(forKey: cacheKey) {
                 image = cached
+                loadedCacheKey = cacheKey
                 return
             }
+            image = nil
+            loadedCacheKey = nil
             let data = photo.data
             let key = cacheKey
-            image = await Task.detached(priority: .userInitiated) {
+            let loadedImage = await Task.detached(priority: .userInitiated) {
                 ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixelSize, cacheKey: key)
             }.value
+            guard !Task.isCancelled else { return }
+            image = loadedImage
+            loadedCacheKey = key
         }
+    }
+
+    private var displayedImage: UIImage? {
+        if loadedCacheKey == cacheKey {
+            return image
+        }
+        return ThumbnailLoader.cached(forKey: cacheKey)
     }
 
     private var cacheKey: String {
@@ -512,12 +535,7 @@ struct EditEventView: View {
             Form {
                 Section {
                     if let eyecatchData, let image = UIImage(data: eyecatchData) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 180)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        eyecatchPreview(image)
 
                         Button("画像を外す", role: .destructive) {
                             self.eyecatchData = nil
@@ -540,6 +558,19 @@ struct EditEventView: View {
                                 .font(FavorecoTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
+                    }
+
+                    if event.category?.templateKey == "book" {
+                        Picker("本の種類", selection: $draft.eyecatchAspectRatioKey) {
+                            ForEach(bookFormatOptions) { format in
+                                Text(format.name).tag(format.key)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        Text(selectedEyecatchAspectRatio.note)
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
                     }
                 } header: {
                     Text("対象アイキャッチ")
@@ -616,6 +647,30 @@ struct EditEventView: View {
         eyecatchData = compressed
     }
 
+    @ViewBuilder
+    private func eyecatchPreview(_ image: UIImage) -> some View {
+        if EyecatchAspectRatio.usesEyecatchFill(for: event.category) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .aspectRatio(
+                    CGFloat(selectedEyecatchAspectRatio.value),
+                    contentMode: .fit
+                )
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 180)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+    }
+
     private func save() {
         event.title = draft.trimmedTitle
         event.seriesName = draft.trimmedSeriesName
@@ -623,6 +678,11 @@ struct EditEventView: View {
         event.memo = draft.trimmedMemo
         event.importMemo = draft.trimmedImportMemo
         event.eyecatchData = eyecatchData
+        if event.category?.templateKey == "book" {
+            var unitFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+            unitFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
+            event.unitFieldsRaw = unitFields.encodedRawValue
+        }
         event.updatedAt = Date()
 
         do {
@@ -634,6 +694,17 @@ struct EditEventView: View {
             assertionFailure("Failed to update event: \(error)")
         }
     }
+
+    private var selectedEyecatchAspectRatio: EyecatchAspectRatio {
+        EyecatchAspectRatio.option(for: draft.eyecatchAspectRatioKey, category: event.category)
+    }
+
+    private var bookFormatOptions: [EyecatchAspectRatio] {
+        if draft.eyecatchAspectRatioKey == EyecatchAspectRatio.bookCover.key {
+            return [EyecatchAspectRatio.bookCover] + EyecatchAspectRatio.selectableBookFormats
+        }
+        return EyecatchAspectRatio.selectableBookFormats
+    }
 }
 
 private struct EventDraft {
@@ -642,6 +713,7 @@ private struct EventDraft {
     var officialURL: String
     var memo: String
     var importMemo: String
+    var eyecatchAspectRatioKey: String
 
     init(event: ExperienceEvent) {
         title = event.title
@@ -649,6 +721,7 @@ private struct EventDraft {
         officialURL = event.officialURL
         memo = event.memo
         importMemo = event.importMemo
+        eyecatchAspectRatioKey = EyecatchAspectRatio.resolved(for: event).key
     }
 
     var trimmedTitle: String {

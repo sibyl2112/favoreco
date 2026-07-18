@@ -78,6 +78,10 @@ struct PhotoUnitEditor: View {
                     .foregroundStyle(.secondary)
             }
 
+            if category?.templateKey == "book" {
+                bookFormatPicker
+            }
+
             if currentPhotoCount == 0 {
                 Text("思い出写真、半券写真、表紙画像などを追加できます。")
                     .font(FavorecoTypography.caption)
@@ -123,7 +127,9 @@ struct PhotoUnitEditor: View {
         }
         .onAppear {
             if aspectRatioKey.isEmpty {
-                aspectRatioKey = EyecatchAspectRatio.recommended(for: category).key
+                aspectRatioKey = category?.templateKey == "book"
+                    ? EyecatchAspectRatio.hardcoverBook.key
+                    : EyecatchAspectRatio.recommended(for: category).key
             }
         }
         .fullScreenCover(isPresented: $isShowingCamera) {
@@ -160,6 +166,28 @@ struct PhotoUnitEditor: View {
 
     private var formattedPhotoBytes: String {
         ByteCountFormatter.string(fromByteCount: currentPhotoBytes, countStyle: .file)
+    }
+
+    private var bookFormatOptions: [EyecatchAspectRatio] {
+        if aspectRatioKey == EyecatchAspectRatio.bookCover.key {
+            return [EyecatchAspectRatio.bookCover] + EyecatchAspectRatio.selectableBookFormats
+        }
+        return EyecatchAspectRatio.selectableBookFormats
+    }
+
+    private var bookFormatPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("本の種類", selection: $aspectRatioKey) {
+                ForEach(bookFormatOptions) { format in
+                    Text(format.name).tag(format.key)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text(selectedAspectRatio.note)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     @ViewBuilder
@@ -222,6 +250,7 @@ struct PhotoUnitEditor: View {
                     photo: photo,
                     title: "保存済み",
                     aspectRatio: selectedAspectRatio.value,
+                    fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
                     isCover: coverPhotoPath == photo.relativePath,
                     onSetCover: {
                         coverPhotoPath = photo.relativePath
@@ -238,6 +267,7 @@ struct PhotoUnitEditor: View {
                     photo: photo,
                     title: "追加予定",
                     aspectRatio: selectedAspectRatio.value,
+                    fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
                     isCover: coverPhotoPath == photo.relativePath,
                     onSetCover: {
                         coverPhotoPath = photo.relativePath

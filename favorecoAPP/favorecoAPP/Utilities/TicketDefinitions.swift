@@ -238,6 +238,184 @@ struct TicketGuideDefinition: Identifiable, Hashable {
     }
 }
 
+struct TicketAttemptUnitFields: Codable, Equatable {
+    var tagNames: [String] = []
+
+    init(tagNames: [String] = []) {
+        self.tagNames = tagNames
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case tagNames
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tagNames = try container.decodeIfPresent([String].self, forKey: .tagNames) ?? []
+    }
+
+    init(rawValue: String) {
+        guard let data = rawValue.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(TicketAttemptUnitFields.self, from: data) else {
+            self.init()
+            return
+        }
+        self = decoded
+    }
+
+    var encodedRawValue: String {
+        guard !tagNames.isEmpty,
+              let data = try? JSONEncoder().encode(self),
+              let string = String(data: data, encoding: .utf8) else {
+            return ""
+        }
+        return string
+    }
+
+    static func normalizedTagNames(from text: String) -> [String] {
+        var normalizedKeys = Set<String>()
+        var results: [String] = []
+
+        for component in text.components(separatedBy: CharacterSet(charactersIn: ",、\n")) {
+            let trimmed = component.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let displayName = String(trimmed.prefix(30))
+            let normalizedKey = displayName.folding(
+                options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                locale: .current
+            )
+            guard normalizedKeys.insert(normalizedKey).inserted else { continue }
+            results.append(displayName)
+            if results.count == 12 { break }
+        }
+        return results
+    }
+}
+
+struct TicketProgressStage: Identifiable, Equatable {
+    enum Kind: String {
+        case entry
+        case result
+        case payment
+        case issue
+        case attend
+    }
+
+    let kind: Kind
+    let title: String
+    let date: Date?
+
+    var id: Kind { kind }
+}
+
+enum TicketProgressTimeline {
+    static func stages(for attempt: TicketAttempt, plan: Plan) -> [TicketProgressStage] {
+        let lottery = usesLotteryFlow(attempt)
+        var stages: [TicketProgressStage] = [
+            TicketProgressStage(
+                kind: .entry,
+                title: lottery ? "申込" : "購入",
+                date: firstAvailableDate(attempt.applyDeadlineAt, attempt.saleStartAt)
+            )
+        ]
+
+        if lottery {
+            stages.append(
+                TicketProgressStage(
+                    kind: .result,
+                    title: "当落",
+                    date: availableDate(attempt.resultAnnounceAt)
+                )
+            )
+        }
+
+        if hasPaymentStage(attempt) {
+            stages.append(
+                TicketProgressStage(
+                    kind: .payment,
+                    title: "入金",
+                    date: firstAvailableDate(attempt.paidAt, attempt.paymentDeadlineAt)
+                )
+            )
+        }
+
+        if hasIssueStage(attempt) {
+            stages.append(
+                TicketProgressStage(
+                    kind: .issue,
+                    title: "発券",
+                    date: firstAvailableDate(attempt.issuedAt, attempt.issueStartAt)
+                )
+            )
+        }
+
+        stages.append(
+            TicketProgressStage(kind: .attend, title: "観劇", date: plan.startsAt)
+        )
+        return stages
+    }
+
+    static func currentIndex(for attempt: TicketAttempt, stages: [TicketProgressStage]) -> Int {
+        guard !stages.isEmpty else { return 0 }
+        let targetKind: TicketProgressStage.Kind
+        switch attempt.statusKey {
+        case "waitingResult", "lost":
+            targetKind = .result
+        case "won", "waitingPayment":
+            targetKind = .payment
+        case "waitingIssue":
+            targetKind = .issue
+        case "issued", "attended":
+            targetKind = .attend
+        default:
+            targetKind = .entry
+        }
+
+        if let exactIndex = stages.firstIndex(where: { $0.kind == targetKind }) {
+            return exactIndex
+        }
+
+        let targetRank = rank(of: targetKind)
+        return stages.firstIndex(where: { rank(of: $0.kind) > targetRank }) ?? max(0, stages.count - 1)
+    }
+
+    private static func usesLotteryFlow(_ attempt: TicketAttempt) -> Bool {
+        ["fanClub", "lottery", "card"].contains(attempt.entryRouteKey)
+            || attempt.resultAnnounceAt != Date.distantPast
+            || ["waitingResult", "lost"].contains(attempt.statusKey)
+    }
+
+    private static func hasPaymentStage(_ attempt: TicketAttempt) -> Bool {
+        attempt.paymentDeadlineAt != Date.distantPast
+            || attempt.paidAt != Date.distantPast
+            || ["won", "waitingPayment"].contains(attempt.statusKey)
+    }
+
+    private static func hasIssueStage(_ attempt: TicketAttempt) -> Bool {
+        attempt.issueStartAt != Date.distantPast
+            || attempt.issuedAt != Date.distantPast
+            || ["waitingIssue", "issued"].contains(attempt.statusKey)
+    }
+
+    private static func availableDate(_ date: Date) -> Date? {
+        date == Date.distantPast ? nil : date
+    }
+
+    private static func firstAvailableDate(_ preferred: Date, _ fallback: Date) -> Date? {
+        availableDate(preferred) ?? availableDate(fallback)
+    }
+
+    private static func rank(of kind: TicketProgressStage.Kind) -> Int {
+        switch kind {
+        case .entry: 0
+        case .result: 1
+        case .payment: 2
+        case .issue: 3
+        case .attend: 4
+        }
+    }
+}
+
 struct TicketNextActionDefinition {
     let title: String
     let date: Date

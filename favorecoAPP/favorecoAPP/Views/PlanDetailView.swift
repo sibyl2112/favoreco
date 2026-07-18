@@ -582,6 +582,10 @@ private struct TicketAttemptDetailCard: View {
             if !attempt.seatText.isEmpty {
                 PlanInfoRow(icon: "chair", title: "座席", value: attempt.seatText)
             }
+            let tagNames = TicketAttemptUnitFields(rawValue: attempt.unitFieldsRaw).tagNames
+            if !tagNames.isEmpty {
+                PlanInfoRow(icon: "tag", title: "タグ", value: tagNames.joined(separator: "、"))
+            }
             if let purchaseURL = URL(string: attempt.purchaseURL), !attempt.purchaseURL.isEmpty {
                 Link(destination: purchaseURL) {
                     PlanInfoRow(icon: "safari", title: "購入", value: attempt.purchaseURL)

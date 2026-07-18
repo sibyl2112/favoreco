@@ -5,6 +5,8 @@
 //  Created by Codex on 2026/07/09.
 //
 
+import Foundation
+
 enum AppStorageKeys {
     static let hasCompletedGenreOnboarding = "hasCompletedGenreOnboarding"
     static let lastSeenReleaseVersion = "lastSeenReleaseVersion"
@@ -41,6 +43,8 @@ enum AppStorageKeys {
     static let defaultGenreMode = "defaultGenreMode"
     static let lastUsedCategoryTemplateKey = "lastUsedCategoryTemplateKey"
     static let homeSelectedCategoryTemplateKey = "homeSelectedCategoryTemplateKey"
+    static let categoryLibraryLayoutModePrefix = "categoryLibraryLayoutMode."
+    static let recordsLayoutMode = "recordsLayoutMode"
     static let afterSaveRecordAction = "afterSaveRecordAction"
     static let photoAddStartMode = "photoAddStartMode"
     static let photoCompressionQuality = "photoCompressionQuality"
@@ -63,6 +67,83 @@ enum AppStorageKeys {
     static let notificationMonthlyReportEnabled = "notificationMonthlyReportEnabled"
     static let opensPreviousMonthlyReport = "opensPreviousMonthlyReport"
     static let opensPreviousYearlyReport = "opensPreviousYearlyReport"
+}
+
+enum RecordsLayoutMode: String, CaseIterable, Identifiable {
+    case gridThree
+    case gridFour
+    case detail
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .gridThree: "3列タイル"
+        case .gridFour: "4列コンパクト"
+        case .detail: "横長詳細"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .gridThree: "square.grid.2x2"
+        case .gridFour: "square.grid.3x3"
+        case .detail: "list.bullet"
+        }
+    }
+
+    var columnCount: Int? {
+        switch self {
+        case .gridThree: 3
+        case .gridFour: 4
+        case .detail: nil
+        }
+    }
+}
+
+enum CategoryLibraryLayoutMode: String, CaseIterable, Identifiable {
+    case gallery
+    case compact
+    case banner
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .gallery: "ギャラリー"
+        case .compact: "ミニ詳細"
+        case .banner: "バナー"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .gallery: "square.grid.3x3"
+        case .compact: "rectangle.grid.2x2"
+        case .banner: "rectangle.grid.1x2"
+        }
+    }
+
+    static func defaultMode(for templateKey: String) -> CategoryLibraryLayoutMode {
+        switch templateKey {
+        case "movie", "theater": .gallery
+        case "live": .banner
+        default: .compact
+        }
+    }
+
+    static func stored(for templateKey: String) -> CategoryLibraryLayoutMode {
+        let key = AppStorageKeys.categoryLibraryLayoutModePrefix + templateKey
+        guard let rawValue = UserDefaults.standard.string(forKey: key),
+              let mode = CategoryLibraryLayoutMode(rawValue: rawValue) else {
+            return defaultMode(for: templateKey)
+        }
+        return mode
+    }
+
+    func store(for templateKey: String) {
+        UserDefaults.standard.set(rawValue, forKey: AppStorageKeys.categoryLibraryLayoutModePrefix + templateKey)
+    }
 }
 
 enum HomeCategoryLayoutMode: String, CaseIterable, Identifiable {

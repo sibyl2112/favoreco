@@ -133,7 +133,11 @@ struct EditTicketAttemptView: View {
                     }
                 }
 
-                Section("メモ") {
+                Section("タグ・メモ") {
+                    TextField("任意タグ（カンマ区切り）", text: $draft.tagNamesText)
+                    Text("例: S席、第1希望、同行者分")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
                     TextField("メモ", text: $draft.memo, axis: .vertical)
                         .lineLimit(3...8)
                 }
@@ -262,6 +266,7 @@ struct EditTicketAttemptView: View {
         attempt.quantity = draft.quantity
         attempt.purchaseURL = draft.trimmedPurchaseURL
         attempt.seatText = draft.trimmedSeatText
+        attempt.unitFieldsRaw = draft.ticketUnitFieldsRaw
         attempt.memo = draft.trimmedMemo
         attempt.updatedAt = now
         attempt.isArchived = false
@@ -296,6 +301,7 @@ private struct TicketAttemptDraft {
     var feeText = ""
     var quantity = 1
     var seatText = ""
+    var tagNamesText = ""
     var purchaseURL = ""
     var memo = ""
 
@@ -324,6 +330,7 @@ private struct TicketAttemptDraft {
         feeText = decimalText(attempt.fee)
         quantity = attempt.quantity
         seatText = attempt.seatText
+        tagNamesText = TicketAttemptUnitFields(rawValue: attempt.unitFieldsRaw).tagNames.joined(separator: ", ")
         purchaseURL = attempt.purchaseURL
         memo = attempt.memo
     }
@@ -331,6 +338,11 @@ private struct TicketAttemptDraft {
     var trimmedTicketSite: String { ticketSite.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedHolderName: String { holderName.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedSeatText: String { seatText.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var ticketUnitFieldsRaw: String {
+        TicketAttemptUnitFields(
+            tagNames: TicketAttemptUnitFields.normalizedTagNames(from: tagNamesText)
+        ).encodedRawValue
+    }
     var trimmedPurchaseURL: String { purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
 

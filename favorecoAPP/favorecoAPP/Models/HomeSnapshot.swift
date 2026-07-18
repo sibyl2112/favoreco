@@ -111,6 +111,7 @@ struct HomeVisitSnapshot: Identifiable {
     let unitFieldsRaw: String
     let eyecatchPath: String
     let eyecatchAspectRatio: Double
+    let fillsEyecatchFrame: Bool
     let peopleSummary: String
     let photo: HomePhotoSnapshot?
 
@@ -143,6 +144,7 @@ struct HomeVisitSnapshot: Identifiable {
             for: unitFields.eyecatchAspectRatioKey,
             category: category
         ).value
+        fillsEyecatchFrame = EyecatchAspectRatio.usesEyecatchFill(for: category)
         self.peopleSummary = peopleSummary
         photo = selectedPhoto.map { HomePhotoSnapshot(photo: $0) }
     }
@@ -170,6 +172,7 @@ struct HomePlanSnapshot: Identifiable {
     let organizerName: String
     let posterData: Data?
     let posterAspectRatio: Double
+    let fillsPosterFrame: Bool
 
     init(plan: Plan) {
         let category = plan.category ?? plan.event?.category
@@ -185,7 +188,9 @@ struct HomePlanSnapshot: Identifiable {
             ? plan.event?.organizerNameSnapshot ?? ""
             : plan.organizerNameSnapshot
         posterData = plan.event?.eyecatchData
-        posterAspectRatio = EyecatchAspectRatio.recommended(for: category).value
+        posterAspectRatio = plan.event.map { EyecatchAspectRatio.resolved(for: $0).value }
+            ?? EyecatchAspectRatio.recommended(for: category).value
+        fillsPosterFrame = EyecatchAspectRatio.usesEyecatchFill(for: category)
     }
 }
 
@@ -197,6 +202,8 @@ struct HomeInterestedEventSnapshot: Identifiable {
     let hasOfficialURL: Bool
     let memo: String
     let eyecatchData: Data?
+    let eyecatchAspectRatio: Double
+    let fillsEyecatchFrame: Bool
 
     init(event: ExperienceEvent) {
         id = event.id
@@ -206,6 +213,8 @@ struct HomeInterestedEventSnapshot: Identifiable {
         hasOfficialURL = !event.officialURL.isEmpty
         memo = event.memo
         eyecatchData = event.eyecatchData
+        eyecatchAspectRatio = EyecatchAspectRatio.resolved(for: event).value
+        fillsEyecatchFrame = EyecatchAspectRatio.usesEyecatchFill(for: event.category)
     }
 }
 

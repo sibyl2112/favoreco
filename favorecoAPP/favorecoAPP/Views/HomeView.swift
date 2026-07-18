@@ -325,7 +325,7 @@ struct HomeView: View {
                     .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
                     .scrollPosition(id: selectedUpcomingPlanPosition)
                 }
-                .frame(height: 206)
+                .frame(height: 224)
 
                 HStack(spacing: 7) {
                     ForEach(items.indices, id: \.self) { index in
@@ -603,8 +603,9 @@ private struct InterestedEventRow: View {
             if let data = event.eyecatchData, let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
-                    .frame(width: 64, height: 78)
+                    .aspectRatio(contentMode: event.fillsEyecatchFrame ? .fill : .fit)
+                    .frame(width: 64, height: interestedEyecatchHeight)
+                    .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
 
@@ -635,6 +636,11 @@ private struct InterestedEventRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var interestedEyecatchHeight: CGFloat {
+        guard event.fillsEyecatchFrame else { return 78 }
+        return 64 / CGFloat(event.eyecatchAspectRatio)
     }
 }
 
@@ -671,7 +677,8 @@ private struct HomeUpcomingPlanCard: View {
             HomeUpcomingPoster(
                 imageData: plan.posterData,
                 fallbackIcon: plan.categoryIcon,
-                tint: tint
+                tint: tint,
+                fillsFrame: plan.fillsPosterFrame
             )
 
             HomeUpcomingHeroDetails(
@@ -728,7 +735,15 @@ private struct HomeUpcomingPlanCard: View {
 
 private struct HomeUpcomingVisitCard: View {
     let visit: HomeVisitSnapshot
+    @Query private var currentVisits: [Visit]
+    @State private var isShowingEditVisit = false
     @Environment(\.favorecoThemePalette) private var themePalette
+
+    init(visit: HomeVisitSnapshot) {
+        self.visit = visit
+        let visitID = visit.id
+        _currentVisits = Query(filter: #Predicate<Visit> { $0.id == visitID })
+    }
 
     private var tint: Color {
         themePalette.categoryColor(hex: visit.categoryColorHex)
@@ -751,7 +766,8 @@ private struct HomeUpcomingVisitCard: View {
             HomeUpcomingPoster(
                 imageData: visit.photo?.data,
                 fallbackIcon: visit.categoryIcon,
-                tint: tint
+                tint: tint,
+                fillsFrame: visit.fillsEyecatchFrame
             )
 
             HomeUpcomingHeroDetails(
@@ -762,16 +778,26 @@ private struct HomeUpcomingVisitCard: View {
                 venueName: visit.venueName,
                 tint: tint
             ) {
-                NavigationLink {
-                    HomeVisitDestination(visitID: visit.id)
-                } label: {
-                    HomeUpcomingActionLabel(
-                        title: "記録を見る",
-                        systemImage: "book.pages",
-                        tint: tint
-                    )
+                HStack(spacing: 6) {
+                    NavigationLink {
+                        HomeVisitDestination(visitID: visit.id)
+                    } label: {
+                        HomeUpcomingActionLabel(
+                            title: "詳細",
+                            systemImage: "book.pages",
+                            tint: tint
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        isShowingEditVisit = true
+                    } label: {
+                        HomeUpcomingSecondaryActionLabel(title: "編集")
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(currentVisits.isEmpty)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(12)
@@ -781,15 +807,22 @@ private struct HomeUpcomingVisitCard: View {
                 .stroke(tint.opacity(0.18), lineWidth: 1)
         }
         .accessibilityElement(children: .contain)
+        .sheet(isPresented: $isShowingEditVisit) {
+            if let currentVisit = currentVisits.first {
+                EditExperienceView(visit: currentVisit)
+            } else {
+                ContentUnavailableView("記録が見つかりません", systemImage: "trash")
+            }
+        }
     }
 
 }
 
 private struct HomeUpcomingHeroLayout: Layout {
     let posterAspectRatio: CGFloat
-    private let posterFraction: CGFloat = 0.34
-    private let maximumPosterWidth: CGFloat = 112
-    private let spacing: CGFloat = 14
+    private let posterFraction: CGFloat = 0.46
+    private let maximumPosterWidth: CGFloat = 148
+    private let spacing: CGFloat = 10
 
     func sizeThatFits(
         proposal: ProposedViewSize,
@@ -839,6 +872,7 @@ private struct HomeUpcomingPoster: View {
     let imageData: Data?
     let fallbackIcon: String
     let tint: Color
+    let fillsFrame: Bool
 
     var body: some View {
         GeometryReader { geometry in
@@ -846,7 +880,7 @@ private struct HomeUpcomingPoster: View {
                 if let imageData, let image = UIImage(data: imageData) {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFit()
+                        .aspectRatio(contentMode: fillsFrame ? .fill : .fit)
                 } else {
                     ZStack {
                         tint.opacity(0.14)
@@ -892,7 +926,7 @@ private struct HomeUpcomingHeroDetails<Actions: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(categoryName)
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(tint)
@@ -900,6 +934,7 @@ private struct HomeUpcomingHeroDetails<Actions: View>: View {
             Text(title)
                 .font(FavorecoTypography.jpSerif(19, weight: .bold, relativeTo: .headline))
                 .foregroundStyle(.primary)
+                .lineSpacing(-2)
                 .lineLimit(2, reservesSpace: true)
                 .truncationMode(.tail)
 
@@ -935,17 +970,31 @@ private struct HomeUpcomingActionLabel: View {
 
     var body: some View {
         Label(title, systemImage: systemImage)
-            .font(FavorecoTypography.captionStrong)
+            .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
             .foregroundStyle(tint)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
             .overlay {
                 Capsule().stroke(tint.opacity(0.55), lineWidth: 1)
             }
             .contentShape(Capsule())
+    }
+}
+
+private struct HomeUpcomingSecondaryActionLabel: View {
+    let title: String
+
+    var body: some View {
+        Label(title, systemImage: "pencil")
+            .font(FavorecoTypography.jpSans(10, weight: .medium, relativeTo: .caption2))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
     }
 }
 
@@ -1278,8 +1327,9 @@ private struct ExperienceGalleryCard: View {
                 if let thumbnailImage {
                     Image(uiImage: thumbnailImage)
                         .resizable()
-                        .scaledToFit()
+                        .aspectRatio(contentMode: visit.fillsEyecatchFrame ? .fill : .fit)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
                 } else {
                     Rectangle()
                         .fill(categoryColor.opacity(0.18))
@@ -1460,8 +1510,9 @@ private struct HomeVisitSummaryRow: View {
         if let thumbnailImage {
             Image(uiImage: thumbnailImage)
                 .resizable()
-                .scaledToFit()
+                .aspectRatio(contentMode: visit.fillsEyecatchFrame ? .fill : .fit)
                 .frame(width: 64, height: thumbnailHeight)
+                .clipped()
                 .background(categoryColor.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {

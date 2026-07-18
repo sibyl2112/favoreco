@@ -10,6 +10,7 @@ struct PendingPhotoThumbnail: View {
     let photo: PendingPhoto
     let title: String
     let aspectRatio: Double
+    let fillsFrame: Bool
     let isCover: Bool
     let onSetCover: () -> Void
     let onDelete: () -> Void
@@ -20,6 +21,7 @@ struct PendingPhotoThumbnail: View {
             image: image,
             title: title,
             aspectRatio: aspectRatio,
+            fillsFrame: fillsFrame,
             isCover: isCover,
             onSetCover: onSetCover,
             onDelete: onDelete
@@ -47,6 +49,7 @@ struct SavedPhotoThumbnail: View {
     let photo: PhotoBlob
     let title: String
     let aspectRatio: Double
+    let fillsFrame: Bool
     let isCover: Bool
     let onSetCover: () -> Void
     let onDelete: () -> Void
@@ -57,6 +60,7 @@ struct SavedPhotoThumbnail: View {
             image: image,
             title: title,
             aspectRatio: aspectRatio,
+            fillsFrame: fillsFrame,
             isCover: isCover,
             onSetCover: onSetCover,
             onDelete: onDelete
@@ -84,6 +88,7 @@ private struct PhotoThumbnail: View {
     let image: UIImage?
     let title: String
     let aspectRatio: Double
+    let fillsFrame: Bool
     let isCover: Bool
     let onSetCover: () -> Void
     let onDelete: () -> Void
@@ -94,7 +99,7 @@ private struct PhotoThumbnail: View {
                 if let image {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFit()
+                        .aspectRatio(contentMode: fillsFrame ? .fill : .fit)
                 } else {
                     Image(systemName: "photo")
                         .font(.title2)
@@ -105,6 +110,7 @@ private struct PhotoThumbnail: View {
             }
             .aspectRatio(CGFloat(aspectRatio), contentMode: .fit)
             .frame(maxWidth: .infinity)
+            .clipped()
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 

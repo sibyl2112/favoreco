@@ -15,6 +15,7 @@ struct ExperienceDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @Environment(\.favorecoThemePalette) private var themePalette
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var isShowingEdit = false
     @State private var calendarDraft: CalendarEventDraft?
@@ -25,10 +26,17 @@ struct ExperienceDetailView: View {
         let snapshot = ExperienceDetailSnapshot.make(visit: visit, personLinks: personLinks)
         let accentColor = themePalette.categoryColor(hex: snapshot.category?.colorHex ?? "#6F8F7A")
         let template = CategoryRecordTemplate.template(for: snapshot.category)
+        let isTheater = snapshot.category?.templateKey == "theater"
 
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                hero(snapshot: snapshot, accentColor: accentColor)
+                if isTheater {
+                    theaterHero(snapshot: snapshot, accentColor: accentColor)
+                        .padding(.horizontal, -8)
+                    theaterCastSection(snapshot: snapshot, accentColor: accentColor)
+                } else {
+                    hero(snapshot: snapshot, accentColor: accentColor)
+                }
                 photoSection(snapshot: snapshot)
                 goshuinBookSection(snapshot: snapshot)
                 peopleSection(snapshot: snapshot, accentColor: accentColor)
@@ -40,25 +48,28 @@ struct ExperienceDetailView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle(snapshot.eventTitle)
+        .background(isTheater ? TheaterDetailStyle.background : Color(.systemGroupedBackground))
+        .environment(\.colorScheme, isTheater ? .dark : colorScheme)
+        .navigationTitle(isTheater ? "観劇回詳細" : snapshot.eventTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        isShowingEdit = true
-                    } label: {
-                        Label("編集", systemImage: "pencil")
-                    }
+            if !isTheater {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            isShowingEdit = true
+                        } label: {
+                            Label("編集", systemImage: "pencil")
+                        }
 
-                    Button(role: .destructive) {
-                        isShowingDeleteConfirmation = true
+                        Button(role: .destructive) {
+                            isShowingDeleteConfirmation = true
+                        } label: {
+                            Label("この記録だけ削除", systemImage: "trash")
+                        }
                     } label: {
-                        Label("この記録だけ削除", systemImage: "trash")
+                        Label("メニュー", systemImage: "ellipsis.circle")
                     }
-                } label: {
-                    Label("メニュー", systemImage: "ellipsis.circle")
                 }
             }
         }
@@ -129,25 +140,150 @@ struct ExperienceDetailView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
+    private func theaterHero(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            TheaterDetailPoster(event: snapshot.event)
+                .frame(width: 126)
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text(snapshot.eventTitle)
+                    .font(FavorecoTypography.jpSerif(19, weight: .bold, relativeTo: .headline))
+                    .foregroundStyle(TheaterDetailStyle.ivory)
+                    .lineLimit(2)
+
+                Label(FavorecoDateText.fullDateTime(visit.visitedAt), systemImage: "calendar")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+
+                if !visit.venueNameSnapshot.isEmpty {
+                    Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                        .lineLimit(1)
+                }
+
+                if !visit.seatText.isEmpty {
+                    Label(visit.seatText, systemImage: "chair")
+                        .lineLimit(1)
+                }
+
+                theaterRating
+
+                Spacer(minLength: 2)
+
+                HStack(spacing: 8) {
+                    Button {
+                        isShowingEdit = true
+                    } label: {
+                        Label("記録を編集", systemImage: "pencil")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(TheaterDetailStyle.gold)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 34)
+                            .overlay {
+                                Capsule().stroke(TheaterDetailStyle.gold.opacity(0.66), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+
+                    Menu {
+                        Button(role: .destructive) {
+                            isShowingDeleteConfirmation = true
+                        } label: {
+                            Label("この記録だけ削除", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(TheaterDetailStyle.gold)
+                            .frame(width: 34, height: 34)
+                            .overlay {
+                                Circle().stroke(TheaterDetailStyle.gold.opacity(0.66), lineWidth: 1)
+                            }
+                    }
+                    .accessibilityLabel("記録メニュー")
+                }
+            }
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(TheaterDetailStyle.ivory.opacity(0.72))
+            .frame(maxWidth: .infinity, minHeight: 178, alignment: .topLeading)
+        }
+        .padding(12)
+        .background(TheaterDetailStyle.cardBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(TheaterDetailStyle.gold.opacity(0.42), lineWidth: 1)
+        }
+    }
+
+    private var theaterRating: some View {
+        HStack(spacing: 3) {
+            ForEach(1...5, id: \.self) { index in
+                Image(systemName: theaterRatingSymbol(at: index))
+                    .foregroundStyle(visit.overallRating > 0 ? TheaterDetailStyle.gold : TheaterDetailStyle.ivory.opacity(0.34))
+            }
+            Text(visit.overallRating > 0 ? String(format: "%.1f", visit.overallRating) : "未評価")
+                .foregroundStyle(TheaterDetailStyle.ivory.opacity(0.72))
+                .padding(.leading, 4)
+        }
+        .font(FavorecoTypography.caption)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(visit.overallRating > 0 ? "評価 \(String(format: "%.1f", visit.overallRating))" : "未評価")
+    }
+
+    private func theaterRatingSymbol(at index: Int) -> String {
+        let threshold = Double(index)
+        if visit.overallRating >= threshold { return "star.fill" }
+        if visit.overallRating >= threshold - 0.5 { return "star.leadinghalf.filled" }
+        return "star"
+    }
+
+    @ViewBuilder
+    private func theaterCastSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
+        let castLinks = snapshot.linkedPeople.filter(isTheaterCastLink)
+        if !castLinks.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("キャスト（\(castLinks.count)人）")
+                    .font(FavorecoTypography.sectionTitle)
+                    .foregroundStyle(TheaterDetailStyle.ivory)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 14) {
+                        ForEach(castLinks) { link in
+                            TheaterCastItem(
+                                name: personName(for: link),
+                                role: link.displayRole.isEmpty ? roleName(for: link.roleKey) : link.displayRole,
+                                imagePath: link.person?.imagePath ?? "",
+                                tint: accentColor
+                            )
+                        }
+                    }
+                }
+                .scrollClipDisabled()
+            }
+        }
+    }
+
     @ViewBuilder
     private func photoSection(snapshot: ExperienceDetailSnapshot) -> some View {
         if !snapshot.photos.isEmpty {
+            let contentMode: ContentMode = EyecatchAspectRatio.usesEyecatchFill(for: snapshot.category) ? .fill : .fit
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("写真")
 
                 if snapshot.photos.count == 1, let firstPhoto = snapshot.photos.first {
-                    RepresentativePhotoImage(photo: firstPhoto, maxPixelSize: 1600, contentMode: .fit)
+                    RepresentativePhotoImage(photo: firstPhoto, maxPixelSize: 1600, contentMode: contentMode)
                         .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fit)
                         .frame(maxWidth: .infinity)
+                        .clipped()
                         .background(Color(.secondarySystemFill))
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 10)], spacing: 10) {
                         ForEach(snapshot.photos) { photo in
                             ZStack(alignment: .bottomLeading) {
-                                RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fit)
+                                RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: contentMode)
                                     .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fit)
                                     .frame(maxWidth: .infinity)
+                                    .clipped()
                                     .background(Color(.secondarySystemFill))
                                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 if photo.relativePath == visit.eyecatchPath {
@@ -186,12 +322,15 @@ struct ExperienceDetailView: View {
 
     @ViewBuilder
     private func peopleSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
-        if !snapshot.linkedPeople.isEmpty {
+        let links = snapshot.category?.templateKey == "theater"
+            ? snapshot.linkedPeople.filter { !isTheaterCastLink($0) }
+            : snapshot.linkedPeople
+        if !links.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle("人物・団体")
+                sectionTitle(snapshot.category?.templateKey == "theater" ? "スタッフ・関係者" : "人物・団体")
 
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(snapshot.linkedPeople) { link in
+                    ForEach(links) { link in
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Text(link.displayRole.isEmpty ? roleName(for: link.roleKey) : link.displayRole)
                                 .font(FavorecoTypography.caption)
@@ -383,6 +522,131 @@ struct ExperienceDetailView: View {
         case "guest": return "ゲスト"
         default: return "その他"
         }
+    }
+
+    private func isTheaterCastRole(_ roleKey: String) -> Bool {
+        ["cast", "lead", "artist", "performer", "guest"].contains(roleKey)
+    }
+
+    private func isTheaterCastLink(_ link: EventPersonLink) -> Bool {
+        if isTheaterCastRole(link.roleKey) { return true }
+        let displayRole = link.displayRole
+        return displayRole.contains("出演") || displayRole.contains("主演") || displayRole.contains("キャスト")
+    }
+
+    private func personName(for link: EventPersonLink) -> String {
+        let snapshotName = link.nameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !snapshotName.isEmpty { return snapshotName }
+        let masterName = link.person?.displayName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return masterName.isEmpty ? "出演者" : masterName
+    }
+}
+
+private enum TheaterDetailStyle {
+    static let background = Color(red: 0.035, green: 0.02, blue: 0.025)
+    static let cardBackground = Color(red: 0.075, green: 0.045, blue: 0.05).opacity(0.96)
+    static let wine = Color(red: 0.28, green: 0.035, blue: 0.08)
+    static let gold = Color(red: 0.82, green: 0.62, blue: 0.30)
+    static let ivory = Color(red: 0.96, green: 0.92, blue: 0.84)
+}
+
+private struct TheaterDetailPoster: View {
+    let event: ExperienceEvent?
+
+    private var representativePhoto: PhotoBlob? {
+        event.flatMap { EventRepresentativePhotoResolver.photo(for: $0) }
+    }
+
+    var body: some View {
+        Group {
+            if let representativePhoto {
+                RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 720, contentMode: .fill)
+            } else if let data = event?.eyecatchData, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    TheaterDetailStyle.wine.opacity(0.72)
+                    Image(systemName: "theatermasks.fill")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(TheaterDetailStyle.gold)
+                }
+            }
+        }
+        .aspectRatio(CGFloat(EyecatchAspectRatio.bSeriesPoster.value), contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .clipped()
+        .overlay {
+            Rectangle().stroke(TheaterDetailStyle.gold.opacity(0.54), lineWidth: 1)
+        }
+    }
+}
+
+private struct TheaterCastItem: View {
+    let name: String
+    let role: String
+    let imagePath: String
+    let tint: Color
+
+    var body: some View {
+        VStack(spacing: 6) {
+            avatar
+                .frame(width: 64, height: 64)
+                .clipShape(Circle())
+                .overlay {
+                    Circle().stroke(TheaterDetailStyle.gold.opacity(0.46), lineWidth: 1)
+                }
+
+            Text(name)
+                .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+                .foregroundStyle(TheaterDetailStyle.ivory)
+                .lineLimit(1)
+                .frame(width: 74)
+
+            Text(role)
+                .font(FavorecoTypography.jpSans(9, weight: .regular, relativeTo: .caption2))
+                .foregroundStyle(TheaterDetailStyle.ivory.opacity(0.58))
+                .lineLimit(1)
+                .frame(width: 74)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if let image = personImage {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            ZStack {
+                tint.opacity(0.22)
+                Text(initial)
+                    .font(FavorecoTypography.jpSerif(24, weight: .bold, relativeTo: .title3))
+                    .foregroundStyle(TheaterDetailStyle.ivory)
+            }
+        }
+    }
+
+    private var initial: String {
+        String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1))
+    }
+
+    private var personImage: UIImage? {
+        let trimmedPath = imagePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPath.isEmpty else { return nil }
+        if let fileURL = URL(string: trimmedPath), fileURL.isFileURL,
+           let image = UIImage(contentsOfFile: fileURL.path) {
+            return image
+        }
+        if trimmedPath.hasPrefix("/"), let image = UIImage(contentsOfFile: trimmedPath) {
+            return image
+        }
+        guard let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return UIImage(contentsOfFile: baseURL.appendingPathComponent(trimmedPath).path)
     }
 }
 

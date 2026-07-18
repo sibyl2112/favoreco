@@ -17,6 +17,7 @@ struct VisitSummaryRow: View {
     @Environment(\.displayScale) private var displayScale
     @Environment(\.favorecoThemePalette) private var themePalette
     @State private var thumbnailImage: UIImage?
+    @State private var loadedThumbnailKey: String?
 
     private var title: String {
         visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
@@ -58,14 +59,18 @@ struct VisitSummaryRow: View {
     private func loadThumbnail() async {
         guard let photo = firstPhoto else {
             thumbnailImage = nil
+            loadedThumbnailKey = nil
             return
         }
         let targetID = photo.id
         let key = cacheKey(for: photo)
         if let cached = ThumbnailLoader.cached(forKey: key) {
             thumbnailImage = cached
+            loadedThumbnailKey = key
             return
         }
+        thumbnailImage = nil
+        loadedThumbnailKey = nil
         let data = photo.data // SwiftData プロパティはメインで読み、値型で渡す
         let maxPixel = thumbnailMaxPixel
         let image = await Task.detached(priority: .userInitiated) {
@@ -74,6 +79,7 @@ struct VisitSummaryRow: View {
         // セル再利用や写真変更後に遅れて届いた結果で、別の写真の画像を上書きしない
         guard !Task.isCancelled, firstPhoto?.id == targetID else { return }
         thumbnailImage = image
+        loadedThumbnailKey = key
     }
 
     private var unitFields: VisitUnitFields {
@@ -146,11 +152,14 @@ struct VisitSummaryRow: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let thumbnailImage {
-            Image(uiImage: thumbnailImage)
+        if let displayedThumbnailImage {
+            Image(uiImage: displayedThumbnailImage)
                 .resizable()
-                .scaledToFit()
+                .aspectRatio(
+                    contentMode: EyecatchAspectRatio.usesEyecatchFill(for: category) ? .fill : .fit
+                )
                 .frame(width: 64, height: thumbnailHeight)
+                .clipped()
                 .background(categoryColor.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {
@@ -160,6 +169,14 @@ struct VisitSummaryRow: View {
                 .frame(width: 64, height: thumbnailHeight)
                 .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
+    }
+
+    private var displayedThumbnailImage: UIImage? {
+        guard let key = thumbnailTaskID else { return nil }
+        if loadedThumbnailKey == key {
+            return thumbnailImage
+        }
+        return ThumbnailLoader.cached(forKey: key)
     }
 
     private var thumbnailHeight: CGFloat {
@@ -202,6 +219,145 @@ struct VisitSummaryRow: View {
 
     private var hasBadges: Bool {
         visit.amount != Decimal(0) || !unitFields.ocrText.isEmpty || !unitFields.advancedEntries.isEmpty
+    }
+}
+
+struct VisitRecordGridTile: View {
+    let visit: Visit
+    let isCompact: Bool
+
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.favorecoThemePalette) private var themePalette
+    @State private var thumbnailImage: UIImage?
+    @State private var loadedThumbnailKey: String?
+
+    private var title: String {
+        visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
+    }
+
+    private var category: RecordCategory? {
+        visit.event?.category
+    }
+
+    private var categoryColor: Color {
+        themePalette.categoryColor(hex: category?.colorHex ?? "#147C88")
+    }
+
+    private var firstPhoto: PhotoBlob? {
+        let photos = (visit.photos ?? [])
+            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
+        if !visit.eyecatchPath.isEmpty,
+           let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
+            return cover
+        }
+        return photos.min { $0.createdAt < $1.createdAt }
+    }
+
+    private var thumbnailMaxPixel: CGFloat {
+        min((isCompact ? 140 : 200) * displayScale, 640)
+    }
+
+    private func cacheKey(for photo: PhotoBlob) -> String {
+        "\(photo.id.uuidString)@record-grid-\(Int(thumbnailMaxPixel.rounded()))"
+    }
+
+    private var thumbnailTaskID: String? {
+        firstPhoto.map { cacheKey(for: $0) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
+            cover
+
+            Text(title)
+                .font(isCompact ? .caption2.weight(.semibold) : FavorecoTypography.captionStrong)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 4) {
+                Text(FavorecoDateText.compactDate(visit.visitedAt))
+                    .lineLimit(1)
+
+                if !isCompact, visit.overallRating > 0 {
+                    Spacer(minLength: 2)
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(categoryColor)
+                    Text(String(format: "%.1f", visit.overallRating))
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+
+            if !isCompact, let categoryName = category?.name, !categoryName.isEmpty {
+                Text(categoryName)
+                    .font(.caption2)
+                    .foregroundStyle(categoryColor)
+                    .lineLimit(1)
+            }
+        }
+        .padding(6)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .task(id: thumbnailTaskID) {
+            await loadThumbnail()
+        }
+    }
+
+    private var cover: some View {
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if let displayedThumbnailImage {
+                    Image(uiImage: displayedThumbnailImage)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        categoryColor.opacity(0.12)
+                        Text(String((category?.name.isEmpty == false ? category?.name : title)?.prefix(1) ?? "記"))
+                            .font(isCompact ? .headline : .title2)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(categoryColor)
+                    }
+                }
+            }
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private var displayedThumbnailImage: UIImage? {
+        guard let key = thumbnailTaskID else { return nil }
+        if loadedThumbnailKey == key {
+            return thumbnailImage
+        }
+        return ThumbnailLoader.cached(forKey: key)
+    }
+
+    @MainActor
+    private func loadThumbnail() async {
+        guard let photo = firstPhoto else {
+            thumbnailImage = nil
+            loadedThumbnailKey = nil
+            return
+        }
+        let targetID = photo.id
+        let key = cacheKey(for: photo)
+        if let cached = ThumbnailLoader.cached(forKey: key) {
+            thumbnailImage = cached
+            loadedThumbnailKey = key
+            return
+        }
+        thumbnailImage = nil
+        loadedThumbnailKey = nil
+        let data = photo.data
+        let maxPixel = thumbnailMaxPixel
+        let image = await Task.detached(priority: .userInitiated) {
+            ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
+        }.value
+        guard !Task.isCancelled, firstPhoto?.id == targetID else { return }
+        thumbnailImage = image
+        loadedThumbnailKey = key
     }
 }
 

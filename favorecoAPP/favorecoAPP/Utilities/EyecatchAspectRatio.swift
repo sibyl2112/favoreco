@@ -31,7 +31,7 @@ struct EyecatchAspectRatio: Identifiable, Hashable, Codable {
         name: "映画ポスター",
         width: 1,
         height: 1.414,
-        note: "日本の映画ポスター/B判に近い比率"
+        note: "映画ポスター/B判系の共通比率"
     )
 
     static let bSeriesPoster = EyecatchAspectRatio(
@@ -44,10 +44,58 @@ struct EyecatchAspectRatio: Identifiable, Hashable, Codable {
 
     static let bookCover = EyecatchAspectRatio(
         key: "bookCover",
-        name: "書影",
+        name: "未設定（従来）",
         width: 1,
         height: 1.45,
-        note: "書籍カバー向き"
+        note: "既存の書籍で使う従来比率"
+    )
+
+    static let comicBook = EyecatchAspectRatio(
+        key: "bookComic112x174",
+        name: "コミック",
+        width: 112,
+        height: 174,
+        note: "W112mm × H174mm"
+    )
+
+    static let shinshoBook = EyecatchAspectRatio(
+        key: "bookShinsho103x182",
+        name: "新書",
+        width: 103,
+        height: 182,
+        note: "W103mm × H182mm"
+    )
+
+    static let hardcoverBook = EyecatchAspectRatio(
+        key: "bookHardcover127x188",
+        name: "ハードカバー",
+        width: 127,
+        height: 188,
+        note: "W127mm × H188mm"
+    )
+
+    static let paperbackBook = EyecatchAspectRatio(
+        key: "bookPaperback105x148",
+        name: "文庫",
+        width: 105,
+        height: 148,
+        note: "W105mm × H148mm"
+    )
+
+    static let magazineBook = EyecatchAspectRatio(
+        key: "bookMagazine182x257",
+        name: "雑誌",
+        width: 182,
+        height: 257,
+        note: "W182mm × H257mm"
+    )
+
+    static let artBook = EyecatchAspectRatio(
+        key: "bookArt210x297",
+        name: "写真集・画集",
+        width: 210,
+        height: 297,
+        note: "W210mm × H297mm"
     )
 
     static let labelLandscape = EyecatchAspectRatio(
@@ -71,8 +119,23 @@ struct EyecatchAspectRatio: Identifiable, Hashable, Codable {
         cinemaPoster,
         bSeriesPoster,
         bookCover,
+        comicBook,
+        shinshoBook,
+        hardcoverBook,
+        paperbackBook,
+        magazineBook,
+        artBook,
         labelLandscape,
         goshuinStandard,
+    ]
+
+    static let selectableBookFormats: [EyecatchAspectRatio] = [
+        comicBook,
+        shinshoBook,
+        hardcoverBook,
+        paperbackBook,
+        magazineBook,
+        artBook,
     ]
 
     static func recommended(for category: RecordCategory?) -> EyecatchAspectRatio {
@@ -93,10 +156,37 @@ struct EyecatchAspectRatio: Identifiable, Hashable, Codable {
     }
 
     static func option(for key: String, category: RecordCategory? = nil) -> EyecatchAspectRatio {
+        if usesPosterFill(for: category) {
+            return recommended(for: category)
+        }
         if let option = all.first(where: { $0.key == key }) {
             return option
         }
         return recommended(for: category)
+    }
+
+    static func resolved(for event: ExperienceEvent?) -> EyecatchAspectRatio {
+        guard let event else { return bookCover }
+        let category = event.category
+        guard category?.templateKey == "book" else { return recommended(for: category) }
+
+        let eventKey = VisitUnitFields(rawValue: event.unitFieldsRaw).eyecatchAspectRatioKey
+        if !eventKey.isEmpty {
+            return option(for: eventKey, category: category)
+        }
+
+        let latestVisitKey = (event.visits ?? [])
+            .max(by: { $0.visitedAt < $1.visitedAt })
+            .map { VisitUnitFields(rawValue: $0.unitFieldsRaw).eyecatchAspectRatioKey } ?? ""
+        return option(for: latestVisitKey, category: category)
+    }
+
+    static func usesPosterFill(for category: RecordCategory?) -> Bool {
+        category?.templateKey == "movie" || category?.templateKey == "theater"
+    }
+
+    static func usesEyecatchFill(for category: RecordCategory?) -> Bool {
+        category != nil
     }
 
     private func format(_ value: Double) -> String {

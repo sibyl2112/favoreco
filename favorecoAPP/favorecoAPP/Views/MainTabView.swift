@@ -197,6 +197,8 @@ struct MainScreenHeader: View {
     var usesBrandFont = false
     var centeredTitle: String? = nil
     var usesCompactBrand = false
+    var brandGradient: LinearGradient? = nil
+    var headerForegroundColor: Color? = nil
     var onLeadingTap: (() -> Void)? = nil
     var onCenteredTitleTap: (() -> Void)? = nil
 
@@ -228,7 +230,7 @@ struct MainScreenHeader: View {
                 }
 
                 Spacer(minLength: 8)
-                MainToolbarActions()
+                MainToolbarActions(tint: headerForegroundColor)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 48)
@@ -244,7 +246,7 @@ struct MainScreenHeader: View {
             }
         }
         .font(FavorecoTypography.jpSerif(20, weight: .bold, relativeTo: .title3))
-        .foregroundStyle(.primary)
+        .foregroundStyle(headerForegroundColor ?? .primary)
         .lineLimit(1)
         .minimumScaleFactor(0.72)
         .padding(.horizontal, 112)
@@ -255,20 +257,30 @@ struct MainScreenHeader: View {
             .font(
                 usesBrandFont
                     ? FavorecoTypography.latinDisplay(
-                        34,
+                        usesCompactBrand ? 27 : 34,
                         weight: usesCompactBrand ? .semibold : .bold,
                         relativeTo: usesCompactBrand ? .headline : .largeTitle
                     )
                     : FavorecoTypography.jpSans(30, weight: .bold, relativeTo: .title)
             )
-            .foregroundStyle(
-                usesBrandFont
-                    ? FavorecoTypography.brandColor(for: colorScheme).opacity(usesCompactBrand ? 0.78 : 1)
-                    : Color.primary
-            )
+            .foregroundStyle(leadingTitleStyle)
             .lineLimit(1)
             .minimumScaleFactor(0.72)
             .layoutPriority(1)
+    }
+
+    private var leadingTitleStyle: AnyShapeStyle {
+        if let brandGradient {
+            return AnyShapeStyle(brandGradient)
+        }
+        if let headerForegroundColor {
+            return AnyShapeStyle(headerForegroundColor)
+        }
+        return AnyShapeStyle(
+            usesBrandFont
+                ? FavorecoTypography.brandColor(for: colorScheme).opacity(usesCompactBrand ? 0.78 : 1)
+                : Color.primary
+        )
     }
 }
 
@@ -276,9 +288,17 @@ struct MainHeaderDivider: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.favorecoThemePalette) private var themePalette
 
+    var tint: Color? = nil
+
     var body: some View {
         Rectangle()
-            .fill(themePalette.globalTint.opacity(colorScheme == .dark ? 0.26 : 0.18))
+            .fill(
+                (tint ?? themePalette.globalTint).opacity(
+                    tint == nil
+                        ? (colorScheme == .dark ? 0.26 : 0.18)
+                        : (colorScheme == .dark ? 0.55 : 0.45)
+                )
+            )
             .frame(height: 1)
     }
 }
@@ -287,6 +307,8 @@ struct MainToolbarActions: View {
     @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
     @State private var isShowingNotifications = false
     @State private var isShowingSettings = false
+
+    var tint: Color? = nil
 
     var body: some View {
         HStack(spacing: 2) {
@@ -299,7 +321,7 @@ struct MainToolbarActions: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.primary)
+            .foregroundStyle(tint ?? .primary)
             .accessibilityLabel("お知らせ")
 
             Button {
@@ -312,6 +334,7 @@ struct MainToolbarActions: View {
             .buttonStyle(.plain)
             .accessibilityLabel("マイ・設定")
         }
+        .foregroundStyle(tint ?? .primary)
         .sheet(isPresented: $isShowingNotifications) {
             AppNotificationCenterView()
         }
@@ -591,19 +614,27 @@ private struct RecordsView: View {
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var searchText = ""
-    @State private var selectedCategoryID: UUID?
+    @State private var selectedCategoryIDs: Set<UUID> = []
     @State private var periodFilter: RecordPeriodFilter = .all
+    @State private var customPeriodStart = Date().startOfMonth
+    @State private var customPeriodEnd = Date()
     @State private var photoFilterEnabled = false
     @State private var sortOrder: RecordSortOrder = .newest
     @State private var isShowingFilters = false
+    @AppStorage(AppStorageKeys.recordsLayoutMode) private var recordsLayoutModeRaw = RecordsLayoutMode.detail.rawValue
+
+    private var recordsLayoutMode: RecordsLayoutMode {
+        RecordsLayoutMode(rawValue: recordsLayoutModeRaw) ?? .detail
+    }
 
     private var visibleVisits: [Visit] {
         let calendar = Calendar.current
         let now = Date()
         let filtered = visits.filter { visit in
             guard visit.event?.isArchived != true else { return false }
-            if let selectedCategoryID, visit.event?.category?.id != selectedCategoryID {
-                return false
+            if !selectedCategoryIDs.isEmpty {
+                guard let categoryID = visit.event?.category?.id,
+                      selectedCategoryIDs.contains(categoryID) else { return false }
             }
             switch periodFilter {
             case .all:
@@ -612,6 +643,12 @@ private struct RecordsView: View {
                 guard calendar.isDate(visit.visitedAt, equalTo: now, toGranularity: .month) else { return false }
             case .thisYear:
                 guard calendar.isDate(visit.visitedAt, equalTo: now, toGranularity: .year) else { return false }
+            case .custom:
+                let start = calendar.startOfDay(for: customPeriodStart)
+                let endDay = calendar.startOfDay(for: customPeriodEnd)
+                guard let endExclusive = calendar.date(byAdding: .day, value: 1, to: endDay),
+                      visit.visitedAt >= start,
+                      visit.visitedAt < endExclusive else { return false }
             }
             if photoFilterEnabled,
                !(visit.photos ?? []).contains(where: { $0.mediaKind == "photo" && $0.hasStoredData }) {
@@ -642,7 +679,7 @@ private struct RecordsView: View {
 
     private var activeFilterCount: Int {
         var count = 0
-        if selectedCategoryID != nil { count += 1 }
+        if !selectedCategoryIDs.isEmpty { count += 1 }
         if periodFilter != .all { count += 1 }
         if photoFilterEnabled { count += 1 }
         if sortOrder != .newest { count += 1 }
@@ -663,33 +700,16 @@ private struct RecordsView: View {
 
                 recordToolbar
 
-                List {
-                if visibleVisits.isEmpty {
-                    PlaceholderRow(
-                        icon: activeFilterCount > 0 || !searchText.isEmpty ? "line.3.horizontal.decrease.circle" : "rectangle.stack",
-                        title: activeFilterCount > 0 || !searchText.isEmpty ? "条件に合う記録がありません" : "記録はまだありません",
-                        message: activeFilterCount > 0 || !searchText.isEmpty ? "検索語やフィルターを変更してください。" : "下部の「追加」から最初の記録を追加できます。"
-                    )
-                } else {
-                    ForEach(visibleVisits) { visit in
-                        NavigationLink {
-                            ExperienceDetailView(visit: visit)
-                        } label: {
-                            VisitSummaryRow(visit: visit)
-                        }
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .listRowSeparator(.hidden)
-                    }
-                }
-                }
-                .listStyle(.plain)
+                recordsContent
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $isShowingFilters) {
                 RecordFilterView(
                     categories: activeCategories,
-                    selectedCategoryID: $selectedCategoryID,
+                    selectedCategoryIDs: $selectedCategoryIDs,
                     periodFilter: $periodFilter,
+                    customPeriodStart: $customPeriodStart,
+                    customPeriodEnd: $customPeriodEnd,
                     photoFilterEnabled: $photoFilterEnabled,
                     sortOrder: $sortOrder
                 )
@@ -745,17 +765,64 @@ private struct RecordsView: View {
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                NavigationLink {
-                    TicketOverviewView()
-                } label: {
-                    Label("予定・チケット", systemImage: "ticket")
-                        .font(FavorecoTypography.captionStrong)
-                }
+                RecordsLayoutPicker(selectionRawValue: $recordsLayoutModeRaw)
             }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
         .background(Color(.systemBackground))
+    }
+
+    @ViewBuilder
+    private var recordsContent: some View {
+        if visibleVisits.isEmpty {
+            List {
+                PlaceholderRow(
+                    icon: activeFilterCount > 0 || !searchText.isEmpty ? "line.3.horizontal.decrease.circle" : "rectangle.stack",
+                    title: activeFilterCount > 0 || !searchText.isEmpty ? "条件に合う記録がありません" : "記録はまだありません",
+                    message: activeFilterCount > 0 || !searchText.isEmpty ? "検索語やフィルターを変更してください。" : "下部の「追加」から最初の記録を追加できます。"
+                )
+            }
+            .listStyle(.plain)
+        } else if let columnCount = recordsLayoutMode.columnCount {
+            ScrollView {
+                LazyVGrid(
+                    columns: Array(
+                        repeating: GridItem(.flexible(), spacing: recordsLayoutMode == .gridFour ? 7 : 10, alignment: .top),
+                        count: columnCount
+                    ),
+                    spacing: recordsLayoutMode == .gridFour ? 12 : 16
+                ) {
+                    ForEach(visibleVisits) { visit in
+                        NavigationLink {
+                            ExperienceDetailView(visit: visit)
+                        } label: {
+                            VisitRecordGridTile(
+                                visit: visit,
+                                isCompact: recordsLayoutMode == .gridFour
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 24)
+            }
+        } else {
+            List {
+                ForEach(visibleVisits) { visit in
+                    NavigationLink {
+                        ExperienceDetailView(visit: visit)
+                    } label: {
+                        VisitSummaryRow(visit: visit)
+                    }
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .listStyle(.plain)
+        }
     }
 }
 
@@ -763,6 +830,7 @@ private enum RecordPeriodFilter: String, CaseIterable, Identifiable {
     case all
     case thisMonth
     case thisYear
+    case custom
 
     var id: String { rawValue }
     var title: String {
@@ -770,6 +838,7 @@ private enum RecordPeriodFilter: String, CaseIterable, Identifiable {
         case .all: "すべて"
         case .thisMonth: "今月"
         case .thisYear: "今年"
+        case .custom: "期間指定"
         }
     }
 }
@@ -789,11 +858,49 @@ private enum RecordSortOrder: String, CaseIterable, Identifiable {
     }
 }
 
+private struct RecordsLayoutPicker: View {
+    @Binding var selectionRawValue: String
+
+    private var selection: RecordsLayoutMode {
+        RecordsLayoutMode(rawValue: selectionRawValue) ?? .detail
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(RecordsLayoutMode.allCases) { mode in
+                Button {
+                    selectionRawValue = mode.rawValue
+                } label: {
+                    Image(systemName: mode.systemImage)
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 30, height: 28)
+                        .foregroundStyle(selection == mode ? Color.white : Color.accentColor)
+                        .background(
+                            selection == mode ? Color.accentColor : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(mode.displayName)表示")
+                .accessibilityAddTraits(selection == mode ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.24), lineWidth: 1)
+        }
+    }
+}
+
 private struct RecordFilterView: View {
     @Environment(\.dismiss) private var dismiss
     let categories: [RecordCategory]
-    @Binding var selectedCategoryID: UUID?
+    @Binding var selectedCategoryIDs: Set<UUID>
     @Binding var periodFilter: RecordPeriodFilter
+    @Binding var customPeriodStart: Date
+    @Binding var customPeriodEnd: Date
     @Binding var photoFilterEnabled: Bool
     @Binding var sortOrder: RecordSortOrder
 
@@ -801,13 +908,35 @@ private struct RecordFilterView: View {
         NavigationStack {
             Form {
                 Section("ジャンル") {
-                    Picker("ジャンル", selection: $selectedCategoryID) {
-                        Text("すべて").tag(UUID?.none)
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
+                        spacing: 10
+                    ) {
                         ForEach(categories) { category in
-                            Label(category.name, systemImage: category.iconSymbol)
-                                .tag(Optional(category.id))
+                            Button {
+                                toggleCategory(category.id)
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: selectedCategoryIDs.contains(category.id) ? "checkmark.square.fill" : "square")
+                                        .foregroundStyle(selectedCategoryIDs.contains(category.id) ? Color.accentColor : .secondary)
+                                    Text(category.name)
+                                        .font(.caption)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.72)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(category.name)
+                            .accessibilityValue(selectedCategoryIDs.contains(category.id) ? "選択中" : "未選択")
                         }
                     }
+
+                    Text(selectedCategoryIDs.isEmpty ? "未選択の場合は、すべてのジャンルを表示します" : "\(selectedCategoryIDs.count)件のジャンルを選択中")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("期間") {
@@ -817,6 +946,21 @@ private struct RecordFilterView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+
+                    if periodFilter == .custom {
+                        DatePicker("開始日", selection: $customPeriodStart, displayedComponents: .date)
+                            .onChange(of: customPeriodStart) { _, newValue in
+                                if customPeriodEnd < newValue {
+                                    customPeriodEnd = newValue
+                                }
+                            }
+                        DatePicker(
+                            "終了日",
+                            selection: $customPeriodEnd,
+                            in: customPeriodStart...,
+                            displayedComponents: .date
+                        )
+                    }
                 }
 
                 Section("内容") {
@@ -833,8 +977,10 @@ private struct RecordFilterView: View {
 
                 Section {
                     Button("すべての条件をクリア") {
-                        selectedCategoryID = nil
+                        selectedCategoryIDs.removeAll()
                         periodFilter = .all
+                        customPeriodStart = Date().startOfMonth
+                        customPeriodEnd = Date()
                         photoFilterEnabled = false
                         sortOrder = .newest
                     }
@@ -847,6 +993,14 @@ private struct RecordFilterView: View {
                     Button("完了") { dismiss() }
                 }
             }
+        }
+    }
+
+    private func toggleCategory(_ categoryID: UUID) {
+        if selectedCategoryIDs.contains(categoryID) {
+            selectedCategoryIDs.remove(categoryID)
+        } else {
+            selectedCategoryIDs.insert(categoryID)
         }
     }
 }

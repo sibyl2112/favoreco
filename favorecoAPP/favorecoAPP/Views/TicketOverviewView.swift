@@ -55,6 +55,7 @@ struct TicketOverviewView: View {
                 TicketStatusDefinition.name(for: attempt.statusKey),
                 TicketEntryRouteDefinition.name(for: attempt.entryRouteKey),
                 TicketInputIssueDefinition.issue(for: attempt)?.title ?? "",
+                TicketAttemptUnitFields(rawValue: attempt.unitFieldsRaw).tagNames.joined(separator: " "),
                 attempt.memo,
             ].joined(separator: " ")
             return searchableText.localizedCaseInsensitiveContains(query)

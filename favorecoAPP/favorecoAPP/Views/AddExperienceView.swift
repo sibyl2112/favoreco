@@ -239,6 +239,7 @@ struct AddExperienceView: View {
             title: draft.trimmedTitle,
             seriesName: draft.trimmedSeriesName,
             officialURL: draft.trimmedOfficialURL,
+            unitFieldsRaw: draft.eventUnitFieldsRaw(for: category),
             createdAt: now,
             updatedAt: now,
             category: category
@@ -548,6 +549,11 @@ struct EditExperienceView: View {
             event.title = draft.trimmedTitle
             event.seriesName = draft.trimmedSeriesName
             event.officialURL = draft.trimmedOfficialURL
+            if event.category?.templateKey == "book" {
+                var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+                eventFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
+                event.unitFieldsRaw = eventFields.encodedRawValue
+            }
             event.updatedAt = now
         }
 
@@ -684,7 +690,11 @@ struct AddVisitView: View {
         self.event = event
         self.sourcePlan = sourcePlan
         self.onSave = onSave
-        _draft = State(initialValue: initialDraft)
+        var preparedDraft = initialDraft
+        if event.category?.templateKey == "book", preparedDraft.eyecatchAspectRatioKey.isEmpty {
+            preparedDraft.eyecatchAspectRatioKey = EyecatchAspectRatio.resolved(for: event).key
+        }
+        _draft = State(initialValue: preparedDraft)
     }
 
     var body: some View {
@@ -899,6 +909,11 @@ struct AddVisitView: View {
         )
 
         event.stateKey = "active"
+        if event.category?.templateKey == "book" {
+            var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+            eventFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
+            event.unitFieldsRaw = eventFields.encodedRawValue
+        }
         event.updatedAt = now
         if let sourcePlan {
             sourcePlan.visit = visit
@@ -1135,10 +1150,21 @@ struct AddExperienceDraft {
     func makeUnitFields(for category: RecordCategory?) -> VisitUnitFields {
         VisitUnitFields(
             ocrText: trimmedOCRText,
-            eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.recommended(for: category).key : eyecatchAspectRatioKey,
+            eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
+                ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
+                : eyecatchAspectRatioKey,
             goshuinBookSizeKey: category?.templateKey == "goshuin" && goshuinBookSizeKey.isEmpty ? GoshuinBookSize.standard.key : goshuinBookSizeKey,
             advancedEntries: trimmedAdvancedEntries
         )
+    }
+
+    func eventUnitFieldsRaw(for category: RecordCategory?) -> String {
+        guard category?.templateKey == "book" else { return "" }
+        return VisitUnitFields(
+            eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
+                ? EyecatchAspectRatio.hardcoverBook.key
+                : eyecatchAspectRatioKey
+        ).encodedRawValue
     }
 
     var canSave: Bool {
@@ -1278,7 +1304,9 @@ struct VisitDraft {
     func makeUnitFields(for category: RecordCategory?) -> VisitUnitFields {
         VisitUnitFields(
             ocrText: trimmedOCRText,
-            eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.recommended(for: category).key : eyecatchAspectRatioKey,
+            eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
+                ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
+                : eyecatchAspectRatioKey,
             goshuinBookSizeKey: category?.templateKey == "goshuin" && goshuinBookSizeKey.isEmpty ? GoshuinBookSize.standard.key : goshuinBookSizeKey,
             advancedEntries: trimmedAdvancedEntries
         )
