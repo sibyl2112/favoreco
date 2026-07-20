@@ -50,13 +50,6 @@ struct GenreNavigationStrip: View {
                         }
                     }
                 }
-                .background(Color(.secondarySystemGroupedBackground).opacity(0.72))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.primary.opacity(0.20), lineWidth: 1)
-                }
-                .padding(.horizontal, 2)
             }
             .scrollIndicators(.hidden)
             .onAppear {
@@ -66,37 +59,42 @@ struct GenreNavigationStrip: View {
                 scrollToSelection(with: proxy, animated: true)
             }
         }
-        .frame(height: 40)
+        .frame(height: 46)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("ジャンルを選ぶ")
     }
 
     private func allLabel(isSelected: Bool, showsLeadingDivider: Bool) -> some View {
         segmentLabel(
-            title: "すべて",
+            title: "総合",
             tint: themePalette.globalTint,
             isSelected: isSelected,
             showsLeadingDivider: showsLeadingDivider
         )
         .id("all-genres")
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("すべてのジャンル")
+        .accessibilityLabel("ジャンル横断の総合画面")
         .accessibilityValue(isSelected ? "選択中" : "")
-        .accessibilityHint(isSelected ? "全ジャンルを表示しています" : "Homeへ戻ります")
+        .accessibilityHint(isSelected ? "ジャンル横断の情報を表示しています" : "総合画面へ戻ります")
     }
 
     private func genreLabel(category: RecordCategory, isSelected: Bool, showsLeadingDivider: Bool) -> some View {
-        let tint = themePalette.categoryColor(hex: category.colorHex)
+        let tint = category.templateKey == "live"
+            ? LiveCategoryStyle.teal
+            : themePalette.categoryColor(hex: category.colorHex)
+        let displayName = category.templateKey == "live"
+            ? "LIVE"
+            : category.name.isEmpty ? "無題" : category.name
 
         return segmentLabel(
-            title: category.name.isEmpty ? "無題" : category.name,
+            title: displayName,
             tint: tint,
             isSelected: isSelected,
             showsLeadingDivider: showsLeadingDivider
         )
         .id(category.id)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(category.name.isEmpty ? "無題ジャンル" : category.name)
+        .accessibilityLabel(category.templateKey == "live" ? "ライブ" : category.name.isEmpty ? "無題ジャンル" : category.name)
         .accessibilityValue(isSelected ? "選択中" : "")
         .accessibilityHint(
             isSelected
@@ -112,17 +110,24 @@ struct GenreNavigationStrip: View {
         showsLeadingDivider: Bool
     ) -> some View {
         Text(title)
-            .font(FavorecoTypography.jpSans(13, weight: isSelected ? .bold : .semibold, relativeTo: .caption))
-            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .font(FavorecoTypography.jpSerif(14, weight: isSelected ? .bold : .medium, relativeTo: .body))
+            .foregroundStyle(isSelected ? tint : Color.primary.opacity(0.82))
             .lineLimit(1)
-            .padding(.horizontal, 14)
-            .frame(height: 36)
-            .background(isSelected ? tint : Color.clear)
+            .padding(.horizontal, 18)
+            .frame(height: 44)
             .overlay(alignment: .leading) {
                 if showsLeadingDivider {
                     Rectangle()
-                        .fill(isSelected ? Color.white.opacity(0.28) : Color.primary.opacity(0.16))
-                        .frame(width: 1, height: 22)
+                        .fill(Color.primary.opacity(0.16))
+                        .frame(width: 1, height: 20)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if isSelected {
+                    Rectangle()
+                        .fill(tint)
+                        .frame(height: 2)
+                        .padding(.horizontal, 8)
                 }
             }
             .contentShape(Rectangle())

@@ -28,39 +28,31 @@ struct HomeView: View {
     @AppStorage(AppStorageKeys.showsHomeCategories) private var showsCategories = true
     @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsStatsSummary = false
     @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var categoryLayoutModeRaw = HomeCategoryLayoutMode.horizontal.rawValue
-    @State private var isShowingAttentionList = false
     @State private var selectedUpcomingPlanIndex = 0
+    @State private var interestLayoutMode: CategoryLibraryLayoutMode = .gallery
+    @State private var isShowingAllHomeUpcoming = false
+    @State private var isShowingNextActionList = false
+    @State private var swipeDestinationCategoryID: UUID?
 
     private var categoryLayoutMode: HomeCategoryLayoutMode {
         HomeCategoryLayoutMode(rawValue: categoryLayoutModeRaw) ?? .horizontal
     }
 
-    private func attentionItems(for snapshot: HomeSnapshot) -> [HomeAttentionItem] {
-        var items = ticketAttentionItems(for: snapshot.activeTicketAttempts)
-
-        if items.count < 5 {
-            items.append(contentsOf: membershipAttentionItems(for: snapshot.expiringTicketAccounts).prefix(5 - items.count))
+    private func nextActionItems(for snapshot: HomeSnapshot, now: Date = Date()) -> [HomeAttentionItem] {
+        let ticketItems = snapshot.activeTicketAttempts.compactMap { attempt in
+            nextActionItem(for: attempt, now: now)
         }
+        let items = ticketItems + membershipAttentionItems(for: snapshot.expiringTicketAccounts)
 
-        return Array(items.sorted { lhs, rhs in
-            if lhs.priority != rhs.priority {
-                return lhs.priority < rhs.priority
+        return items.sorted { lhs, rhs in
+            if lhs.isOverdue != rhs.isOverdue {
+                return lhs.isOverdue
             }
-            return lhs.dueDate < rhs.dueDate
-        }.prefix(5))
-    }
-
-    private func ticketAttentionItems(for attempts: [TicketAttempt]) -> [HomeAttentionItem] {
-        attempts
-            .flatMap { ticketAttentionItems(for: $0) }
-            .sorted { lhs, rhs in
-                if lhs.priority != rhs.priority {
-                    return lhs.priority < rhs.priority
-                }
+            if lhs.dueDate != rhs.dueDate {
                 return lhs.dueDate < rhs.dueDate
             }
-            .prefix(5)
-            .map { $0 }
+            return lhs.priority < rhs.priority
+        }
     }
 
     private func membershipAttentionItems(for accounts: [TicketAccount]) -> [HomeAttentionItem] {
@@ -69,115 +61,36 @@ struct HomeView: View {
                 HomeAttentionItem(
                     id: "membership-\(account.id.uuidString)-expiry",
                     icon: "person.text.rectangle",
-                    title: account.serviceName.isEmpty ? "会員期限" : account.serviceName,
-                    subtitle: "期限 \(FavorecoDateText.compactDateTime(account.expiryDate))",
+                    title: "会員期限",
+                    subtitle: "\(account.serviceName.isEmpty ? "登録サービス" : account.serviceName)・\(FavorecoDateText.compactDateTime(account.expiryDate))",
+                    contextTitle: account.serviceName.isEmpty ? "登録サービス" : account.serviceName,
                     dueDate: account.expiryDate,
                     tint: Color(hex: account.colorHex),
-                    priority: 8
+                    priority: 8,
+                    isOverdue: false
                 )
             }
-            .sorted { lhs, rhs in
-                if lhs.priority != rhs.priority {
-                    return lhs.priority < rhs.priority
-                }
-                return lhs.dueDate < rhs.dueDate
-            }
     }
 
-    private func ticketAttentionItems(for attempt: TicketAttempt) -> [HomeAttentionItem] {
-        let now = Date()
+    private func nextActionItem(for attempt: TicketAttempt, now: Date) -> HomeAttentionItem? {
+        guard let action = TicketNextActionDefinition.nextAction(for: attempt, now: now) else {
+            return nil
+        }
+
         let plan = attempt.plan
-        let title = plan?.title.isEmpty == false ? plan?.title ?? "予定" : "予定"
+        let planTitle = plan?.title.isEmpty == false ? plan?.title ?? "予定" : "予定"
         let tint = themePalette.categoryColor(hex: plan?.category?.colorHex ?? "#147C88")
-        var items: [HomeAttentionItem] = []
-
-        if attempt.saleStartAt > now {
-            items.append(ticketAttention(
-                id: "ticket-\(attempt.id.uuidString)-sale-start",
-                icon: "ticket",
-                label: "申込開始",
-                title: title,
-                date: attempt.saleStartAt,
-                plan: plan,
-                tint: tint,
-                priority: 12
-            ))
-        }
-
-        if attempt.applyDeadlineAt > now {
-            items.append(ticketAttention(
-                id: "ticket-\(attempt.id.uuidString)-apply-deadline",
-                icon: "hourglass",
-                label: "申込締切",
-                title: title,
-                date: attempt.applyDeadlineAt,
-                plan: plan,
-                tint: .red,
-                priority: 1
-            ))
-        }
-
-        if attempt.resultAnnounceAt > now {
-            items.append(ticketAttention(
-                id: "ticket-\(attempt.id.uuidString)-result",
-                icon: "checkmark.seal",
-                label: "当落発表",
-                title: title,
-                date: attempt.resultAnnounceAt,
-                plan: plan,
-                tint: .purple,
-                priority: 5
-            ))
-        }
-
-        if attempt.paymentDeadlineAt > now {
-            items.append(ticketAttention(
-                id: "ticket-\(attempt.id.uuidString)-payment",
-                icon: "yensign.circle",
-                label: "入金締切",
-                title: title,
-                date: attempt.paymentDeadlineAt,
-                plan: plan,
-                tint: .orange,
-                priority: 2
-            ))
-        }
-
-        if attempt.issueStartAt > now {
-            items.append(ticketAttention(
-                id: "ticket-\(attempt.id.uuidString)-issue-start",
-                icon: "ticket.fill",
-                label: "発券開始",
-                title: title,
-                date: attempt.issueStartAt,
-                plan: plan,
-                tint: .teal,
-                priority: 10
-            ))
-        }
-
-        return items
-    }
-
-    private func ticketAttention(
-        id: String,
-        icon: String,
-        label: String,
-        title: String,
-        date: Date,
-        plan: Plan?,
-        tint: Color,
-        priority: Int
-    ) -> HomeAttentionItem {
-        HomeAttentionItem(
-            id: id,
-            icon: icon,
-            title: title,
-            subtitle: "\(label) \(FavorecoDateText.compactDateTime(date))",
-            dueDate: date,
+        return HomeAttentionItem(
+            id: "ticket-\(attempt.id.uuidString)-\(action.title)-\(action.date.timeIntervalSinceReferenceDate)",
+            icon: action.systemImage,
+            title: action.title,
+            subtitle: "\(planTitle)・\(FavorecoDateText.compactDateTime(action.date))",
+            contextTitle: planTitle,
+            dueDate: action.date,
             plan: plan,
-            tint: tint,
-            priority: priority
+            tint: action.isOverdue ? .red : tint,
+            priority: action.priority,
+            isOverdue: action.isOverdue
         )
     }
 
@@ -192,7 +105,8 @@ struct HomeView: View {
             ticketAccounts: ticketAccounts,
             personLinks: personLinks
         )
-        let attentionItems = attentionItems(for: snapshot)
+        let ticketProgressItems = CategoryTicketProgressItem.activeItems(in: plans)
+        let homeNextActionItems = nextActionItems(for: snapshot)
 
         NavigationStack {
             VStack(spacing: 0) {
@@ -201,41 +115,57 @@ struct HomeView: View {
                     .padding(.top, -4)
                     .padding(.bottom, 6)
 
+                if showsCategories, !snapshot.visibleCategories.isEmpty {
+                    GenreNavigationStrip(categories: snapshot.visibleCategories)
+                        .padding(.horizontal, 18)
+                }
+
                 MainHeaderDivider()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        if showsCategories {
-                            categorySection(categories: snapshot.visibleCategories)
-                                .padding(.bottom, -8)
+                        homeHeroSection(items: snapshot.heroItems)
+
+                        GenreSwipeContainer(
+                            canMoveBackward: !snapshot.visibleCategories.isEmpty,
+                            canMoveForward: !snapshot.visibleCategories.isEmpty,
+                            onMove: { direction in
+                                let destination = direction > 0
+                                    ? snapshot.visibleCategories.last
+                                    : snapshot.visibleCategories.first
+                                swipeDestinationCategoryID = destination?.id
+                            }
+                        ) {
+                            VStack(alignment: .leading, spacing: 24) {
+                                if showsAttention {
+                                    nextActionSection(items: homeNextActionItems)
+                                    ticketScheduleSection(items: ticketProgressItems)
+                                }
+
+                                if showsInbox {
+                                    inboxSection(
+                                        interestedEvents: snapshot.interestedEvents,
+                                        unresolvedInboxItems: snapshot.unresolvedInboxItems
+                                    )
+                                }
+
+                                homeComingUpSection(items: snapshot.upcomingItems)
+
+                                if showsExperienceGallery && !snapshot.recentVisits.isEmpty {
+                                    experienceGallerySection(visits: snapshot.recentVisits)
+                                }
+
+                                if showsRecentRecords && !snapshot.recentVisits.isEmpty {
+                                    recentSection(visits: snapshot.recentVisits)
+                                }
+
+                                if showsStatsSummary && snapshot.visibleVisitCount > 0 {
+                                    statsSummarySection(snapshot: snapshot)
+                                }
+
+                                crossGenreMiniStats(snapshot: snapshot)
+                            }
                         }
-
-                        upcomingPlansSection(items: snapshot.upcomingItems)
-
-                        if showsAttention {
-                            attentionSection(items: attentionItems)
-                        }
-
-                        if showsExperienceGallery && !snapshot.recentVisits.isEmpty {
-                            experienceGallerySection(visits: snapshot.recentVisits)
-                        }
-
-                        if showsInbox && (!snapshot.interestedEvents.isEmpty || !snapshot.unresolvedInboxItems.isEmpty) {
-                            inboxSection(
-                                interestedEvents: snapshot.interestedEvents,
-                                unresolvedInboxItems: snapshot.unresolvedInboxItems
-                            )
-                        }
-
-                        if showsRecentRecords && !snapshot.recentVisits.isEmpty {
-                            recentSection(visits: snapshot.recentVisits)
-                        }
-
-                        if showsStatsSummary && snapshot.visibleVisitCount > 0 {
-                            statsSummarySection(snapshot: snapshot)
-                        }
-
-                        crossGenreMiniStats(snapshot: snapshot)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
@@ -244,8 +174,23 @@ struct HomeView: View {
             }
             .background(homeBackground)
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $isShowingAttentionList) {
-                HomeAttentionListView(items: attentionItems)
+            .sheet(isPresented: $isShowingNextActionList) {
+                HomeAttentionListView(items: homeNextActionItems)
+            }
+            .navigationDestination(
+                isPresented: Binding(
+                    get: { swipeDestinationCategoryID != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            swipeDestinationCategoryID = nil
+                        }
+                    }
+                )
+            ) {
+                if let categoryID = swipeDestinationCategoryID,
+                   let category = snapshot.visibleCategories.first(where: { $0.id == categoryID }) {
+                    CategoryTopView(category: category)
+                }
             }
             .task {
                 try? LegacyInboxMigrationService.migrateIfNeeded(in: modelContext)
@@ -277,22 +222,11 @@ struct HomeView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func upcomingPlansSection(items: [HomeUpcomingItem]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("次の予定")
-                    .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
-                    .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
-
-                Spacer()
-
-                if !items.isEmpty {
-                    Button("予定一覧") {
-                        NotificationCenter.default.post(name: .openFavorecoPlanList, object: nil)
-                    }
-                    .font(FavorecoTypography.captionStrong)
-                }
-            }
+    private func homeHeroSection(items: [HomeUpcomingItem]) -> some View {
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("PICK UP")
+                .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
+                .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
 
             switch items.count {
             case 0:
@@ -308,10 +242,10 @@ struct HomeView: View {
 
             default:
                 GeometryReader { geometry in
-                    let cardWidth = max(0, geometry.size.width - 36)
+                    let cardWidth = max(0, geometry.size.width)
 
                     ScrollView(.horizontal) {
-                        LazyHStack(alignment: .top, spacing: 10) {
+                        LazyHStack(alignment: .top, spacing: 0) {
                             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                                 upcomingItemLink(item)
                                     .frame(width: cardWidth, alignment: .top)
@@ -320,9 +254,8 @@ struct HomeView: View {
                         }
                         .scrollTargetLayout()
                     }
-                    .contentMargins(.horizontal, 18, for: .scrollContent)
                     .scrollIndicators(.hidden)
-                    .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+                    .scrollTargetBehavior(.paging)
                     .scrollPosition(id: selectedUpcomingPlanPosition)
                 }
                 .frame(height: 224)
@@ -340,7 +273,7 @@ struct HomeView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("予定 \(min(selectedUpcomingPlanIndex + 1, items.count))件目、全\(items.count)件")
+                    .accessibilityLabel("ピックアップ \(min(selectedUpcomingPlanIndex + 1, items.count))件目、全\(items.count)件")
             }
         }
         .onChange(of: items.count) { _, count in
@@ -445,43 +378,96 @@ struct HomeView: View {
         .ignoresSafeArea()
     }
 
-    private func attentionSection(items: [HomeAttentionItem]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("アテンション", count: items.count)
+    private func nextActionSection(items: [HomeAttentionItem]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("次にやること")
+                    .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
+                    .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
+
+                if !items.isEmpty {
+                    Text("\(items.count)")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+            }
 
             if items.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.green)
+                    Text("今すぐ対応することはありません")
+                        .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .caption))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
+                .background(.background, in: Capsule())
+            } else {
+                ForEach(items.prefix(3)) { item in
+                    if let plan = item.plan {
+                        NavigationLink {
+                            PlanDetailView(plan: plan)
+                        } label: {
+                            HomeNextActionCapsuleRow(item: item)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        HomeNextActionCapsuleRow(item: item)
+                    }
+                }
+
+                if items.count > 3 {
+                    Button {
+                        isShowingNextActionList = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("ほか\(items.count - 3)件を見る")
+                            Image(systemName: "chevron.right")
+                        }
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(themePalette.globalTint)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("次にやることをすべて見る、ほか\(items.count - 3)件")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func ticketScheduleSection(items: [CategoryTicketProgressItem]) -> some View {
+        if items.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Ticket Schedule")
+                    .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
+                    .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
+
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle")
                         .font(.title3)
                         .foregroundStyle(Color.green)
-                    Text("対応が必要なお知らせはありません")
+                    Text("進行中のチケット予定はありません")
                         .font(FavorecoTypography.bodyStrong)
                     Spacer(minLength: 0)
                 }
                 .padding(14)
                 .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            } else {
-                ForEach(items.prefix(2)) { item in
-                    if let plan = item.plan {
-                        NavigationLink {
-                            PlanDetailView(plan: plan)
-                        } label: {
-                            AttentionRow(item: item)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        AttentionRow(item: item)
-                    }
-                }
-
-                if items.count > 2 {
-                    Button("ほか\(items.count - 2)件") {
-                        isShowingAttentionList = true
-                    }
-                    .font(FavorecoTypography.captionStrong)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
             }
+        } else {
+            CategoryTicketProgressSection(
+                items: items,
+                title: "Ticket Schedule",
+                usesLatinTitle: true,
+                usesTheaterStyle: false,
+                showsCategoryInSelector: true
+            )
         }
     }
 
@@ -496,18 +482,22 @@ struct HomeView: View {
                     message: "写真付きの記録やこれから参加する予定が、ここに並びます。"
                 )
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
-                        ForEach(visits) { visit in
-                            NavigationLink {
-                                HomeVisitDestination(visitID: visit.id)
-                            } label: {
-                                ExperienceGalleryCard(visit: visit)
-                            }
-                            .buttonStyle(.plain)
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 12, alignment: .top),
+                        GridItem(.flexible(), spacing: 12, alignment: .top),
+                    ],
+                    alignment: .leading,
+                    spacing: 12
+                ) {
+                    ForEach(visits) { visit in
+                        NavigationLink {
+                            HomeVisitDestination(visitID: visit.id)
+                        } label: {
+                            ExperienceGalleryCard(visit: visit)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.trailing, 20)
                 }
             }
         }
@@ -540,30 +530,99 @@ struct HomeView: View {
         interestedEvents: [HomeInterestedEventSnapshot],
         unresolvedInboxItems: [HomeInboxItemSnapshot]
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("気になる", count: interestedEvents.count + unresolvedInboxItems.count)
+        let items = interestedEvents.map(HomeInterestingItem.event)
+            + unresolvedInboxItems.map(HomeInterestingItem.inbox)
 
-            if interestedEvents.isEmpty && unresolvedInboxItems.isEmpty {
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Text("Interesting")
+                    .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
+                    .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
+
+                Text("\(items.count)")
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 4)
+
+                if !items.isEmpty {
+                    CategoryLibraryLayoutPicker(
+                        selection: $interestLayoutMode,
+                        tint: themePalette.globalTint,
+                        onSelect: { _ in }
+                    )
+                }
+            }
+
+            if items.isEmpty {
                 EmptyStateRow(
                     icon: "tray",
                     title: "気になる対象はありません",
                     message: "クイック登録した作品や場所がここに表示されます。"
                 )
             } else {
-                ForEach(interestedEvents.prefix(3)) { event in
-                    NavigationLink {
-                        HomeEventDestination(eventID: event.id)
-                    } label: {
-                        InterestedEventRow(event: event)
+                HomeInterestingCollection(
+                    items: items,
+                    layout: interestLayoutMode,
+                    tint: themePalette.globalTint
+                )
+                .id("home-interesting-\(interestLayoutMode.rawValue)")
+            }
+        }
+    }
+
+    private func homeComingUpSection(items: [HomeUpcomingItem]) -> some View {
+        let visibleItems = isShowingAllHomeUpcoming ? items : Array(items.prefix(1))
+
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Coming Up")
+                .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
+                .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
+
+            if items.isEmpty {
+                Button {
+                    NotificationCenter.default.post(name: .openFavorecoPlanCreation, object: nil)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "calendar.badge.plus")
+                            .foregroundStyle(themePalette.globalTint)
+                            .frame(width: 34, height: 34)
+                            .background(themePalette.globalTint.opacity(0.10), in: Circle())
+                        Text("次の予定はまだありません")
+                            .font(FavorecoTypography.bodyStrong)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Text("予定を追加")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(themePalette.globalTint)
                     }
-                    .buttonStyle(.plain)
+                    .padding(12)
+                    .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            } else {
+                ForEach(visibleItems) { item in
+                    HomeComingUpLink(item: item)
                 }
 
-                ForEach(unresolvedInboxItems.prefix(max(0, 3 - interestedEvents.count))) { item in
-                    NavigationLink {
-                        HomeInboxDestination(itemID: item.id)
+                if items.count > 1 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isShowingAllHomeUpcoming.toggle()
+                        }
                     } label: {
-                        InboxItemRow(item: item)
+                        HStack(spacing: 10) {
+                            Rectangle()
+                                .fill(themePalette.globalTint.opacity(0.24))
+                                .frame(height: 0.6)
+                            Text(isShowingAllHomeUpcoming ? "閉じる" : "さらに\(items.count - 1)件")
+                                .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
+                                .foregroundStyle(themePalette.globalTint)
+                            Rectangle()
+                                .fill(themePalette.globalTint.opacity(0.24))
+                                .frame(height: 0.6)
+                        }
+                        .frame(minHeight: 44)
                     }
                     .buttonStyle(.plain)
                 }
@@ -641,6 +700,371 @@ private struct InterestedEventRow: View {
     private var interestedEyecatchHeight: CGFloat {
         guard event.fillsEyecatchFrame else { return 78 }
         return 64 / CGFloat(event.eyecatchAspectRatio)
+    }
+}
+
+private enum HomeInterestingItem: Identifiable {
+    case event(HomeInterestedEventSnapshot)
+    case inbox(HomeInboxItemSnapshot)
+
+    var id: String {
+        switch self {
+        case .event(let event): "event-\(event.id.uuidString)"
+        case .inbox(let item): "inbox-\(item.id.uuidString)"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .event(let event): event.title
+        case .inbox(let item): item.title
+        }
+    }
+
+    var categoryName: String {
+        switch self {
+        case .event(let event): event.categoryName ?? "気になる"
+        case .inbox(let item): item.categoryName ?? "未整理"
+        }
+    }
+
+    var categoryIcon: String {
+        switch self {
+        case .event(let event): event.categoryIcon ?? "bookmark"
+        case .inbox(let item): item.categoryIcon ?? "tray"
+        }
+    }
+
+    var colorHex: String {
+        switch self {
+        case .event(let event): event.categoryColorHex
+        case .inbox(let item): item.categoryColorHex
+        }
+    }
+
+    var imageData: Data? {
+        switch self {
+        case .event(let event): event.eyecatchData
+        case .inbox(let item): item.eyecatchData
+        }
+    }
+
+    var aspectRatio: CGFloat {
+        switch self {
+        case .event(let event): CGFloat(event.eyecatchAspectRatio)
+        case .inbox: 1
+        }
+    }
+
+    var detailText: String {
+        switch self {
+        case .event(let event): event.memo
+        case .inbox(let item): item.body
+        }
+    }
+}
+
+private struct HomeInterestingCollection: View {
+    let items: [HomeInterestingItem]
+    let layout: CategoryLibraryLayoutMode
+    let tint: Color
+
+    @State private var visibleCount: Int
+
+    init(items: [HomeInterestingItem], layout: CategoryLibraryLayoutMode, tint: Color) {
+        self.items = items
+        self.layout = layout
+        self.tint = tint
+        _visibleCount = State(initialValue: Self.pageSize(for: layout))
+    }
+
+    var body: some View {
+        let pageSize = Self.pageSize(for: layout)
+        let visibleItems = Array(items.prefix(min(items.count, visibleCount)))
+
+        VStack(alignment: .leading, spacing: 10) {
+            switch layout {
+            case .gallery:
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 3),
+                    alignment: .leading,
+                    spacing: 16
+                ) {
+                    ForEach(visibleItems) { item in
+                        HomeInterestingLink(item: item) {
+                            HomeInterestingPosterCard(item: item)
+                        }
+                    }
+                }
+            case .compact:
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 2),
+                    alignment: .leading,
+                    spacing: 10
+                ) {
+                    ForEach(visibleItems) { item in
+                        HomeInterestingLink(item: item) {
+                            HomeInterestingCompactCard(item: item)
+                        }
+                    }
+                }
+            case .banner:
+                LazyVStack(spacing: 10) {
+                    ForEach(visibleItems) { item in
+                        HomeInterestingLink(item: item) {
+                            HomeInterestingBannerCard(item: item)
+                        }
+                    }
+                }
+            }
+
+            if items.count > pageSize {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        visibleCount = visibleCount >= items.count
+                            ? pageSize
+                            : min(items.count, visibleCount + pageSize)
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Rectangle().fill(tint.opacity(0.24)).frame(height: 0.6)
+                        Text(visibleCount >= items.count ? "閉じる" : "さらに\(items.count - visibleCount)件")
+                            .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
+                            .foregroundStyle(tint)
+                            .lineLimit(1)
+                        Rectangle().fill(tint.opacity(0.24)).frame(height: 0.6)
+                    }
+                    .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private static func pageSize(for layout: CategoryLibraryLayoutMode) -> Int {
+        switch layout {
+        case .gallery: 9
+        case .compact: 8
+        case .banner: 6
+        }
+    }
+}
+
+private struct HomeInterestingLink<Label: View>: View {
+    let item: HomeInterestingItem
+    @ViewBuilder let label: Label
+
+    var body: some View {
+        NavigationLink {
+            switch item {
+            case .event(let event):
+                HomeEventDestination(eventID: event.id)
+            case .inbox(let inbox):
+                HomeInboxDestination(itemID: inbox.id)
+            }
+        } label: {
+            label
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(item.categoryName)、\(item.title)")
+    }
+}
+
+private struct HomeInterestingArtwork: View {
+    let item: HomeInterestingItem
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color(.secondarySystemFill)
+                if let data = item.imageData, let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                } else {
+                    Image(systemName: item.categoryIcon)
+                        .font(.title2)
+                        .foregroundStyle(Color(hex: item.colorHex))
+                }
+            }
+        }
+        .clipped()
+    }
+}
+
+private struct HomeInterestingPosterCard: View {
+    let item: HomeInterestingItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HomeInterestingArtwork(item: item)
+                .aspectRatio(item.aspectRatio, contentMode: .fit)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.categoryName)
+                    .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(Color(hex: item.colorHex))
+                    .lineLimit(1)
+                Text(item.title)
+                    .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
+                    .lineLimit(2, reservesSpace: true)
+            }
+            .padding(6)
+        }
+        .background(Color(.secondarySystemBackground))
+        .overlay { Rectangle().stroke(Color(hex: item.colorHex).opacity(0.18), lineWidth: 0.5) }
+    }
+}
+
+private struct HomeInterestingCompactCard: View {
+    let item: HomeInterestingItem
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            HomeInterestingArtwork(item: item)
+                .frame(width: 58, height: 90)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(item.categoryName)
+                    .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(Color(hex: item.colorHex))
+                    .lineLimit(1)
+                Text(item.title)
+                    .font(FavorecoTypography.jpSans(11, weight: .bold, relativeTo: .caption))
+                    .lineLimit(2, reservesSpace: true)
+                if !item.detailText.isEmpty {
+                    Text(item.detailText)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            .padding(.vertical, 7)
+            .padding(.trailing, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, minHeight: 106, maxHeight: 106, alignment: .topLeading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color(hex: item.colorHex).opacity(0.20), lineWidth: 0.75)
+        }
+    }
+}
+
+private struct HomeInterestingBannerCard: View {
+    let item: HomeInterestingItem
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            HomeInterestingArtwork(item: item)
+                .frame(width: 82, height: 112)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.categoryName)
+                    .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(Color(hex: item.colorHex))
+                    .padding(.horizontal, 6)
+                    .frame(height: 18)
+                    .background(Color(hex: item.colorHex).opacity(0.12), in: Capsule())
+                Text(item.title)
+                    .font(FavorecoTypography.jpSans(15, weight: .bold, relativeTo: .headline))
+                    .lineLimit(2, reservesSpace: true)
+                if !item.detailText.isEmpty {
+                    Text(item.detailText)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 45)
+        }
+        .padding(10)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color(hex: item.colorHex).opacity(0.20), lineWidth: 0.75)
+        }
+    }
+}
+
+private struct HomeComingUpLink: View {
+    let item: HomeUpcomingItem
+
+    var body: some View {
+        switch item {
+        case .plan(let plan):
+            NavigationLink {
+                HomePlanDestination(planID: plan.id)
+            } label: {
+                HomeComingUpRow(
+                    title: plan.title,
+                    categoryName: plan.categoryName,
+                    categoryIcon: plan.categoryIcon,
+                    colorHex: plan.categoryColorHex,
+                    date: plan.startsAt,
+                    place: plan.venueName,
+                    imageData: plan.posterData
+                )
+            }
+            .buttonStyle(.plain)
+        case .visit(let visit):
+            NavigationLink {
+                HomeVisitDestination(visitID: visit.id)
+            } label: {
+                HomeComingUpRow(
+                    title: visit.title,
+                    categoryName: visit.categoryName,
+                    categoryIcon: visit.categoryIcon,
+                    colorHex: visit.categoryColorHex,
+                    date: visit.visitedAt,
+                    place: visit.venueName,
+                    imageData: visit.photo?.data
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+private struct HomeComingUpRow: View {
+    let title: String
+    let categoryName: String
+    let categoryIcon: String
+    let colorHex: String
+    let date: Date
+    let place: String
+    let imageData: Data?
+
+    var body: some View {
+        let tint = Color(hex: colorHex)
+        FavorecoComingUpRow(
+            date: date,
+            categoryName: categoryName,
+            title: title,
+            venue: place,
+            tint: tint,
+            isTheater: false
+        ) {
+            ZStack {
+                Color(.secondarySystemFill)
+                if let imageData, let image = UIImage(data: imageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: categoryIcon)
+                        .font(.title2)
+                        .foregroundStyle(tint)
+                }
+            }
+            .clipped()
+        }
     }
 }
 
@@ -1040,10 +1464,61 @@ private struct HomeAttentionItem: Identifiable {
     let icon: String
     let title: String
     let subtitle: String
+    var contextTitle = ""
     let dueDate: Date
     var plan: Plan? = nil
     let tint: Color
     let priority: Int
+    var isOverdue = false
+}
+
+private struct HomeNextActionCapsuleRow: View {
+    let item: HomeAttentionItem
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: item.icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(item.tint)
+                .frame(width: 18)
+
+            Text(FavorecoDateText.compactDateWithHalfWidthWeekday(item.dueDate))
+                .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+                .foregroundStyle(item.isOverdue ? Color.red : .secondary)
+                .fixedSize(horizontal: true, vertical: false)
+
+            Text("|")
+                .foregroundStyle(.tertiary)
+
+            Text(item.title)
+                .font(FavorecoTypography.jpSans(12, weight: .bold, relativeTo: .caption))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+
+            if !item.contextTitle.isEmpty {
+                Text("|")
+                    .foregroundStyle(.tertiary)
+
+                Text(item.contextTitle)
+                    .font(FavorecoTypography.jpSans(11, weight: .medium, relativeTo: .caption))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
+        .background(.background, in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(item.tint.opacity(item.isOverdue ? 0.42 : 0.18), lineWidth: 0.75)
+        }
+        .contentShape(Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(FavorecoDateText.compactDate(item.dueDate))、\(item.title)、\(item.contextTitle)")
+    }
 }
 
 private struct HomeMiniStatCell: View {
@@ -1126,7 +1601,7 @@ private struct HomeAttentionListView: View {
                 }
             }
             .listStyle(.plain)
-            .navigationTitle("お知らせ")
+            .navigationTitle("次にやること")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -1277,7 +1752,7 @@ private struct ExperienceGalleryCard: View {
         themePalette.categoryColor(hex: visit.categoryColorHex)
     }
 
-    // 190pt幅カード。scale過剰を避けるため上限クランプ。
+    // 2列カード。scale過剰を避けるため上限クランプ。
     private var thumbnailMaxPixel: CGFloat {
         min(200 * displayScale, 1200)
     }
@@ -1401,7 +1876,7 @@ private struct ExperienceGalleryCard: View {
                 }
             }
         }
-        .frame(width: 190, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .task(id: thumbnailTaskID) {

@@ -70,33 +70,26 @@ enum AppStorageKeys {
 }
 
 enum RecordsLayoutMode: String, CaseIterable, Identifiable {
-    case gridThree
-    case gridFour
-    case detail
+    // Keep the former raw values so an existing saved selection migrates without resetting.
+    case gallery = "gridThree"
+    case compact = "gridFour"
+    case banner = "detail"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .gridThree: "3列タイル"
-        case .gridFour: "4列コンパクト"
-        case .detail: "横長詳細"
+        case .gallery: "ギャラリー"
+        case .compact: "ミニ詳細"
+        case .banner: "バナー"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .gridThree: "square.grid.2x2"
-        case .gridFour: "square.grid.3x3"
-        case .detail: "list.bullet"
-        }
-    }
-
-    var columnCount: Int? {
-        switch self {
-        case .gridThree: 3
-        case .gridFour: 4
-        case .detail: nil
+        case .gallery: "square.grid.3x3"
+        case .compact: "rectangle.grid.2x2"
+        case .banner: "rectangle.grid.1x2"
         }
     }
 }

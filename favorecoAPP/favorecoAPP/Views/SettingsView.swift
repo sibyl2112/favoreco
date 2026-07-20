@@ -961,7 +961,7 @@ struct DisplaySettingsView: View {
     var body: some View {
         Form {
             Section("Home表示") {
-                Toggle("アテンション", isOn: $showsHomeAttention)
+                Toggle("次にやること・チケット", isOn: $showsHomeAttention)
                 Toggle("最近の思い出", isOn: $showsHomeExperienceGallery)
                 Toggle("気になる", isOn: $showsHomeInbox)
                 Toggle("最近の記録", isOn: $showsHomeRecentRecords)

@@ -74,14 +74,16 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: tabSelection) {
             HomeView()
+                .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
-                    Label("Home", systemImage: "house")
+                    Label("Home", systemImage: "house.fill")
                 }
                 .tag(MainTab.home)
 
             RecordsView()
+                .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
-                    Label("記録", systemImage: "rectangle.stack")
+                    Label("記録", systemImage: "rectangle.stack.fill")
                 }
                 .tag(MainTab.records)
 
@@ -92,17 +94,21 @@ struct MainTabView: View {
                 .tag(MainTab.create)
 
             CalendarView(displayMode: $calendarDisplayMode)
+                .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
                     Label("カレンダー", systemImage: "calendar")
                 }
                 .tag(MainTab.calendar)
 
             StatsView(isActive: selectedTab == .stats)
+                .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
-                    Label("統計", systemImage: "chart.bar")
+                    Label("統計", systemImage: "chart.bar.fill")
                 }
                 .tag(MainTab.stats)
         }
+        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .sheet(isPresented: $isShowingCreateMenu, onDismiss: openPendingCreateAction) {
             CreateEntryMenuView(
                 canCreateRecord: !visibleCategories.isEmpty,
@@ -305,6 +311,8 @@ struct MainHeaderDivider: View {
 
 struct MainToolbarActions: View {
     @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
+    @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
+    @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
     @State private var isShowingNotifications = false
     @State private var isShowingSettings = false
 
@@ -315,14 +323,29 @@ struct MainToolbarActions: View {
             Button {
                 isShowingNotifications = true
             } label: {
-                Image(systemName: "bell")
-                    .font(.system(size: 22, weight: .semibold))
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bell")
+                            .font(.system(size: 22, weight: .semibold))
+
+                        if hasReachedAction(at: context.date) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                                .overlay {
+                                    Circle().stroke(Color(.systemBackground), lineWidth: 1.5)
+                                }
+                                .offset(x: 2, y: -1)
+                                .accessibilityHidden(true)
+                        }
+                    }
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
+                }
             }
             .buttonStyle(.plain)
             .foregroundStyle(tint ?? .primary)
-            .accessibilityLabel("お知らせ")
+            .accessibilityLabel("お知らせ・次にやること")
 
             Button {
                 isShowingSettings = true
@@ -340,6 +363,30 @@ struct MainToolbarActions: View {
         }
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()
+        }
+    }
+
+    private func hasReachedAction(at now: Date) -> Bool {
+        let hasTicketAction = ticketAttempts.contains { attempt in
+            guard !attempt.isArchived,
+                  attempt.plan?.isArchived != true,
+                  let action = TicketNextActionDefinition.nextAction(for: attempt, now: now) else {
+                return false
+            }
+            return action.isOverdue
+        }
+
+        if hasTicketAction {
+            return true
+        }
+
+        let warningLimit = Calendar.current.date(byAdding: .day, value: 45, to: now) ?? now
+        return ticketAccounts.contains { account in
+            !account.isArchived
+                && account.renewalNotify
+                && account.expiryDate != Date.distantPast
+                && account.expiryDate >= now
+                && account.expiryDate <= warningLimit
         }
     }
 }
@@ -613,23 +660,52 @@ private enum MainTab: Hashable {
 private struct RecordsView: View {
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var searchText = ""
     @State private var selectedCategoryIDs: Set<UUID> = []
+    @State private var selectedTagNames: Set<String> = []
+    @State private var selectedCompanionNames: Set<String> = []
     @State private var periodFilter: RecordPeriodFilter = .all
     @State private var customPeriodStart = Date().startOfMonth
     @State private var customPeriodEnd = Date()
     @State private var photoFilterEnabled = false
     @State private var sortOrder: RecordSortOrder = .newest
     @State private var isShowingFilters = false
-    @AppStorage(AppStorageKeys.recordsLayoutMode) private var recordsLayoutModeRaw = RecordsLayoutMode.detail.rawValue
+    @AppStorage(AppStorageKeys.recordsLayoutMode) private var recordsLayoutModeRaw = RecordsLayoutMode.banner.rawValue
 
     private var recordsLayoutMode: RecordsLayoutMode {
-        RecordsLayoutMode(rawValue: recordsLayoutModeRaw) ?? .detail
+        RecordsLayoutMode(rawValue: recordsLayoutModeRaw) ?? .banner
     }
 
     private var visibleVisits: [Visit] {
         let calendar = Calendar.current
         let now = Date()
+        var peopleTextByEventID: [UUID: [String]] = [:]
+        var peopleTextByVisitID: [UUID: [String]] = [:]
+
+        for link in personLinks where !link.isArchived {
+            let person = link.person
+            let text = [
+                link.nameSnapshot,
+                link.displayRole,
+                link.roleKey,
+                link.memo,
+                person?.displayName ?? "",
+                person?.reading ?? "",
+                person?.aliasesRaw ?? "",
+                person?.roleTagsRaw ?? "",
+                person?.memo ?? "",
+                person?.sourceSnapshotRaw ?? "",
+            ].joined(separator: " ")
+
+            if let eventID = link.event?.id {
+                peopleTextByEventID[eventID, default: []].append(text)
+            }
+            if let visitID = link.visit?.id {
+                peopleTextByVisitID[visitID, default: []].append(text)
+            }
+        }
+
         let filtered = visits.filter { visit in
             guard visit.event?.isArchived != true else { return false }
             if !selectedCategoryIDs.isEmpty {
@@ -654,15 +730,57 @@ private struct RecordsView: View {
                !(visit.photos ?? []).contains(where: { $0.mediaKind == "photo" && $0.hasStoredData }) {
                 return false
             }
+
+            let visitTags = Set(recordFacetNames(from: visit.tagNamesRaw))
+            if !selectedTagNames.isEmpty, selectedTagNames.isDisjoint(with: visitTags) {
+                return false
+            }
+
+            let visitCompanions = Set(recordFacetNames(from: visit.companionNamesRaw))
+            if !selectedCompanionNames.isEmpty,
+               selectedCompanionNames.isDisjoint(with: visitCompanions) {
+                return false
+            }
+
             let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !query.isEmpty else { return true }
+            let event = visit.event
+            let place = visit.placeMaster
+            let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+            let advancedText = unitFields.advancedEntries
+                .flatMap { [$0.label, $0.value] }
+                .joined(separator: " ")
+            let eventPeopleText = event.flatMap { peopleTextByEventID[$0.id] } ?? []
+            let linkedPeopleText = eventPeopleText + (peopleTextByVisitID[visit.id] ?? [])
             let searchableText = [
-                visit.event?.title ?? "",
-                visit.event?.seriesName ?? "",
+                event?.title ?? "",
+                event?.seriesName ?? "",
+                event?.organizerNameSnapshot ?? "",
+                event?.memo ?? "",
+                event?.importMemo ?? "",
+                event?.unitFieldsRaw ?? "",
+                event?.officialURL ?? "",
+                event?.category?.name ?? "",
                 visit.venueNameSnapshot,
                 visit.note,
+                visit.tagNamesRaw,
+                visit.companionNamesRaw,
+                visit.seatText,
+                visit.outcomeKey,
+                String(describing: visit.amount),
+                String(visit.overallRating),
+                unitFields.ocrText,
+                advancedText,
+                place?.name ?? "",
+                place?.reading ?? "",
+                place?.aliasesRaw ?? "",
+                place?.placeTagsRaw ?? "",
+                place?.address ?? "",
+                place?.memo ?? "",
+                linkedPeopleText.joined(separator: " "),
             ].joined(separator: " ")
-            return searchableText.localizedCaseInsensitiveContains(query)
+            let terms = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            return terms.allSatisfy { searchableText.localizedCaseInsensitiveContains($0) }
         }
 
         return filtered.sorted { lhs, rhs in
@@ -681,6 +799,18 @@ private struct RecordsView: View {
         var count = 0
         if !selectedCategoryIDs.isEmpty { count += 1 }
         if periodFilter != .all { count += 1 }
+        if !selectedTagNames.isEmpty { count += 1 }
+        if !selectedCompanionNames.isEmpty { count += 1 }
+        if photoFilterEnabled { count += 1 }
+        if sortOrder != .newest { count += 1 }
+        return count
+    }
+
+    private var detailedFilterCount: Int {
+        var count = 0
+        if periodFilter != .all { count += 1 }
+        if !selectedTagNames.isEmpty { count += 1 }
+        if !selectedCompanionNames.isEmpty { count += 1 }
         if photoFilterEnabled { count += 1 }
         if sortOrder != .newest { count += 1 }
         return count
@@ -688,6 +818,26 @@ private struct RecordsView: View {
 
     private var activeCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
+    }
+
+    private var quickFilterCategories: [RecordCategory] {
+        let usedCategoryIDs = Set(
+            visits.compactMap { visit -> UUID? in
+                guard visit.event?.isArchived != true else { return nil }
+                return visit.event?.category?.id
+            }
+        )
+        return activeCategories.filter {
+            usedCategoryIDs.contains($0.id) || selectedCategoryIDs.contains($0.id)
+        }
+    }
+
+    private var availableTagNames: [String] {
+        recordFacetOptions(\.tagNamesRaw, including: selectedTagNames)
+    }
+
+    private var availableCompanionNames: [String] {
+        recordFacetOptions(\.companionNamesRaw, including: selectedCompanionNames)
     }
 
     var body: some View {
@@ -703,10 +853,13 @@ private struct RecordsView: View {
                 recordsContent
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $isShowingFilters) {
+            .navigationDestination(isPresented: $isShowingFilters) {
                 RecordFilterView(
-                    categories: activeCategories,
                     selectedCategoryIDs: $selectedCategoryIDs,
+                    selectedTagNames: $selectedTagNames,
+                    selectedCompanionNames: $selectedCompanionNames,
+                    availableTagNames: availableTagNames,
+                    availableCompanionNames: availableCompanionNames,
                     periodFilter: $periodFilter,
                     customPeriodStart: $customPeriodStart,
                     customPeriodEnd: $customPeriodEnd,
@@ -723,7 +876,7 @@ private struct RecordsView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
-                    TextField("タイトル・会場・メモを検索", text: $searchText)
+                    TextField("タイトル・人物・会場などを検索", text: $searchText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     if !searchText.isEmpty {
@@ -739,26 +892,11 @@ private struct RecordsView: View {
                 .padding(.horizontal, 12)
                 .frame(height: 42)
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                Button {
-                    isShowingFilters = true
-                } label: {
-                    Image(systemName: activeFilterCount > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                        .font(.title3)
-                        .frame(width: 42, height: 42)
-                        .overlay(alignment: .topTrailing) {
-                            if activeFilterCount > 0 {
-                                Text("\(activeFilterCount)")
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(.white)
-                                    .frame(width: 18, height: 18)
-                                    .background(Color.accentColor, in: Circle())
-                                    .offset(x: 5, y: -5)
-                            }
-                        }
-                }
-                .accessibilityLabel("記録を絞り込む")
             }
+
+            quickCategoryFilter
+
+            detailedSearchButton
 
             HStack {
                 Text("\(visibleVisits.count)件")
@@ -773,6 +911,105 @@ private struct RecordsView: View {
         .background(Color(.systemBackground))
     }
 
+    private var detailedSearchButton: some View {
+        Button {
+            isShowingFilters = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "slider.horizontal.3")
+                Text("詳細検索")
+
+                if detailedFilterCount > 0 {
+                    Text("\(detailedFilterCount)")
+                        .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption2))
+                        .foregroundStyle(.white)
+                        .frame(width: 18, height: 18)
+                        .background(Color.accentColor, in: Circle())
+                }
+            }
+            .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .caption))
+            .foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 32)
+            .background(Color.accentColor.opacity(0.08), in: Capsule())
+            .overlay {
+                Capsule().stroke(Color.accentColor.opacity(0.22), lineWidth: 0.75)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .accessibilityLabel("詳細検索")
+        .accessibilityValue(detailedFilterCount > 0 ? "\(detailedFilterCount)件の条件を適用中" : "条件なし")
+    }
+
+    private var quickCategoryFilter: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 14) {
+                quickCategoryButton(
+                    title: "すべて",
+                    isSelected: selectedCategoryIDs.isEmpty,
+                    action: { selectedCategoryIDs.removeAll() }
+                )
+
+                ForEach(quickFilterCategories) { category in
+                    quickCategoryButton(
+                        title: category.name.isEmpty ? "無題" : category.name,
+                        isSelected: selectedCategoryIDs.contains(category.id),
+                        action: { toggleQuickCategory(category.id) }
+                    )
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .scrollIndicators(.hidden)
+        .frame(height: 30)
+        .accessibilityLabel("ジャンルで絞り込む")
+    }
+
+    private func quickCategoryButton(
+        title: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+
+                Text(title)
+                    .font(FavorecoTypography.jpSans(12, weight: isSelected ? .semibold : .regular, relativeTo: .caption))
+                    .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                    .lineLimit(1)
+            }
+            .frame(minHeight: 30)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(isSelected ? "選択中" : "未選択")
+    }
+
+    private func toggleQuickCategory(_ categoryID: UUID) {
+        if selectedCategoryIDs.isEmpty {
+            selectedCategoryIDs = [categoryID]
+        } else if selectedCategoryIDs.contains(categoryID) {
+            selectedCategoryIDs.remove(categoryID)
+        } else {
+            selectedCategoryIDs.insert(categoryID)
+        }
+    }
+
+    private func recordFacetOptions(
+        _ keyPath: KeyPath<Visit, String>,
+        including selectedValues: Set<String>
+    ) -> [String] {
+        let values = visits
+            .filter { $0.event?.isArchived != true }
+            .flatMap { recordFacetNames(from: $0[keyPath: keyPath]) }
+        return Array(Set(values).union(selectedValues))
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
     @ViewBuilder
     private var recordsContent: some View {
         if visibleVisits.isEmpty {
@@ -784,44 +1021,22 @@ private struct RecordsView: View {
                 )
             }
             .listStyle(.plain)
-        } else if let columnCount = recordsLayoutMode.columnCount {
+        } else {
             ScrollView {
-                LazyVGrid(
-                    columns: Array(
-                        repeating: GridItem(.flexible(), spacing: recordsLayoutMode == .gridFour ? 7 : 10, alignment: .top),
-                        count: columnCount
-                    ),
-                    spacing: recordsLayoutMode == .gridFour ? 12 : 16
-                ) {
-                    ForEach(visibleVisits) { visit in
-                        NavigationLink {
-                            ExperienceDetailView(visit: visit)
-                        } label: {
-                            VisitRecordGridTile(
-                                visit: visit,
-                                isCompact: recordsLayoutMode == .gridFour
-                            )
-                        }
-                        .buttonStyle(.plain)
+                Group {
+                    switch recordsLayoutMode {
+                    case .gallery:
+                        VisitRecordGalleryGrid(visits: visibleVisits)
+                    case .compact:
+                        VisitRecordCompactGrid(visits: visibleVisits)
+                    case .banner:
+                        VisitRecordBannerList(visits: visibleVisits)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .padding(.bottom, 24)
+                .padding(.bottom, 96)
             }
-        } else {
-            List {
-                ForEach(visibleVisits) { visit in
-                    NavigationLink {
-                        ExperienceDetailView(visit: visit)
-                    } label: {
-                        VisitSummaryRow(visit: visit)
-                    }
-                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                    .listRowSeparator(.hidden)
-                }
-            }
-            .listStyle(.plain)
         }
     }
 }
@@ -862,7 +1077,7 @@ private struct RecordsLayoutPicker: View {
     @Binding var selectionRawValue: String
 
     private var selection: RecordsLayoutMode {
-        RecordsLayoutMode(rawValue: selectionRawValue) ?? .detail
+        RecordsLayoutMode(rawValue: selectionRawValue) ?? .banner
     }
 
     var body: some View {
@@ -889,15 +1104,17 @@ private struct RecordsLayoutPicker: View {
         .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.accentColor.opacity(0.24), lineWidth: 1)
+                .stroke(Color.accentColor.opacity(0.24), lineWidth: 0.75)
         }
     }
 }
 
 private struct RecordFilterView: View {
-    @Environment(\.dismiss) private var dismiss
-    let categories: [RecordCategory]
     @Binding var selectedCategoryIDs: Set<UUID>
+    @Binding var selectedTagNames: Set<String>
+    @Binding var selectedCompanionNames: Set<String>
+    let availableTagNames: [String]
+    let availableCompanionNames: [String]
     @Binding var periodFilter: RecordPeriodFilter
     @Binding var customPeriodStart: Date
     @Binding var customPeriodEnd: Date
@@ -905,104 +1122,133 @@ private struct RecordFilterView: View {
     @Binding var sortOrder: RecordSortOrder
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("ジャンル") {
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
-                        spacing: 10
-                    ) {
-                        ForEach(categories) { category in
-                            Button {
-                                toggleCategory(category.id)
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: selectedCategoryIDs.contains(category.id) ? "checkmark.square.fill" : "square")
-                                        .foregroundStyle(selectedCategoryIDs.contains(category.id) ? Color.accentColor : .secondary)
-                                    Text(category.name)
-                                        .font(.caption)
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.72)
-                                }
-                                .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                                .contentShape(Rectangle())
+        Form {
+            Section("日付・期間") {
+                Picker("期間", selection: $periodFilter) {
+                    ForEach(RecordPeriodFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if periodFilter == .custom {
+                    DatePicker("開始日", selection: $customPeriodStart, displayedComponents: .date)
+                        .onChange(of: customPeriodStart) { _, newValue in
+                            if customPeriodEnd < newValue {
+                                customPeriodEnd = newValue
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(category.name)
-                            .accessibilityValue(selectedCategoryIDs.contains(category.id) ? "選択中" : "未選択")
                         }
-                    }
-
-                    Text(selectedCategoryIDs.isEmpty ? "未選択の場合は、すべてのジャンルを表示します" : "\(selectedCategoryIDs.count)件のジャンルを選択中")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    DatePicker(
+                        "終了日",
+                        selection: $customPeriodEnd,
+                        in: customPeriodStart...,
+                        displayedComponents: .date
+                    )
                 }
+            }
 
-                Section("期間") {
-                    Picker("期間", selection: $periodFilter) {
-                        ForEach(RecordPeriodFilter.allCases) { filter in
-                            Text(filter.title).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+            if !availableTagNames.isEmpty {
+                RecordFacetFilterSection(
+                    title: "タグ",
+                    values: availableTagNames,
+                    selection: $selectedTagNames
+                )
+            }
 
-                    if periodFilter == .custom {
-                        DatePicker("開始日", selection: $customPeriodStart, displayedComponents: .date)
-                            .onChange(of: customPeriodStart) { _, newValue in
-                                if customPeriodEnd < newValue {
-                                    customPeriodEnd = newValue
-                                }
-                            }
-                        DatePicker(
-                            "終了日",
-                            selection: $customPeriodEnd,
-                            in: customPeriodStart...,
-                            displayedComponents: .date
-                        )
-                    }
-                }
+            if !availableCompanionNames.isEmpty {
+                RecordFacetFilterSection(
+                    title: "同行者",
+                    values: availableCompanionNames,
+                    selection: $selectedCompanionNames
+                )
+            }
 
-                Section("内容") {
-                    Toggle("写真がある記録だけ", isOn: $photoFilterEnabled)
-                }
+            Section("内容") {
+                Toggle("写真がある記録だけ", isOn: $photoFilterEnabled)
+            }
 
-                Section("並び順") {
-                    Picker("並び順", selection: $sortOrder) {
-                        ForEach(RecordSortOrder.allCases) { order in
-                            Text(order.title).tag(order)
-                        }
-                    }
-                }
-
-                Section {
-                    Button("すべての条件をクリア") {
-                        selectedCategoryIDs.removeAll()
-                        periodFilter = .all
-                        customPeriodStart = Date().startOfMonth
-                        customPeriodEnd = Date()
-                        photoFilterEnabled = false
-                        sortOrder = .newest
+            Section("並び順") {
+                Picker("並び順", selection: $sortOrder) {
+                    ForEach(RecordSortOrder.allCases) { order in
+                        Text(order.title).tag(order)
                     }
                 }
             }
-            .navigationTitle("記録を絞り込む")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") { dismiss() }
+
+            Section {
+                Button("すべての条件をクリア") {
+                    selectedCategoryIDs.removeAll()
+                    selectedTagNames.removeAll()
+                    selectedCompanionNames.removeAll()
+                    periodFilter = .all
+                    customPeriodStart = Date().startOfMonth
+                    customPeriodEnd = Date()
+                    photoFilterEnabled = false
+                    sortOrder = .newest
                 }
+            }
+        }
+        .navigationTitle("詳細検索")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+    }
+}
+
+private struct RecordFacetFilterSection: View {
+    let title: String
+    let values: [String]
+    @Binding var selection: Set<String>
+
+    var body: some View {
+        Section(title) {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2),
+                spacing: 8
+            ) {
+                ForEach(values, id: \.self) { value in
+                    Button {
+                        toggle(value)
+                    } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: selection.contains(value) ? "checkmark.square.fill" : "square")
+                                .foregroundStyle(selection.contains(value) ? Color.accentColor : .secondary)
+                            Text(value)
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(selection.contains(value) ? "選択中" : "未選択")
+                }
+            }
+
+            if !selection.isEmpty {
+                Button("この条件をクリア") {
+                    selection.removeAll()
+                }
+                .font(FavorecoTypography.captionStrong)
             }
         }
     }
 
-    private func toggleCategory(_ categoryID: UUID) {
-        if selectedCategoryIDs.contains(categoryID) {
-            selectedCategoryIDs.remove(categoryID)
+    private func toggle(_ value: String) {
+        if selection.contains(value) {
+            selection.remove(value)
         } else {
-            selectedCategoryIDs.insert(categoryID)
+            selection.insert(value)
         }
     }
+}
+
+private func recordFacetNames(from rawValue: String) -> [String] {
+    rawValue
+        .components(separatedBy: CharacterSet(charactersIn: ",、;；\n"))
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
 }
 
 private struct CalendarView: View {

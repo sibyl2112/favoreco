@@ -28,13 +28,32 @@ enum FavorecoDateText {
         return "\(values.month)/\(values.day)（\(values.weekday)）"
     }
 
+    static func compactDateWithHalfWidthWeekday(_ date: Date) -> String {
+        let values = components(for: date)
+        return "\(values.month)/\(values.day)(\(values.weekday))"
+    }
+
     static func monthDay(_ date: Date) -> String {
         let values = components(for: date)
         return "\(values.month)/\(values.day)"
     }
 
+    static func weekdayName(_ date: Date) -> String {
+        "\(components(for: date).weekday)曜"
+    }
+
     static func month(_ date: Date) -> String {
         "\(components(for: date).month)月"
+    }
+
+    static func compactDateWithEnglishWeekday(_ date: Date) -> String {
+        let values = components(for: date)
+        let weekdayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+        return "\(values.month)/\(values.day) \(weekdayNames[values.weekdayIndex])"
+    }
+
+    static func weekdayNumber(_ date: Date) -> Int {
+        components(for: date).weekdayIndex + 1
     }
 
     static func time(_ date: Date) -> String {
@@ -61,6 +80,7 @@ enum FavorecoDateText {
             month: components.month ?? 0,
             day: components.day ?? 0,
             weekday: weekdayNames[weekdayIndex],
+            weekdayIndex: weekdayIndex,
             hour: components.hour ?? 0,
             minute: components.minute ?? 0
         )
@@ -79,6 +99,7 @@ private struct DateComponentsText {
     let month: Int
     let day: Int
     let weekday: String
+    let weekdayIndex: Int
     let hour: Int
     let minute: Int
 }

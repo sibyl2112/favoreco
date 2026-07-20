@@ -222,18 +222,296 @@ struct VisitSummaryRow: View {
     }
 }
 
-struct VisitRecordGridTile: View {
+struct VisitRecordGalleryGrid: View {
+    let visits: [Visit]
+
+    private let columns = Array(
+        repeating: GridItem(.flexible(), spacing: 10, alignment: .top),
+        count: 3
+    )
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
+            ForEach(visits) { visit in
+                NavigationLink {
+                    ExperienceDetailView(visit: visit)
+                } label: {
+                    VisitRecordGalleryTile(visit: visit)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+struct VisitRecordCompactGrid: View {
+    let visits: [Visit]
+
+    private let columns = Array(
+        repeating: GridItem(.flexible(), spacing: 12, alignment: .top),
+        count: 2
+    )
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+            ForEach(visits) { visit in
+                NavigationLink {
+                    ExperienceDetailView(visit: visit)
+                } label: {
+                    VisitRecordCompactTile(visit: visit)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+struct VisitRecordBannerList: View {
+    let visits: [Visit]
+
+    var body: some View {
+        LazyVStack(spacing: 10) {
+            ForEach(visits) { visit in
+                NavigationLink {
+                    ExperienceDetailView(visit: visit)
+                } label: {
+                    VisitRecordBannerRow(visit: visit)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct VisitRecordGalleryTile: View {
     let visit: Visit
-    let isCompact: Bool
+
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    private var category: RecordCategory? { visit.event?.category }
+    private var tint: Color { themePalette.categoryColor(hex: category?.colorHex ?? "#147C88") }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VisitRecordArtwork(visit: visit, maxPixelSize: 520)
+
+            HStack(alignment: .center, spacing: 3) {
+                Text(FavorecoDateText.compactDateWithHalfWidthWeekday(visit.visitedAt))
+                    .foregroundStyle(dateColor)
+                    .minimumScaleFactor(0.72)
+
+                Spacer(minLength: 1)
+
+                Rectangle()
+                    .fill(tint.opacity(0.34))
+                    .frame(width: 0.6, height: 11)
+
+                Spacer(minLength: 1)
+
+                HStack(spacing: 2) {
+                    Image(systemName: visit.overallRating > 0 ? "star.fill" : "star")
+                    Text(ratingText)
+                }
+                .foregroundStyle(visit.overallRating > 0 ? Color.yellow : Color.secondary)
+            }
+            .font(FavorecoTypography.jpSans(9.5, weight: .medium, relativeTo: .caption2))
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 7)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Color(.secondarySystemBackground))
+        .overlay {
+            Rectangle().stroke(tint.opacity(0.18), lineWidth: 0.5)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var dateColor: Color {
+        switch FavorecoDateText.weekdayNumber(visit.visitedAt) {
+        case 1: .red
+        case 7: .blue
+        default: .secondary
+        }
+    }
+
+    private var ratingText: String {
+        visit.overallRating > 0 ? String(format: "%.1f", visit.overallRating) : "—"
+    }
+
+    private var accessibilitySummary: String {
+        "\(visit.event?.title ?? "記録")、\(FavorecoDateText.compactDate(visit.visitedAt))、評価\(ratingText)"
+    }
+}
+
+private struct VisitRecordCompactTile: View {
+    let visit: Visit
+
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    private var category: RecordCategory? { visit.event?.category }
+    private var tint: Color { themePalette.categoryColor(hex: category?.colorHex ?? "#147C88") }
+    private var isMovie: Bool { category?.templateKey == "movie" }
+    private var cardHeight: CGFloat { isMovie ? 108 : 106 }
+    private var artworkWidth: CGFloat { isMovie ? 76 : 58 }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VisitRecordArtwork(
+                visit: visit,
+                aspectRatioOverride: artworkWidth / (isMovie ? cardHeight : cardHeight - 16),
+                maxPixelSize: 420
+            )
+            .frame(width: artworkWidth, height: isMovie ? cardHeight : cardHeight - 16)
+
+            VStack(alignment: .leading, spacing: isMovie ? 3 : 4) {
+                Text(title)
+                    .font(FavorecoTypography.jpSans(isMovie ? 10.5 : 11, weight: .bold, relativeTo: .caption))
+                    .foregroundStyle(.primary)
+                    .tracking(-0.35)
+                    .lineSpacing(-1.5)
+                    .lineLimit(2, reservesSpace: true)
+
+                Label(FavorecoDateText.compactDateWithHalfWidthWeekday(visit.visitedAt), systemImage: "calendar")
+                    .font(FavorecoTypography.jpSans(isMovie ? 8.5 : 9, weight: .medium, relativeTo: .caption2))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+
+                compactRating
+            }
+            .padding(.vertical, isMovie ? 7 : 0)
+            .padding(.trailing, isMovie ? 7 : 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .padding(isMovie ? 0 : 8)
+        .frame(maxWidth: .infinity, minHeight: cardHeight, maxHeight: cardHeight, alignment: .topLeading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(tint.opacity(0.20), lineWidth: 0.75)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title)、\(FavorecoDateText.compactDate(visit.visitedAt))")
+    }
+
+    private var title: String {
+        visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
+    }
+
+    @ViewBuilder
+    private var compactRating: some View {
+        HStack(spacing: 4) {
+            if visit.overallRating > 0 {
+                HStack(spacing: 1) {
+                    ForEach(1...5, id: \.self) { index in
+                        Image(systemName: starSymbol(at: index))
+                    }
+                }
+            } else {
+                Image(systemName: "star")
+            }
+
+            Text(visit.overallRating > 0 ? String(format: "%.1f", visit.overallRating) : "—")
+                .monospacedDigit()
+        }
+        .font(.system(size: 7.5, weight: .medium))
+        .foregroundStyle(visit.overallRating > 0 ? Color.yellow : Color.secondary)
+        .lineLimit(1)
+    }
+
+    private func starSymbol(at index: Int) -> String {
+        let roundedRating = (visit.overallRating * 2).rounded() / 2
+        if roundedRating >= Double(index) { return "star.fill" }
+        if roundedRating >= Double(index) - 0.5 { return "star.leadinghalf.filled" }
+        return "star"
+    }
+}
+
+private struct VisitRecordBannerRow: View {
+    let visit: Visit
+
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    private var category: RecordCategory? { visit.event?.category }
+    private var tint: Color { themePalette.categoryColor(hex: category?.colorHex ?? "#147C88") }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VisitRecordArtwork(visit: visit, maxPixelSize: 520)
+                .frame(width: 82)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(statusText)
+                    .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .frame(height: 18)
+                    .background(tint.opacity(0.12), in: Capsule())
+
+                Text(title)
+                    .font(FavorecoTypography.jpSans(15, weight: .bold, relativeTo: .headline))
+                    .foregroundStyle(.primary)
+                    .lineSpacing(-1)
+                    .lineLimit(2, reservesSpace: true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(FavorecoDateText.compactDate(visit.visitedAt), systemImage: "calendar")
+                    if !visit.venueNameSnapshot.isEmpty {
+                        Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                            .lineLimit(1)
+                    }
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 45)
+        }
+        .padding(10)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(tint.opacity(0.20), lineWidth: 0.75)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var title: String {
+        visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
+    }
+
+    private var statusText: String {
+        switch category?.templateKey {
+        case "theater": "観劇済み"
+        case "movie": "鑑賞済み"
+        case "museum": "鑑賞済み"
+        case "live": "参加済み"
+        case "book": "読了"
+        case "sake": "飲んだ"
+        case "outing_facility": "訪問済み"
+        case "goshuin": "参拝済み"
+        default: category?.name.isEmpty == false ? category?.name ?? "体験済み" : "体験済み"
+        }
+    }
+}
+
+private struct VisitRecordArtwork: View {
+    let visit: Visit
+    var aspectRatioOverride: CGFloat? = nil
+    var maxPixelSize: CGFloat = 520
 
     @Environment(\.displayScale) private var displayScale
     @Environment(\.favorecoThemePalette) private var themePalette
     @State private var thumbnailImage: UIImage?
     @State private var loadedThumbnailKey: String?
-
-    private var title: String {
-        visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
-    }
 
     private var category: RecordCategory? {
         visit.event?.category
@@ -251,14 +529,15 @@ struct VisitRecordGridTile: View {
             return cover
         }
         return photos.min { $0.createdAt < $1.createdAt }
+            ?? visit.event.flatMap { EventRepresentativePhotoResolver.photo(for: $0) }
     }
 
     private var thumbnailMaxPixel: CGFloat {
-        min((isCompact ? 140 : 200) * displayScale, 640)
+        min(maxPixelSize * displayScale, 1040)
     }
 
     private func cacheKey(for photo: PhotoBlob) -> String {
-        "\(photo.id.uuidString)@record-grid-\(Int(thumbnailMaxPixel.rounded()))"
+        "\(photo.id.uuidString)@record-library-\(Int(thumbnailMaxPixel.rounded()))"
     }
 
     private var thumbnailTaskID: String? {
@@ -266,64 +545,35 @@ struct VisitRecordGridTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
-            cover
+        GeometryReader { geometry in
+            ZStack {
+                categoryColor.opacity(0.12)
 
-            Text(title)
-                .font(isCompact ? .caption2.weight(.semibold) : FavorecoTypography.captionStrong)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: 4) {
-                Text(FavorecoDateText.compactDate(visit.visitedAt))
-                    .lineLimit(1)
-
-                if !isCompact, visit.overallRating > 0 {
-                    Spacer(minLength: 2)
-                    Image(systemName: "star.fill")
+                if let displayedThumbnailImage {
+                    Image(uiImage: displayedThumbnailImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                } else {
+                    Image(systemName: category?.iconSymbol ?? "sparkles.rectangle.stack")
+                        .font(.title2)
                         .foregroundStyle(categoryColor)
-                    Text(String(format: "%.1f", visit.overallRating))
                 }
             }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-
-            if !isCompact, let categoryName = category?.name, !categoryName.isEmpty {
-                Text(categoryName)
-                    .font(.caption2)
-                    .foregroundStyle(categoryColor)
-                    .lineLimit(1)
-            }
         }
-        .padding(6)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .aspectRatio(aspectRatio, contentMode: .fit)
+        .clipped()
         .task(id: thumbnailTaskID) {
             await loadThumbnail()
         }
     }
 
-    private var cover: some View {
-        Color.clear
-            .aspectRatio(1, contentMode: .fit)
-            .overlay {
-                if let displayedThumbnailImage {
-                    Image(uiImage: displayedThumbnailImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    ZStack {
-                        categoryColor.opacity(0.12)
-                        Text(String((category?.name.isEmpty == false ? category?.name : title)?.prefix(1) ?? "記"))
-                            .font(isCompact ? .headline : .title2)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(categoryColor)
-                    }
-                }
-            }
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    private var aspectRatio: CGFloat {
+        if let aspectRatioOverride { return aspectRatioOverride }
+        if let event = visit.event { return CGFloat(EyecatchAspectRatio.resolved(for: event).value) }
+        let fields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+        return CGFloat(EyecatchAspectRatio.option(for: fields.eyecatchAspectRatioKey, category: category).value)
     }
 
     private var displayedThumbnailImage: UIImage? {

@@ -6,12 +6,12 @@ struct HomeSnapshot {
     let recentVisits: [HomeVisitSnapshot]
     let interestedEvents: [HomeInterestedEventSnapshot]
     let unresolvedInboxItems: [HomeInboxItemSnapshot]
+    let heroItems: [HomeUpcomingItem]
     let upcomingItems: [HomeUpcomingItem]
+    let upcomingItemCount: Int
     let activeTicketAttempts: [TicketAttempt]
     let expiringTicketAccounts: [TicketAccount]
     let currentYearVisitCount: Int
-
-    var upcomingItemCount: Int { upcomingItems.count }
 
     @MainActor
     static func make(
@@ -48,6 +48,11 @@ struct HomeSnapshot {
                 + futureVisitSnapshots.map(HomeUpcomingItem.visit)
         )
         .sorted { $0.startsAt < $1.startsAt }
+        let recentHeroVisits = visitSnapshots
+            .filter { calendar.startOfDay(for: $0.visitedAt) < today }
+            .prefix(5)
+            .map(HomeUpcomingItem.visit)
+        let heroItems = Array(upcomingItems.prefix(5)) + recentHeroVisits
         let warningLimit = calendar.date(byAdding: .day, value: 45, to: now) ?? now
         let currentYear = calendar.component(.year, from: now)
 
@@ -61,7 +66,9 @@ struct HomeSnapshot {
             unresolvedInboxItems: inboxItems
                 .filter { $0.state == "unresolved" }
                 .map { HomeInboxItemSnapshot(item: $0, categories: visibleCategories) },
+            heroItems: heroItems,
             upcomingItems: upcomingItems,
+            upcomingItemCount: upcomingItems.count,
             activeTicketAttempts: ticketAttempts.filter { attempt in
                 !attempt.isArchived
                     && attempt.plan?.isArchived != true
@@ -199,6 +206,7 @@ struct HomeInterestedEventSnapshot: Identifiable {
     let title: String
     let categoryName: String?
     let categoryIcon: String?
+    let categoryColorHex: String
     let hasOfficialURL: Bool
     let memo: String
     let eyecatchData: Data?
@@ -210,6 +218,7 @@ struct HomeInterestedEventSnapshot: Identifiable {
         title = event.title.isEmpty ? "無題" : event.title
         categoryName = event.category?.name
         categoryIcon = event.category?.iconSymbol
+        categoryColorHex = event.category?.colorHex ?? "#147C88"
         hasOfficialURL = !event.officialURL.isEmpty
         memo = event.memo
         eyecatchData = event.eyecatchData
@@ -224,6 +233,8 @@ struct HomeInboxItemSnapshot: Identifiable {
     let body: String
     let hasSourceURL: Bool
     let categoryName: String?
+    let categoryIcon: String?
+    let categoryColorHex: String
     let createdAt: Date
     let eyecatchData: Data?
 
@@ -232,7 +243,10 @@ struct HomeInboxItemSnapshot: Identifiable {
         title = item.title.isEmpty ? "無題" : item.title
         body = item.body
         hasSourceURL = !item.sourceURL.isEmpty
-        categoryName = categories.first(where: { $0.templateKey == item.targetTemplateKey })?.name
+        let category = categories.first(where: { $0.templateKey == item.targetTemplateKey })
+        categoryName = category?.name
+        categoryIcon = category?.iconSymbol
+        categoryColorHex = category?.colorHex ?? "#147C88"
         createdAt = item.createdAt
         eyecatchData = item.eyecatchData
     }
