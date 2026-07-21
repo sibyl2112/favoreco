@@ -2132,7 +2132,7 @@ struct CategoryTicketProgressSection: View {
     }
 }
 
-private struct CategoryTicketProgressCard: View {
+struct CategoryTicketProgressCard: View {
     let item: CategoryTicketProgressItem
     let tint: Color
     let isTheater: Bool

@@ -39,6 +39,7 @@ struct EventDetailView: View {
 
     var body: some View {
         let snapshot = EventDetailSnapshot.make(event: event)
+        let scheduleSnapshot = TheaterEventScheduleSnapshot.make(event: event)
 
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -47,6 +48,17 @@ struct EventDetailView: View {
                     TheaterEventOverviewSection(
                         snapshot: snapshot,
                         ratingLabel: template.ratingLabel,
+                        accentColor: accentColor
+                    )
+                    TheaterEventUpcomingPlansSection(
+                        event: event,
+                        plans: scheduleSnapshot.upcomingPlans,
+                        representativePhoto: snapshot.representativePhoto,
+                        accentColor: accentColor,
+                        onAddPlan: { isShowingAddPlan = true }
+                    )
+                    TheaterEventTicketProgressSection(
+                        references: scheduleSnapshot.ticketReferences,
                         accentColor: accentColor
                     )
                     TheaterEventInformationSection(event: event, accentColor: accentColor)

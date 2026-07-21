@@ -28,7 +28,7 @@ struct EventDetailSnapshot {
             sortedVisits: visits
         )
         let people = deduplicatedPeople(in: event)
-        let castLinks = people.filter(isTheaterCastLink)
+        let castLinks = people.filter { isTheaterCastLink($0) }
         let staffLinks = people.filter { !isTheaterCastLink($0) }
         let memoryPhotos = visits.flatMap { visit in
             (visit.photos ?? [])
