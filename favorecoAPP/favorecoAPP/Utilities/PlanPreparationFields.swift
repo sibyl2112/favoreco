@@ -266,22 +266,10 @@ struct ExperienceExpenseSummary {
     }
 
     static func make(visit: Visit?, plan: Plan?) -> ExperienceExpenseSummary {
-        let photos = visit?.photos ?? []
-        let ticketPhotoAmount = photos
-            .filter { ExperiencePhotoPurpose.resolved(from: $0.purpose) == .ticket }
-            .reduce(Decimal(0)) { $0 + max($1.amount, Decimal(0)) }
-        let goodsAmount = photos
-            .filter { ExperiencePhotoPurpose.resolved(from: $0.purpose) == .goods }
-            .reduce(Decimal(0)) { $0 + max($1.amount, Decimal(0)) }
-        let includedStatusKeys: Set<String> = ["won", "waitingPayment", "waitingIssue", "issued", "attended"]
-        let ticketAttemptAmount = (plan?.ticketAttempts ?? [])
-            .filter { !$0.isArchived && includedStatusKeys.contains($0.statusKey) }
-            .reduce(Decimal(0)) { partial, attempt in
-                partial + max((attempt.price + attempt.fee) * Decimal(max(attempt.quantity, 1)), Decimal(0))
-            }
-        let travelAmount = (plan?.preparationFields.tasks ?? [])
-            .filter { $0.kind.isTravel }
-            .reduce(Decimal(0)) { $0 + max($1.amount, Decimal(0)) }
+        let ticketPhotoAmount = ExperienceExpenseCalculator.photoAmount(for: visit, purpose: .ticket)
+        let goodsAmount = ExperienceExpenseCalculator.photoAmount(for: visit, purpose: .goods)
+        let ticketAttemptAmount = ExperienceExpenseCalculator.securedTicketAmount(for: plan)
+        let travelAmount = ExperienceExpenseCalculator.travelAmount(for: plan)
         let ticketAmount = ticketAttemptAmount > 0 ? ticketAttemptAmount : ticketPhotoAmount
         let structuredAmount = ticketAmount + goodsAmount + travelAmount
         let legacyAmount = max(visit?.amount ?? Decimal(0), Decimal(0))

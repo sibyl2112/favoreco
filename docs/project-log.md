@@ -5,6 +5,44 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-22: 観劇の作品・公演詳細へ金額総計と内訳を追加
+
+### 変更概要
+- 作品・公演詳細の参加履歴と思い出ギャラリーの間へ、チケット・グッズ・遠征・その他旧入力の金額総計を追加した
+- 対象内のVisitと非表示でないPlanをUUIDで一意化し、同じVisitへ複数Planが紐づいても写真金額と旧Visit合計を重複集計しないようにした
+- チケットは確保済みTicketAttemptを正本とし、合計0円の場合だけチケット写真金額を代替した
+- 旧Visit合計は、そのVisitのチケット・グッズ・遠征がすべて0円の場合だけその他へ加え、構造化明細がある場合は参考値として合計から除外した
+- 記録詳細の既存費用集計も共通の小さな計算部品を使うよう整理した
+
+### 変更意図
+同じ公演を複数回観た場合の総支出を作品単位で確認できるようにしつつ、予定の申込額、記録写真の金額、旧形式のVisit合計が同じ支出を表す場合の二重加算を防ぐため。集計、表示、単回計算を別ファイルに分け、作品詳細本体の肥大化も抑えるため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Models/TheaterEventExpenseSnapshot.swift`
+- `favorecoAPP/favorecoAPP/Views/TheaterEventExpenseComponents.swift`
+- `favorecoAPP/favorecoAPP/Utilities/ExperienceExpenseCalculator.swift`
+- `favorecoAPP/favorecoAPP/Utilities/PlanPreparationFields.swift`
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`
+- `favoreco/CLAUDE.md`
+- `docs/15-画面情報設計.md`
+- `docs/00-開発状況と残課題.md`
+- `docs/project-log.md`
+
+### 影響する画面・機能
+- 観劇の作品・公演詳細に表示する金額総計と費目内訳
+- 記録／予定詳細で既存表示している単回のチケット・グッズ・遠征費用集計
+- 保存モデル、通知、観劇以外の対象詳細には影響しない
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析成功
+- `git diff --check`成功
+- 署名なしiPhoneOS向けDebugビルド成功
+- `EventDetailView.swift`は5行増の840行、集計90行・表示121行・共通計算30行を別ファイルへ分離し、`PlanPreparationFields.swift`は337行へ縮小
+
+### 既知のリスク・残課題
+- 実機で0円、1回、複数回、同一Visitに複数Plan、チケット写真代替、旧Visit合計代替の表示と合計を確認する
+- ライト／ダーク、Dynamic Type、長い通貨表示で2列内訳カードの折返しを確認する
+
 ## 2026-07-22: 記録詳細の標準ヘッダーを撤去し上演時間・観劇スタイルを追加
 
 ### 変更概要

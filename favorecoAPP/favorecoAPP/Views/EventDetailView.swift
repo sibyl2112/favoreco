@@ -40,6 +40,7 @@ struct EventDetailView: View {
     var body: some View {
         let snapshot = EventDetailSnapshot.make(event: event)
         let scheduleSnapshot = TheaterEventScheduleSnapshot.make(event: event)
+        let expenseSnapshot = TheaterEventExpenseSnapshot.make(event: event)
 
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -69,6 +70,10 @@ struct EventDetailView: View {
                     )
                     TheaterEventParticipationHistorySection(
                         visits: snapshot.visits,
+                        accentColor: accentColor
+                    )
+                    TheaterEventExpenseSection(
+                        snapshot: expenseSnapshot,
                         accentColor: accentColor
                     )
                     TheaterEventMemoryGallerySection(
