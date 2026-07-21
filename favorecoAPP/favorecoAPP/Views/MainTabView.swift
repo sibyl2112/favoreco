@@ -1587,13 +1587,38 @@ private struct CalendarView: View {
 
             MainHeaderDivider()
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    displayedCalendarContent
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        displayedCalendarContent
+                    }
+                    .padding(20)
                 }
-                .padding(20)
+                .task(id: timelineInitialScrollKey) {
+                    await scrollToCurrentTimelineTimeIfNeeded(using: proxy)
+                }
             }
         }
+    }
+
+    private var timelineInitialScrollKey: String {
+        switch displayMode {
+        case .week where selectedWeekDays.contains(where: calendar.isDateInToday):
+            return "week-\(selectedWeekStart.timeIntervalSinceReferenceDate)"
+        case .day where calendar.isDateInToday(selectedDate):
+            return "day-today"
+        default:
+            return "none"
+        }
+    }
+
+    @MainActor
+    private func scrollToCurrentTimelineTimeIfNeeded(using proxy: ScrollViewProxy) async {
+        guard timelineInitialScrollKey != "none" else { return }
+        try? await Task.sleep(for: .milliseconds(80))
+        let currentHour = calendar.component(.hour, from: Date())
+        let contextHour = max(currentHour - 1, 0)
+        proxy.scrollTo(CalendarTimelineScrollTarget.hour(contextHour), anchor: .top)
     }
 
     @ViewBuilder

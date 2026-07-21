@@ -150,6 +150,8 @@ struct AddExperienceView: View {
                     title: $draft.title,
                     seriesName: $draft.seriesName,
                     visitedAt: $draft.visitedAt,
+                    endedAt: $draft.endedAt,
+                    styleNamesText: $draft.styleNamesText,
                     venueName: venueNameBinding,
                     venueAddress: venueAddressBinding,
                     overallRating: $draft.overallRating,
@@ -158,6 +160,8 @@ struct AddExperienceView: View {
                     placeMasters: placeMasters,
                     usesPlaceSuggestions: usesInputSuggestionDictionary,
                     usesMapSearchAssist: usesMapSearchAssist,
+                    supportsPerformanceTime: category.usesOpeningTime,
+                    supportsStyles: category.templateKey == "theater",
                     ratingText: draft.ratingLabel,
                     onSelectPlace: { draft.apply(placeMaster: $0) },
                     onOpenPlaceSearch: { isShowingPlaceSearch = true }
@@ -272,7 +276,7 @@ struct AddExperienceView: View {
         )
         let visit = Visit(
             visitedAt: draft.visitedAt,
-            endedAt: draft.visitedAt,
+            endedAt: max(draft.endedAt, draft.visitedAt),
             venueNameSnapshot: draft.trimmedVenueName,
             overallRating: draft.overallRating,
             outcomeKey: draft.outcomeKey,
@@ -471,18 +475,22 @@ struct EditExperienceView: View {
             VStack(alignment: .leading, spacing: 12) {
                 ExperienceBasicUnitEditor(
                     template: template,
-                    title: $draft.title,
-                    seriesName: $draft.seriesName,
-                    visitedAt: $draft.visitedAt,
-                    venueName: venueNameBinding,
+            title: $draft.title,
+            seriesName: $draft.seriesName,
+            visitedAt: $draft.visitedAt,
+            endedAt: $draft.endedAt,
+            styleNamesText: $draft.styleNamesText,
+            venueName: venueNameBinding,
                     venueAddress: venueAddressBinding,
                     overallRating: $draft.overallRating,
                     latitude: draft.latitude,
                     longitude: draft.longitude,
                     placeMasters: placeMasters,
-                    usesPlaceSuggestions: usesInputSuggestionDictionary,
-                    usesMapSearchAssist: usesMapSearchAssist,
-                    ratingText: draft.ratingLabel,
+            usesPlaceSuggestions: usesInputSuggestionDictionary,
+            usesMapSearchAssist: usesMapSearchAssist,
+            supportsPerformanceTime: category?.usesOpeningTime == true,
+            supportsStyles: category?.templateKey == "theater",
+            ratingText: draft.ratingLabel,
                     onSelectPlace: { draft.apply(placeMaster: $0) },
                     onOpenPlaceSearch: { isShowingPlaceSearch = true }
                 )
@@ -610,7 +618,7 @@ struct EditExperienceView: View {
         }
 
         visit.visitedAt = draft.visitedAt
-        visit.endedAt = draft.visitedAt
+        visit.endedAt = max(draft.endedAt, draft.visitedAt)
         visit.venueNameSnapshot = draft.trimmedVenueName
         visit.latitude = draft.latitude
         visit.longitude = draft.longitude
@@ -673,6 +681,10 @@ struct EditExperienceView: View {
                 ? metadata.ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
                 : ""
             photo.amount = metadata.purpose.supportsAmount ? metadata.amount : Decimal(0)
+            if metadata.purpose != .memory,
+               event?.representativeEyecatchPath == photo.relativePath {
+                event?.representativeEyecatchPath = coverPhotoPath
+            }
         }
     }
 
@@ -862,6 +874,8 @@ struct AddVisitView: View {
                 eventTitle: event.title,
                 eventSeriesName: event.seriesName,
                 visitedAt: $draft.visitedAt,
+                endedAt: $draft.endedAt,
+                styleNamesText: $draft.styleNamesText,
                 venueName: venueNameBinding,
                 venueAddress: venueAddressBinding,
                 overallRating: $draft.overallRating,
@@ -870,6 +884,8 @@ struct AddVisitView: View {
                 placeMasters: placeMasters,
                 usesPlaceSuggestions: usesInputSuggestionDictionary,
                 usesMapSearchAssist: usesMapSearchAssist,
+                supportsPerformanceTime: event.category?.usesOpeningTime == true,
+                supportsStyles: event.category?.templateKey == "theater",
                 ratingText: draft.ratingLabel,
                 onSelectPlace: { draft.apply(placeMaster: $0) },
                 onOpenPlaceSearch: { isShowingPlaceSearch = true }
@@ -956,7 +972,7 @@ struct AddVisitView: View {
         var attendedAttempt: TicketAttempt?
         let visit = Visit(
             visitedAt: draft.visitedAt,
-            endedAt: inheritedEndedAt,
+            endedAt: max(draft.endedAt, draft.visitedAt),
             venueNameSnapshot: draft.trimmedVenueName,
             overallRating: draft.overallRating,
             outcomeKey: draft.outcomeKey,
@@ -1023,12 +1039,6 @@ struct AddVisitView: View {
         }
     }
 
-    private var inheritedEndedAt: Date {
-        guard let sourcePlan else { return draft.visitedAt }
-        let duration = max(sourcePlan.endsAt.timeIntervalSince(sourcePlan.startsAt), 0)
-        return draft.visitedAt.addingTimeInterval(duration)
-    }
-
     private func insertPendingPhotos(for visit: Visit) {
         for pendingPhoto in pendingPhotos {
             modelContext.insert(pendingPhoto.makePhotoBlob(visit: visit))
@@ -1067,15 +1077,8 @@ private struct SavedExperienceDetailView: View {
     let onDone: () -> Void
 
     var body: some View {
-        ExperienceDetailView(visit: visit)
+        ExperienceDetailView(visit: visit, onBack: onDone)
             .navigationBarBackButtonHidden()
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("完了") {
-                        onDone()
-                    }
-                }
-            }
     }
 }
 
@@ -1085,6 +1088,8 @@ struct AddExperienceDraft {
     var subTypeKey: String = ""
     var officialURL: String = ""
     var visitedAt: Date = Date()
+    var endedAt: Date = Date()
+    var styleNamesText: String = ""
     var venueName: String = ""
     var venueAddress: String = ""
     var latitude: Double = 0
@@ -1107,6 +1112,8 @@ struct AddExperienceDraft {
         subTypeKey = visit.event?.subTypeKey ?? ""
         officialURL = visit.event?.officialURL ?? ""
         visitedAt = visit.visitedAt
+        endedAt = visit.endedAt
+        styleNamesText = VisitUnitFields(rawValue: visit.unitFieldsRaw).styleNames.joined(separator: "、")
         venueName = visit.venueNameSnapshot
         venueAddress = visit.placeMaster?.address ?? ""
         let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
@@ -1217,6 +1224,7 @@ struct AddExperienceDraft {
     func makeUnitFields(for category: RecordCategory?) -> VisitUnitFields {
         VisitUnitFields(
             ocrText: trimmedOCRText,
+            styleNames: normalizedStyleNames(from: styleNamesText),
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
                 : eyecatchAspectRatioKey,
@@ -1281,6 +1289,8 @@ private func outingCategory(
 
 struct VisitDraft {
     var visitedAt: Date = Date()
+    var endedAt: Date = Date()
+    var styleNamesText: String = ""
     var venueName: String = ""
     var venueAddress: String = ""
     var latitude: Double = 0
@@ -1304,6 +1314,7 @@ struct VisitDraft {
             .first
 
         visitedAt = plan.startsAt
+        endedAt = max(plan.endsAt, plan.startsAt)
         venueName = plan.venueNameSnapshot
         venueAddress = plan.placeMaster?.address ?? ""
         latitude = plan.placeMaster?.latitude ?? 0
@@ -1404,6 +1415,7 @@ struct VisitDraft {
     func makeUnitFields(for category: RecordCategory?) -> VisitUnitFields {
         VisitUnitFields(
             ocrText: trimmedOCRText,
+            styleNames: normalizedStyleNames(from: styleNamesText),
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
                 : eyecatchAspectRatioKey,
@@ -1515,6 +1527,16 @@ private func parsedCurrencyAmount(from text: String) -> Decimal {
 private func formattedCurrencyAmount(_ amount: Decimal) -> String {
     guard amount != Decimal(0) else { return "" }
     return NSDecimalNumber(decimal: amount).stringValue
+}
+
+private func normalizedStyleNames(from text: String) -> [String] {
+    var seen = Set<String>()
+    return text
+        .components(separatedBy: CharacterSet(charactersIn: ",、\n"))
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { value in
+            !value.isEmpty && seen.insert(value).inserted
+        }
 }
 
 private enum RecordUnitStatus {

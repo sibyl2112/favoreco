@@ -269,6 +269,7 @@ struct PhotoUnitEditor: View {
                     fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
                     isCover: coverPhotoPath == photo.relativePath,
                     purpose: existingMetadata(for: photo).purpose,
+                    canSetCover: existingMetadata(for: photo).purpose == .memory,
                     onSetCover: {
                         coverPhotoPath = photo.relativePath
                     },
@@ -290,6 +291,7 @@ struct PhotoUnitEditor: View {
                     fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
                     isCover: coverPhotoPath == photo.relativePath,
                     purpose: photo.metadata.purpose,
+                    canSetCover: photo.metadata.purpose == .memory,
                     onSetCover: {
                         coverPhotoPath = photo.relativePath
                     },
@@ -322,7 +324,12 @@ struct PhotoUnitEditor: View {
                 PhotoMetadataEditor(
                     metadata: Binding(
                         get: { pendingPhotos[index].metadata },
-                        set: { pendingPhotos[index].metadata = $0 }
+                        set: { metadata in
+                            pendingPhotos[index].metadata = metadata
+                            if metadata.purpose != .memory, coverPhotoPath == pendingPhotos[index].relativePath {
+                                selectFallbackCover(excluding: pendingPhotos[index].relativePath)
+                            }
+                        }
                     ),
                     imageData: pendingPhotos[index].data
                 )
@@ -345,7 +352,12 @@ struct PhotoUnitEditor: View {
     private func existingMetadataBinding(for photo: PhotoBlob) -> Binding<PhotoMetadataDraft> {
         Binding(
             get: { existingMetadata(for: photo) },
-            set: { existingPhotoMetadata[photo.id] = $0 }
+            set: { metadata in
+                existingPhotoMetadata[photo.id] = metadata
+                if metadata.purpose != .memory, coverPhotoPath == photo.relativePath {
+                    selectFallbackCover(excluding: photo.relativePath)
+                }
+            }
         )
     }
 
@@ -389,9 +401,13 @@ struct PhotoUnitEditor: View {
     private func selectFallbackCover(excluding path: String) {
         guard coverPhotoPath == path else { return }
         coverPhotoPath = activeExistingPhotos
-            .first(where: { $0.relativePath != path })?
+            .first(where: {
+                $0.relativePath != path && existingMetadata(for: $0).purpose == .memory
+            })?
             .relativePath
-            ?? pendingPhotos.first(where: { $0.relativePath != path })?.relativePath
+            ?? pendingPhotos.first(where: {
+                $0.relativePath != path && $0.metadata.purpose == .memory
+            })?.relativePath
             ?? ""
     }
 

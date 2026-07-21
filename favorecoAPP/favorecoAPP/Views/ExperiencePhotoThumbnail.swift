@@ -13,6 +13,7 @@ struct PendingPhotoThumbnail: View {
     let fillsFrame: Bool
     let isCover: Bool
     let purpose: ExperiencePhotoPurpose
+    let canSetCover: Bool
     let onSetCover: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -26,6 +27,7 @@ struct PendingPhotoThumbnail: View {
             fillsFrame: fillsFrame,
             isCover: isCover,
             purpose: purpose,
+            canSetCover: canSetCover,
             onSetCover: onSetCover,
             onEdit: onEdit,
             onDelete: onDelete
@@ -56,6 +58,7 @@ struct SavedPhotoThumbnail: View {
     let fillsFrame: Bool
     let isCover: Bool
     let purpose: ExperiencePhotoPurpose
+    let canSetCover: Bool
     let onSetCover: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -69,6 +72,7 @@ struct SavedPhotoThumbnail: View {
             fillsFrame: fillsFrame,
             isCover: isCover,
             purpose: purpose,
+            canSetCover: canSetCover,
             onSetCover: onSetCover,
             onEdit: onEdit,
             onDelete: onDelete
@@ -99,6 +103,7 @@ private struct PhotoThumbnail: View {
     let fillsFrame: Bool
     let isCover: Bool
     let purpose: ExperiencePhotoPurpose
+    let canSetCover: Bool
     let onSetCover: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
@@ -148,15 +153,17 @@ private struct PhotoThumbnail: View {
             VStack {
                 Spacer()
                 HStack {
-                    Button(action: onSetCover) {
-                        Image(systemName: isCover ? "star.fill" : "star")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(isCover ? Color.yellow : Color.white)
-                            .padding(7)
-                            .background(.black.opacity(0.55), in: Circle())
+                    if canSetCover {
+                        Button(action: onSetCover) {
+                            Image(systemName: isCover ? "star.fill" : "star")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(isCover ? Color.yellow : Color.white)
+                                .padding(7)
+                                .background(.black.opacity(0.55), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(isCover ? "カバー写真に設定済み" : "カバー写真に設定")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(isCover ? "カバー写真に設定済み" : "カバー写真に設定")
                     Spacer()
                     Button(action: onEdit) {
                         Image(systemName: "slider.horizontal.3")

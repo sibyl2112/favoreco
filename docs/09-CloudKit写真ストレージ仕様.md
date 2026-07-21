@@ -334,3 +334,21 @@ static var storeSupportDirectoryNames: [String] {
 - `caption: String = ""`：任意（主に collection。空でも可・例：観た絵画の作品名）。
 - **写真↔コレクションの移動＝`role` の変更のみ**（externalStorage の data 本体は触らない・再保存/再アップロードなし）。
 - CloudKit互換：どちらも既定値ありの非optional文字列（§2の3条件を満たす）。`byteCount` 等の既存メタと同じくメタ列でありフォールトを起こさない。
+
+---
+
+## 12. PhotoBlob の記録写真分類・OCR・金額（2026-07-21実装）
+
+現行実装では`purpose`を記録内での写真分類として使用する。
+
+- `memory`: 思い出写真。Hero背景、アイキャッチ、通常ギャラリーの候補
+- `ticket`: チケット、半券、電子チケット等
+- `goods`: グッズ、購入品、レシート等
+- 空値または未知値: 読み取り時に`memory`へフォールバックし、既存写真を失わない
+
+チケット／グッズ写真には次の既定値付きメタ列を追加する。
+
+- `ocrText: String = ""`: 同じ画像から読み取ったVision OCR本文。候補の根拠として画像に紐づけて保持する
+- `amount: Decimal = 0`: 利用者が確認した画像別金額。OCR結果から自動確定せず、候補を選んだ場合だけ入力する
+
+分類変更はメタデータだけを書き換え、`data`本体は再保存しない。入力中は新規写真を`PendingPhoto.metadata`、既存写真をUUIDキーの`PhotoMetadataDraft`へ保持し、記録保存時だけ`PhotoBlob`へ反映する。JSON schema 6の`BackupPhoto`では新規2列をoptionalとして符号化し、schema 5以前のバックアップは空値・0円として復元する。完全バックアップは画像本体とともに両列を往復する。

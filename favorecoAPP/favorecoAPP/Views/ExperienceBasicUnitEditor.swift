@@ -8,6 +8,8 @@ struct ExperienceBasicUnitEditor: View {
     private let existingTitle: String
     private let existingSeriesName: String
     @Binding private var visitedAt: Date
+    @Binding private var endedAt: Date
+    @Binding private var styleNamesText: String
     @Binding private var venueName: String
     @Binding private var venueAddress: String
     @Binding private var overallRating: Double
@@ -16,6 +18,8 @@ struct ExperienceBasicUnitEditor: View {
     let placeMasters: [PlaceMaster]
     let usesPlaceSuggestions: Bool
     let usesMapSearchAssist: Bool
+    let supportsPerformanceTime: Bool
+    let supportsStyles: Bool
     let ratingText: String
     let onSelectPlace: (PlaceMaster) -> Void
     let onOpenPlaceSearch: () -> Void
@@ -25,6 +29,8 @@ struct ExperienceBasicUnitEditor: View {
         title: Binding<String>,
         seriesName: Binding<String>,
         visitedAt: Binding<Date>,
+        endedAt: Binding<Date>,
+        styleNamesText: Binding<String>,
         venueName: Binding<String>,
         venueAddress: Binding<String>,
         overallRating: Binding<Double>,
@@ -33,6 +39,8 @@ struct ExperienceBasicUnitEditor: View {
         placeMasters: [PlaceMaster],
         usesPlaceSuggestions: Bool,
         usesMapSearchAssist: Bool,
+        supportsPerformanceTime: Bool,
+        supportsStyles: Bool,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
         onOpenPlaceSearch: @escaping () -> Void
@@ -43,6 +51,8 @@ struct ExperienceBasicUnitEditor: View {
         existingTitle = ""
         existingSeriesName = ""
         _visitedAt = visitedAt
+        _endedAt = endedAt
+        _styleNamesText = styleNamesText
         _venueName = venueName
         _venueAddress = venueAddress
         _overallRating = overallRating
@@ -51,6 +61,8 @@ struct ExperienceBasicUnitEditor: View {
         self.placeMasters = placeMasters
         self.usesPlaceSuggestions = usesPlaceSuggestions
         self.usesMapSearchAssist = usesMapSearchAssist
+        self.supportsPerformanceTime = supportsPerformanceTime
+        self.supportsStyles = supportsStyles
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
         self.onOpenPlaceSearch = onOpenPlaceSearch
@@ -61,6 +73,8 @@ struct ExperienceBasicUnitEditor: View {
         eventTitle: String,
         eventSeriesName: String,
         visitedAt: Binding<Date>,
+        endedAt: Binding<Date>,
+        styleNamesText: Binding<String>,
         venueName: Binding<String>,
         venueAddress: Binding<String>,
         overallRating: Binding<Double>,
@@ -69,6 +83,8 @@ struct ExperienceBasicUnitEditor: View {
         placeMasters: [PlaceMaster],
         usesPlaceSuggestions: Bool,
         usesMapSearchAssist: Bool,
+        supportsPerformanceTime: Bool,
+        supportsStyles: Bool,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
         onOpenPlaceSearch: @escaping () -> Void
@@ -79,6 +95,8 @@ struct ExperienceBasicUnitEditor: View {
         existingTitle = eventTitle
         existingSeriesName = eventSeriesName
         _visitedAt = visitedAt
+        _endedAt = endedAt
+        _styleNamesText = styleNamesText
         _venueName = venueName
         _venueAddress = venueAddress
         _overallRating = overallRating
@@ -87,6 +105,8 @@ struct ExperienceBasicUnitEditor: View {
         self.placeMasters = placeMasters
         self.usesPlaceSuggestions = usesPlaceSuggestions
         self.usesMapSearchAssist = usesMapSearchAssist
+        self.supportsPerformanceTime = supportsPerformanceTime
+        self.supportsStyles = supportsStyles
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
         self.onOpenPlaceSearch = onOpenPlaceSearch
@@ -127,6 +147,46 @@ struct ExperienceBasicUnitEditor: View {
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
             DatePicker(template.dateLabel, selection: $visitedAt, displayedComponents: .date)
+            if supportsPerformanceTime {
+                DatePicker("開演", selection: $visitedAt, displayedComponents: .hourAndMinute)
+                DatePicker("終演", selection: $endedAt, in: visitedAt..., displayedComponents: .hourAndMinute)
+            }
+            if supportsStyles {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("スタイル")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 104), spacing: 8)],
+                        alignment: .leading,
+                        spacing: 8
+                    ) {
+                        ForEach(theaterStyleSuggestions, id: \.self) { style in
+                            let isSelected = selectedStyleNames.contains(style)
+                            Button {
+                                toggleStyle(style)
+                            } label: {
+                                HStack(spacing: 5) {
+                                    if isSelected {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption2.weight(.bold))
+                                    }
+                                    Text(style)
+                                        .lineLimit(1)
+                                }
+                                .font(FavorecoTypography.caption)
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(isSelected ? Color(hex: "#8B2F45") : Color.secondary)
+                        }
+                    }
+
+                    TextField("選択内容・自由入力（カンマ区切り）", text: $styleNamesText, axis: .vertical)
+                        .textInputAutocapitalization(.never)
+                }
+            }
             TextField(template.venuePlaceholder, text: $venueName)
             placeSuggestionList
             if usesMapSearchAssist {
@@ -143,6 +203,11 @@ struct ExperienceBasicUnitEditor: View {
                 )
             }
             ratingSlider
+        }
+        .onChange(of: visitedAt) { oldValue, newValue in
+            guard supportsPerformanceTime else { return }
+            let duration = max(endedAt.timeIntervalSince(oldValue), 0)
+            endedAt = newValue.addingTimeInterval(duration)
         }
     }
 
@@ -206,6 +271,32 @@ struct ExperienceBasicUnitEditor: View {
             }
             Slider(value: $overallRating, in: 0...5, step: 0.5)
         }
+    }
+
+    private var theaterStyleSuggestions: [String] {
+        [
+            "ミュージカル", "宝塚歌劇団", "劇団四季", "2.5次元",
+            "ストレートプレイ", "歌舞伎・伝統芸能", "ダンス・バレエ",
+            "ディナーショー", "ファンミーティング", "ライブ", "朗読劇",
+            "STARTO ENTERTAINMENT", "その他",
+        ]
+    }
+
+    private var selectedStyleNames: [String] {
+        styleNamesText
+            .components(separatedBy: CharacterSet(charactersIn: ",、\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func toggleStyle(_ style: String) {
+        var values = selectedStyleNames
+        if let index = values.firstIndex(of: style) {
+            values.remove(at: index)
+        } else {
+            values.append(style)
+        }
+        styleNamesText = values.joined(separator: "、")
     }
 
     private func normalizedPlaceText(_ value: String) -> String {

@@ -93,6 +93,7 @@ struct PlanDetailView: View {
                     headerSection
                     basicSection
                     ticketSection
+                    expenseSection
                     preparationSection
                     officialSection
                     memoSection
@@ -387,6 +388,13 @@ struct PlanDetailView: View {
                 highlightedTaskID: highlightedPreparationTaskID
             )
         }
+    }
+
+    private var expenseSection: some View {
+        ExperienceExpenseSummaryCard(
+            summary: ExperienceExpenseSummary.make(visit: plan.visit, plan: plan),
+            tint: categoryColor
+        )
     }
 
     @ViewBuilder
@@ -752,7 +760,7 @@ private struct PlanStatusChip: View {
     }
 }
 
-private extension NumberFormatter {
+extension NumberFormatter {
     static let planCurrency: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -760,6 +768,73 @@ private extension NumberFormatter {
         formatter.maximumFractionDigits = 0
         return formatter
     }()
+}
+
+struct ExperienceExpenseSummaryCard: View {
+    let summary: ExperienceExpenseSummary
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("費用合計")
+                    .font(FavorecoTypography.sectionTitle)
+                Spacer(minLength: 12)
+                Text(currencyText(summary.total))
+                    .font(FavorecoTypography.heroLead)
+                    .foregroundStyle(tint)
+            }
+
+            if summary.total == 0 {
+                Text("チケット、グッズ、遠征費を登録するとここにまとまります。")
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.secondary)
+            } else if summary.usesLegacyFallback {
+                expenseRow(icon: "yensign.circle", title: "記録済み合計", amount: summary.legacyAmount)
+            } else {
+                if summary.ticketAmount > 0 {
+                    expenseRow(icon: "ticket", title: "チケット", amount: summary.ticketAmount)
+                }
+                if summary.goodsAmount > 0 {
+                    expenseRow(icon: "bag", title: "グッズ", amount: summary.goodsAmount)
+                }
+                if summary.travelAmount > 0 {
+                    expenseRow(icon: "suitcase.rolling", title: "遠征", amount: summary.travelAmount)
+                }
+            }
+
+            if summary.usesTicketPhotoFallback {
+                Text("チケット申込に金額がないため、チケット写真の確認済み金額を使っています。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            } else if summary.structuredAmount > 0, summary.legacyAmount > 0 {
+                Text("旧入力の合計 \(currencyText(summary.legacyAmount)) は参考値として保持し、二重加算していません。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func expenseRow(icon: String, title: String, amount: Decimal) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+                .frame(width: 22)
+            Text(title)
+                .font(FavorecoTypography.body)
+            Spacer()
+            Text(currencyText(amount))
+                .font(FavorecoTypography.bodyStrong)
+        }
+    }
+
+    private func currencyText(_ amount: Decimal) -> String {
+        NumberFormatter.planCurrency.string(from: NSDecimalNumber(decimal: amount))
+            ?? "¥\(NSDecimalNumber(decimal: amount).intValue)"
+    }
 }
 
 private extension View {

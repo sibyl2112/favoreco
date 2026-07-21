@@ -1158,6 +1158,7 @@ private struct HomeComingUpRow: View {
 private struct HomeUpcomingPlanCard: View {
     let plan: HomePlanSnapshot
     @Query private var currentPlans: [Plan]
+    @State private var isShowingPlanDetail = false
     @State private var isShowingEditPlan = false
     @Environment(\.favorecoThemePalette) private var themePalette
 
@@ -1191,6 +1192,10 @@ private struct HomeUpcomingPlanCard: View {
                 tint: tint,
                 fillsFrame: plan.fillsPosterFrame
             )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                isShowingPlanDetail = true
+            }
 
             HomeUpcomingHeroDetails(
                 categoryName: plan.categoryName,
@@ -1198,19 +1203,23 @@ private struct HomeUpcomingPlanCard: View {
                 subtitle: plan.subtitle.isEmpty ? plan.organizerName : plan.subtitle,
                 dateText: dateText,
                 venueName: plan.venueName,
-                tint: tint
+                tint: tint,
+                onOpen: {
+                    isShowingPlanDetail = true
+                }
             ) {
                 HStack(spacing: 6) {
-                    NavigationLink {
-                        HomePlanDestination(planID: plan.id)
+                    Button {
+                        isShowingPlanDetail = true
                     } label: {
                         HomeUpcomingActionLabel(
-                            title: "予定を見る",
+                            title: "予定詳細",
                             systemImage: "book.pages",
                             tint: tint
                         )
                     }
                     .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
 
                     Button {
                         isShowingEditPlan = true
@@ -1218,10 +1227,12 @@ private struct HomeUpcomingPlanCard: View {
                         HomeUpcomingActionLabel(
                             title: "編集",
                             systemImage: "pencil",
-                            tint: tint
+                            tint: tint,
+                            isPrimary: false
                         )
                     }
                     .buttonStyle(.plain)
+                    .frame(width: 58)
                     .disabled(currentPlans.isEmpty)
                 }
             }
@@ -1234,6 +1245,9 @@ private struct HomeUpcomingPlanCard: View {
                 .stroke(tint.opacity(0.18), lineWidth: 1)
         }
         .accessibilityElement(children: .contain)
+        .navigationDestination(isPresented: $isShowingPlanDetail) {
+            HomePlanDestination(planID: plan.id)
+        }
         .sheet(isPresented: $isShowingEditPlan) {
             if let currentPlan = currentPlans.first {
                 AddTicketPlanView(plan: currentPlan, entryMode: .plan)
@@ -1248,6 +1262,7 @@ private struct HomeUpcomingPlanCard: View {
 private struct HomeUpcomingVisitCard: View {
     let visit: HomeVisitSnapshot
     @Query private var currentVisits: [Visit]
+    @State private var isShowingVisitDetail = false
     @State private var isShowingEditVisit = false
     @Environment(\.favorecoThemePalette) private var themePalette
 
@@ -1281,6 +1296,10 @@ private struct HomeUpcomingVisitCard: View {
                 tint: tint,
                 fillsFrame: visit.fillsEyecatchFrame
             )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                isShowingVisitDetail = true
+            }
 
             HomeUpcomingHeroDetails(
                 categoryName: visit.categoryName,
@@ -1288,26 +1307,36 @@ private struct HomeUpcomingVisitCard: View {
                 subtitle: "",
                 dateText: dateText,
                 venueName: visit.venueName,
-                tint: tint
+                tint: tint,
+                onOpen: {
+                    isShowingVisitDetail = true
+                }
             ) {
                 HStack(spacing: 6) {
-                    NavigationLink {
-                        HomeVisitDestination(visitID: visit.id)
+                    Button {
+                        isShowingVisitDetail = true
                     } label: {
                         HomeUpcomingActionLabel(
-                            title: "詳細",
+                            title: "記録詳細",
                             systemImage: "book.pages",
                             tint: tint
                         )
                     }
                     .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
 
                     Button {
                         isShowingEditVisit = true
                     } label: {
-                        HomeUpcomingSecondaryActionLabel(title: "編集")
+                        HomeUpcomingActionLabel(
+                            title: "編集",
+                            systemImage: "pencil",
+                            tint: tint,
+                            isPrimary: false
+                        )
                     }
                     .buttonStyle(.plain)
+                    .frame(width: 58)
                     .disabled(currentVisits.isEmpty)
                 }
             }
@@ -1320,6 +1349,9 @@ private struct HomeUpcomingVisitCard: View {
                 .stroke(tint.opacity(0.18), lineWidth: 1)
         }
         .accessibilityElement(children: .contain)
+        .navigationDestination(isPresented: $isShowingVisitDetail) {
+            HomeVisitDestination(visitID: visit.id)
+        }
         .sheet(isPresented: $isShowingEditVisit) {
             if let currentVisit = currentVisits.first {
                 EditExperienceView(visit: currentVisit)
@@ -1332,7 +1364,7 @@ private struct HomeUpcomingVisitCard: View {
 }
 
 private enum HomeUpcomingHeroMetrics {
-    static let contentHeight: CGFloat = 250
+    static let contentHeight: CGFloat = 224
     static let cardHeight: CGFloat = contentHeight + 24
 }
 
@@ -1423,6 +1455,7 @@ private struct HomeUpcomingHeroDetails<Actions: View>: View {
     let dateText: String
     let venueName: String
     let tint: Color
+    let onOpen: () -> Void
     let actions: Actions
 
     init(
@@ -1432,6 +1465,7 @@ private struct HomeUpcomingHeroDetails<Actions: View>: View {
         dateText: String,
         venueName: String,
         tint: Color,
+        onOpen: @escaping () -> Void,
         @ViewBuilder actions: () -> Actions
     ) {
         self.categoryName = categoryName
@@ -1440,40 +1474,46 @@ private struct HomeUpcomingHeroDetails<Actions: View>: View {
         self.dateText = dateText
         self.venueName = venueName
         self.tint = tint
+        self.onOpen = onOpen
         self.actions = actions()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(categoryName)
-                .font(FavorecoTypography.captionStrong)
-                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(categoryName)
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(tint)
 
-            Text(title)
-                .font(FavorecoTypography.jpSerif(19, weight: .bold, relativeTo: .headline))
-                .foregroundStyle(.primary)
-                .lineSpacing(-2)
-                .lineLimit(2, reservesSpace: true)
-                .truncationMode(.tail)
+                Text(title)
+                    .font(FavorecoTypography.jpSerif(19, weight: .bold, relativeTo: .headline))
+                    .foregroundStyle(.primary)
+                    .lineSpacing(-2)
+                    .lineLimit(2, reservesSpace: true)
+                    .truncationMode(.tail)
 
-            if !subtitle.isEmpty {
-                Text(subtitle)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Label(dateText, systemImage: "calendar")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-            }
 
-            Label(dateText, systemImage: "calendar")
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            if !venueName.isEmpty {
-                Label(venueName, systemImage: "mappin.and.ellipse")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if !venueName.isEmpty {
+                    Label(venueName, systemImage: "mappin.and.ellipse")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onOpen)
 
             Spacer(minLength: 0)
 
@@ -1487,34 +1527,23 @@ private struct HomeUpcomingActionLabel: View {
     let title: String
     let systemImage: String
     let tint: Color
+    var isPrimary: Bool = true
 
     var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+            Text(title)
+        }
+            .font(FavorecoTypography.jpSans(isPrimary ? 12 : 10.5, weight: isPrimary ? .semibold : .medium, relativeTo: .caption))
             .foregroundStyle(tint)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 5)
+            .frame(height: 34)
             .overlay {
-                Capsule().stroke(tint.opacity(0.55), lineWidth: 1)
+                Capsule().stroke(tint.opacity(0.48), lineWidth: 1)
             }
             .contentShape(Capsule())
-    }
-}
-
-private struct HomeUpcomingSecondaryActionLabel: View {
-    let title: String
-
-    var body: some View {
-        Label(title, systemImage: "pencil")
-            .font(FavorecoTypography.jpSans(10, weight: .medium, relativeTo: .caption2))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 5)
-            .contentShape(Rectangle())
     }
 }
 

@@ -91,7 +91,12 @@ struct PlanPreparationFields: Codable, Equatable {
 struct PlanPreparationTask: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var title: String = ""
+    var kindKey: String = PlanPreparationKind.other.rawValue
+    var startsAt: Date?
+    var endsAt: Date?
     var dueAt: Date?
+    var amount: Decimal = Decimal(0)
+    var ocrText: String = ""
     var isCompleted: Bool = false
     var sortOrder: Int = 0
     var createdAt: Date = Date()
@@ -101,7 +106,12 @@ struct PlanPreparationTask: Codable, Identifiable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id
         case title
+        case kindKey
+        case startsAt
+        case endsAt
         case dueAt
+        case amount
+        case ocrText
         case isCompleted
         case sortOrder
         case createdAt
@@ -112,7 +122,12 @@ struct PlanPreparationTask: Codable, Identifiable, Equatable {
     init(
         id: UUID = UUID(),
         title: String = "",
+        kindKey: String = PlanPreparationKind.other.rawValue,
+        startsAt: Date? = nil,
+        endsAt: Date? = nil,
         dueAt: Date? = nil,
+        amount: Decimal = Decimal(0),
+        ocrText: String = "",
         isCompleted: Bool = false,
         sortOrder: Int = 0,
         createdAt: Date = Date(),
@@ -121,7 +136,12 @@ struct PlanPreparationTask: Codable, Identifiable, Equatable {
     ) {
         self.id = id
         self.title = title
+        self.kindKey = kindKey
+        self.startsAt = startsAt
+        self.endsAt = endsAt
         self.dueAt = dueAt
+        self.amount = amount
+        self.ocrText = ocrText
         self.isCompleted = isCompleted
         self.sortOrder = sortOrder
         self.createdAt = createdAt
@@ -133,7 +153,12 @@ struct PlanPreparationTask: Codable, Identifiable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        kindKey = try container.decodeIfPresent(String.self, forKey: .kindKey) ?? PlanPreparationKind.other.rawValue
+        startsAt = try container.decodeIfPresent(Date.self, forKey: .startsAt)
+        endsAt = try container.decodeIfPresent(Date.self, forKey: .endsAt)
         dueAt = try container.decodeIfPresent(Date.self, forKey: .dueAt)
+        amount = try container.decodeIfPresent(Decimal.self, forKey: .amount) ?? Decimal(0)
+        ocrText = try container.decodeIfPresent(String.self, forKey: .ocrText) ?? ""
         isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
         sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
@@ -144,17 +169,134 @@ struct PlanPreparationTask: Codable, Identifiable, Equatable {
     var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    var kind: PlanPreparationKind {
+        PlanPreparationKind(rawValue: kindKey) ?? .other
+    }
+
+    var hasTravelSchedule: Bool {
+        kind.isTravel || startsAt != nil || endsAt != nil
+    }
+}
+
+enum PlanPreparationKind: String, Codable, CaseIterable, Identifiable, Hashable {
+    case other
+    case hotel
+    case shinkansen
+    case flight
+    case localTransport
+    case otherTravel
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .other: return "その他"
+        case .hotel: return "ホテル"
+        case .shinkansen: return "新幹線"
+        case .flight: return "飛行機"
+        case .localTransport: return "現地交通"
+        case .otherTravel: return "その他の遠征"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .other: return "checklist"
+        case .hotel: return "bed.double"
+        case .shinkansen: return "tram.fill"
+        case .flight: return "airplane"
+        case .localTransport: return "bus"
+        case .otherTravel: return "suitcase.rolling"
+        }
+    }
+
+    var isTravel: Bool { self != .other }
+
+    static func inferred(from text: String) -> PlanPreparationKind? {
+        let normalized = text.folding(
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+            locale: .current
+        )
+        if ["ホテル", "宿泊", "旅館", "チェックイン", "宿を"].contains(where: normalized.contains) {
+            return .hotel
+        }
+        if ["新幹線", "jr東海", "jr東日本", "jr西日本", "乗車券", "特急券"].contains(where: normalized.contains) {
+            return .shinkansen
+        }
+        if ["飛行機", "航空", "搭乗", "フライト", "jal", "ana"].contains(where: normalized.contains) {
+            return .flight
+        }
+        if ["バス", "地下鉄", "タクシー", "現地交通", "レンタカー"].contains(where: normalized.contains) {
+            return .localTransport
+        }
+        return nil
+    }
 }
 
 enum PlanPreparationSuggestion {
     static let titles = [
-        "宿を予約",
-        "交通を手配",
+        "ホテルを予約",
+        "新幹線を予約",
+        "飛行機を予約",
+        "現地交通を確認",
         "休暇を申請",
         "同行者へ連絡",
         "グッズを準備",
         "発券・座席を確認",
     ]
+}
+
+struct ExperienceExpenseSummary {
+    let ticketAttemptAmount: Decimal
+    let ticketPhotoAmount: Decimal
+    let ticketAmount: Decimal
+    let goodsAmount: Decimal
+    let travelAmount: Decimal
+    let legacyAmount: Decimal
+    let usesTicketPhotoFallback: Bool
+    let usesLegacyFallback: Bool
+
+    var structuredAmount: Decimal {
+        ticketAmount + goodsAmount + travelAmount
+    }
+
+    var total: Decimal {
+        usesLegacyFallback ? legacyAmount : structuredAmount
+    }
+
+    static func make(visit: Visit?, plan: Plan?) -> ExperienceExpenseSummary {
+        let photos = visit?.photos ?? []
+        let ticketPhotoAmount = photos
+            .filter { ExperiencePhotoPurpose.resolved(from: $0.purpose) == .ticket }
+            .reduce(Decimal(0)) { $0 + max($1.amount, Decimal(0)) }
+        let goodsAmount = photos
+            .filter { ExperiencePhotoPurpose.resolved(from: $0.purpose) == .goods }
+            .reduce(Decimal(0)) { $0 + max($1.amount, Decimal(0)) }
+        let includedStatusKeys: Set<String> = ["won", "waitingPayment", "waitingIssue", "issued", "attended"]
+        let ticketAttemptAmount = (plan?.ticketAttempts ?? [])
+            .filter { !$0.isArchived && includedStatusKeys.contains($0.statusKey) }
+            .reduce(Decimal(0)) { partial, attempt in
+                partial + max((attempt.price + attempt.fee) * Decimal(max(attempt.quantity, 1)), Decimal(0))
+            }
+        let travelAmount = (plan?.preparationFields.tasks ?? [])
+            .filter { $0.kind.isTravel }
+            .reduce(Decimal(0)) { $0 + max($1.amount, Decimal(0)) }
+        let ticketAmount = ticketAttemptAmount > 0 ? ticketAttemptAmount : ticketPhotoAmount
+        let structuredAmount = ticketAmount + goodsAmount + travelAmount
+        let legacyAmount = max(visit?.amount ?? Decimal(0), Decimal(0))
+
+        return ExperienceExpenseSummary(
+            ticketAttemptAmount: ticketAttemptAmount,
+            ticketPhotoAmount: ticketPhotoAmount,
+            ticketAmount: ticketAmount,
+            goodsAmount: goodsAmount,
+            travelAmount: travelAmount,
+            legacyAmount: legacyAmount,
+            usesTicketPhotoFallback: ticketAttemptAmount == 0 && ticketPhotoAmount > 0,
+            usesLegacyFallback: structuredAmount == 0 && legacyAmount > 0
+        )
+    }
 }
 
 enum PlanPreparationTicketPhase {

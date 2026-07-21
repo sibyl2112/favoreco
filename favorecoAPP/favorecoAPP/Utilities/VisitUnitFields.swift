@@ -9,6 +9,7 @@ import Foundation
 
 struct VisitUnitFields: Codable {
     var ocrText: String = ""
+    var styleNames: [String] = []
     var eyecatchAspectRatioKey: String = ""
     var goshuinBookSizeKey: String = ""
     var weatherSymbolName: String = ""
@@ -20,6 +21,7 @@ struct VisitUnitFields: Codable {
 
     init(
         ocrText: String = "",
+        styleNames: [String] = [],
         eyecatchAspectRatioKey: String = "",
         goshuinBookSizeKey: String = "",
         weatherSymbolName: String = "",
@@ -30,6 +32,7 @@ struct VisitUnitFields: Codable {
         advancedEntries: [AdvancedFieldEntry] = []
     ) {
         self.ocrText = ocrText
+        self.styleNames = styleNames
         self.eyecatchAspectRatioKey = eyecatchAspectRatioKey
         self.goshuinBookSizeKey = goshuinBookSizeKey
         self.weatherSymbolName = weatherSymbolName
@@ -42,6 +45,7 @@ struct VisitUnitFields: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case ocrText
+        case styleNames
         case eyecatchAspectRatioKey
         case goshuinBookSizeKey
         case weatherSymbolName
@@ -55,6 +59,7 @@ struct VisitUnitFields: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         ocrText = try container.decodeIfPresent(String.self, forKey: .ocrText) ?? ""
+        styleNames = try container.decodeIfPresent([String].self, forKey: .styleNames) ?? []
         eyecatchAspectRatioKey = try container.decodeIfPresent(String.self, forKey: .eyecatchAspectRatioKey) ?? ""
         goshuinBookSizeKey = try container.decodeIfPresent(String.self, forKey: .goshuinBookSizeKey) ?? ""
         weatherSymbolName = try container.decodeIfPresent(String.self, forKey: .weatherSymbolName) ?? ""

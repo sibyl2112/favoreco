@@ -8,6 +8,12 @@
 import Foundation
 import SwiftUI
 
+enum CalendarTimelineScrollTarget {
+    static func hour(_ hour: Int) -> String {
+        "calendar-timeline-hour-\(hour)"
+    }
+}
+
 struct CalendarTimelineEntry: Identifiable {
     enum Kind: Equatable {
         case plan
@@ -170,7 +176,7 @@ struct CalendarWeekTimelineView: View {
     let onSelectDate: (Date) -> Void
 
     private let hourHeight: CGFloat = 60
-    private let timeLabelWidth: CGFloat = 34
+    private let timeLabelWidth: CGFloat = 42
 
     var body: some View {
         VStack(spacing: 0) {
@@ -289,7 +295,7 @@ struct CalendarDayTimelineView: View {
     let calendar: Calendar
 
     private let hourHeight: CGFloat = 60
-    private let timeLabelWidth: CGFloat = 42
+    private let timeLabelWidth: CGFloat = 46
 
     private var interval: DateInterval {
         let start = calendar.startOfDay(for: date)
@@ -354,16 +360,24 @@ private struct CalendarTimelineHourLabels: View {
     let hourHeight: CGFloat
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            ForEach(0...24, id: \.self) { hour in
+        VStack(spacing: 0) {
+            ForEach(0..<24, id: \.self) { hour in
                 Text(String(format: "%d:00", hour))
-                    .font(.system(size: 8.5, weight: .regular, design: .rounded))
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
-                    .offset(y: CGFloat(hour) * hourHeight - 5)
+                    .frame(maxWidth: .infinity, minHeight: hourHeight, maxHeight: hourHeight, alignment: .topTrailing)
+                    .offset(y: -7)
+                    .id(CalendarTimelineScrollTarget.hour(hour))
             }
         }
         .frame(height: hourHeight * 24, alignment: .topTrailing)
         .padding(.trailing, 4)
+        .overlay(alignment: .bottomTrailing) {
+            Text("24:00")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .offset(y: 7)
+        }
     }
 }
 
@@ -383,8 +397,8 @@ private struct CalendarTimelineDayColumn: View {
 
                 ForEach(0...24, id: \.self) { hour in
                     Rectangle()
-                        .fill(Color(.separator).opacity(hour.isMultiple(of: 2) ? 0.42 : 0.22))
-                        .frame(height: 0.5)
+                        .fill(Color.primary.opacity(hour.isMultiple(of: 6) ? 0.20 : 0.13))
+                        .frame(height: hour.isMultiple(of: 6) ? 1 : 0.75)
                         .offset(y: CGFloat(hour) * hourHeight)
                 }
 

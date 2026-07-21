@@ -43,9 +43,31 @@ struct EventDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero(snapshot: snapshot)
-                eventMemoSection
-                stats(snapshot: snapshot)
-                visitHistory(snapshot: snapshot)
+                if category?.templateKey == "theater" {
+                    TheaterEventOverviewSection(
+                        snapshot: snapshot,
+                        ratingLabel: template.ratingLabel,
+                        accentColor: accentColor
+                    )
+                    TheaterEventInformationSection(event: event, accentColor: accentColor)
+                    TheaterEventPeopleSection(
+                        castLinks: snapshot.castLinks,
+                        staffLinks: snapshot.staffLinks,
+                        accentColor: accentColor
+                    )
+                    TheaterEventParticipationHistorySection(
+                        visits: snapshot.visits,
+                        accentColor: accentColor
+                    )
+                    TheaterEventMemoryGallerySection(
+                        items: snapshot.memoryPhotos,
+                        accentColor: accentColor
+                    )
+                } else {
+                    eventMemoSection
+                    stats(snapshot: snapshot)
+                    visitHistory(snapshot: snapshot)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)

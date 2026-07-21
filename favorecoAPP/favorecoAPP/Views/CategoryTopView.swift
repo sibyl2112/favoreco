@@ -4154,6 +4154,7 @@ private struct CategoryFeaturePlanCard: View {
     let tint: Color
     let fallbackIcon: String
     @Query private var currentPlans: [Plan]
+    @State private var isShowingPlanDetail = false
     @State private var isShowingEditPlan = false
 
     init(item: CategoryFeatureItem, plan: Plan, tint: Color, fallbackIcon: String) {
@@ -4166,13 +4167,20 @@ private struct CategoryFeaturePlanCard: View {
     }
 
     var body: some View {
-        CategoryFeatureCard(item: item, tint: tint, fallbackIcon: fallbackIcon) {
+        CategoryFeatureCard(
+            item: item,
+            tint: tint,
+            fallbackIcon: fallbackIcon,
+            onOpen: {
+                isShowingPlanDetail = true
+            }
+        ) {
             HStack(spacing: 6) {
-                NavigationLink {
-                    PlanDetailView(plan: plan)
+                Button {
+                    isShowingPlanDetail = true
                 } label: {
                     CategoryFeatureActionLabel(
-                        title: "詳細",
+                        title: "予定詳細",
                         systemImage: "book.pages",
                         tint: tint
                     )
@@ -4186,12 +4194,20 @@ private struct CategoryFeaturePlanCard: View {
                     CategoryFeatureActionLabel(
                         title: "編集",
                         systemImage: "pencil",
-                        tint: tint
+                        tint: tint,
+                        isPrimary: false
                     )
                 }
                 .buttonStyle(.plain)
                 .frame(width: 58)
                 .disabled(currentPlans.isEmpty)
+            }
+        }
+        .navigationDestination(isPresented: $isShowingPlanDetail) {
+            if let currentPlan = currentPlans.first {
+                PlanDetailView(plan: currentPlan)
+            } else {
+                ContentUnavailableView("予定が見つかりません", systemImage: "trash")
             }
         }
         .sheet(isPresented: $isShowingEditPlan) {
@@ -4208,67 +4224,29 @@ private struct CategoryFeatureCard<Actions: View>: View {
     let item: CategoryFeatureItem
     let tint: Color
     let fallbackIcon: String
+    let onOpen: (() -> Void)?
     let actions: Actions
 
     init(
         item: CategoryFeatureItem,
         tint: Color,
         fallbackIcon: String,
+        onOpen: (() -> Void)? = nil,
         @ViewBuilder actions: () -> Actions
     ) {
         self.item = item
         self.tint = tint
         self.fallbackIcon = fallbackIcon
+        self.onOpen = onOpen
         self.actions = actions()
     }
 
     var body: some View {
         CategoryFeatureHeroLayout(posterAspectRatio: posterAspectRatio) {
-            CategoryFeaturePoster(
-                item: item,
-                fallbackIcon: fallbackIcon,
-                tint: tint
-            )
+            interactivePoster
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.badgeText)
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(tint)
-
-                Text(item.title)
-                    .font(FavorecoTypography.jpSerif(18.5, weight: .bold, relativeTo: .headline))
-                    .lineSpacing(-2)
-                    .lineLimit(2, reservesSpace: true)
-                    .truncationMode(.tail)
-
-                if !item.subtitle.isEmpty {
-                    Text(item.subtitle)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.primary.opacity(0.68))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-
-                if !item.dateText.isEmpty {
-                    Label(item.dateText, systemImage: "calendar")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                if !item.placeText.isEmpty {
-                    Label(item.placeText, systemImage: "mappin.and.ellipse")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                if !item.detailText.isEmpty {
-                    Text(item.detailText)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                interactiveDetails
 
                 Spacer(minLength: 0)
 
@@ -4290,16 +4268,91 @@ private struct CategoryFeatureCard<Actions: View>: View {
         }
         return 0.7
     }
+
+    @ViewBuilder
+    private var interactivePoster: some View {
+        let poster = CategoryFeaturePoster(
+            item: item,
+            fallbackIcon: fallbackIcon,
+            tint: tint
+        )
+        if let onOpen {
+            poster
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onOpen)
+        } else {
+            poster
+        }
+    }
+
+    @ViewBuilder
+    private var interactiveDetails: some View {
+        if let onOpen {
+            detailsContent
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onOpen)
+        } else {
+            detailsContent
+        }
+    }
+
+    private var detailsContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.badgeText)
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(tint)
+
+            Text(item.title)
+                .font(FavorecoTypography.jpSerif(18.5, weight: .bold, relativeTo: .headline))
+                .lineSpacing(-2)
+                .lineLimit(2, reservesSpace: true)
+                .truncationMode(.tail)
+
+            if !item.subtitle.isEmpty {
+                Text(item.subtitle)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.primary.opacity(0.68))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            if !item.dateText.isEmpty {
+                Label(item.dateText, systemImage: "calendar")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if !item.placeText.isEmpty {
+                Label(item.placeText, systemImage: "mappin.and.ellipse")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if !item.detailText.isEmpty {
+                Text(item.detailText)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
 private struct CategoryFeatureActionLabel: View {
     let title: String
     let systemImage: String
     let tint: Color
+    var isPrimary: Bool = true
 
     var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+            Text(title)
+        }
+            .font(FavorecoTypography.jpSans(isPrimary ? 12 : 10.5, weight: isPrimary ? .semibold : .medium, relativeTo: .caption))
             .foregroundStyle(tint)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
@@ -4323,7 +4376,7 @@ private struct CategoryFeatureSingleActionLabel: View {
 }
 
 private enum CategoryFeatureHeroMetrics {
-    static let contentHeight: CGFloat = 250
+    static let contentHeight: CGFloat = 224
     static let cardHeight: CGFloat = contentHeight + 24
 }
 

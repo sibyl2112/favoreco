@@ -11,6 +11,7 @@ import UIKit
 
 struct ExperienceDetailView: View {
     let visit: Visit
+    let onBack: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
@@ -18,14 +19,25 @@ struct ExperienceDetailView: View {
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var isShowingEdit = false
     @State private var calendarDraft: CalendarEventDraft?
+    @State private var ticketPlanForEditor: Plan?
+    @State private var navigatingPlan: Plan?
     @State private var isShowingDeleteConfirmation = false
     @State private var deletionErrorMessage: String?
+    @State private var planCreationErrorMessage: String?
+
+    init(visit: Visit, onBack: (() -> Void)? = nil) {
+        self.visit = visit
+        self.onBack = onBack
+    }
 
     var body: some View {
         let snapshot = ExperienceDetailSnapshot.make(visit: visit, personLinks: personLinks)
-        let accentColor = themePalette.categoryColor(hex: snapshot.category?.colorHex ?? "#6F8F7A")
+        let genreColor = Color(hex: snapshot.category?.colorHex ?? "#6F8F7A")
         let template = CategoryRecordTemplate.template(for: snapshot.category)
         let isTheater = snapshot.category?.templateKey == "theater"
+        let accentColor = isTheater
+            ? Color(red: 0.82, green: 0.62, blue: 0.30)
+            : themePalette.categoryColor(hex: snapshot.category?.colorHex ?? "#6F8F7A")
         let eyecatchPhoto = detailEyecatchPhoto(in: snapshot)
         let backgroundPhoto = detailBackgroundPhoto(in: snapshot, excluding: eyecatchPhoto)
 
@@ -34,6 +46,7 @@ struct ExperienceDetailView: View {
                 recordHero(
                     snapshot: snapshot,
                     accentColor: accentColor,
+                    genreColor: genreColor,
                     eyecatchPhoto: eyecatchPhoto,
                     backgroundPhoto: backgroundPhoto
                 )
@@ -50,6 +63,11 @@ struct ExperienceDetailView: View {
                 if isTheater {
                     theaterCastSection(snapshot: snapshot, accentColor: accentColor)
                 }
+                expenseAndTicketSection(
+                    snapshot: snapshot,
+                    plan: activePlan,
+                    accentColor: accentColor
+                )
                 goshuinBookSection(snapshot: snapshot)
                 peopleSection(snapshot: snapshot, accentColor: accentColor)
                 ocrSection(snapshot: snapshot)
@@ -59,33 +77,24 @@ struct ExperienceDetailView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle(isTheater ? "観劇記録" : snapshot.eventTitle)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        isShowingEdit = true
-                    } label: {
-                        Label("編集", systemImage: "pencil")
-                    }
-
-                    Button(role: .destructive) {
-                        isShowingDeleteConfirmation = true
-                    } label: {
-                        Label("この記録だけ削除", systemImage: "trash")
-                    }
-                } label: {
-                    Label("メニュー", systemImage: "ellipsis.circle")
-                }
-            }
+        .ignoresSafeArea(edges: .top)
+        .background(detailPageBackground(genreColor: genreColor))
+        .environment(\.colorScheme, .dark)
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay(alignment: .top) {
+            detailNavigationControls(accentColor: accentColor, genreColor: genreColor)
         }
         .sheet(isPresented: $isShowingEdit) {
             EditExperienceView(visit: visit)
         }
         .sheet(item: $calendarDraft) { draft in
             CalendarEventEditSheet(draft: draft)
+        }
+        .sheet(item: $ticketPlanForEditor) { plan in
+            EditTicketAttemptView(plan: plan)
+        }
+        .navigationDestination(item: $navigatingPlan) { plan in
+            PlanDetailView(plan: plan)
         }
         .confirmationDialog("この記録を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
             Button("この記録だけ削除", role: .destructive) {
@@ -102,6 +111,14 @@ struct ExperienceDetailView: View {
             Button("OK", role: .cancel) { deletionErrorMessage = nil }
         } message: {
             Text(deletionErrorMessage ?? "")
+        }
+        .alert("予定を作成できませんでした", isPresented: Binding(
+            get: { planCreationErrorMessage != nil },
+            set: { if !$0 { planCreationErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { planCreationErrorMessage = nil }
+        } message: {
+            Text(planCreationErrorMessage ?? "")
         }
         .task(id: snapshot.weatherTaskID) {
             await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext)
@@ -121,11 +138,12 @@ struct ExperienceDetailView: View {
     private func recordHero(
         snapshot: ExperienceDetailSnapshot,
         accentColor: Color,
+        genreColor: Color,
         eyecatchPhoto: PhotoBlob?,
         backgroundPhoto: PhotoBlob?
     ) -> some View {
         ZStack(alignment: .bottomLeading) {
-            recordHeroBackground(photo: backgroundPhoto, accentColor: accentColor)
+            recordHeroBackground(photo: backgroundPhoto, genreColor: genreColor)
 
             VStack(alignment: .leading, spacing: 14) {
                 if let event = snapshot.event {
@@ -135,26 +153,28 @@ struct ExperienceDetailView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 7) {
                             Text(snapshot.eventTitle)
                                 .font(FavorecoTypography.jpSerif(27, weight: .bold, relativeTo: .title2))
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(.white)
                                 .lineLimit(2)
                                 .multilineTextAlignment(.leading)
+                                .shadow(color: .black.opacity(0.62), radius: 5, y: 2)
                             Image(systemName: "chevron.right")
                                 .font(.caption.weight(.bold))
-                                .foregroundStyle(accentColor)
+                                .foregroundStyle(.white.opacity(0.86))
                         }
                     }
                     .buttonStyle(.plain)
                 } else {
                     Text(snapshot.eventTitle)
                         .font(FavorecoTypography.jpSerif(27, weight: .bold, relativeTo: .title2))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
                         .lineLimit(2)
+                        .shadow(color: .black.opacity(0.62), radius: 5, y: 2)
                 }
 
                 if let seriesName = snapshot.event?.seriesName, !seriesName.isEmpty {
                     Text(seriesName)
                         .font(FavorecoTypography.captionStrong)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.68))
                         .lineLimit(1)
                 }
 
@@ -171,15 +191,29 @@ struct ExperienceDetailView: View {
                     VStack(alignment: .leading, spacing: 11) {
                         recordMetadataRow(
                             icon: "calendar",
-                            text: FavorecoDateText.fullDateTime(visit.visitedAt),
-                            accentColor: accentColor
+                            text: FavorecoDateText.fullDate(visit.visitedAt),
+                            accentColor: .white.opacity(0.86)
                         )
+
+                        recordMetadataRow(
+                            icon: "clock",
+                            text: performanceTimeText,
+                            accentColor: .white.opacity(0.86)
+                        )
+
+                        if !snapshot.unitFields.styleNames.isEmpty {
+                            recordMetadataRow(
+                                icon: "tag.fill",
+                                text: "スタイル  \(snapshot.unitFields.styleNames.joined(separator: "・"))",
+                                accentColor: accentColor
+                            )
+                        }
 
                         if !visit.venueNameSnapshot.isEmpty {
                             recordMetadataRow(
                                 icon: "mappin.and.ellipse",
                                 text: visit.venueNameSnapshot,
-                                accentColor: accentColor
+                                accentColor: .white.opacity(0.86)
                             )
                         }
 
@@ -187,11 +221,11 @@ struct ExperienceDetailView: View {
                             recordMetadataRow(
                                 icon: "chair",
                                 text: visit.seatText,
-                                accentColor: accentColor
+                                accentColor: .white.opacity(0.86)
                             )
                         }
 
-                        recordRating(accentColor: accentColor)
+                        recordRating(accentColor: .white.opacity(0.90))
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -199,38 +233,134 @@ struct ExperienceDetailView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
-        .frame(minHeight: 390, alignment: .bottom)
+        .frame(minHeight: 560, alignment: .bottom)
         .accessibilityElement(children: .contain)
     }
 
-    private func recordHeroBackground(photo: PhotoBlob?, accentColor: Color) -> some View {
-        ZStack {
-            if let photo {
-                RepresentativePhotoImage(photo: photo, maxPixelSize: 1600, contentMode: .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-            } else {
+    private func recordHeroBackground(photo: PhotoBlob?, genreColor: Color) -> some View {
+        GeometryReader { proxy in
+            let imageBandHeight = min(proxy.size.height * 0.74, 420)
+
+            ZStack(alignment: .top) {
+                genreColor
+
+                Group {
+                    if let photo {
+                        RepresentativePhotoImage(photo: photo, maxPixelSize: 1600, contentMode: .fill)
+                    } else {
+                        LinearGradient(
+                            colors: [genreColor.opacity(0.92), Color.black.opacity(0.72)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    }
+                }
+                .frame(width: proxy.size.width, height: imageBandHeight, alignment: .center)
+                .clipped()
+
+                genreColor
+                    .opacity(photo == nil ? 0.10 : 0.08)
+                    .frame(height: imageBandHeight)
+
+                // ステータスバーと上部操作を、明るい写真でも読める状態に保つ。
                 LinearGradient(
-                    colors: [accentColor.opacity(0.38), accentColor.opacity(0.08)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    stops: [
+                        .init(color: .black.opacity(0.48), location: 0.00),
+                        .init(color: .black.opacity(0.20), location: 0.22),
+                        .init(color: .clear, location: 0.46),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
+                .frame(height: imageBandHeight * 0.58)
+
+                // 写真の色を残したまま、下端だけをジャンル色へ接続する。
+                LinearGradient(
+                    stops: [
+                        .init(color: genreColor.opacity(0.00), location: 0.00),
+                        .init(color: genreColor.opacity(0.04), location: 0.50),
+                        .init(color: genreColor.opacity(0.30), location: 0.72),
+                        .init(color: genreColor.opacity(0.82), location: 0.91),
+                        .init(color: genreColor, location: 1.00),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: imageBandHeight)
             }
+        }
+        .clipped()
+    }
 
-            accentColor.opacity(photo == nil ? 0.04 : 0.12)
-
+    private func detailPageBackground(genreColor: Color) -> some View {
+        ZStack {
+            Color.black
             LinearGradient(
-                colors: [
-                    Color(.systemGroupedBackground).opacity(photo == nil ? 0.10 : 0.02),
-                    Color(.systemGroupedBackground).opacity(0.58),
-                    Color(.systemGroupedBackground),
-                ],
+                colors: [genreColor, genreColor.opacity(0.72), Color.black.opacity(0.94)],
                 startPoint: .top,
                 endPoint: .bottom
             )
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
+        .ignoresSafeArea()
+    }
+
+    private func detailNavigationControls(accentColor: Color, genreColor: Color) -> some View {
+        HStack {
+            Button {
+                if let onBack {
+                    onBack()
+                } else {
+                    dismiss()
+                }
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 50, height: 50)
+                    .background(.black.opacity(0.48), in: Circle())
+                    .overlay {
+                        Circle().stroke(.white.opacity(0.20), lineWidth: 0.7)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("戻る")
+
+            Spacer()
+
+            Menu {
+                Button {
+                    isShowingEdit = true
+                } label: {
+                    Label("編集", systemImage: "pencil")
+                }
+
+                Button(role: .destructive) {
+                    isShowingDeleteConfirmation = true
+                } label: {
+                    Label("この記録だけ削除", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(accentColor)
+                    .frame(width: 50, height: 50)
+                    .background(genreColor.opacity(0.86), in: Circle())
+                    .overlay {
+                        Circle().stroke(accentColor.opacity(0.72), lineWidth: 1)
+                    }
+            }
+            .accessibilityLabel("メニュー")
+        }
+        .padding(.horizontal, 20)
+        .safeAreaPadding(.top, 8)
+    }
+
+    private var performanceTimeText: String {
+        let start = FavorecoDateText.time(visit.visitedAt)
+        guard visit.endedAt > visit.visitedAt else {
+            return "上演時間  \(start)"
+        }
+        return "上演時間  \(start)–\(FavorecoDateText.time(visit.endedAt))"
     }
 
     private func recordMetadataRow(icon: String, text: String, accentColor: Color) -> some View {
@@ -239,7 +369,7 @@ struct ExperienceDetailView: View {
                 .foregroundStyle(accentColor)
                 .frame(width: 18)
             Text(text)
-                .foregroundStyle(.primary.opacity(0.78))
+                .foregroundStyle(.white.opacity(0.84))
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
         }
@@ -253,7 +383,7 @@ struct ExperienceDetailView: View {
                     .foregroundStyle(visit.overallRating > 0 ? accentColor : Color.secondary.opacity(0.34))
             }
             Text(visit.overallRating > 0 ? String(format: "%.1f", visit.overallRating) : "未評価")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.68))
                 .padding(.leading, 4)
         }
         .font(FavorecoTypography.caption)
@@ -271,7 +401,8 @@ struct ExperienceDetailView: View {
     private func detailEyecatchPhoto(in snapshot: ExperienceDetailSnapshot) -> PhotoBlob? {
         if snapshot.event?.eyecatchData != nil { return nil }
         if let event = snapshot.event,
-           let representative = EventRepresentativePhotoResolver.photo(for: event) {
+           let representative = EventRepresentativePhotoResolver.photo(for: event),
+           ExperiencePhotoPurpose.resolved(from: representative.purpose) == .memory {
             return representative
         }
         return memoryPhotos(in: snapshot).first
@@ -352,6 +483,88 @@ struct ExperienceDetailView: View {
         formatter.maximumFractionDigits = 0
         return formatter.string(from: NSDecimalNumber(decimal: amount))
             ?? "¥\(NSDecimalNumber(decimal: amount).stringValue)"
+    }
+
+    private var activePlan: Plan? {
+        (visit.plans ?? [])
+            .filter { !$0.isArchived }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+    }
+
+    @ViewBuilder
+    private func expenseAndTicketSection(
+        snapshot: ExperienceDetailSnapshot,
+        plan: Plan?,
+        accentColor: Color
+    ) -> some View {
+        let supportsTicketManagement = ["theater", "live"].contains(snapshot.category?.templateKey ?? "")
+        VStack(alignment: .leading, spacing: 12) {
+            ExperienceExpenseSummaryCard(
+                summary: ExperienceExpenseSummary.make(visit: visit, plan: plan),
+                tint: accentColor
+            )
+
+            if supportsTicketManagement {
+                HStack(spacing: 10) {
+                    Button {
+                        guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
+                        ticketPlanForEditor = plan
+                    } label: {
+                        Label("申込を追加", systemImage: "ticket")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(accentColor)
+
+                    Button {
+                        guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
+                        navigatingPlan = plan
+                    } label: {
+                        Label("遠征ToDo", systemImage: "suitcase.rolling")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(accentColor)
+                }
+
+                Text("申込、ホテル・新幹線・飛行機などの遠征予定と費用を、この記録に紐づけて管理します。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func ensureTicketPlan(snapshot: ExperienceDetailSnapshot) -> Plan? {
+        if let activePlan { return activePlan }
+
+        let now = Date()
+        let plan = Plan(
+            title: snapshot.eventTitle,
+            subtitle: snapshot.event?.seriesName ?? "",
+            stateKey: "attended",
+            startsAt: visit.visitedAt,
+            endsAt: visit.endedAt > visit.visitedAt ? visit.endedAt : visit.visitedAt.addingTimeInterval(2 * 60 * 60),
+            opensAt: visit.visitedAt,
+            venueNameSnapshot: visit.venueNameSnapshot,
+            organizerNameSnapshot: snapshot.event?.organizerNameSnapshot ?? "",
+            officialURL: snapshot.event?.officialURL ?? "",
+            createdAt: now,
+            updatedAt: now,
+            category: snapshot.category,
+            event: snapshot.event,
+            placeMaster: visit.placeMaster,
+            visit: visit
+        )
+        modelContext.insert(plan)
+        do {
+            try modelContext.save()
+            return plan
+        } catch {
+            modelContext.rollback()
+            planCreationErrorMessage = "チケット・遠征管理を開始できませんでした。もう一度お試しください。"
+            return nil
+        }
     }
 
     @ViewBuilder
@@ -518,10 +731,6 @@ struct ExperienceDetailView: View {
 
             if !visit.outcomeKey.isEmpty {
                 DetailInfoRow(icon: "ticket", title: "チケット状態", value: snapshot.ticketStatusText)
-            }
-
-            if visit.amount != Decimal(0) {
-                DetailInfoRow(icon: "yensign.circle", title: "金額", value: snapshot.formattedAmount)
             }
 
             Button {
@@ -779,7 +988,11 @@ private extension View {
         self
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
-            .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(Color.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 0.6)
+            }
     }
 }
 
