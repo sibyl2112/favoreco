@@ -37,13 +37,15 @@ struct CategoryTopView: View {
     @State private var goshuinShareLocked = false
     @State private var selectedFeatureCarouselIndex = 0
     @State private var selectedGoshuinHeroIndex = 0
-    @State private var libraryLayoutMode: CategoryLibraryLayoutMode
+    @State private var libraryLayoutModes: [String: CategoryLibraryLayoutMode]
     @State private var isShowingAllUpcomingPlans = false
 
     init(category: RecordCategory) {
         self.category = category
         _selectedCategoryID = State(initialValue: category.id)
-        _libraryLayoutMode = State(initialValue: CategoryLibraryLayoutMode.stored(for: category.templateKey))
+        _libraryLayoutModes = State(initialValue: [
+            category.templateKey: CategoryLibraryLayoutMode.stored(for: category.templateKey)
+        ])
     }
 
     var body: some View {
@@ -92,18 +94,10 @@ struct CategoryTopView: View {
 
                         VStack(alignment: .leading, spacing: 24) {
                             Group {
-                                if activeCategory.templateKey == "theater" {
-                                    theaterHero(category: activeCategory, snapshot: snapshot)
-                                } else if activeCategory.templateKey == "goshuin" {
+                                if activeCategory.templateKey == "goshuin" {
                                     goshuinHero(category: activeCategory, snapshot: snapshot)
-                                } else if usesFeatureOverview(for: activeCategory) {
-                                    featureOverviewContent(category: activeCategory, snapshot: snapshot)
                                 } else {
-                                    hero(
-                                        category: activeCategory,
-                                        snapshot: snapshot,
-                                        recordTemplate: recordTemplate
-                                    )
+                                    categoryPriorityHero(category: activeCategory, snapshot: snapshot)
                                 }
                             }
                             .id("category-hero-\(activeCategory.id.uuidString)")
@@ -113,7 +107,7 @@ struct CategoryTopView: View {
                                 canMoveBackward: !snapshot.visibleCategories.isEmpty,
                                 canMoveForward: !snapshot.visibleCategories.isEmpty,
                                 onMove: { direction in
-                                    if let destination = neighboringCategory(from: activeCategory, offset: -direction) {
+                                    if let destination = neighboringCategory(from: activeCategory, offset: direction) {
                                         switchCategory(to: destination)
                                     } else {
                                         dismiss()
@@ -143,6 +137,14 @@ struct CategoryTopView: View {
                                             recordTemplate: recordTemplate
                                         )
                                             .id(CategoryScrollAnchor.events)
+                                        if supportsVisitedPlacesMap(activeCategory) {
+                                            VisitedPlacesHeatMapSection(
+                                                visits: snapshot.visits,
+                                                category: activeCategory,
+                                                tint: categoryAccent(activeCategory)
+                                            )
+                                            .id("visited-places-map-\(activeCategory.id.uuidString)")
+                                        }
                                     }
                                     chapterFooter(
                                         categories: snapshot.visibleCategories,
@@ -315,9 +317,11 @@ struct CategoryTopView: View {
                 ("観たい", "\(snapshot.interestedEventCount)", "本", "鑑賞候補"),
             ]
         case "museum":
+            let visitedVenueCount = museumVisitedVenueCount(in: snapshot.visits)
+            let viewedEventCount = Set(snapshot.visits.compactMap { $0.event?.id }).count
             values = [
-                ("展覧会", "\(snapshot.eventCount)", "件", "総展示数"),
-                ("鑑賞済み", "\(snapshot.visitCount)", "回", "総鑑賞数"),
+                ("訪れた館", "\(visitedVenueCount)", "館", "訪問館数"),
+                ("鑑賞イベント", "\(viewedEventCount)", "件", "鑑賞済み"),
                 ("気になる", "\(snapshot.interestedEventCount)", "件", "鑑賞候補"),
             ]
         case "live":
@@ -363,6 +367,19 @@ struct CategoryTopView: View {
         return values.map {
             CategoryStatisticsItem(title: $0.0, value: $0.1, unit: $0.2, note: $0.3)
         }
+    }
+
+    private func museumVisitedVenueCount(in visits: [Visit]) -> Int {
+        Set(visits.compactMap { visit -> String? in
+            if let placeID = visit.placeMaster?.id {
+                return "place:\(placeID.uuidString)"
+            }
+
+            let venueName = visit.venueNameSnapshot
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+            return venueName.isEmpty ? nil : "name:\(venueName)"
+        }).count
     }
 
     private func theaterEventSection(
@@ -411,20 +428,16 @@ struct CategoryTopView: View {
         }
     }
 
-    private func usesFeatureOverview(for category: RecordCategory) -> Bool {
-        ["movie", "book", "outing_facility"].contains(category.templateKey)
-    }
-
-    private func featureOverviewContent(category: RecordCategory, snapshot: CategoryTopSnapshot) -> some View {
-        let items = featureCarouselItems(category: category, visits: snapshot.visits)
+    private func categoryPriorityHero(category: RecordCategory, snapshot: CategoryTopSnapshot) -> some View {
+        let items = priorityHeroItems(category: category, snapshot: snapshot)
 
         return VStack(alignment: .leading, spacing: 14) {
             CategoryFeatureCarousel(
-                title: featureCarouselTitle(for: category),
-                emptyMessage: featureEmptyMessage(for: category),
+                title: "Coming Up / Interests",
+                emptyMessage: "これからの予定や興味のあるものを追加すると、ここに並びます。",
                 items: items,
                 selectedIndex: $selectedFeatureCarouselIndex,
-                tint: themePalette.categoryColor(hex: category.colorHex),
+                tint: categoryAccent(category),
                 fallbackIcon: category.iconSymbol,
                 onAdd: { isShowingAddExperience = true }
             )
@@ -522,48 +535,24 @@ struct CategoryTopView: View {
             .sorted { $0.startsAt < $1.startsAt }
     }
 
-    private func featureCarouselTitle(for category: RecordCategory) -> String {
-        switch category.templateKey {
-        case "movie": return "最近観た映画・これから観る予定"
-        case "book": return "最近読んだ本・これから読む予定"
-        case "outing_facility": return "最近行った場所・これから行く予定"
-        default: return "最近の記録・これからの予定"
-        }
-    }
-
-    private func featureEmptyMessage(for category: RecordCategory) -> String {
-        switch category.templateKey {
-        case "movie": return "映画を観た記録や鑑賞予定を入れると、ここに並びます。"
-        case "book": return "読んだ本やこれから読む本を入れると、ここに並びます。"
-        case "outing_facility": return "来園記録やこれから行く予定を入れると、ここに並びます。"
-        default: return "記録や予定を入れると、ここに並びます。"
-        }
-    }
-
-    private func featureCarouselItems(category: RecordCategory, visits: [Visit]) -> [CategoryFeatureItem] {
+    private func priorityHeroItems(category: RecordCategory, snapshot: CategoryTopSnapshot) -> [CategoryFeatureItem] {
         let now = Date()
         let upcomingPlans = allPlans
             .filter { plan in
-                !plan.isArchived && plan.startsAt >= now && plan.category?.id == category.id
+                !plan.isArchived
+                    && plan.startsAt >= now
+                    && (plan.category ?? plan.event?.category)?.id == category.id
             }
             .sorted { $0.startsAt < $1.startsAt }
-            .prefix(5)
-            .map(CategoryFeatureItem.plan)
+        let plannedEventIDs = Set(upcomingPlans.compactMap { $0.event?.id })
+        let interestedEvents = snapshot.events
+            .map(\.event)
+            .filter { $0.stateKey == "interested" && !plannedEventIDs.contains($0.id) }
+            .sorted { $0.updatedAt > $1.updatedAt }
 
-        let linkedVisitIDs = Set(upcomingPlans.compactMap { item -> UUID? in
-            if case .plan(let plan) = item {
-                return plan.visit?.id
-            }
-            return nil
-        })
-
-        let recentVisits = visits
-            .filter { !linkedVisitIDs.contains($0.id) }
-            .sorted { $0.visitedAt > $1.visitedAt }
-            .prefix(8)
-            .map(CategoryFeatureItem.visit)
-
-        return Array(upcomingPlans + recentVisits).prefix(10).map { $0 }
+        let planItems = upcomingPlans.map(CategoryFeatureItem.plan)
+        let interestItems = interestedEvents.map(CategoryFeatureItem.interest)
+        return Array((planItems + interestItems).prefix(10))
     }
 
     private func featureMetrics(category: RecordCategory, snapshot: CategoryTopSnapshot) -> [MiniStatisticsItem] {
@@ -860,7 +849,7 @@ struct CategoryTopView: View {
     }
 
     private func goshuinAvailablePrefectures(in visits: [Visit]) -> [String] {
-        JapanPrefecture.allCases
+        CategoryTopJapanPrefecture.allCases
             .map(\.rawValue)
             .filter { prefecture in
                 visits.contains { goshuinPrefectureText(for: $0).contains(prefecture) }
@@ -933,15 +922,29 @@ struct CategoryTopView: View {
         snapshot: CategoryTopSnapshot,
         recordTemplate: CategoryRecordTemplate
     ) -> some View {
+        let selectedLayout = libraryLayoutMode(for: category)
         let items = categoryLibraryItems(category: category, snapshot: snapshot)
         let usesLatinLibraryStyle = category.templateKey == "theater" || category.templateKey == "live"
-        let separatesInterests = usesLatinLibraryStyle
-        let interestedItems = separatesInterests
-            ? items.filter { $0.event.stateKey == "interested" }
+        let showsPlanningSections = ["theater", "live", "museum", "movie"].contains(category.templateKey)
+        let separatesInterests = showsPlanningSections
+        let showsBookSections = category.templateKey == "book"
+        let interestedItems: [CategoryLibraryItem] = if showsPlanningSections {
+            items.filter { $0.event.stateKey == "interested" && $0.nextPlan == nil }
+        } else if showsBookSections {
+            items.filter { $0.event.stateKey == "interested" }
+        } else {
+            []
+        }
+        let unreadBookItems = showsBookSections
+            ? items.filter { $0.event.stateKey != "interested" && $0.latestVisit == nil }
             : []
-        let productionItems = separatesInterests
-            ? items.filter { $0.event.stateKey != "interested" }
-            : items
+        let productionItems: [CategoryLibraryItem] = if showsPlanningSections {
+            items.filter { $0.event.stateKey != "interested" }
+        } else if showsBookSections {
+            items.filter { $0.event.stateKey != "interested" && $0.latestVisit != nil }
+        } else {
+            items
+        }
         let tint: Color = switch category.templateKey {
         case "theater": TheaterCategoryStyle.gold
         case "live": LiveCategoryStyle.teal
@@ -949,11 +952,39 @@ struct CategoryTopView: View {
         }
 
         return VStack(alignment: .leading, spacing: 12) {
-            if !interestedItems.isEmpty {
+            if showsBookSections {
                 categoryLibrarySubsection(
-                    title: usesLatinLibraryStyle ? "Interests" : "気になる",
+                    title: "気になる！",
+                    items: interestedItems,
+                    sectionKey: "book-interests",
+                    emptyIcon: "heart",
+                    emptyTitle: "気になる本はまだありません",
+                    category: category,
+                    tint: tint
+                )
+
+                Spacer()
+                    .frame(height: 8)
+
+                categoryLibrarySubsection(
+                    title: "積読",
+                    items: unreadBookItems,
+                    sectionKey: "book-unread",
+                    emptyIcon: "books.vertical",
+                    emptyTitle: "積読はまだありません",
+                    category: category,
+                    tint: tint
+                )
+
+                Spacer()
+                    .frame(height: 8)
+            } else if separatesInterests {
+                categoryLibrarySubsection(
+                    title: "Interests",
                     items: interestedItems,
                     sectionKey: "interests",
+                    emptyIcon: "heart",
+                    emptyTitle: "気になるものはまだありません",
                     category: category,
                     tint: tint
                 )
@@ -962,7 +993,7 @@ struct CategoryTopView: View {
                     .frame(height: 8)
             }
 
-            if usesLatinLibraryStyle {
+            if showsPlanningSections {
                 categoryComingUpSection(category: category)
 
                 Spacer()
@@ -984,13 +1015,16 @@ struct CategoryTopView: View {
 
                 Spacer(minLength: 4)
 
-                CategoryLibraryLayoutPicker(
-                    selection: $libraryLayoutMode,
-                    tint: tint,
-                    onSelect: { mode in
-                        mode.store(for: category.templateKey)
-                    }
-                )
+                if category.templateKey != "live" {
+                    CategoryLibraryLayoutPicker(
+                        selection: Binding(
+                            get: { libraryLayoutMode(for: category) },
+                            set: { selectLibraryLayout($0, for: category) }
+                        ),
+                        tint: tint,
+                        onSelect: { _ in }
+                    )
+                }
             }
 
             if productionItems.isEmpty {
@@ -1005,11 +1039,12 @@ struct CategoryTopView: View {
                     items: productionItems,
                     sectionKey: "productions",
                     category: category,
-                    tint: tint
+                    tint: tint,
+                    layout: selectedLayout
                 )
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: libraryLayoutMode)
+        .animation(.easeInOut(duration: 0.18), value: selectedLayout)
     }
 
     @ViewBuilder
@@ -1017,13 +1052,15 @@ struct CategoryTopView: View {
         title: String,
         items: [CategoryLibraryItem],
         sectionKey: String,
+        emptyIcon: String,
+        emptyTitle: String,
         category: RecordCategory,
         tint: Color
     ) -> some View {
         HStack(spacing: 10) {
             Text(title)
                 .font(
-                    category.templateKey == "theater" || category.templateKey == "live"
+                    ["theater", "live", "museum", "movie"].contains(category.templateKey)
                         ? FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3)
                         : FavorecoTypography.sectionTitle
                 )
@@ -1034,12 +1071,24 @@ struct CategoryTopView: View {
                 .foregroundStyle(librarySecondaryTextColor(category))
         }
 
-        categoryLibraryItemsContent(
-            items: items,
-            sectionKey: sectionKey,
-            category: category,
-            tint: tint
-        )
+        if items.isEmpty {
+            CategoryScheduleEmptyRow(
+                icon: emptyIcon,
+                title: emptyTitle,
+                actionTitle: nil,
+                tint: tint,
+                isTheater: category.templateKey == "theater",
+                isLive: category.templateKey == "live"
+            )
+        } else {
+            categoryLibraryItemsContent(
+                items: items,
+                sectionKey: sectionKey,
+                category: category,
+                tint: tint,
+                layout: libraryLayoutMode(for: category)
+            )
+        }
     }
 
     @ViewBuilder
@@ -1047,16 +1096,17 @@ struct CategoryTopView: View {
         items: [CategoryLibraryItem],
         sectionKey: String,
         category: RecordCategory,
-        tint: Color
+        tint: Color,
+        layout: CategoryLibraryLayoutMode
     ) -> some View {
-        let pageSize = libraryPageSize(for: libraryLayoutMode)
-        let key = libraryDisplayKey(category: category, sectionKey: sectionKey, layout: libraryLayoutMode)
+        let pageSize = libraryPageSize(for: layout)
+        let key = libraryDisplayKey(category: category, sectionKey: sectionKey, layout: layout)
 
         ProgressiveCategoryLibraryContent(
             items: items,
             category: category,
             tint: tint,
-            layout: libraryLayoutMode,
+            layout: layout,
             pageSize: pageSize
         )
         .id(key)
@@ -1068,6 +1118,26 @@ struct CategoryTopView: View {
         case .compact: 8
         case .banner: 6
         }
+    }
+
+    private func libraryLayoutMode(for category: RecordCategory) -> CategoryLibraryLayoutMode {
+        if category.templateKey == "live" {
+            return .banner
+        }
+        return libraryLayoutModes[category.templateKey]
+            ?? CategoryLibraryLayoutMode.stored(for: category.templateKey)
+    }
+
+    private func selectLibraryLayout(
+        _ mode: CategoryLibraryLayoutMode,
+        for category: RecordCategory
+    ) {
+        guard category.templateKey != "live" else {
+            libraryLayoutModes[category.templateKey] = .banner
+            return
+        }
+        libraryLayoutModes[category.templateKey] = mode
+        mode.store(for: category.templateKey)
     }
 
     private func librarySectionTitle(category: RecordCategory, fallback: String) -> String {
@@ -1320,6 +1390,10 @@ struct CategoryTopView: View {
             : themePalette.categoryColor(hex: category.colorHex)
     }
 
+    private func supportsVisitedPlacesMap(_ category: RecordCategory) -> Bool {
+        ["museum", "live", "outing_facility"].contains(category.templateKey)
+    }
+
     private func usesAtmosphericDarkStyle(_ category: RecordCategory) -> Bool {
         category.templateKey == "theater" || category.templateKey == "live"
     }
@@ -1373,7 +1447,9 @@ struct CategoryTopView: View {
 
         withAnimation(categorySwitchAnimation) {
             selectedCategoryID = destination.id
-            libraryLayoutMode = CategoryLibraryLayoutMode.stored(for: destination.templateKey)
+            if libraryLayoutModes[destination.templateKey] == nil {
+                libraryLayoutModes[destination.templateKey] = CategoryLibraryLayoutMode.stored(for: destination.templateKey)
+            }
         }
     }
 
@@ -1452,8 +1528,8 @@ struct CategoryTopView: View {
             )
         }
 
-        if usesFeatureOverview(for: category) {
-            for item in featureCarouselItems(category: category, visits: snapshot.visits).prefix(2) {
+        if category.templateKey != "goshuin" {
+            for item in priorityHeroItems(category: category, snapshot: snapshot).prefix(2) {
                 guard let photo = item.visit.flatMap({ firstPhoto(in: $0) })
                     ?? item.event.flatMap({ EventRepresentativePhotoResolver.photo(for: $0) }) else { continue }
                 let maxPixelSize: CGFloat = 520
@@ -1463,7 +1539,7 @@ struct CategoryTopView: View {
                     cacheKey: "representative-\(photo.id.uuidString)-\(photo.byteCount)-\(Int(maxPixelSize))"
                 )
             }
-        } else if category.templateKey == "goshuin" {
+        } else {
             for visit in snapshot.visits.prefix(4) {
                 guard let photo = firstPhoto(in: visit) else { continue }
                 let maxPixelSize: CGFloat = 360
@@ -1737,9 +1813,11 @@ private struct DirectionalHorizontalPanInstaller: UIViewRepresentable {
             let activeFrame = markerView.convert(markerView.bounds, to: installedView)
             guard activeFrame.contains(location) else { return false }
 
-            if let touchedView = installedView.hitTest(location, with: nil),
-               isInsideNestedHorizontalScrollView(touchedView, outerScrollView: installedView) {
-                return false
+            if let touchedView = installedView.hitTest(location, with: nil) {
+                if isInsideNestedHorizontalScrollView(touchedView, outerScrollView: installedView)
+                    || isInsideMapView(touchedView, outerScrollView: installedView) {
+                    return false
+                }
             }
 
             let velocity = pan.velocity(in: installedView)
@@ -1762,6 +1840,18 @@ private struct DirectionalHorizontalPanInstaller: UIViewRepresentable {
                    scrollView.contentSize.width > scrollView.bounds.width + 1 {
                     return true
                 }
+                candidate = view.superview
+            }
+            return false
+        }
+
+        private func isInsideMapView(
+            _ touchedView: UIView,
+            outerScrollView: UIView
+        ) -> Bool {
+            var candidate: UIView? = touchedView
+            while let view = candidate, view !== outerScrollView {
+                if view is MKMapView { return true }
                 candidate = view.superview
             }
             return false
@@ -2285,7 +2375,22 @@ private struct CategoryLibraryItem: Identifiable {
         if let nextPlan, !nextPlan.venueNameSnapshot.isEmpty {
             return nextPlan.venueNameSnapshot
         }
-        return latestVisit?.venueNameSnapshot ?? ""
+        if let planVenue = nextPlan?.placeMaster?.name, !planVenue.isEmpty {
+            return planVenue
+        }
+        if let latestVisit, !latestVisit.venueNameSnapshot.isEmpty {
+            return latestVisit.venueNameSnapshot
+        }
+        return latestVisit?.placeMaster?.name ?? ""
+    }
+
+    var prefectureText: String {
+        let placeMasters = [nextPlan?.placeMaster, latestVisit?.placeMaster].compactMap { $0 }
+        if let savedPrefecture = placeMasters.map(\.prefecture).first(where: { !$0.isEmpty }) {
+            return savedPrefecture
+        }
+        let address = placeMasters.map(\.address).first(where: { !$0.isEmpty }) ?? ""
+        return JapanPrefecture.extract(from: address)
     }
 
     var ticketStatusNames: [String] {
@@ -2317,6 +2422,7 @@ private struct CategoryLibraryItem: Identifiable {
             switch category.templateKey {
             case "theater": return "観劇予定"
             case "movie": return "鑑賞予定"
+            case "live": return "参加予定"
             default: return "予定"
             }
         }
@@ -2325,6 +2431,7 @@ private struct CategoryLibraryItem: Identifiable {
             switch category.templateKey {
             case "theater": return "観劇済み"
             case "movie": return "鑑賞済み"
+            case "live": return "参加済み"
             default: return "体験済み"
             }
         }
@@ -2346,6 +2453,25 @@ private struct CategoryLibraryItem: Identifiable {
         case "movie":
             let directors = linkedNames(for: "director")
             return directors.isEmpty ? "" : "監督: \(directors.joined(separator: "・"))"
+        case "live":
+            let artists = ["artist", "performer", "cast"]
+                .flatMap { linkedNames(for: $0) }
+                .reduce(into: [String]()) { names, name in
+                    if !names.contains(name) {
+                        names.append(name)
+                    }
+                }
+            if !artists.isEmpty {
+                return "出演: \(artists.joined(separator: "・"))"
+            }
+            if let nextPlan, !nextPlan.organizerNameSnapshot.isEmpty {
+                return "主催: \(nextPlan.organizerNameSnapshot)"
+            }
+            if !event.organizerNameSnapshot.isEmpty {
+                return "主催: \(event.organizerNameSnapshot)"
+            }
+            let organizers = linkedNames(for: "organizer")
+            return organizers.isEmpty ? "" : "主催: \(organizers.joined(separator: "・"))"
         default:
             return ""
         }
@@ -2460,6 +2586,26 @@ private struct CompactTileDateView: View {
     }
 }
 
+private struct CompactTileSupplementalView: View {
+    let text: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+                .font(.system(size: 7.5, weight: .medium))
+
+            Text(text.isEmpty ? "—" : text)
+                .font(FavorecoTypography.jpSans(8.5, weight: .medium, relativeTo: .caption2))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(text.isEmpty ? "未設定" : text)
+    }
+}
+
 private struct MovieCompactLibraryCard: View {
     let item: CategoryLibraryItem
     let category: RecordCategory
@@ -2492,11 +2638,16 @@ private struct MovieCompactLibraryCard: View {
                     fontSize: 8.5
                 )
 
+                CompactTileSupplementalView(
+                    text: item.venueText,
+                    systemImage: "mappin.and.ellipse"
+                )
+
                 CompactRatingView(
                     rating: item.ratingValue,
                     ratingText: item.ratingText,
                     color: item.ratingColor,
-                    fontSize: 8.5
+                    fontSize: 9.35
                 )
             }
             .padding(.vertical, 7)
@@ -2707,8 +2858,9 @@ private struct CategoryLibraryCompactGrid: View {
         repeating: GridItem(.flexible(), spacing: 12, alignment: .top),
         count: 2
     )
-    private let cardHeight: CGFloat = 106
     private let artworkWidth: CGFloat = 58
+
+    private let cardHeight: CGFloat = 106
 
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
@@ -2741,11 +2893,23 @@ private struct CategoryLibraryCompactGrid: View {
                                     fontSize: 9
                                 )
 
+                                if category.templateKey == "theater" {
+                                    CompactTileSupplementalView(
+                                        text: item.venueText,
+                                        systemImage: "mappin.and.ellipse"
+                                    )
+                                } else if category.templateKey == "outing_facility" {
+                                    CompactTileSupplementalView(
+                                        text: item.prefectureText,
+                                        systemImage: "mappin"
+                                    )
+                                }
+
                                 CompactRatingView(
                                     rating: item.ratingValue,
                                     ratingText: item.ratingText,
                                     color: item.ratingColor,
-                                    fontSize: 8.5
+                                    fontSize: 9.35
                                 )
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -2816,6 +2980,14 @@ private struct CategoryLibraryBannerList: View {
                                 .foregroundStyle(.primary)
                                 .lineSpacing(-1)
                                 .lineLimit(2, reservesSpace: true)
+
+                            if category.templateKey == "live", !item.event.seriesName.isEmpty {
+                                Text(item.event.seriesName)
+                                    .font(FavorecoTypography.jpSans(10, weight: .medium, relativeTo: .caption2))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
 
                             VStack(alignment: .leading, spacing: 4) {
                                 if item.dateText != "—" {
@@ -3552,11 +3724,13 @@ private struct EventRow: View {
 private enum CategoryFeatureItem: Identifiable {
     case plan(Plan)
     case visit(Visit)
+    case interest(ExperienceEvent)
 
     var id: String {
         switch self {
         case .plan(let plan): return "plan-\(plan.id.uuidString)"
         case .visit(let visit): return "visit-\(visit.id.uuidString)"
+        case .interest(let event): return "interest-\(event.id.uuidString)"
         }
     }
 
@@ -3567,6 +3741,8 @@ private enum CategoryFeatureItem: Identifiable {
             return plan.event?.title ?? "予定"
         case .visit(let visit):
             return visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
+        case .interest(let event):
+            return event.title.isEmpty ? "興味あり" : event.title
         }
     }
 
@@ -3576,6 +3752,8 @@ private enum CategoryFeatureItem: Identifiable {
             return plan.subtitle.isEmpty ? plan.event?.seriesName ?? "" : plan.subtitle
         case .visit(let visit):
             return visit.event?.seriesName ?? ""
+        case .interest(let event):
+            return event.seriesName
         }
     }
 
@@ -3583,6 +3761,23 @@ private enum CategoryFeatureItem: Identifiable {
         switch self {
         case .plan: return "予定"
         case .visit: return "記録済み"
+        case .interest: return "興味あり"
+        }
+    }
+
+    var actionText: String {
+        switch self {
+        case .plan: return "予定を見る"
+        case .visit: return "記録を見る"
+        case .interest: return "詳細を見る"
+        }
+    }
+
+    var actionIcon: String {
+        switch self {
+        case .plan: return "calendar"
+        case .visit: return "doc.text"
+        case .interest: return "chevron.right"
         }
     }
 
@@ -3590,6 +3785,7 @@ private enum CategoryFeatureItem: Identifiable {
         switch self {
         case .plan(let plan): return FavorecoDateText.compactDate(plan.startsAt)
         case .visit(let visit): return FavorecoDateText.compactDate(visit.visitedAt)
+        case .interest: return ""
         }
     }
 
@@ -3599,18 +3795,22 @@ private enum CategoryFeatureItem: Identifiable {
             return plan.venueNameSnapshot.isEmpty ? plan.placeMaster?.name ?? "" : plan.venueNameSnapshot
         case .visit(let visit):
             return visit.venueNameSnapshot.isEmpty ? visit.placeMaster?.name ?? "" : visit.venueNameSnapshot
+        case .interest:
+            return ""
         }
     }
 
     var detailText: String {
         switch self {
         case .plan(let plan):
-            return plan.memo.isEmpty ? plan.organizerNameSnapshot : plan.memo
+            return plan.organizerNameSnapshot
         case .visit(let visit):
             if visit.overallRating > 0 {
                 return String(format: "評価 %.1f", visit.overallRating)
             }
-            return visit.note
+            return ""
+        case .interest:
+            return ""
         }
     }
 
@@ -3618,6 +3818,7 @@ private enum CategoryFeatureItem: Identifiable {
         switch self {
         case .plan(let plan): return plan.event
         case .visit(let visit): return visit.event
+        case .interest(let event): return event
         }
     }
 
@@ -3625,6 +3826,7 @@ private enum CategoryFeatureItem: Identifiable {
         switch self {
         case .plan(let plan): return plan.visit
         case .visit(let visit): return visit
+        case .interest: return nil
         }
     }
 }
@@ -3850,7 +4052,7 @@ private struct CategoryFeatureCarousel: View {
                     .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
                     .scrollPosition(id: selectedPosition)
                 }
-                .frame(height: 206)
+                .frame(height: CategoryFeatureHeroMetrics.cardHeight)
 
                 HStack(spacing: 7) {
                     ForEach(items.indices, id: \.self) { index in
@@ -3884,27 +4086,115 @@ private struct CategoryFeatureCardLink: View {
     var body: some View {
         switch item {
         case .plan(let plan):
-            NavigationLink {
-                PlanDetailView(plan: plan)
-            } label: {
-                CategoryFeatureCard(item: item, tint: tint, fallbackIcon: fallbackIcon)
-            }
-            .buttonStyle(.plain)
+            CategoryFeaturePlanCard(
+                item: item,
+                plan: plan,
+                tint: tint,
+                fallbackIcon: fallbackIcon
+            )
         case .visit(let visit):
             NavigationLink {
                 ExperienceDetailView(visit: visit)
             } label: {
-                CategoryFeatureCard(item: item, tint: tint, fallbackIcon: fallbackIcon)
+                CategoryFeatureCard(item: item, tint: tint, fallbackIcon: fallbackIcon) {
+                    CategoryFeatureSingleActionLabel(
+                        title: item.actionText,
+                        systemImage: item.actionIcon,
+                        tint: tint
+                    )
+                }
+            }
+            .buttonStyle(.plain)
+        case .interest(let event):
+            NavigationLink {
+                EventDetailView(event: event)
+            } label: {
+                CategoryFeatureCard(item: item, tint: tint, fallbackIcon: fallbackIcon) {
+                    CategoryFeatureSingleActionLabel(
+                        title: item.actionText,
+                        systemImage: item.actionIcon,
+                        tint: tint
+                    )
+                }
             }
             .buttonStyle(.plain)
         }
     }
 }
 
-private struct CategoryFeatureCard: View {
+private struct CategoryFeaturePlanCard: View {
+    let item: CategoryFeatureItem
+    let plan: Plan
+    let tint: Color
+    let fallbackIcon: String
+    @Query private var currentPlans: [Plan]
+    @State private var isShowingEditPlan = false
+
+    init(item: CategoryFeatureItem, plan: Plan, tint: Color, fallbackIcon: String) {
+        self.item = item
+        self.plan = plan
+        self.tint = tint
+        self.fallbackIcon = fallbackIcon
+        let planID = plan.id
+        _currentPlans = Query(filter: #Predicate<Plan> { $0.id == planID })
+    }
+
+    var body: some View {
+        CategoryFeatureCard(item: item, tint: tint, fallbackIcon: fallbackIcon) {
+            HStack(spacing: 6) {
+                NavigationLink {
+                    PlanDetailView(plan: plan)
+                } label: {
+                    CategoryFeatureActionLabel(
+                        title: "詳細",
+                        systemImage: "book.pages",
+                        tint: tint
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+
+                Button {
+                    isShowingEditPlan = true
+                } label: {
+                    CategoryFeatureActionLabel(
+                        title: "編集",
+                        systemImage: "pencil",
+                        tint: tint
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(width: 58)
+                .disabled(currentPlans.isEmpty)
+            }
+        }
+        .sheet(isPresented: $isShowingEditPlan) {
+            if let currentPlan = currentPlans.first {
+                AddTicketPlanView(plan: currentPlan, entryMode: .plan)
+            } else {
+                ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+            }
+        }
+    }
+}
+
+private struct CategoryFeatureCard<Actions: View>: View {
     let item: CategoryFeatureItem
     let tint: Color
     let fallbackIcon: String
+    let actions: Actions
+
+    init(
+        item: CategoryFeatureItem,
+        tint: Color,
+        fallbackIcon: String,
+        @ViewBuilder actions: () -> Actions
+    ) {
+        self.item = item
+        self.tint = tint
+        self.fallbackIcon = fallbackIcon
+        self.actions = actions()
+    }
 
     var body: some View {
         CategoryFeatureHeroLayout(posterAspectRatio: posterAspectRatio) {
@@ -3921,19 +4211,24 @@ private struct CategoryFeatureCard: View {
 
                 Text(item.title)
                     .font(FavorecoTypography.jpSerif(18.5, weight: .bold, relativeTo: .headline))
-                    .lineLimit(2)
+                    .lineSpacing(-2)
+                    .lineLimit(2, reservesSpace: true)
+                    .truncationMode(.tail)
 
                 if !item.subtitle.isEmpty {
                     Text(item.subtitle)
                         .font(FavorecoTypography.caption)
+                        .foregroundStyle(.primary.opacity(0.68))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                if !item.dateText.isEmpty {
+                    Label(item.dateText, systemImage: "calendar")
+                        .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-
-                Label(item.dateText, systemImage: "calendar")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
 
                 if !item.placeText.isEmpty {
                     Label(item.placeText, systemImage: "mappin.and.ellipse")
@@ -3951,17 +4246,10 @@ private struct CategoryFeatureCard: View {
 
                 Spacer(minLength: 0)
 
-                Label(item.badgeText == "予定" ? "予定を見る" : "記録を見る", systemImage: "pencil")
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(tint)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 34)
-                    .overlay {
-                        Capsule()
-                            .stroke(tint.opacity(0.42), lineWidth: 1)
-                    }
+                actions
             }
         }
+        .frame(height: CategoryFeatureHeroMetrics.contentHeight, alignment: .top)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
@@ -3976,6 +4264,41 @@ private struct CategoryFeatureCard: View {
         }
         return 0.7
     }
+}
+
+private struct CategoryFeatureActionLabel: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity)
+            .frame(height: 34)
+            .overlay {
+                Capsule().stroke(tint.opacity(0.48), lineWidth: 1)
+            }
+            .contentShape(Capsule())
+    }
+}
+
+private struct CategoryFeatureSingleActionLabel: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        CategoryFeatureActionLabel(title: title, systemImage: systemImage, tint: tint)
+    }
+}
+
+private enum CategoryFeatureHeroMetrics {
+    static let contentHeight: CGFloat = 250
+    static let cardHeight: CGFloat = contentHeight + 24
 }
 
 private struct CategoryFeatureHeroLayout: Layout {
@@ -4107,6 +4430,11 @@ private struct CategoryFeatureEmptyCard: View {
             Spacer()
         }
         .padding(12)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: CategoryFeatureHeroMetrics.cardHeight,
+            maxHeight: CategoryFeatureHeroMetrics.cardHeight
+        )
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -4662,7 +4990,7 @@ private struct GoshuinVisitedPlaceRow: View {
     }
 }
 
-private enum JapanPrefecture: String, CaseIterable {
+private enum CategoryTopJapanPrefecture: String, CaseIterable {
     case hokkaido = "北海道"
     case aomori = "青森県"
     case iwate = "岩手県"
@@ -4718,7 +5046,7 @@ private struct GoshuinPrefectureSearchView: View {
     @Environment(\.dismiss) private var dismiss
 
     private var prefectures: [String] {
-        let base = availablePrefectures.isEmpty ? JapanPrefecture.allCases.map(\.rawValue) : availablePrefectures
+        let base = availablePrefectures.isEmpty ? CategoryTopJapanPrefecture.allCases.map(\.rawValue) : availablePrefectures
         return base.sorted()
     }
 

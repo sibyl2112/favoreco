@@ -186,6 +186,8 @@ enum RecordDeletionService {
         let photos = try context.fetch(FetchDescriptor<PhotoBlob>())
         let socialAccounts = try context.fetch(FetchDescriptor<SocialAccount>())
         let people = try context.fetch(FetchDescriptor<PersonMaster>())
+        let favoriteProfiles = try context.fetch(FetchDescriptor<FavoriteProfile>())
+        let favoPins = try context.fetch(FetchDescriptor<FavoPin>())
         let links = try context.fetch(FetchDescriptor<EventPersonLink>())
         let places = try context.fetch(FetchDescriptor<PlaceMaster>())
         let plans = try context.fetch(FetchDescriptor<Plan>())
@@ -197,7 +199,7 @@ enum RecordDeletionService {
         let accountNotificationIDs = accounts.map(\.id)
 
         let deletedModelCount = categories.count + events.count + visits.count
-            + inboxItems.count + photos.count + socialAccounts.count + people.count
+            + inboxItems.count + photos.count + socialAccounts.count + people.count + favoriteProfiles.count + favoPins.count
             + links.count + places.count + plans.count + accounts.count + attempts.count
 
         // 親を先に削除し、親を持たない孤立モデルだけを個別削除する。
@@ -209,6 +211,8 @@ enum RecordDeletionService {
         for photo in photos where photo.visit == nil { context.delete(photo) }
         for item in inboxItems { context.delete(item) }
         for account in socialAccounts { context.delete(account) }
+        for pin in favoPins { context.delete(pin) }
+        for profile in favoriteProfiles where profile.person == nil { context.delete(profile) }
         for person in people { context.delete(person) }
         for place in places { context.delete(place) }
         for account in accounts { context.delete(account) }
@@ -250,6 +254,7 @@ enum RecordDeletionService {
         }
 
         UserDefaults.standard.set(false, forKey: AppStorageKeys.hasCompletedGenreOnboarding)
+        UserDefaults.standard.set(false, forKey: AppStorageKeys.hasMigratedLegacyFavoritesToFavoPins)
 
         return AllDataDeletionResult(
             deletedModelCount: deletedModelCount,

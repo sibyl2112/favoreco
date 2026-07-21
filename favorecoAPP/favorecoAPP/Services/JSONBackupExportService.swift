@@ -10,7 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    static let schemaVersion = 2
+    static let schemaVersion = 4
 
     static func makeBackupJSON(
         categories: [RecordCategory],
@@ -20,6 +20,8 @@ enum JSONBackupExportService {
         photos: [PhotoBlob],
         socialAccounts: [SocialAccount],
         people: [PersonMaster],
+        favoriteProfiles: [FavoriteProfile],
+        favoPins: [FavoPin],
         personLinks: [EventPersonLink],
         places: [PlaceMaster],
         plans: [Plan],
@@ -48,6 +50,8 @@ enum JSONBackupExportService {
             },
             socialAccounts: socialAccounts.sorted { $0.sortOrder < $1.sortOrder }.map(BackupSocialAccount.init),
             people: people.sorted { $0.displayName < $1.displayName }.map(BackupPerson.init),
+            favoriteProfiles: favoriteProfiles.sorted { $0.sortOrder < $1.sortOrder }.map(BackupFavoriteProfile.init),
+            favoPins: favoPins.sorted { $0.sortOrder < $1.sortOrder }.map(BackupFavoPin.init),
             personLinks: personLinks.sorted { $0.sortOrder < $1.sortOrder }.map(BackupPersonLink.init),
             places: places.sorted { $0.name < $1.name }.map(BackupPlace.init),
             plans: plans.sorted { $0.startsAt > $1.startsAt }.map(BackupPlan.init),
@@ -75,6 +79,8 @@ struct FavorecoBackupEnvelope: Codable {
     var photos: [BackupPhoto]
     var socialAccounts: [BackupSocialAccount]
     var people: [BackupPerson]
+    var favoriteProfiles: [BackupFavoriteProfile]?
+    var favoPins: [BackupFavoPin]?
     var personLinks: [BackupPersonLink]
     var places: [BackupPlace]
     var plans: [BackupPlan]
@@ -358,12 +364,77 @@ struct BackupPersonLink: Codable {
     }
 }
 
+struct BackupFavoriteProfile: Codable {
+    var id: UUID
+    var personID: UUID?
+    var isFavorite: Bool
+    var isPrimary: Bool
+    var isPinned: Bool
+    var sortOrder: Int
+    var startedAt: Date
+    var hasStartedAt: Bool
+    var includesStartDay: Bool
+    var colorHex: String
+    var nickname: String
+    var imagePath: String
+    var originText: String
+    var memo: String
+    var showOnHome: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ profile: FavoriteProfile) {
+        id = profile.id
+        personID = profile.person?.id
+        isFavorite = profile.isFavorite
+        isPrimary = profile.isPrimary
+        isPinned = profile.isPinned
+        sortOrder = profile.sortOrder
+        startedAt = profile.startedAt
+        hasStartedAt = profile.hasStartedAt
+        includesStartDay = profile.includesStartDay
+        colorHex = profile.colorHex
+        nickname = profile.nickname
+        imagePath = profile.imagePath
+        originText = profile.originText
+        memo = profile.memo
+        showOnHome = profile.showOnHome
+        createdAt = profile.createdAt
+        updatedAt = profile.updatedAt
+    }
+}
+
+struct BackupFavoPin: Codable {
+    var id: UUID
+    var targetKindKey: String
+    var sortOrder: Int
+    var customTitle: String
+    var personID: UUID?
+    var eventID: UUID?
+    var placeID: UUID?
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ pin: FavoPin) {
+        id = pin.id
+        targetKindKey = pin.targetKindKey
+        sortOrder = pin.sortOrder
+        customTitle = pin.customTitle
+        personID = pin.person?.id
+        eventID = pin.event?.id
+        placeID = pin.place?.id
+        createdAt = pin.createdAt
+        updatedAt = pin.updatedAt
+    }
+}
+
 struct BackupPlace: Codable {
     var id: UUID
     var name: String
     var reading: String
     var aliasesRaw: String
     var placeTagsRaw: String
+    var prefecture: String?
     var address: String
     var latitude: Double
     var longitude: Double
@@ -383,6 +454,7 @@ struct BackupPlace: Codable {
         reading = place.reading
         aliasesRaw = place.aliasesRaw
         placeTagsRaw = place.placeTagsRaw
+        prefecture = place.prefecture
         address = place.address
         latitude = place.latitude
         longitude = place.longitude

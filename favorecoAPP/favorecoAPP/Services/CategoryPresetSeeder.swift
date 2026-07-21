@@ -36,16 +36,16 @@ enum CategoryPresetSeeder {
             dateLabel: "観劇日"
         ),
         CategoryPreset(
-            name: "美術展",
+            name: "ミュージアム",
             templateKey: "museum",
             templateTypeKey: "visiting",
             iconSymbol: "paintpalette.fill",
             colorHex: "#7D8C78",
             sortOrder: 20,
             enabledUnitsRaw: "basic,people,ticketPlan,photos,importOCR,officialInfo,memo",
-            targetNameLabel: "展示",
-            recordUnitName: "訪問",
-            dateLabel: "訪問日"
+            targetNameLabel: "展示・イベント",
+            recordUnitName: "鑑賞",
+            dateLabel: "鑑賞日"
         ),
         CategoryPreset(
             name: "ライブ",
@@ -88,7 +88,7 @@ enum CategoryPresetSeeder {
             templateKey: "outing_facility",
             templateTypeKey: "visiting",
             iconSymbol: "ticket.fill",
-            colorHex: "#2E7D60",
+            colorHex: "#2F7FB8",
             sortOrder: 60,
             enabledUnitsRaw: "basic,ticketPlan,photos,importOCR,money,officialInfo,memo",
             targetNameLabel: "施設",

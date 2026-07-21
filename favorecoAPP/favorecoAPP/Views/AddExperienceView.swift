@@ -1337,6 +1337,8 @@ func resolvePlaceMaster(
     guard !name.isEmpty else { return nil }
 
     let address = snapshot.address.trimmingCharacters(in: .whitespacesAndNewlines)
+    let prefecture = JapanPrefecture.extract(from: address)
+    guard !prefecture.isEmpty else { return nil }
     let normalizedName = normalizedPlaceText(name)
     let normalizedAddress = normalizedPlaceText(address)
     let matchedPlace = placeMasters.first { place in
@@ -1353,6 +1355,7 @@ func resolvePlaceMaster(
     let now = Date()
     if let matchedPlace {
         if !address.isEmpty { matchedPlace.address = address }
+        if !prefecture.isEmpty { matchedPlace.prefecture = prefecture }
         if snapshot.latitude != 0 || snapshot.longitude != 0 {
             matchedPlace.latitude = snapshot.latitude
             matchedPlace.longitude = snapshot.longitude
@@ -1365,6 +1368,7 @@ func resolvePlaceMaster(
 
     let place = PlaceMaster(
         name: name,
+        prefecture: prefecture,
         address: address,
         latitude: snapshot.latitude,
         longitude: snapshot.longitude,

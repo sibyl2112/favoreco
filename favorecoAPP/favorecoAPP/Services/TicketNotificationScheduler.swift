@@ -9,6 +9,9 @@ import Foundation
 import UserNotifications
 
 enum TicketNotificationScheduler {
+    static let destinationPlanIDKey = "favorecoPlanID"
+    static let destinationPreparationTaskIDKey = "favorecoPreparationTaskID"
+
     static func scheduledAttemptIdentifiers(plan: Plan, attempt: TicketAttempt) -> [String] {
         guard UserDefaults.standard.bool(forKey: AppStorageKeys.notificationMasterEnabled) else {
             return []
@@ -18,6 +21,9 @@ enum TicketNotificationScheduler {
 
     static func cancel(plan: Plan, attempt: TicketAttempt?) {
         cancel(planID: plan.id, attemptID: attempt?.id)
+        Task {
+            await reschedulePreparation(plan: plan)
+        }
     }
 
     static func cancel(planID: UUID, attemptID: UUID?) {
@@ -36,6 +42,7 @@ enum TicketNotificationScheduler {
 
     static func reschedule(plan: Plan, attempt: TicketAttempt?) async {
         let center = UNUserNotificationCenter.current()
+        await reschedulePreparation(plan: plan, center: center)
         let specs = notificationSpecs(plan: plan, attempt: attempt)
         let staleIdentifiers = staleIdentifierCandidates(planID: plan.id, attemptID: attempt?.id)
 
@@ -58,6 +65,7 @@ enum TicketNotificationScheduler {
             content.title = spec.title
             content.body = spec.body
             content.sound = .default
+            content.userInfo = [destinationPlanIDKey: plan.id.uuidString]
 
             let components = Calendar.current.dateComponents(
                 [.year, .month, .day, .hour, .minute],
@@ -69,10 +77,99 @@ enum TicketNotificationScheduler {
         }
     }
 
+    static func reschedulePreparation(plan: Plan) async {
+        await reschedulePreparation(plan: plan, center: UNUserNotificationCenter.current())
+    }
+
+    private static func reschedulePreparation(
+        plan: Plan,
+        center: UNUserNotificationCenter
+    ) async {
+        let identifierPrefix = preparationIdentifierPrefix(planID: plan.id)
+        let pendingIdentifiers = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix(identifierPrefix) }
+        center.removePendingNotificationRequests(withIdentifiers: pendingIdentifiers)
+
+        let deliveredIdentifiers = await center.deliveredNotifications()
+            .map { $0.request.identifier }
+            .filter { $0.hasPrefix(identifierPrefix) }
+        center.removeDeliveredNotifications(withIdentifiers: deliveredIdentifiers)
+
+        guard UserDefaults.standard.bool(forKey: AppStorageKeys.notificationMasterEnabled),
+              notificationPreference(
+                forKey: AppStorageKeys.notificationPreparationDeadlineEnabled,
+                defaultValue: true
+              ),
+              !plan.isArchived,
+              plan.isPreparationChecklistActive else { return }
+
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
+            return
+        }
+
+        for spec in preparationNotificationSpecs(plan: plan) where spec.fireDate > Date() {
+            let content = UNMutableNotificationContent()
+            content.title = spec.title
+            content.body = spec.body
+            content.sound = .default
+            content.userInfo = [
+                destinationPlanIDKey: plan.id.uuidString,
+                destinationPreparationTaskIDKey: preparationTaskID(from: spec.identifier)?.uuidString ?? "",
+            ]
+
+            let components = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: spec.fireDate
+            )
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            let request = UNNotificationRequest(identifier: spec.identifier, content: content, trigger: trigger)
+            try? await center.add(request)
+        }
+    }
+
+    private static func preparationNotificationSpecs(plan: Plan) -> [TicketNotificationSpec] {
+        let calendar = Calendar.current
+        return plan.preparationFields.tasks.compactMap { task in
+            guard !task.isCompleted,
+                  let dueAt = task.dueAt,
+                  dueAt > Date(),
+                  let previousDay = calendar.date(byAdding: .day, value: -1, to: dueAt),
+                  let fireDate = calendar.date(
+                    bySettingHour: 20,
+                    minute: 0,
+                    second: 0,
+                    of: previousDay
+                  ) else { return nil }
+
+            let taskTitle = task.trimmedTitle.isEmpty ? "公演の準備" : task.trimmedTitle
+            return TicketNotificationSpec(
+                identifier: "\(preparationIdentifierPrefix(planID: plan.id))\(task.id.uuidString).dayBefore",
+                fireDate: fireDate,
+                title: "明日まで：\(taskTitle)",
+                body: "\(planTitle(plan)) の準備期限が近づいています。"
+            )
+        }
+    }
+
+    private static func preparationIdentifierPrefix(planID: UUID) -> String {
+        "plan.\(planID.uuidString).preparation."
+    }
+
+    private static func preparationTaskID(from identifier: String) -> UUID? {
+        let parts = identifier.split(separator: ".")
+        guard parts.count >= 5,
+              parts[0] == "plan",
+              parts[2] == "preparation" else { return nil }
+        return UUID(uuidString: String(parts[3]))
+    }
+
     private static func notificationSpecs(plan: Plan, attempt: TicketAttempt?) -> [TicketNotificationSpec] {
         guard let attempt else {
-            guard UserDefaults.standard.bool(
-                forKey: AppStorageKeys.notificationPerformanceReminderEnabled
+            guard notificationPreference(
+                forKey: AppStorageKeys.notificationPerformanceReminderEnabled,
+                defaultValue: true
             ) else {
                 return []
             }
@@ -92,7 +189,10 @@ enum TicketNotificationScheduler {
             )
         }
 
-        if UserDefaults.standard.bool(forKey: AppStorageKeys.notificationApplicationDeadlineEnabled),
+        if notificationPreference(
+            forKey: AppStorageKeys.notificationApplicationDeadlineEnabled,
+            defaultValue: true
+        ),
            attempt.applyDeadlineAt != Date.distantPast {
             specs.append(contentsOf: deadlineSpecs(
                 attemptID: attempt.id,
@@ -103,7 +203,10 @@ enum TicketNotificationScheduler {
             ))
         }
 
-        if UserDefaults.standard.bool(forKey: AppStorageKeys.notificationLotteryResultEnabled),
+        if notificationPreference(
+            forKey: AppStorageKeys.notificationLotteryResultEnabled,
+            defaultValue: true
+        ),
            attempt.resultAnnounceAt != Date.distantPast {
             specs.append(
                 TicketNotificationSpec(
@@ -115,7 +218,10 @@ enum TicketNotificationScheduler {
             )
         }
 
-        if UserDefaults.standard.bool(forKey: AppStorageKeys.notificationPaymentDeadlineEnabled),
+        if notificationPreference(
+            forKey: AppStorageKeys.notificationPaymentDeadlineEnabled,
+            defaultValue: true
+        ),
            attempt.paymentDeadlineAt != Date.distantPast {
             specs.append(contentsOf: deadlineSpecs(
                 attemptID: attempt.id,
@@ -126,7 +232,10 @@ enum TicketNotificationScheduler {
             ))
         }
 
-        if UserDefaults.standard.bool(forKey: AppStorageKeys.notificationTicketIssueEnabled),
+        if notificationPreference(
+            forKey: AppStorageKeys.notificationTicketIssueEnabled,
+            defaultValue: true
+        ),
            attempt.issueStartAt != Date.distantPast {
             specs.append(
                 TicketNotificationSpec(
@@ -238,6 +347,14 @@ enum TicketNotificationScheduler {
 
     private static func planTitle(_ plan: Plan) -> String {
         plan.title.isEmpty ? "予定" : plan.title
+    }
+
+    private static func notificationPreference(
+        forKey key: String,
+        defaultValue: Bool
+    ) -> Bool {
+        guard UserDefaults.standard.object(forKey: key) != nil else { return defaultValue }
+        return UserDefaults.standard.bool(forKey: key)
     }
 }
 

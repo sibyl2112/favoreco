@@ -26,6 +26,8 @@ enum JSONBackupImportService {
 
         var categories = Dictionary(grouping: try context.fetch(FetchDescriptor<RecordCategory>()), by: \.id).compactMapValues(\.first)
         var people = Dictionary(grouping: try context.fetch(FetchDescriptor<PersonMaster>()), by: \.id).compactMapValues(\.first)
+        var favoriteProfiles = Dictionary(grouping: try context.fetch(FetchDescriptor<FavoriteProfile>()), by: \.id).compactMapValues(\.first)
+        var favoPins = Dictionary(grouping: try context.fetch(FetchDescriptor<FavoPin>()), by: \.id).compactMapValues(\.first)
         var places = Dictionary(grouping: try context.fetch(FetchDescriptor<PlaceMaster>()), by: \.id).compactMapValues(\.first)
         var ticketAccounts = Dictionary(grouping: try context.fetch(FetchDescriptor<TicketAccount>()), by: \.id).compactMapValues(\.first)
         var inboxItems = Dictionary(grouping: try context.fetch(FetchDescriptor<InboxItem>()), by: \.id).compactMapValues(\.first)
@@ -92,6 +94,35 @@ enum JSONBackupImportService {
             model.updatedAt = item.updatedAt
         }
 
+        for item in envelope.favoriteProfiles ?? [] {
+            let model: FavoriteProfile
+            if let existing = favoriteProfiles[item.id] {
+                model = existing
+                updatedCount += 1
+            } else {
+                model = FavoriteProfile(id: item.id)
+                context.insert(model)
+                favoriteProfiles[item.id] = model
+                insertedCount += 1
+            }
+            model.isFavorite = item.isFavorite
+            model.isPrimary = item.isPrimary
+            model.isPinned = item.isPinned
+            model.sortOrder = item.sortOrder
+            model.startedAt = item.startedAt
+            model.hasStartedAt = item.hasStartedAt
+            model.includesStartDay = item.includesStartDay
+            model.colorHex = item.colorHex
+            model.nickname = item.nickname
+            model.imagePath = item.imagePath
+            model.originText = item.originText
+            model.memo = item.memo
+            model.showOnHome = item.showOnHome
+            model.createdAt = item.createdAt
+            model.updatedAt = item.updatedAt
+            model.person = item.personID.flatMap { people[$0] }
+        }
+
         for item in envelope.places {
             let model: PlaceMaster
             if let existing = places[item.id] {
@@ -107,6 +138,10 @@ enum JSONBackupImportService {
             model.reading = item.reading
             model.aliasesRaw = item.aliasesRaw
             model.placeTagsRaw = item.placeTagsRaw
+            let importedPrefecture = item.prefecture?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            model.prefecture = JapanPrefecture.all.contains(importedPrefecture)
+                ? importedPrefecture
+                : JapanPrefecture.extract(from: item.address)
             model.address = item.address
             model.latitude = item.latitude
             model.longitude = item.longitude
@@ -361,6 +396,58 @@ enum JSONBackupImportService {
             model.visit = item.visitID.flatMap { visits[$0] }
         }
 
+        for item in envelope.favoPins ?? [] {
+            let kind = FavoTargetKind(rawValue: item.targetKindKey)
+                ?? (item.personID != nil ? .person : (item.placeID != nil ? .place : .event))
+            let person = kind == .person ? item.personID.flatMap { people[$0] } : nil
+            let event = kind == .event ? item.eventID.flatMap { events[$0] } : nil
+            let place = kind == .place ? item.placeID.flatMap { places[$0] } : nil
+            guard person != nil || event != nil || place != nil else { continue }
+
+            let model: FavoPin
+            if let existing = favoPins[item.id] {
+                model = existing
+                updatedCount += 1
+            } else {
+                model = FavoPin(id: item.id)
+                context.insert(model)
+                favoPins[item.id] = model
+                insertedCount += 1
+            }
+            model.targetKindKey = kind.rawValue
+            model.sortOrder = item.sortOrder
+            model.customTitle = item.customTitle
+            model.createdAt = item.createdAt
+            model.updatedAt = item.updatedAt
+            model.person = person
+            model.event = event
+            model.place = place
+        }
+
+        if envelope.favoPins == nil {
+            UserDefaults.standard.set(false, forKey: AppStorageKeys.hasMigratedLegacyFavoritesToFavoPins)
+        }
+
+        let restoredPins = try context.fetch(FetchDescriptor<FavoPin>()).sorted { lhs, rhs in
+            if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+        var seenPinTargets = Set<String>()
+        var keptPinCount = 0
+        for pin in restoredPins {
+            guard pin.isValid, let targetID = pin.targetID else {
+                context.delete(pin)
+                continue
+            }
+            let key = "\(pin.targetKind.rawValue):\(targetID.uuidString)"
+            if !seenPinTargets.insert(key).inserted || keptPinCount >= 4 {
+                context.delete(pin)
+            } else {
+                pin.sortOrder = keptPinCount
+                keptPinCount += 1
+            }
+        }
+
         try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: context)
         if savesChanges {
             try context.save()
@@ -424,6 +511,8 @@ struct JSONBackupPreview {
     let photoMetadataCount: Int
     let socialAccountCount: Int
     let personCount: Int
+    let favoriteProfileCount: Int
+    let favoPinCount: Int
     let personLinkCount: Int
     let placeCount: Int
     let planCount: Int
@@ -441,6 +530,8 @@ struct JSONBackupPreview {
         photoMetadataCount = envelope.photos.count
         socialAccountCount = envelope.socialAccounts.count
         personCount = envelope.people.count
+        favoriteProfileCount = envelope.favoriteProfiles?.count ?? 0
+        favoPinCount = envelope.favoPins?.count ?? 0
         personLinkCount = envelope.personLinks.count
         placeCount = envelope.places.count
         planCount = envelope.plans.count
@@ -455,6 +546,8 @@ struct JSONBackupPreview {
             + inboxCount
             + socialAccountCount
             + personCount
+            + favoriteProfileCount
+            + favoPinCount
             + personLinkCount
             + placeCount
             + planCount

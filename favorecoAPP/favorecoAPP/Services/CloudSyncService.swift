@@ -11,6 +11,8 @@ enum FavorecoModelContainerBootstrap {
         PhotoBlob.self,
         SocialAccount.self,
         PersonMaster.self,
+        FavoriteProfile.self,
+        FavoPin.self,
         EventPersonLink.self,
         PlaceMaster.self,
         Plan.self,

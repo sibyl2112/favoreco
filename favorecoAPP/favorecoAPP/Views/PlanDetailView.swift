@@ -15,6 +15,7 @@ struct PlanDetailView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.favorecoThemePalette) private var themePalette
     let plan: Plan
+    var highlightedPreparationTaskID: UUID? = nil
     @State private var isShowingEditPlan = false
     @State private var isShowingAddAttempt = false
     @State private var editingAttempt: TicketAttempt?
@@ -86,15 +87,25 @@ struct PlanDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                headerSection
-                basicSection
-                ticketSection
-                officialSection
-                memoSection
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    headerSection
+                    basicSection
+                    ticketSection
+                    preparationSection
+                    officialSection
+                    memoSection
+                }
+                .padding(20)
             }
-            .padding(20)
+            .task(id: highlightedPreparationTaskID) {
+                guard let highlightedPreparationTaskID else { return }
+                await Task.yield()
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    proxy.scrollTo(highlightedPreparationTaskID, anchor: .center)
+                }
+            }
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("予定・チケット")
@@ -364,6 +375,17 @@ struct PlanDetailView: View {
                 }
             }
             .planSectionCard()
+        }
+    }
+
+    @ViewBuilder
+    private var preparationSection: some View {
+        if plan.supportsPreparationChecklist {
+            PlanPreparationChecklistView(
+                plan: plan,
+                tint: categoryColor,
+                highlightedTaskID: highlightedPreparationTaskID
+            )
         }
     }
 

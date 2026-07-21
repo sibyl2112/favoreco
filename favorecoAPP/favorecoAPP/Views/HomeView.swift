@@ -24,6 +24,7 @@ struct HomeView: View {
     @AppStorage(AppStorageKeys.showsHomeAttention) private var showsAttention = true
     @AppStorage(AppStorageKeys.showsHomeExperienceGallery) private var showsExperienceGallery = true
     @AppStorage(AppStorageKeys.showsHomeInbox) private var showsInbox = true
+    @AppStorage(AppStorageKeys.showsHomeInterestingExpanded) private var isInterestingExpanded = true
     @AppStorage(AppStorageKeys.showsHomeRecentRecords) private var showsRecentRecords = true
     @AppStorage(AppStorageKeys.showsHomeCategories) private var showsCategories = true
     @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsStatsSummary = false
@@ -42,7 +43,14 @@ struct HomeView: View {
         let ticketItems = snapshot.activeTicketAttempts.compactMap { attempt in
             nextActionItem(for: attempt, now: now)
         }
-        let items = ticketItems + membershipAttentionItems(for: snapshot.expiringTicketAccounts)
+        let preparationItems = plans
+            .filter { !$0.isArchived && $0.isPreparationChecklistActive }
+            .flatMap { plan in
+                preparationAttentionItems(for: plan, now: now)
+            }
+        let items = ticketItems
+            + preparationItems
+            + membershipAttentionItems(for: snapshot.expiringTicketAccounts)
 
         return items.sorted { lhs, rhs in
             if lhs.isOverdue != rhs.isOverdue {
@@ -52,6 +60,31 @@ struct HomeView: View {
                 return lhs.dueDate < rhs.dueDate
             }
             return lhs.priority < rhs.priority
+        }
+    }
+
+    private func preparationAttentionItems(for plan: Plan, now: Date) -> [HomeAttentionItem] {
+        let planTitle = plan.title.isEmpty ? "予定" : plan.title
+        let tint = themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88")
+        return plan.preparationFields.tasks.compactMap { task in
+            guard !task.isCompleted,
+                  !task.trimmedTitle.isEmpty,
+                  let dueAt = task.dueAt else {
+                return nil
+            }
+            let isOverdue = dueAt < now
+            return HomeAttentionItem(
+                id: "preparation-\(plan.id.uuidString)-\(task.id.uuidString)",
+                icon: "checklist",
+                title: task.trimmedTitle,
+                subtitle: "\(planTitle)・\(FavorecoDateText.compactDateTime(dueAt))",
+                contextTitle: planTitle,
+                dueDate: dueAt,
+                plan: plan,
+                tint: isOverdue ? .red : tint,
+                priority: 50,
+                isOverdue: isOverdue
+            )
         }
     }
 
@@ -131,8 +164,8 @@ struct HomeView: View {
                             canMoveForward: !snapshot.visibleCategories.isEmpty,
                             onMove: { direction in
                                 let destination = direction > 0
-                                    ? snapshot.visibleCategories.last
-                                    : snapshot.visibleCategories.first
+                                    ? snapshot.visibleCategories.first
+                                    : snapshot.visibleCategories.last
                                 swipeDestinationCategoryID = destination?.id
                             }
                         ) {
@@ -258,7 +291,7 @@ struct HomeView: View {
                     .scrollTargetBehavior(.paging)
                     .scrollPosition(id: selectedUpcomingPlanPosition)
                 }
-                .frame(height: 224)
+                .frame(height: HomeUpcomingHeroMetrics.cardHeight)
 
                 HStack(spacing: 7) {
                     ForEach(items.indices, id: \.self) { index in
@@ -545,28 +578,45 @@ struct HomeView: View {
 
                 Spacer(minLength: 4)
 
-                if !items.isEmpty {
+                if isInterestingExpanded, !items.isEmpty {
                     CategoryLibraryLayoutPicker(
                         selection: $interestLayoutMode,
                         tint: themePalette.globalTint,
                         onSelect: { _ in }
                     )
                 }
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isInterestingExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
+                        .rotationEffect(.degrees(isInterestingExpanded ? 0 : -90))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isInterestingExpanded ? "Interestingを閉じる" : "Interestingを開く")
             }
 
-            if items.isEmpty {
-                EmptyStateRow(
-                    icon: "tray",
-                    title: "気になる対象はありません",
-                    message: "クイック登録した作品や場所がここに表示されます。"
-                )
-            } else {
-                HomeInterestingCollection(
-                    items: items,
-                    layout: interestLayoutMode,
-                    tint: themePalette.globalTint
-                )
-                .id("home-interesting-\(interestLayoutMode.rawValue)")
+            if isInterestingExpanded {
+                if items.isEmpty {
+                    EmptyStateRow(
+                        icon: "tray",
+                        title: "気になる対象はありません",
+                        message: "クイック登録した作品や場所がここに表示されます。"
+                    )
+                } else {
+                    HomeInterestingCollection(
+                        items: items,
+                        layout: interestLayoutMode,
+                        tint: themePalette.globalTint
+                    )
+                    .id("home-interesting-\(interestLayoutMode.rawValue)")
+                }
             }
         }
     }
@@ -1139,6 +1189,7 @@ private struct HomeUpcomingPlanCard: View {
                 }
             }
         }
+        .frame(height: HomeUpcomingHeroMetrics.contentHeight, alignment: .top)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
@@ -1224,6 +1275,7 @@ private struct HomeUpcomingVisitCard: View {
                 }
             }
         }
+        .frame(height: HomeUpcomingHeroMetrics.contentHeight, alignment: .top)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
@@ -1240,6 +1292,11 @@ private struct HomeUpcomingVisitCard: View {
         }
     }
 
+}
+
+private enum HomeUpcomingHeroMetrics {
+    static let contentHeight: CGFloat = 250
+    static let cardHeight: CGFloat = contentHeight + 24
 }
 
 private struct HomeUpcomingHeroLayout: Layout {
@@ -1381,6 +1438,8 @@ private struct HomeUpcomingHeroDetails<Actions: View>: View {
                     .lineLimit(1)
             }
 
+            Spacer(minLength: 0)
+
             actions
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -1449,7 +1508,11 @@ private struct HomeUpcomingEmptyCard: View {
                 .background(themePalette.globalTint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 274, maxHeight: 274)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: HomeUpcomingHeroMetrics.cardHeight,
+            maxHeight: HomeUpcomingHeroMetrics.cardHeight
+        )
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)

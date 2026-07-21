@@ -39,7 +39,7 @@ struct EyecatchAspectRatio: Identifiable, Hashable, Codable {
         name: "チラシ・ポスター",
         width: 1,
         height: 1.414,
-        note: "観劇、美術展、博物展のチラシ向き"
+        note: "観劇、ミュージアムの展示・イベントチラシ向き"
     )
 
     static let bookCover = EyecatchAspectRatio(

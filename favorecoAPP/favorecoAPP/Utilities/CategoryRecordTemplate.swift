@@ -70,15 +70,15 @@ struct CategoryRecordTemplate {
             )
         case "museum":
             return CategoryRecordTemplate(
-                targetSectionTitle: "展示",
-                titlePlaceholder: "展覧会名・展示名",
-                seriesPlaceholder: "美術館・企画シリーズ（任意）",
-                visitSectionTitle: "訪問した回",
-                dateLabel: "訪問日",
-                venuePlaceholder: "美術館・博物館・ギャラリー（任意）",
+                targetSectionTitle: "展示・イベント",
+                titlePlaceholder: "展覧会・展示・イベント名",
+                seriesPlaceholder: "企画・シリーズ（任意）",
+                visitSectionTitle: "鑑賞した回",
+                dateLabel: "鑑賞日",
+                venuePlaceholder: "美術館・博物館・科学館・資料館（任意）",
                 ratingLabel: "満足度",
                 memoSectionTitle: "鑑賞メモ",
-                memoPlaceholder: "好きだった作品、展示室、混雑感など"
+                memoPlaceholder: "印象に残った作品や展示、展示室、混雑感など"
             )
         case "live":
             return CategoryRecordTemplate(

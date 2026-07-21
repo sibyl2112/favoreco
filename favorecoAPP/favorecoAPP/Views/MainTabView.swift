@@ -11,15 +11,19 @@ import UIKit
 import Charts
 
 private enum CalendarDisplayMode: String, CaseIterable, Identifiable {
-    case calendar
+    case month
+    case week
+    case day
     case planList
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .calendar: "カレンダー"
-        case .planList: "予定一覧"
+        case .month: "月"
+        case .week: "週"
+        case .day: "日"
+        case .planList: "予定"
         }
     }
 }
@@ -31,6 +35,9 @@ struct MainTabView: View {
     @AppStorage(AppStorageKeys.homeSelectedCategoryTemplateKey) private var homeSelectedCategoryTemplateKey = ""
     @AppStorage(AppStorageKeys.opensPreviousMonthlyReport) private var opensPreviousMonthlyReport = false
     @AppStorage(AppStorageKeys.opensPreviousYearlyReport) private var opensPreviousYearlyReport = false
+    @AppStorage(AppStorageKeys.pendingNotificationPlanID) private var pendingNotificationPlanID = ""
+    @AppStorage(AppStorageKeys.pendingNotificationAttemptID) private var pendingNotificationAttemptID = ""
+    @AppStorage(AppStorageKeys.pendingNotificationPreparationTaskID) private var pendingNotificationPreparationTaskID = ""
     @State private var selectedTab: MainTab = .home
     @State private var isShowingCreateMenu = false
     @State private var isShowingRecordTargetSelection = false
@@ -40,7 +47,7 @@ struct MainTabView: View {
     @State private var pendingCreateAction: CreateAction?
     @State private var pendingRecordDestination: RecordEntryDestination?
     @State private var recordDestination: RecordEntryDestination?
-    @State private var calendarDisplayMode: CalendarDisplayMode = .calendar
+    @State private var calendarDisplayMode: CalendarDisplayMode = .month
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -80,10 +87,10 @@ struct MainTabView: View {
                 }
                 .tag(MainTab.home)
 
-            RecordsView()
+            FavoView()
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
-                    Label("記録", systemImage: "rectangle.stack.fill")
+                    Label("FAVO", systemImage: "heart.text.square.fill")
                 }
                 .tag(MainTab.records)
 
@@ -93,7 +100,12 @@ struct MainTabView: View {
                 }
                 .tag(MainTab.create)
 
-            CalendarView(displayMode: $calendarDisplayMode)
+            CalendarView(
+                displayMode: $calendarDisplayMode,
+                requestedPlanID: $pendingNotificationPlanID,
+                requestedAttemptID: $pendingNotificationAttemptID,
+                requestedPreparationTaskID: $pendingNotificationPreparationTaskID
+            )
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
                     Label("カレンダー", systemImage: "calendar")
@@ -139,9 +151,24 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoPlanCreation)) { _ in
             isShowingAddPlan = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openFavorecoPlan)) { _ in
+            selectedTab = .calendar
+        }
         .task {
-            if opensPreviousMonthlyReport || opensPreviousYearlyReport {
+            if !pendingNotificationPlanID.isEmpty || !pendingNotificationAttemptID.isEmpty {
+                selectedTab = .calendar
+            } else if opensPreviousMonthlyReport || opensPreviousYearlyReport {
                 selectedTab = .stats
+            }
+        }
+        .onChange(of: pendingNotificationPlanID) { _, planID in
+            if !planID.isEmpty {
+                selectedTab = .calendar
+            }
+        }
+        .onChange(of: pendingNotificationAttemptID) { _, attemptID in
+            if !attemptID.isEmpty {
+                selectedTab = .calendar
             }
         }
         .onChange(of: opensPreviousMonthlyReport) { _, shouldOpen in
@@ -657,7 +684,9 @@ private enum MainTab: Hashable {
     case stats
 }
 
-private struct RecordsView: View {
+struct RecordsView: View {
+    let embedsInNavigationStack: Bool
+    let screenTitle: String
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
@@ -672,6 +701,11 @@ private struct RecordsView: View {
     @State private var sortOrder: RecordSortOrder = .newest
     @State private var isShowingFilters = false
     @AppStorage(AppStorageKeys.recordsLayoutMode) private var recordsLayoutModeRaw = RecordsLayoutMode.banner.rawValue
+
+    init(embedsInNavigationStack: Bool = true, screenTitle: String = "記録") {
+        self.embedsInNavigationStack = embedsInNavigationStack
+        self.screenTitle = screenTitle
+    }
 
     private var recordsLayoutMode: RecordsLayoutMode {
         RecordsLayoutMode(rawValue: recordsLayoutModeRaw) ?? .banner
@@ -841,32 +875,42 @@ private struct RecordsView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                MainScreenHeader(title: "記録")
+        if embedsInNavigationStack {
+            NavigationStack { recordsRoot }
+        } else {
+            recordsRoot
+        }
+    }
+
+    private var recordsRoot: some View {
+        VStack(spacing: 0) {
+            if embedsInNavigationStack {
+                MainScreenHeader(title: screenTitle)
                     .padding(.horizontal, 20)
                     .padding(.top, -4)
                     .padding(.bottom, 6)
-
-                recordToolbar
-
-                recordsContent
             }
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: $isShowingFilters) {
-                RecordFilterView(
-                    selectedCategoryIDs: $selectedCategoryIDs,
-                    selectedTagNames: $selectedTagNames,
-                    selectedCompanionNames: $selectedCompanionNames,
-                    availableTagNames: availableTagNames,
-                    availableCompanionNames: availableCompanionNames,
-                    periodFilter: $periodFilter,
-                    customPeriodStart: $customPeriodStart,
-                    customPeriodEnd: $customPeriodEnd,
-                    photoFilterEnabled: $photoFilterEnabled,
-                    sortOrder: $sortOrder
-                )
-            }
+
+            recordToolbar
+
+            recordsContent
+        }
+        .navigationTitle(embedsInNavigationStack ? "" : screenTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(embedsInNavigationStack ? .hidden : .visible, for: .navigationBar)
+        .navigationDestination(isPresented: $isShowingFilters) {
+            RecordFilterView(
+                selectedCategoryIDs: $selectedCategoryIDs,
+                selectedTagNames: $selectedTagNames,
+                selectedCompanionNames: $selectedCompanionNames,
+                availableTagNames: availableTagNames,
+                availableCompanionNames: availableCompanionNames,
+                periodFilter: $periodFilter,
+                customPeriodStart: $customPeriodStart,
+                customPeriodEnd: $customPeriodEnd,
+                photoFilterEnabled: $photoFilterEnabled,
+                sortOrder: $sortOrder
+            )
         }
     }
 
@@ -1251,14 +1295,28 @@ private func recordFacetNames(from rawValue: String) -> [String] {
         .filter { !$0.isEmpty }
 }
 
+private struct CalendarNotificationDestination: Identifiable {
+    let plan: Plan
+    let preparationTaskID: UUID?
+
+    var id: String {
+        "\(plan.id.uuidString)-\(preparationTaskID?.uuidString ?? "plan")"
+    }
+}
+
 private struct CalendarView: View {
     @Binding var displayMode: CalendarDisplayMode
+    @Binding var requestedPlanID: String
+    @Binding var requestedAttemptID: String
+    @Binding var requestedPreparationTaskID: String
     @Query(sort: \Visit.visitedAt, order: .forward) private var visits: [Visit]
     @Query(sort: \Plan.startsAt, order: .forward) private var plans: [Plan]
+    @Query private var ticketAttempts: [TicketAttempt]
     @AppStorage(AppStorageKeys.showsExternalCalendarEvents) private var showsExternalCalendarEvents = true
     @StateObject private var externalCalendarStore = ExternalCalendarOverlayStore()
     @State private var displayedMonth = Date().startOfMonth
     @State private var selectedDate = Date()
+    @State private var notificationDestination: CalendarNotificationDestination?
 
     private let calendar = Calendar.current
 
@@ -1338,17 +1396,108 @@ private struct CalendarView: View {
     }
 
     private var calendarFetchInterval: DateInterval {
-        let days = daysInDisplayedMonth
-        let start = days.first?.date ?? displayedMonth
-        let lastDay = days.last?.date ?? displayedMonth
-        let end = calendar.date(byAdding: .day, value: 1, to: lastDay) ?? lastDay
-        return DateInterval(start: start, end: end)
+        switch displayMode {
+        case .month, .planList:
+            let days = daysInDisplayedMonth
+            let start = days.first?.date ?? displayedMonth
+            let lastDay = days.last?.date ?? displayedMonth
+            let end = calendar.date(byAdding: .day, value: 1, to: lastDay) ?? lastDay
+            return DateInterval(start: start, end: end)
+        case .week:
+            let start = selectedWeekStart
+            let end = calendar.date(byAdding: .day, value: 7, to: start) ?? start
+            return DateInterval(start: start, end: end)
+        case .day:
+            let start = calendar.startOfDay(for: selectedDate)
+            let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
+            return DateInterval(start: start, end: end)
+        }
     }
 
     private var weekdaySymbols: [String] {
         let symbols = ["日", "月", "火", "水", "木", "金", "土"]
         let startIndex = max(calendar.firstWeekday - 1, 0)
         return Array(symbols[startIndex...] + symbols[..<startIndex])
+    }
+
+    private var selectedWeekStart: Date {
+        calendar.dateInterval(of: .weekOfYear, for: selectedDate)?.start
+            ?? calendar.startOfDay(for: selectedDate)
+    }
+
+    private var selectedWeekDays: [Date] {
+        (0..<7).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: selectedWeekStart)
+        }
+    }
+
+    private var timelineSnapshot: CalendarTimelineSnapshot {
+        CalendarTimelineSnapshot.make(
+            visits: visibleVisits,
+            plans: plans,
+            externalEvents: externalCalendarStore.events,
+            showsExternalEvents: showsExternalCalendarEvents,
+            calendar: calendar
+        )
+    }
+
+    private var ticketProgressItems: [CategoryTicketProgressItem] {
+        CategoryTicketProgressItem.activeItems(in: plans)
+    }
+
+    private var nextActionItems: [CalendarNextActionItem] {
+        let now = Date()
+        let ticketItems = plans
+            .filter { !$0.isArchived }
+            .flatMap { plan -> [CalendarNextActionItem] in
+                (plan.ticketAttempts ?? []).compactMap { attempt -> CalendarNextActionItem? in
+                    guard !attempt.isArchived,
+                          let action = TicketNextActionDefinition.nextAction(for: attempt, now: now) else {
+                        return nil
+                    }
+                    return CalendarNextActionItem(
+                        id: "ticket-\(attempt.id.uuidString)-\(action.title)-\(action.date.timeIntervalSinceReferenceDate)",
+                        plan: plan,
+                        title: action.title,
+                        date: action.date,
+                        systemImage: action.systemImage,
+                        isOverdue: action.isOverdue,
+                        priority: action.priority
+                    )
+                }
+            }
+
+        let preparationItems = plans
+            .filter { !$0.isArchived && $0.isPreparationChecklistActive }
+            .flatMap { plan -> [CalendarNextActionItem] in
+                plan.preparationFields.tasks.compactMap { task -> CalendarNextActionItem? in
+                    guard !task.isCompleted,
+                          !task.trimmedTitle.isEmpty,
+                          let dueAt = task.dueAt else {
+                        return nil
+                    }
+                    return CalendarNextActionItem(
+                        id: "preparation-\(plan.id.uuidString)-\(task.id.uuidString)",
+                        plan: plan,
+                        title: task.trimmedTitle,
+                        date: dueAt,
+                        systemImage: "checklist",
+                        isOverdue: dueAt < now,
+                        priority: 50
+                    )
+                }
+            }
+
+        return (ticketItems + preparationItems)
+            .sorted { lhs, rhs in
+                if lhs.isOverdue != rhs.isOverdue {
+                    return lhs.isOverdue
+                }
+                if lhs.date != rhs.date {
+                    return lhs.date < rhs.date
+                }
+                return lhs.priority < rhs.priority
+            }
     }
 
     var body: some View {
@@ -1379,14 +1528,24 @@ private struct CalendarView: View {
                             .accessibilityLabel("予定・チケット")
                         }
 
-                        if displayMode == .calendar {
+                        switch displayMode {
+                        case .month:
                             monthHeader
+                            monthStrip
                             externalCalendarControl
-                            weekdayHeader
                             monthGrid
-                            selectedDaySection
-                            upcomingSection
-                        } else {
+                            calendarAgendaSection
+                        case .week:
+                            timelineNavigationHeader
+                            externalCalendarControl
+                            weekTimeline
+                            calendarAgendaSection
+                        case .day:
+                            timelineNavigationHeader
+                            externalCalendarControl
+                            dayTimeline
+                            calendarAgendaSection
+                        case .planList:
                             planListSection
                         }
                     }
@@ -1403,6 +1562,16 @@ private struct CalendarView: View {
                     await refreshExternalCalendarIfNeeded()
                 }
             }
+            .onChange(of: selectedDate) { _, _ in
+                Task {
+                    await refreshExternalCalendarIfNeeded()
+                }
+            }
+            .onChange(of: displayMode) { _, _ in
+                Task {
+                    await refreshExternalCalendarIfNeeded()
+                }
+            }
             .onChange(of: showsExternalCalendarEvents) { _, newValue in
                 Task {
                     if newValue {
@@ -1412,34 +1581,190 @@ private struct CalendarView: View {
                     }
                 }
             }
+            .navigationDestination(item: $notificationDestination) { destination in
+                PlanDetailView(
+                    plan: destination.plan,
+                    highlightedPreparationTaskID: destination.preparationTaskID
+                )
+            }
+            .task(id: requestedPlanID) {
+                openRequestedPlanIfNeeded()
+            }
+            .task(id: requestedAttemptID) {
+                openRequestedPlanIfNeeded()
+            }
+            .onChange(of: plans.map(\.id)) { _, _ in
+                openRequestedPlanIfNeeded()
+            }
+            .onChange(of: ticketAttempts.map(\.id)) { _, _ in
+                openRequestedPlanIfNeeded()
+            }
         }
     }
 
+    private func openRequestedPlanIfNeeded() {
+        var destinationPlan: Plan?
+
+        if !requestedPlanID.isEmpty {
+            guard let planID = UUID(uuidString: requestedPlanID) else {
+                requestedPlanID = ""
+                requestedPreparationTaskID = ""
+                return
+            }
+            destinationPlan = plans.first(where: { $0.id == planID })
+        } else if !requestedAttemptID.isEmpty {
+            guard let attemptID = UUID(uuidString: requestedAttemptID) else {
+                requestedAttemptID = ""
+                return
+            }
+            destinationPlan = ticketAttempts.first(where: { $0.id == attemptID })?.plan
+        }
+
+        guard let plan = destinationPlan else { return }
+        guard !plan.isArchived else {
+            requestedPlanID = ""
+            requestedAttemptID = ""
+            requestedPreparationTaskID = ""
+            return
+        }
+
+        selectedDate = plan.startsAt
+        displayedMonth = plan.startsAt.startOfMonth
+        let preparationTaskID = UUID(uuidString: requestedPreparationTaskID)
+        notificationDestination = CalendarNotificationDestination(
+            plan: plan,
+            preparationTaskID: preparationTaskID
+        )
+        requestedPlanID = ""
+        requestedAttemptID = ""
+        requestedPreparationTaskID = ""
+    }
+
     private var monthHeader: some View {
-        HStack {
+        HStack(spacing: 12) {
             Button {
-                displayedMonth = calendar.date(byAdding: .month, value: -1, to: displayedMonth) ?? displayedMonth
+                moveDisplayedMonth(by: -1)
             } label: {
                 Image(systemName: "chevron.left")
-                    .frame(width: 36, height: 36)
+                    .frame(width: 40, height: 40)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
+            .accessibilityLabel("前の月")
 
-            Spacer()
+            VStack(alignment: .leading, spacing: 1) {
+                Text(japaneseYearMonth(displayedMonth))
+                    .font(FavorecoTypography.sectionTitle)
 
-            Text(japaneseYearMonth(displayedMonth))
-                .font(FavorecoTypography.sectionTitle)
+                if !calendar.isDate(displayedMonth, equalTo: Date(), toGranularity: .month) {
+                    Button("今月へ戻る") {
+                        displayedMonth = Date().startOfMonth
+                        selectedDate = Date()
+                    }
+                    .font(FavorecoTypography.captionStrong)
+                }
+            }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             Button {
-                displayedMonth = calendar.date(byAdding: .month, value: 1, to: displayedMonth) ?? displayedMonth
+                moveDisplayedMonth(by: 1)
             } label: {
                 Image(systemName: "chevron.right")
-                    .frame(width: 36, height: 36)
+                    .frame(width: 40, height: 40)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
+            .accessibilityLabel("次の月")
         }
+    }
+
+    private var monthStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(0..<5, id: \.self) { offset in
+                    let month = calendar.date(byAdding: .month, value: offset, to: displayedMonth) ?? displayedMonth
+                    let isDisplayed = calendar.isDate(month, equalTo: displayedMonth, toGranularity: .month)
+
+                    Button {
+                        selectMonth(month)
+                    } label: {
+                        Text(shortMonthTitle(month))
+                            .font(FavorecoTypography.bodyStrong)
+                            .foregroundStyle(isDisplayed ? Color.white : Color.primary)
+                            .frame(minWidth: 64)
+                            .padding(.vertical, 8)
+                            .background {
+                                Capsule(style: .continuous)
+                                    .fill(isDisplayed ? Color.accentColor : Color.clear)
+                            }
+                            .overlay {
+                                if !isDisplayed {
+                                    Capsule(style: .continuous)
+                                        .stroke(Color.secondary.opacity(0.7), lineWidth: 1)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+    }
+
+    private var timelineNavigationHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                moveTimeline(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(displayMode == .week ? "前の週" : "前の日")
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(timelineTitle)
+                    .font(FavorecoTypography.sectionTitle)
+
+                if !calendar.isDateInToday(selectedDate) {
+                    Button(displayMode == .week ? "今週へ戻る" : "今日へ戻る") {
+                        selectedDate = Date()
+                        displayedMonth = Date().startOfMonth
+                    }
+                    .font(FavorecoTypography.captionStrong)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                moveTimeline(by: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(displayMode == .week ? "次の週" : "次の日")
+        }
+    }
+
+    private var timelineTitle: String {
+        if displayMode == .week, let lastDay = selectedWeekDays.last {
+            let startMonth = calendar.component(.month, from: selectedWeekStart)
+            let startDay = calendar.component(.day, from: selectedWeekStart)
+            let endMonth = calendar.component(.month, from: lastDay)
+            let endDay = calendar.component(.day, from: lastDay)
+            return startMonth == endMonth
+                ? "\(startMonth)月\(startDay)日〜\(endDay)日"
+                : "\(startMonth)月\(startDay)日〜\(endMonth)月\(endDay)日"
+        }
+        return japaneseFullDate(selectedDate)
+    }
+
+    private func moveTimeline(by offset: Int) {
+        let component: Calendar.Component = displayMode == .week ? .weekOfYear : .day
+        let date = calendar.date(byAdding: component, value: offset, to: selectedDate) ?? selectedDate
+        selectedDate = date
+        displayedMonth = date.startOfMonth
     }
 
     private var planListSection: some View {
@@ -1477,15 +1802,39 @@ private struct CalendarView: View {
         return "\(components.year ?? 0)年\(components.month ?? 0)月"
     }
 
-    private var externalCalendarControl: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Toggle("外部カレンダーを重ねる", isOn: $showsExternalCalendarEvents)
-                .font(FavorecoTypography.bodyStrong)
+    private func shortMonthTitle(_ date: Date) -> String {
+        "\(calendar.component(.month, from: date))月"
+    }
 
-            HStack(spacing: 10) {
-                Label(externalCalendarStore.authorizationStatusText, systemImage: "calendar.badge.clock")
-                    .font(FavorecoTypography.caption)
+    private func moveDisplayedMonth(by offset: Int) {
+        let month = calendar.date(byAdding: .month, value: offset, to: displayedMonth) ?? displayedMonth
+        selectMonth(month)
+    }
+
+    private func selectMonth(_ month: Date) {
+        let monthStart = month.startOfMonth
+        let preferredDay = calendar.component(.day, from: selectedDate)
+        let lastDay = calendar.range(of: .day, in: .month, for: monthStart)?.count ?? 1
+        var components = calendar.dateComponents([.year, .month], from: monthStart)
+        components.day = min(preferredDay, lastDay)
+
+        displayedMonth = monthStart
+        selectedDate = calendar.date(from: components) ?? monthStart
+    }
+
+    private var externalCalendarControl: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "calendar.badge.clock")
                     .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("外部カレンダー")
+                        .font(FavorecoTypography.captionStrong)
+                    Text(externalCalendarStore.authorizationStatusText)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 if externalCalendarStore.isLoading {
                     ProgressView()
@@ -1512,6 +1861,9 @@ private struct CalendarView: View {
                     .buttonStyle(.borderless)
                     .accessibilityLabel("外部カレンダーを再読み込み")
                 }
+
+                Toggle("外部カレンダーを重ねる", isOn: $showsExternalCalendarEvents)
+                    .labelsHidden()
             }
 
             if !externalCalendarStore.errorMessage.isEmpty {
@@ -1520,44 +1872,135 @@ private struct CalendarView: View {
                     .foregroundStyle(.red)
             }
         }
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private var weekdayHeader: some View {
-        HStack {
-            ForEach(weekdaySymbols, id: \.self) { symbol in
-                Text(symbol)
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-            }
-        }
+        .padding(.vertical, 2)
     }
 
     private var monthGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
-            ForEach(daysInDisplayedMonth) { day in
-                let dayVisits = visitsByDay[calendar.startOfDay(for: day.date)] ?? []
-                let dayPlans = plansByDay[calendar.startOfDay(for: day.date)] ?? []
-                let dayExternalEvents = externalEventsByDay[calendar.startOfDay(for: day.date)] ?? []
-                CalendarDayCell(
-                    day: day,
-                    isSelected: calendar.isDate(day.date, inSameDayAs: selectedDate),
-                    isToday: calendar.isDateInToday(day.date),
-                    visitCount: dayVisits.count,
-                    planCount: dayPlans.count,
-                    externalEventCount: showsExternalCalendarEvents ? dayExternalEvents.count : 0
-                ) {
-                    selectedDate = day.date
-                    if !calendar.isDate(day.date, equalTo: displayedMonth, toGranularity: .month) {
-                        displayedMonth = day.date.startOfMonth
+        let snapshot = CalendarMonthSnapshot.make(
+            days: daysInDisplayedMonth,
+            visitsByDay: visitsByDay,
+            plansByDay: plansByDay,
+            plans: plans,
+            externalEventsByDay: externalEventsByDay,
+            showsExternalEvents: showsExternalCalendarEvents,
+            calendar: calendar
+        )
+
+        return CalendarMonthGridView(
+            weekdaySymbols: weekdaySymbols,
+            days: daysInDisplayedMonth,
+            entriesByDay: snapshot.entriesByDay,
+            selectedDate: selectedDate,
+            calendar: calendar
+        ) { day in
+            selectedDate = day.date
+            if !calendar.isDate(day.date, equalTo: displayedMonth, toGranularity: .month) {
+                displayedMonth = day.date.startOfMonth
+            }
+        }
+        .padding(.horizontal, -20)
+    }
+
+    private var weekTimeline: some View {
+        CalendarWeekTimelineView(
+            weekDays: selectedWeekDays,
+            snapshot: timelineSnapshot,
+            selectedDate: selectedDate,
+            calendar: calendar
+        ) { date in
+            selectedDate = date
+            displayedMonth = date.startOfMonth
+        }
+        .padding(.horizontal, -20)
+    }
+
+    private var dayTimeline: some View {
+        CalendarDayTimelineView(
+            date: selectedDate,
+            snapshot: timelineSnapshot,
+            calendar: calendar
+        )
+        .padding(.horizontal, -20)
+    }
+
+    private var calendarAgendaSection: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            ticketScheduleSection
+            nextActionSection
+            selectedDaySection
+            upcomingSection
+        }
+    }
+
+    @ViewBuilder
+    private var ticketScheduleSection: some View {
+        if ticketProgressItems.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("チケットスケジュール")
+                    .font(FavorecoTypography.sectionTitle)
+
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle")
+                        .foregroundStyle(.green)
+                    Text("進行中のチケット予定はありません")
+                        .font(FavorecoTypography.bodyStrong)
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+        } else {
+            CategoryTicketProgressSection(
+                items: ticketProgressItems,
+                title: "チケットスケジュール",
+                usesLatinTitle: false,
+                usesTheaterStyle: false,
+                showsCategoryInSelector: true
+            )
+        }
+    }
+
+    private var nextActionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("次にやること")
+                    .font(FavorecoTypography.sectionTitle)
+                if !nextActionItems.isEmpty {
+                    Text("\(nextActionItems.count)")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            if nextActionItems.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle")
+                        .foregroundStyle(.green)
+                    Text("今すぐ対応することはありません")
+                        .font(FavorecoTypography.bodyStrong)
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                ForEach(nextActionItems.prefix(5)) { item in
+                    NavigationLink {
+                        PlanDetailView(plan: item.plan)
+                    } label: {
+                        CalendarNextActionRow(item: item)
                     }
+                    .buttonStyle(.plain)
+                }
+
+                if nextActionItems.count > 5 {
+                    Text("ほか\(nextActionItems.count - 5)件は各公演の準備・チケット欄で確認できます")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .trailing)
                 }
             }
         }
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var selectedDaySection: some View {
@@ -1685,10 +2128,11 @@ private struct CalendarView: View {
     }
 }
 
-private struct CalendarDay: Identifiable {
-    let id = UUID()
+struct CalendarDay: Identifiable {
     let date: Date
     let isInDisplayedMonth: Bool
+
+    var id: Date { date }
 
     static func days(for month: Date, calendar: Calendar) -> [CalendarDay] {
         guard let monthInterval = calendar.dateInterval(of: .month, for: month),
@@ -1705,7 +2149,7 @@ private struct CalendarDay: Identifiable {
             calendar.date(byAdding: .day, value: day - 1, to: monthInterval.start)
         }
         let totalCount = leadingDays.count + currentMonthDays.count
-        let trailingCount = (7 - totalCount % 7) % 7
+        let trailingCount = max(42 - totalCount, 0)
         let trailingDays = (0..<trailingCount).compactMap { offset in
             calendar.date(byAdding: .day, value: offset + 1, to: currentMonthDays.last ?? monthInterval.start)
         }
@@ -1719,67 +2163,59 @@ private struct CalendarDay: Identifiable {
     }
 }
 
-private struct CalendarDayCell: View {
-    let day: CalendarDay
-    let isSelected: Bool
-    let isToday: Bool
-    let visitCount: Int
-    let planCount: Int
-    let externalEventCount: Int
-    let action: () -> Void
+private struct CalendarNextActionItem: Identifiable {
+    let id: String
+    let plan: Plan
+    let title: String
+    let date: Date
+    let systemImage: String
+    let isOverdue: Bool
+    let priority: Int
+}
 
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 5) {
-                Text(day.date.formatted(.dateTime.day()))
-                    .font(FavorecoTypography.bodyStrong)
-                    .foregroundStyle(day.isInDisplayedMonth ? .primary : .tertiary)
+private struct CalendarNextActionRow: View {
+    let item: CalendarNextActionItem
+    @Environment(\.favorecoThemePalette) private var themePalette
 
-                HStack(spacing: 3) {
-                    ForEach(0..<min(visitCount, 3), id: \.self) { _ in
-                        Circle()
-                            .fill(isSelected ? .white : Color.accentColor)
-                            .frame(width: 4, height: 4)
-                    }
-                    ForEach(0..<min(planCount, 2), id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 1, style: .continuous)
-                            .fill(isSelected ? .white : Color.orange)
-                            .frame(width: 5, height: 4)
-                    }
-                    ForEach(0..<min(externalEventCount, 2), id: \.self) { _ in
-                        Circle()
-                            .stroke(isSelected ? .white : Color.secondary, lineWidth: 1)
-                            .frame(width: 4, height: 4)
-                    }
-                }
-                .frame(height: 6)
-            }
-            .frame(maxWidth: .infinity, minHeight: 48)
-            .background(backgroundShape)
-            .overlay {
-                if isToday && !isSelected {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.accentColor.opacity(0.45), lineWidth: 1)
-                }
-            }
-        }
-        .buttonStyle(.plain)
+    private var tint: Color {
+        item.isOverdue
+            ? .red
+            : themePalette.categoryColor(hex: item.plan.category?.colorHex ?? "#147C88")
     }
 
-    private var backgroundShape: some ShapeStyle {
-        if isSelected {
-            return AnyShapeStyle(Color.accentColor)
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: item.systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 20)
+
+            Text(FavorecoDateText.compactDateTime(item.date))
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(item.isOverdue ? Color.red : .secondary)
+                .fixedSize(horizontal: true, vertical: false)
+
+            Text(item.title)
+                .font(FavorecoTypography.bodyStrong)
+                .lineLimit(1)
+
+            Text(item.plan.title.isEmpty ? "予定" : item.plan.title)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
-        if visitCount > 0 {
-            return AnyShapeStyle(Color.accentColor.opacity(0.10))
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(tint.opacity(0.22), lineWidth: 0.75)
         }
-        if planCount > 0 {
-            return AnyShapeStyle(Color.orange.opacity(0.12))
-        }
-        if externalEventCount > 0 {
-            return AnyShapeStyle(Color(.tertiarySystemGroupedBackground))
-        }
-        return AnyShapeStyle(Color(.secondarySystemGroupedBackground))
     }
 }
 
@@ -3323,5 +3759,5 @@ private struct PlaceholderRow: View {
 #Preview {
     MainTabView()
         .environmentObject(PurchaseManager.shared)
-        .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self], inMemory: true)
+        .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self, PersonMaster.self, FavoriteProfile.self, FavoPin.self, EventPersonLink.self, PlaceMaster.self, Plan.self, TicketAccount.self, TicketAttempt.self], inMemory: true)
 }

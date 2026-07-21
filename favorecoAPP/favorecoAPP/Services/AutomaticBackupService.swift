@@ -72,6 +72,8 @@ enum AutomaticBackupService {
         let photos = try snapshotContext.fetch(FetchDescriptor<PhotoBlob>())
         let socialAccounts = try snapshotContext.fetch(FetchDescriptor<SocialAccount>())
         let people = try snapshotContext.fetch(FetchDescriptor<PersonMaster>())
+        let favoriteProfiles = try snapshotContext.fetch(FetchDescriptor<FavoriteProfile>())
+        let favoPins = try snapshotContext.fetch(FetchDescriptor<FavoPin>())
         let personLinks = try snapshotContext.fetch(FetchDescriptor<EventPersonLink>())
         let places = try snapshotContext.fetch(FetchDescriptor<PlaceMaster>())
         let plans = try snapshotContext.fetch(FetchDescriptor<Plan>())
@@ -79,7 +81,7 @@ enum AutomaticBackupService {
         let ticketAttempts = try snapshotContext.fetch(FetchDescriptor<TicketAttempt>())
         let userContentCount = categories.filter { !$0.isBuiltIn }.count
             + events.count + visits.count + inboxItems.count + photos.count
-            + socialAccounts.count + people.count + personLinks.count + places.count
+            + socialAccounts.count + people.count + favoriteProfiles.count + favoPins.count + personLinks.count + places.count
             + plans.count + ticketAccounts.count + ticketAttempts.count
         guard userContentCount > 0 else { return nil }
 
@@ -95,6 +97,8 @@ enum AutomaticBackupService {
             photos: photos,
             socialAccounts: socialAccounts,
             people: people,
+            favoriteProfiles: favoriteProfiles,
+            favoPins: favoPins,
             personLinks: personLinks,
             places: places,
             plans: plans,

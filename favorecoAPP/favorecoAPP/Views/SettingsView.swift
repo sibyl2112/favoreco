@@ -747,11 +747,12 @@ struct NotificationSettingsView: View {
     @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
     @AppStorage(AppStorageKeys.notificationMasterEnabled) private var masterEnabled = false
     @AppStorage(AppStorageKeys.notificationApplicationStartEnabled) private var applicationStartEnabled = false
-    @AppStorage(AppStorageKeys.notificationApplicationDeadlineEnabled) private var applicationDeadlineEnabled = false
-    @AppStorage(AppStorageKeys.notificationLotteryResultEnabled) private var lotteryResultEnabled = false
-    @AppStorage(AppStorageKeys.notificationPaymentDeadlineEnabled) private var paymentDeadlineEnabled = false
-    @AppStorage(AppStorageKeys.notificationTicketIssueEnabled) private var ticketIssueEnabled = false
+    @AppStorage(AppStorageKeys.notificationApplicationDeadlineEnabled) private var applicationDeadlineEnabled = true
+    @AppStorage(AppStorageKeys.notificationLotteryResultEnabled) private var lotteryResultEnabled = true
+    @AppStorage(AppStorageKeys.notificationPaymentDeadlineEnabled) private var paymentDeadlineEnabled = true
+    @AppStorage(AppStorageKeys.notificationTicketIssueEnabled) private var ticketIssueEnabled = true
     @AppStorage(AppStorageKeys.notificationPerformanceReminderEnabled) private var performanceReminderEnabled = true
+    @AppStorage(AppStorageKeys.notificationPreparationDeadlineEnabled) private var preparationDeadlineEnabled = true
     @AppStorage(AppStorageKeys.notificationMembershipExpiryEnabled) private var membershipExpiryEnabled = false
     @AppStorage(AppStorageKeys.notificationMemoryReminderEnabled) private var memoryReminderEnabled = false
     @AppStorage(AppStorageKeys.notificationMonthlyReportEnabled) private var monthlyReportEnabled = false
@@ -780,35 +781,35 @@ struct NotificationSettingsView: View {
             }
 
             Section("予定・チケット") {
+                Picker("通知プリセット", selection: ticketPresetBinding) {
+                    ForEach(TicketNotificationPreset.allCases) { preset in
+                        Text(preset.title).tag(Optional(preset))
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(currentTicketPreset?.summary ?? "現在：カスタム設定")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle("申込開始", isOn: $applicationStartEnabled)
-                    .onChange(of: applicationStartEnabled) { _, _ in
-                        synchronizePlanAndTicketNotifications()
-                    }
                 Toggle("申込締切", isOn: $applicationDeadlineEnabled)
-                    .onChange(of: applicationDeadlineEnabled) { _, _ in
-                        synchronizePlanAndTicketNotifications()
-                    }
                 Toggle("当落発表", isOn: $lotteryResultEnabled)
-                    .onChange(of: lotteryResultEnabled) { _, _ in
-                        synchronizePlanAndTicketNotifications()
-                    }
                 Toggle("入金締切", isOn: $paymentDeadlineEnabled)
-                    .onChange(of: paymentDeadlineEnabled) { _, _ in
-                        synchronizePlanAndTicketNotifications()
-                    }
                 Toggle("発券開始", isOn: $ticketIssueEnabled)
-                    .onChange(of: ticketIssueEnabled) { _, _ in
-                        synchronizePlanAndTicketNotifications()
-                    }
                 Toggle("公演前日/当日", isOn: $performanceReminderEnabled)
-                    .onChange(of: performanceReminderEnabled) { _, _ in
-                        synchronizePlanAndTicketNotifications()
-                    }
-                Text("公演前日/当日だけ初期ONです。申込、当落、入金、発券は必要なものだけ選びます。")
+                Toggle("公演準備の期限", isOn: $preparationDeadlineEnabled)
+                Text("期限付きの公演準備は、未完了の項目だけ前日の20時に1回お知らせします。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                Text("新規利用時は「おすすめ」です。個別に変更するとカスタム設定として保持します。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
             .disabled(!masterEnabled)
+            .onChange(of: ticketNotificationSignature) { _, _ in
+                synchronizePlanAndTicketNotifications()
+            }
 
             Section("アカウント") {
                 Toggle("FC・会員期限", isOn: $membershipExpiryEnabled)
@@ -841,7 +842,7 @@ struct NotificationSettingsView: View {
             .disabled(!masterEnabled)
 
             Section("現在の実装範囲") {
-                Text("通知タイプ別の設定保存、iOS通知許可、予定・申込・FC/会員期限、Premiumの月刊Favoreco通知まで接続しています。")
+                Text("通知タイプ別の設定保存、iOS通知許可、予定・申込・公演準備・FC/会員期限、Premiumの月刊Favoreco通知まで接続しています。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -877,6 +878,52 @@ struct NotificationSettingsView: View {
                 permissionMessage = "通知許可の取得に失敗しました。"
             }
         }
+    }
+
+    private var currentTicketPreset: TicketNotificationPreset? {
+        TicketNotificationPreset.allCases.first { preset in
+            preset.applicationStart == applicationStartEnabled
+                && preset.applicationDeadline == applicationDeadlineEnabled
+                && preset.lotteryResult == lotteryResultEnabled
+                && preset.paymentDeadline == paymentDeadlineEnabled
+                && preset.ticketIssue == ticketIssueEnabled
+                && preset.performanceReminder == performanceReminderEnabled
+                && preset.preparationDeadline == preparationDeadlineEnabled
+        }
+    }
+
+    private var ticketPresetBinding: Binding<TicketNotificationPreset?> {
+        Binding(
+            get: { currentTicketPreset },
+            set: { preset in
+                guard let preset else { return }
+                applyTicketPreset(preset)
+            }
+        )
+    }
+
+    private var ticketNotificationSignature: String {
+        [
+            applicationStartEnabled,
+            applicationDeadlineEnabled,
+            lotteryResultEnabled,
+            paymentDeadlineEnabled,
+            ticketIssueEnabled,
+            performanceReminderEnabled,
+            preparationDeadlineEnabled,
+        ]
+        .map { $0 ? "1" : "0" }
+        .joined()
+    }
+
+    private func applyTicketPreset(_ preset: TicketNotificationPreset) {
+        applicationStartEnabled = preset.applicationStart
+        applicationDeadlineEnabled = preset.applicationDeadline
+        lotteryResultEnabled = preset.lotteryResult
+        paymentDeadlineEnabled = preset.paymentDeadline
+        ticketIssueEnabled = preset.ticketIssue
+        performanceReminderEnabled = preset.performanceReminder
+        preparationDeadlineEnabled = preset.preparationDeadline
     }
 
     private func rescheduleMembershipNotificationsIfNeeded() {
@@ -941,6 +988,41 @@ struct NotificationSettingsView: View {
             return "不明"
         }
     }
+}
+
+private enum TicketNotificationPreset: String, CaseIterable, Identifiable {
+    case minimal
+    case recommended
+    case thorough
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .minimal: "少なめ"
+        case .recommended: "おすすめ"
+        case .thorough: "しっかり"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .minimal:
+            "申込締切・入金締切・公演前日/当日"
+        case .recommended:
+            "締切・当落・入金・発券・公演・公演準備"
+        case .thorough:
+            "申込開始を含む予定・チケット通知をすべて使用"
+        }
+    }
+
+    var applicationStart: Bool { self == .thorough }
+    var applicationDeadline: Bool { true }
+    var lotteryResult: Bool { self != .minimal }
+    var paymentDeadline: Bool { true }
+    var ticketIssue: Bool { self != .minimal }
+    var performanceReminder: Bool { true }
+    var preparationDeadline: Bool { self != .minimal }
 }
 
 struct DisplaySettingsView: View {
@@ -1756,6 +1838,8 @@ struct JSONExportView: View {
     @Query(sort: \PhotoBlob.createdAt, order: .reverse) private var photos: [PhotoBlob]
     @Query(sort: \SocialAccount.sortOrder) private var socialAccounts: [SocialAccount]
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
+    @Query(sort: \FavoriteProfile.sortOrder) private var favoriteProfiles: [FavoriteProfile]
+    @Query(sort: \FavoPin.sortOrder) private var favoPins: [FavoPin]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Query(sort: \PlaceMaster.name) private var places: [PlaceMaster]
     @Query(sort: \Plan.startsAt, order: .reverse) private var plans: [Plan]
@@ -1771,7 +1855,7 @@ struct JSONExportView: View {
     }
 
     private var totalRecordCount: Int {
-        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
+        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + favoriteProfiles.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
     }
 
     var body: some View {
@@ -1792,6 +1876,8 @@ struct JSONExportView: View {
                 LabeledContent("対象", value: "\(events.count)")
                 LabeledContent("訪問/鑑賞記録", value: "\(visits.count)")
                 LabeledContent("人物・団体", value: "\(people.count)")
+                LabeledContent("FAVO", value: "\(favoriteProfiles.filter(\.isFavorite).count)")
+                LabeledContent("MY FAVO固定", value: "\(favoPins.count)")
                 LabeledContent("人物リンク", value: "\(personLinks.count)")
                 LabeledContent("場所", value: "\(places.count)")
                 LabeledContent("予定", value: "\(plans.count)")
@@ -1816,6 +1902,8 @@ struct JSONExportView: View {
                             photos: photos,
                             socialAccounts: socialAccounts,
                             people: people,
+                            favoriteProfiles: favoriteProfiles,
+                            favoPins: favoPins,
                             personLinks: personLinks,
                             places: places,
                             plans: plans,

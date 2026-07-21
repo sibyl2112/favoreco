@@ -33,11 +33,64 @@ enum MasterMergeService {
         destination.wikidataQID = preferred(destination.wikidataQID, fallback: source.wikidataQID)
         destination.appleMusicID = preferred(destination.appleMusicID, fallback: source.appleMusicID)
         destination.sourceSnapshotRaw = preferred(destination.sourceSnapshotRaw, fallback: source.sourceSnapshotRaw)
+        mergeFavoriteProfile(from: source, into: destination, at: now, in: context)
+        mergeFavoPins(from: source, into: destination, at: now, in: context)
         destination.updatedAt = now
 
         source.isArchived = true
         source.updatedAt = now
         try context.save()
+    }
+
+    @MainActor
+    private static func mergeFavoPins(
+        from source: PersonMaster,
+        into destination: PersonMaster,
+        at now: Date,
+        in context: ModelContext
+    ) {
+        var destinationHasPin = (destination.favoPins ?? []).contains { $0.targetKind == .person }
+        for pin in Array(source.favoPins ?? []) where pin.targetKind == .person {
+            if destinationHasPin {
+                context.delete(pin)
+            } else {
+                pin.person = destination
+                pin.updatedAt = now
+                destinationHasPin = true
+            }
+        }
+    }
+
+    @MainActor
+    private static func mergeFavoriteProfile(
+        from source: PersonMaster,
+        into destination: PersonMaster,
+        at now: Date,
+        in context: ModelContext
+    ) {
+        guard let sourceProfile = source.favoriteProfile else { return }
+        guard let destinationProfile = destination.favoriteProfile else {
+            sourceProfile.person = destination
+            sourceProfile.updatedAt = now
+            return
+        }
+
+        destinationProfile.isFavorite = destinationProfile.isFavorite || sourceProfile.isFavorite
+        destinationProfile.isPrimary = destinationProfile.isPrimary || sourceProfile.isPrimary
+        destinationProfile.isPinned = destinationProfile.isPinned || sourceProfile.isPinned
+        if !destinationProfile.hasStartedAt, sourceProfile.hasStartedAt {
+            destinationProfile.startedAt = sourceProfile.startedAt
+            destinationProfile.hasStartedAt = true
+            destinationProfile.includesStartDay = sourceProfile.includesStartDay
+        }
+        destinationProfile.colorHex = preferred(destinationProfile.colorHex, fallback: sourceProfile.colorHex)
+        destinationProfile.nickname = preferred(destinationProfile.nickname, fallback: sourceProfile.nickname)
+        destinationProfile.imagePath = preferred(destinationProfile.imagePath, fallback: sourceProfile.imagePath)
+        destinationProfile.originText = preferred(destinationProfile.originText, fallback: sourceProfile.originText)
+        destinationProfile.memo = preferred(destinationProfile.memo, fallback: sourceProfile.memo)
+        destinationProfile.showOnHome = destinationProfile.showOnHome || sourceProfile.showOnHome
+        destinationProfile.updatedAt = now
+        context.delete(sourceProfile)
     }
 
     @MainActor
@@ -57,6 +110,10 @@ enum MasterMergeService {
         destination.reading = preferred(destination.reading, fallback: source.reading)
         destination.aliasesRaw = mergedTerms(destination.aliasesRaw, source.aliasesRaw, source.name)
         destination.placeTagsRaw = mergedTerms(destination.placeTagsRaw, source.placeTagsRaw)
+        destination.prefecture = preferred(destination.prefecture, fallback: source.prefecture)
+        if destination.prefecture.isEmpty {
+            destination.prefecture = JapanPrefecture.extract(from: preferred(destination.address, fallback: source.address))
+        }
         destination.address = preferred(destination.address, fallback: source.address)
         if destination.latitude == 0, destination.longitude == 0 {
             destination.latitude = source.latitude
@@ -67,11 +124,31 @@ enum MasterMergeService {
         destination.externalIDsRaw = preferred(destination.externalIDsRaw, fallback: source.externalIDsRaw)
         destination.sourceSnapshotRaw = preferred(destination.sourceSnapshotRaw, fallback: source.sourceSnapshotRaw)
         destination.normalizedAddress = preferred(destination.normalizedAddress, fallback: source.normalizedAddress)
+        mergeFavoPins(from: source, into: destination, at: now, in: context)
         destination.updatedAt = now
 
         source.isArchived = true
         source.updatedAt = now
         try context.save()
+    }
+
+    @MainActor
+    private static func mergeFavoPins(
+        from source: PlaceMaster,
+        into destination: PlaceMaster,
+        at now: Date,
+        in context: ModelContext
+    ) {
+        var destinationHasPin = (destination.favoPins ?? []).contains { $0.targetKind == .place }
+        for pin in Array(source.favoPins ?? []) where pin.targetKind == .place {
+            if destinationHasPin {
+                context.delete(pin)
+            } else {
+                pin.place = destination
+                pin.updatedAt = now
+                destinationHasPin = true
+            }
+        }
     }
 
     nonisolated private static func preferred(_ current: String, fallback: String) -> String {

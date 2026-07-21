@@ -33,6 +33,36 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didReceive response: UNNotificationResponse
     ) async {
         let userInfo = response.notification.request.content.userInfo
+        if let planID = userInfo[TicketNotificationScheduler.destinationPlanIDKey] as? String,
+           UUID(uuidString: planID) != nil {
+            let taskID = userInfo[TicketNotificationScheduler.destinationPreparationTaskIDKey] as? String
+            openPlanNotification(planID: planID, preparationTaskID: taskID)
+            return
+        }
+
+        let identifierParts = response.notification.request.identifier.split(separator: ".")
+        if identifierParts.count >= 2,
+           identifierParts[0] == "plan",
+           UUID(uuidString: String(identifierParts[1])) != nil {
+            let taskID = identifierParts.count >= 4 && identifierParts[2] == "preparation"
+                ? String(identifierParts[3])
+                : nil
+            openPlanNotification(planID: String(identifierParts[1]), preparationTaskID: taskID)
+            return
+        }
+        if identifierParts.count >= 2,
+           identifierParts[0] == "ticket",
+           UUID(uuidString: String(identifierParts[1])) != nil {
+            UserDefaults.standard.removeObject(forKey: AppStorageKeys.pendingNotificationPlanID)
+            UserDefaults.standard.removeObject(forKey: AppStorageKeys.pendingNotificationPreparationTaskID)
+            UserDefaults.standard.set(
+                String(identifierParts[1]),
+                forKey: AppStorageKeys.pendingNotificationAttemptID
+            )
+            postOpenPlanNotification()
+            return
+        }
+
         guard let destination = userInfo[MonthlyReportNotificationScheduler.destinationKey] as? String else { return }
         switch destination {
         case MonthlyReportNotificationScheduler.monthlyDestinationValue:
@@ -46,8 +76,29 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             NotificationCenter.default.post(name: .openFavorecoStats, object: nil)
         }
     }
+
+    private func openPlanNotification(planID: String, preparationTaskID: String?) {
+        UserDefaults.standard.removeObject(forKey: AppStorageKeys.pendingNotificationAttemptID)
+        if let preparationTaskID, UUID(uuidString: preparationTaskID) != nil {
+            UserDefaults.standard.set(
+                preparationTaskID,
+                forKey: AppStorageKeys.pendingNotificationPreparationTaskID
+            )
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppStorageKeys.pendingNotificationPreparationTaskID)
+        }
+        UserDefaults.standard.set(planID, forKey: AppStorageKeys.pendingNotificationPlanID)
+        postOpenPlanNotification()
+    }
+
+    private func postOpenPlanNotification() {
+        Task { @MainActor in
+            NotificationCenter.default.post(name: .openFavorecoPlan, object: nil)
+        }
+    }
 }
 
 extension Notification.Name {
     static let openFavorecoStats = Notification.Name("openFavorecoStats")
+    static let openFavorecoPlan = Notification.Name("openFavorecoPlan")
 }

@@ -132,6 +132,12 @@ final class PersonMaster {
     @Relationship(deleteRule: .cascade, inverse: \EventPersonLink.person)
     var eventLinks: [EventPersonLink]? = []
 
+    @Relationship(deleteRule: .cascade, inverse: \FavoriteProfile.person)
+    var favoriteProfile: FavoriteProfile?
+
+    @Relationship(deleteRule: .cascade, inverse: \FavoPin.person)
+    var favoPins: [FavoPin]? = []
+
     init(
         id: UUID = UUID(),
         displayName: String = "",
@@ -168,6 +174,142 @@ final class PersonMaster {
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+}
+
+@Model
+final class FavoriteProfile {
+    var id: UUID = UUID()
+    var isFavorite: Bool = true
+    var isPrimary: Bool = false
+    var isPinned: Bool = false
+    var sortOrder: Int = 0
+    var startedAt: Date = Date()
+    var hasStartedAt: Bool = false
+    var includesStartDay: Bool = true
+    var colorHex: String = "#8F5E73"
+    var nickname: String = ""
+    var imagePath: String = ""
+    var originText: String = ""
+    var memo: String = ""
+    var showOnHome: Bool = true
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var person: PersonMaster?
+
+    init(
+        id: UUID = UUID(),
+        isFavorite: Bool = true,
+        isPrimary: Bool = false,
+        isPinned: Bool = false,
+        sortOrder: Int = 0,
+        startedAt: Date = Date(),
+        hasStartedAt: Bool = false,
+        includesStartDay: Bool = true,
+        colorHex: String = "#8F5E73",
+        nickname: String = "",
+        imagePath: String = "",
+        originText: String = "",
+        memo: String = "",
+        showOnHome: Bool = true,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        person: PersonMaster? = nil
+    ) {
+        self.id = id
+        self.isFavorite = isFavorite
+        self.isPrimary = isPrimary
+        self.isPinned = isPinned
+        self.sortOrder = sortOrder
+        self.startedAt = startedAt
+        self.hasStartedAt = hasStartedAt
+        self.includesStartDay = includesStartDay
+        self.colorHex = colorHex
+        self.nickname = nickname
+        self.imagePath = imagePath
+        self.originText = originText
+        self.memo = memo
+        self.showOnHome = showOnHome
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.person = person
+    }
+}
+
+enum FavoTargetKind: String, CaseIterable {
+    case person
+    case event
+    case place
+
+    var displayName: String {
+        switch self {
+        case .person: "人物・団体"
+        case .event: "作品・体験"
+        case .place: "場所"
+        }
+    }
+}
+
+@Model
+final class FavoPin {
+    var id: UUID = UUID()
+    var targetKindKey: String = FavoTargetKind.event.rawValue
+    var sortOrder: Int = 0
+    var customTitle: String = ""
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var person: PersonMaster?
+    var event: ExperienceEvent?
+    var place: PlaceMaster?
+
+    var targetKind: FavoTargetKind {
+        FavoTargetKind(rawValue: targetKindKey) ?? inferredTargetKind
+    }
+
+    var targetID: UUID? {
+        switch targetKind {
+        case .person: person?.id
+        case .event: event?.id
+        case .place: place?.id
+        }
+    }
+
+    var isValid: Bool {
+        switch targetKind {
+        case .person: person != nil
+        case .event: event != nil
+        case .place: place != nil
+        }
+    }
+
+    private var inferredTargetKind: FavoTargetKind {
+        if person != nil { return .person }
+        if place != nil { return .place }
+        return .event
+    }
+
+    init(
+        id: UUID = UUID(),
+        targetKindKey: String = FavoTargetKind.event.rawValue,
+        sortOrder: Int = 0,
+        customTitle: String = "",
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        person: PersonMaster? = nil,
+        event: ExperienceEvent? = nil,
+        place: PlaceMaster? = nil
+    ) {
+        self.id = id
+        self.targetKindKey = targetKindKey
+        self.sortOrder = sortOrder
+        self.customTitle = customTitle
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.person = person
+        self.event = event
+        self.place = place
     }
 }
 
@@ -223,6 +365,7 @@ final class PlaceMaster {
     var reading: String = ""
     var aliasesRaw: String = ""
     var placeTagsRaw: String = ""
+    var prefecture: String = ""
     var address: String = ""
     var latitude: Double = 0
     var longitude: Double = 0
@@ -242,12 +385,16 @@ final class PlaceMaster {
     @Relationship(deleteRule: .nullify, inverse: \Visit.placeMaster)
     var visits: [Visit]? = []
 
+    @Relationship(deleteRule: .cascade, inverse: \FavoPin.place)
+    var favoPins: [FavoPin]? = []
+
     init(
         id: UUID = UUID(),
         name: String = "",
         reading: String = "",
         aliasesRaw: String = "",
         placeTagsRaw: String = "",
+        prefecture: String = "",
         address: String = "",
         latitude: Double = 0,
         longitude: Double = 0,
@@ -266,6 +413,7 @@ final class PlaceMaster {
         self.reading = reading
         self.aliasesRaw = aliasesRaw
         self.placeTagsRaw = placeTagsRaw
+        self.prefecture = prefecture
         self.address = address
         self.latitude = latitude
         self.longitude = longitude
@@ -316,6 +464,9 @@ final class ExperienceEvent {
 
     @Relationship(deleteRule: .cascade, inverse: \EventPersonLink.event)
     var personLinks: [EventPersonLink]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \FavoPin.event)
+    var favoPins: [FavoPin]? = []
 
     init(
         id: UUID = UUID(),
