@@ -358,9 +358,9 @@ struct ExperienceDetailView: View {
     private var performanceTimeText: String {
         let start = FavorecoDateText.time(visit.visitedAt)
         guard visit.endedAt > visit.visitedAt else {
-            return "上演時間  \(start)"
+            return start
         }
-        return "上演時間  \(start)–\(FavorecoDateText.time(visit.endedAt))"
+        return "\(start)–\(FavorecoDateText.time(visit.endedAt))"
     }
 
     private func recordMetadataRow(icon: String, text: String, accentColor: Color) -> some View {
