@@ -23,11 +23,11 @@ struct DebugSampleDataSummary {
     )
 
     var insertedMessage: String {
-        "サンプル(eventCount)件（記録(visitCount)件・未来予定(planCount)件）を追加しました。"
+        "サンプル\(eventCount)件（記録\(visitCount)件・未来予定\(planCount)件）を追加しました。"
     }
 
     var deletedMessage: String {
-        "サンプル(eventCount)件（記録(visitCount)件・予定(planCount)件）を削除しました。通常の記録とマスターは残ります。"
+        "サンプル\(eventCount)件（記録\(visitCount)件・予定\(planCount)件）を削除しました。通常の記録とマスターは残ります。"
     }
 }
 
