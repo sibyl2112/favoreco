@@ -358,6 +358,66 @@ final class EventPersonLink {
     }
 }
 
+struct PlacePilgrimageMembership: Codable, Hashable, Identifiable {
+    var id: UUID = UUID()
+    var pilgrimageKey: String = ""
+    var pilgrimageName: String = ""
+    var siteNumber: Int?
+    var siteNumberLabel: String = ""
+
+    init(
+        id: UUID = UUID(),
+        pilgrimageKey: String = "",
+        pilgrimageName: String = "",
+        siteNumber: Int? = nil,
+        siteNumberLabel: String = ""
+    ) {
+        self.id = id
+        self.pilgrimageKey = pilgrimageKey
+        self.pilgrimageName = pilgrimageName
+        self.siteNumber = siteNumber
+        self.siteNumberLabel = siteNumberLabel
+    }
+
+    nonisolated var resolvedNumberLabel: String {
+        let trimmed = siteNumberLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        return siteNumber.map { "第\($0)番" } ?? ""
+    }
+
+    nonisolated static func decode(_ rawValue: String) -> [PlacePilgrimageMembership] {
+        guard let data = rawValue.data(using: .utf8), !data.isEmpty else { return [] }
+        return (try? JSONDecoder().decode([PlacePilgrimageMembership].self, from: data)) ?? []
+    }
+
+    nonisolated static func encode(_ memberships: [PlacePilgrimageMembership]) -> String {
+        let normalized = memberships.compactMap { membership -> PlacePilgrimageMembership? in
+            var value = membership
+            value.pilgrimageKey = value.pilgrimageKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            value.pilgrimageName = value.pilgrimageName.trimmingCharacters(in: .whitespacesAndNewlines)
+            value.siteNumberLabel = value.siteNumberLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.pilgrimageName.isEmpty else { return nil }
+            return value
+        }
+        guard let data = try? JSONEncoder().encode(normalized) else { return "[]" }
+        return String(data: data, encoding: .utf8) ?? "[]"
+    }
+
+    nonisolated static func merged(_ currentRawValue: String, _ sourceRawValue: String) -> String {
+        var merged = decode(currentRawValue)
+        var seen = Set(merged.map(mergeKey))
+        for membership in decode(sourceRawValue) where seen.insert(mergeKey(membership)).inserted {
+            merged.append(membership)
+        }
+        return encode(merged)
+    }
+
+    nonisolated private static func mergeKey(_ membership: PlacePilgrimageMembership) -> String {
+        let route = membership.pilgrimageKey.isEmpty ? membership.pilgrimageName : membership.pilgrimageKey
+        return "\(route.folding(options: [.caseInsensitive, .widthInsensitive], locale: .current))|\(membership.siteNumber.map(String.init) ?? "")|\(membership.resolvedNumberLabel)"
+    }
+}
+
 @Model
 final class PlaceMaster {
     var id: UUID = UUID()
@@ -373,6 +433,7 @@ final class PlaceMaster {
     var memo: String = ""
     var externalIDsRaw: String = ""
     var sourceSnapshotRaw: String = ""
+    var pilgrimageMembershipsRaw: String = "[]"
     var normalizedName: String = ""
     var normalizedAddress: String = ""
     var isArchived: Bool = false
@@ -402,6 +463,7 @@ final class PlaceMaster {
         memo: String = "",
         externalIDsRaw: String = "",
         sourceSnapshotRaw: String = "",
+        pilgrimageMembershipsRaw: String = "[]",
         normalizedName: String = "",
         normalizedAddress: String = "",
         isArchived: Bool = false,
@@ -421,6 +483,7 @@ final class PlaceMaster {
         self.memo = memo
         self.externalIDsRaw = externalIDsRaw
         self.sourceSnapshotRaw = sourceSnapshotRaw
+        self.pilgrimageMembershipsRaw = pilgrimageMembershipsRaw
         self.normalizedName = normalizedName
         self.normalizedAddress = normalizedAddress
         self.isArchived = isArchived

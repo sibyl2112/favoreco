@@ -123,6 +123,10 @@ enum MasterMergeService {
         destination.memo = preferred(destination.memo, fallback: source.memo)
         destination.externalIDsRaw = preferred(destination.externalIDsRaw, fallback: source.externalIDsRaw)
         destination.sourceSnapshotRaw = preferred(destination.sourceSnapshotRaw, fallback: source.sourceSnapshotRaw)
+        destination.pilgrimageMembershipsRaw = PlacePilgrimageMembership.merged(
+            destination.pilgrimageMembershipsRaw,
+            source.pilgrimageMembershipsRaw
+        )
         destination.normalizedAddress = preferred(destination.normalizedAddress, fallback: source.normalizedAddress)
         mergeFavoPins(from: source, into: destination, at: now, in: context)
         destination.updatedAt = now

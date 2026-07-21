@@ -64,6 +64,7 @@ enum DebugDataSeeder {
                 let event = ExperienceEvent(
                     title: title,
                     seriesName: sampleSeries(for: category, index: sampleIndex),
+                    subTypeKey: sampleSubTypeKey(for: category, index: sampleIndex),
                     organizerNameSnapshot: sampleOrganizer(for: category),
                     representativeEyecatchPath: samplePath,
                     officialURL: "\(debugURLPrefix)\(category.templateKey)/\(sampleNumber)",
@@ -479,8 +480,12 @@ enum DebugDataSeeder {
             titles = ["光の断片展", "静物たちの部屋", "青の近代", "余白の彫刻", "紙と祈りの博物展", "夜の常設展", "色彩のアーカイブ", "小さな工芸展", "記憶の標本室", "風景を集める"]
         case "live":
             titles = ["夏のライブツアー", "Blue Hour", "星屑アリーナ", "週末フェス", "アンコールの夜", "Neon Session", "小さなクラブ公演", "音の記念日", "雨上がりのステージ", "ラストナンバー"]
+        case "theme_park":
+            titles = ["海辺のテーマパーク", "港の遊園地", "星空パーク", "森のアトラクション", "夏のウォーターパーク", "夜のパレード", "クラシック遊園地", "湖畔のパーク", "花火の夜", "冬のイルミネーション"]
+        case "nature_living":
+            titles = ["海辺の水族館", "森の温室", "朝の動物園", "湖畔の植物園", "夕暮れの庭園", "小さな水族館", "高原の動物園", "季節の花園", "野鳥の森", "海のいきもの館"]
         case "outing_facility":
-            titles = ["海辺の水族館", "夜の展望台", "森の温室", "クラシックホテル", "港の遊園地", "朝の動物園", "湖畔の公園", "古い街並み散歩", "雨の日のプラネタリウム", "夕暮れの庭園"]
+            titles = ["未分類のおでかけ", "街の体験施設", "季節のイベント", "郊外のおでかけ", "旅先の施設", "週末スポット", "地域の催し", "展望スポット", "体験センター", "思い出の場所"]
         case "goshuin":
             titles = ["青葉神社", "白山寺", "水鏡稲荷", "月守神宮", "花霞寺", "千歳八幡宮", "風待不動尊", "椿森神社", "朝霧観音", "星川天満宮"]
         default:
@@ -508,6 +513,20 @@ enum DebugDataSeeder {
         }
     }
 
+    private static func sampleSubTypeKey(for category: RecordCategory, index: Int) -> String {
+        switch category.templateKey {
+        case "theme_park":
+            return OutingFacilityType.themePark.rawValue
+        case "nature_living":
+            let types: [OutingFacilityType] = [.aquarium, .zoo, .botanicalGarden, .natureOther]
+            return types[index % types.count].rawValue
+        case "outing_facility":
+            return OutingFacilityType.facilityOther.rawValue
+        default:
+            return ""
+        }
+    }
+
     private static func sampleVenue(for category: RecordCategory, index: Int) -> String {
         let venues: [String]
         switch category.templateKey {
@@ -516,7 +535,9 @@ enum DebugDataSeeder {
         case "museum": venues = ["favoreco美術館", "国立西洋美術館", "東京都美術館", "森の博物館"]
         case "live": venues = ["favorecoホール", "Zepp DiverCity", "日本武道館", "Blue Note Tokyo"]
         case "sake": venues = ["自宅", "日本酒バー 澄", "蔵元試飲会", "友人宅"]
-        case "outing_facility": venues = ["favorecoパーク", "海辺の水族館", "港の展望台", "森の植物園"]
+        case "theme_park": venues = ["favorecoパーク", "港の遊園地", "星空パーク", "湖畔のパーク"]
+        case "nature_living": venues = ["海辺の水族館", "朝の動物園", "森の植物園", "夕暮れの庭園"]
+        case "outing_facility": venues = ["街の体験施設", "旅先の施設", "展望スポット", "地域の催し"]
         case "goshuin": venues = ["favoreco神社", "青葉神社", "白山寺", "月守神宮"]
         case "book": venues = ["読書メモ", "自宅", "カフェ", "移動中"]
         default: venues = ["favoreco"]
@@ -650,7 +671,7 @@ enum DebugDataSeeder {
     private static func sampleAmount(for category: RecordCategory, index: Int) -> Decimal {
         switch category.templateKey {
         case "theater", "live": return Decimal(6500 + index * 800)
-        case "museum", "movie", "outing_facility": return Decimal(1200 + index * 300)
+        case "museum", "movie", "outing_facility", "theme_park", "nature_living": return Decimal(1200 + index * 300)
         case "sake": return Decimal(1800 + index * 450)
         case "book": return Decimal(900 + index * 120)
         default: return Decimal(0)
@@ -665,7 +686,7 @@ enum DebugDataSeeder {
         case "sake": return "酒"
         case "museum": return "展"
         case "live": return "音"
-        case "outing_facility": return "旅"
+        case "outing_facility", "theme_park", "nature_living": return "旅"
         case "goshuin": return "印"
         default: return String(category.name.prefix(1))
         }

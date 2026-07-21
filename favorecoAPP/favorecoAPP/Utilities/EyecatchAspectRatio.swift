@@ -148,7 +148,7 @@ struct EyecatchAspectRatio: Identifiable, Hashable, Codable {
             return bookCover
         case "goshuin":
             return goshuinStandard
-        case "sake", "outing_facility":
+        case "sake", "outing_facility", "theme_park", "nature_living":
             return labelLandscape
         default:
             return square

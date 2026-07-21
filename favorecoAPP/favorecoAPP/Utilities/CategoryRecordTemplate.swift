@@ -7,6 +7,53 @@
 
 import Foundation
 
+enum OutingFacilityType: String, CaseIterable, Identifiable {
+    case themePark = "outing_theme_park"
+    case aquarium = "outing_aquarium"
+    case zoo = "outing_zoo"
+    case botanicalGarden = "outing_botanical_garden"
+    case natureOther = "outing_nature_other"
+    case facilityOther = "outing_facility_other"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .themePark: "テーマパーク・遊園地"
+        case .aquarium: "水族館"
+        case .zoo: "動物園"
+        case .botanicalGarden: "植物園・庭園"
+        case .natureOther: "その他の自然・いきもの"
+        case .facilityOther: "その他の施設"
+        }
+    }
+
+    var groupKey: String {
+        switch self {
+        case .themePark:
+            "theme_park"
+        case .aquarium, .zoo, .botanicalGarden, .natureOther:
+            "nature_living"
+        case .facilityOther:
+            "other"
+        }
+    }
+
+    var destinationTemplateKey: String {
+        switch groupKey {
+        case "theme_park": "theme_park"
+        case "nature_living": "nature_living"
+        default: "outing_facility"
+        }
+    }
+}
+
+extension RecordCategory {
+    var isOutingFacilityGenre: Bool {
+        ["outing_facility", "theme_park", "nature_living"].contains(templateKey)
+    }
+}
+
 extension RecordCategory {
     var usesOpeningTime: Bool {
         templateKey == "theater" || templateKey == "live"
@@ -116,7 +163,7 @@ struct CategoryRecordTemplate {
                 memoSectionTitle: "味わいメモ",
                 memoPlaceholder: "香り、甘辛、合わせた料理、また飲みたいか"
             )
-        case "outing_facility":
+        case "outing_facility", "theme_park", "nature_living":
             return CategoryRecordTemplate(
                 targetSectionTitle: "施設",
                 titlePlaceholder: "施設名・イベント名",

@@ -342,9 +342,21 @@ struct CategoryTopView: View {
                 ("飲んだ", "\(snapshot.visitCount)", "回", "総記録数"),
                 ("気になる", "\(snapshot.interestedEventCount)", "本", "試飲候補"),
             ]
+        case "theme_park":
+            values = [
+                ("パーク", "\(snapshot.eventCount)", "園", "総登録数"),
+                ("来園済み", "\(snapshot.visitCount)", "回", "総来園数"),
+                ("気になる", "\(snapshot.interestedEventCount)", "件", "訪問候補"),
+            ]
+        case "nature_living":
+            values = [
+                ("訪れた施設", "\(snapshot.eventCount)", "館", "総施設数"),
+                ("訪問済み", "\(snapshot.visitCount)", "回", "総訪問数"),
+                ("気になる", "\(snapshot.interestedEventCount)", "件", "訪問候補"),
+            ]
         case "outing_facility":
             values = [
-                ("施設", "\(snapshot.eventCount)", "件", "総施設数"),
+                ("その他施設", "\(snapshot.eventCount)", "件", "未分類を含む"),
                 ("訪問済み", "\(snapshot.visitCount)", "回", "総訪問数"),
                 ("気になる", "\(snapshot.interestedEventCount)", "件", "訪問候補"),
             ]
@@ -588,14 +600,28 @@ struct CategoryTopView: View {
                 MiniStatisticsItem(title: "年間評価", value: averageText, unit: "", icon: "star"),
                 MiniStatisticsItem(title: "お気に入り", value: "\(favoriteCount)", unit: "冊", icon: "bookmark"),
             ]
-        case "outing_facility":
+        case "theme_park":
+            let repeatCount = repeatVisitCount(in: snapshot.visits)
+            return [
+                MiniStatisticsItem(title: "総来園数", value: "\(snapshot.visitCount)", unit: "回", icon: "ticket"),
+                MiniStatisticsItem(title: "年間来園", value: "\(yearVisits.count)", unit: "回", icon: "calendar"),
+                MiniStatisticsItem(title: "リピート", value: "\(repeatCount)", unit: "回", icon: "arrow.triangle.2.circlepath"),
+                MiniStatisticsItem(title: "気になる", value: "\(snapshot.interestedEventCount)", unit: "件", icon: "bookmark"),
+            ]
+        case "nature_living":
             let repeatCount = repeatVisitCount(in: snapshot.visits)
             let encounteredCount = encounteredItemCount(in: snapshot.visits)
             return [
-                MiniStatisticsItem(title: "総来園数", value: "\(snapshot.visitCount)", unit: "回", icon: "building.columns"),
-                MiniStatisticsItem(title: "年間来園", value: "\(yearVisits.count)", unit: "回", icon: "calendar"),
+                MiniStatisticsItem(title: "総訪問数", value: "\(snapshot.visitCount)", unit: "回", icon: "pawprint"),
+                MiniStatisticsItem(title: "年間訪問", value: "\(yearVisits.count)", unit: "回", icon: "calendar"),
                 MiniStatisticsItem(title: "リピート", value: "\(repeatCount)", unit: "回", icon: "arrow.triangle.2.circlepath"),
                 MiniStatisticsItem(title: "出会った数", value: encounteredCount == 0 ? "-" : "\(encounteredCount)", unit: "種", icon: "pawprint"),
+            ]
+        case "outing_facility":
+            return [
+                MiniStatisticsItem(title: "施設", value: "\(snapshot.eventCount)", unit: "件", icon: "questionmark.folder"),
+                MiniStatisticsItem(title: "訪問", value: "\(snapshot.visitCount)", unit: "回", icon: "calendar"),
+                MiniStatisticsItem(title: "気になる", value: "\(snapshot.interestedEventCount)", unit: "件", icon: "bookmark"),
             ]
         default:
             return [
@@ -1391,7 +1417,7 @@ struct CategoryTopView: View {
     }
 
     private func supportsVisitedPlacesMap(_ category: RecordCategory) -> Bool {
-        ["museum", "live", "outing_facility"].contains(category.templateKey)
+        ["museum", "live", "outing_facility", "theme_park", "nature_living"].contains(category.templateKey)
     }
 
     private func usesAtmosphericDarkStyle(_ category: RecordCategory) -> Bool {
@@ -2898,7 +2924,7 @@ private struct CategoryLibraryCompactGrid: View {
                                         text: item.venueText,
                                         systemImage: "mappin.and.ellipse"
                                     )
-                                } else if category.templateKey == "outing_facility" {
+                                } else if category.isOutingFacilityGenre {
                                     CompactTileSupplementalView(
                                         text: item.prefectureText,
                                         systemImage: "mappin"

@@ -442,6 +442,7 @@ struct BackupPlace: Codable {
     var memo: String
     var externalIDsRaw: String
     var sourceSnapshotRaw: String
+    var pilgrimageMembershipsRaw: String?
     var normalizedName: String
     var normalizedAddress: String
     var isArchived: Bool
@@ -462,6 +463,7 @@ struct BackupPlace: Codable {
         memo = place.memo
         externalIDsRaw = place.externalIDsRaw
         sourceSnapshotRaw = place.sourceSnapshotRaw
+        pilgrimageMembershipsRaw = place.pilgrimageMembershipsRaw
         normalizedName = place.normalizedName
         normalizedAddress = place.normalizedAddress
         isArchived = place.isArchived

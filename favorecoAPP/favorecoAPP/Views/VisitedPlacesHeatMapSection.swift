@@ -106,7 +106,9 @@ struct VisitedPlacesHeatMapSection: View {
         switch category.templateKey {
         case "museum": return "訪れたミュージアムMAP"
         case "live": return "行ったライブ会場MAP"
-        case "outing_facility": return "行った施設MAP"
+        case "theme_park": return "行ったパークMAP"
+        case "nature_living": return "訪れた自然・いきものMAP"
+        case "outing_facility": return "その他・未分類施設MAP"
         default: return "行った場所MAP"
         }
     }

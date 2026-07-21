@@ -496,7 +496,7 @@ private struct VisitRecordBannerRow: View {
         case "live": "参加済み"
         case "book": "読了"
         case "sake": "飲んだ"
-        case "outing_facility": "訪問済み"
+        case "outing_facility", "theme_park", "nature_living": "訪問済み"
         case "goshuin": "参拝済み"
         default: category?.name.isEmpty == false ? category?.name ?? "体験済み" : "体験済み"
         }

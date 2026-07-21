@@ -10,24 +10,6 @@ import SwiftData
 import UIKit
 import Charts
 
-private enum CalendarDisplayMode: String, CaseIterable, Identifiable {
-    case month
-    case week
-    case day
-    case planList
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .month: "月"
-        case .week: "週"
-        case .day: "日"
-        case .planList: "予定"
-        }
-    }
-}
-
 struct MainTabView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @AppStorage(AppStorageKeys.defaultGenreMode) private var defaultGenreMode = "lastUsed"
@@ -1295,12 +1277,20 @@ private func recordFacetNames(from rawValue: String) -> [String] {
         .filter { !$0.isEmpty }
 }
 
-private struct CalendarNotificationDestination: Identifiable {
+private struct CalendarNotificationDestination: Identifiable, Hashable {
     let plan: Plan
     let preparationTaskID: UUID?
 
     var id: String {
         "\(plan.id.uuidString)-\(preparationTaskID?.uuidString ?? "plan")"
+    }
+
+    static func == (lhs: CalendarNotificationDestination, rhs: CalendarNotificationDestination) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
@@ -1502,103 +1492,136 @@ private struct CalendarView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                MainScreenHeader(title: "カレンダー")
-                    .padding(.horizontal, 20)
-                    .padding(.top, -4)
-                    .padding(.bottom, 6)
+            notificationRoutingScreen
+        }
+    }
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        HStack(spacing: 10) {
-                            Picker("表示", selection: $displayMode) {
-                                ForEach(CalendarDisplayMode.allCases) { mode in
-                                    Text(mode.title).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-
-                            NavigationLink {
-                                TicketOverviewView()
-                            } label: {
-                                Image(systemName: "ticket")
-                                    .font(.title3)
-                                    .frame(width: 42, height: 32)
-                            }
-                            .accessibilityLabel("予定・チケット")
-                        }
-
-                        switch displayMode {
-                        case .month:
-                            monthHeader
-                            monthStrip
-                            externalCalendarControl
-                            monthGrid
-                            calendarAgendaSection
-                        case .week:
-                            timelineNavigationHeader
-                            externalCalendarControl
-                            weekTimeline
-                            calendarAgendaSection
-                        case .day:
-                            timelineNavigationHeader
-                            externalCalendarControl
-                            dayTimeline
-                            calendarAgendaSection
-                        case .planList:
-                            planListSection
-                        }
-                    }
-                    .padding(20)
-                }
-            }
-            .background(Color(.systemGroupedBackground))
-            .toolbar(.hidden, for: .navigationBar)
-            .task {
-                await refreshExternalCalendarIfNeeded()
-            }
-            .onChange(of: displayedMonth) { _, _ in
-                Task {
-                    await refreshExternalCalendarIfNeeded()
-                }
-            }
-            .onChange(of: selectedDate) { _, _ in
-                Task {
-                    await refreshExternalCalendarIfNeeded()
-                }
-            }
-            .onChange(of: displayMode) { _, _ in
-                Task {
-                    await refreshExternalCalendarIfNeeded()
-                }
-            }
-            .onChange(of: showsExternalCalendarEvents) { _, newValue in
-                Task {
-                    if newValue {
-                        await refreshExternalCalendarIfNeeded()
-                    } else {
-                        externalCalendarStore.updateAuthorizationStatus()
-                    }
-                }
-            }
+    private var notificationRoutingScreen: some View {
+        externalCalendarRefreshingScreen
             .navigationDestination(item: $notificationDestination) { destination in
                 PlanDetailView(
                     plan: destination.plan,
                     highlightedPreparationTaskID: destination.preparationTaskID
                 )
             }
-            .task(id: requestedPlanID) {
+            .task(id: requestedRouteKey) {
                 openRequestedPlanIfNeeded()
             }
-            .task(id: requestedAttemptID) {
+            .onChange(of: planIDs) { _, _ in
                 openRequestedPlanIfNeeded()
             }
-            .onChange(of: plans.map(\.id)) { _, _ in
+            .onChange(of: ticketAttemptIDs) { _, _ in
                 openRequestedPlanIfNeeded()
             }
-            .onChange(of: ticketAttempts.map(\.id)) { _, _ in
-                openRequestedPlanIfNeeded()
+    }
+
+    private var externalCalendarRefreshingScreen: some View {
+        decoratedCalendarScreen
+            .task {
+                await refreshExternalCalendarIfNeeded()
             }
+            .onChange(of: displayedMonth) { _, _ in
+                refreshExternalCalendar()
+            }
+            .onChange(of: selectedDate) { _, _ in
+                refreshExternalCalendar()
+            }
+            .onChange(of: displayMode) { _, _ in
+                refreshExternalCalendar()
+            }
+            .onChange(of: showsExternalCalendarEvents) { _, newValue in
+                handleExternalCalendarVisibilityChange(isVisible: newValue)
+            }
+    }
+
+    private var decoratedCalendarScreen: some View {
+        calendarScreen
+            .background(Color(.systemGroupedBackground))
+            .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var requestedRouteKey: String {
+        "\(requestedPlanID)|\(requestedAttemptID)"
+    }
+
+    private var planIDs: [UUID] {
+        plans.map(\.id)
+    }
+
+    private var ticketAttemptIDs: [UUID] {
+        ticketAttempts.map(\.id)
+    }
+
+    private func refreshExternalCalendar() {
+        Task {
+            await refreshExternalCalendarIfNeeded()
+        }
+    }
+
+    private func handleExternalCalendarVisibilityChange(isVisible: Bool) {
+        guard isVisible else {
+            externalCalendarStore.updateAuthorizationStatus()
+            return
+        }
+        refreshExternalCalendar()
+    }
+
+    private var calendarScreen: some View {
+        VStack(spacing: 0) {
+            MainScreenHeader(title: "カレンダー")
+                .padding(.horizontal, 20)
+                .padding(.top, -4)
+                .padding(.bottom, 6)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    CalendarDisplayToolbar(displayMode: $displayMode)
+                    displayedCalendarContent
+                }
+                .padding(20)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var displayedCalendarContent: some View {
+        switch displayMode {
+        case .month:
+            monthCalendarContent
+        case .week:
+            weekCalendarContent
+        case .day:
+            dayCalendarContent
+        case .planList:
+            planListSection
+        }
+    }
+
+    private var monthCalendarContent: some View {
+        Group {
+            monthHeader
+            monthStrip
+            externalCalendarControl
+            monthGrid
+            calendarAgendaSection
+        }
+    }
+
+    private var weekCalendarContent: some View {
+        Group {
+            timelineNavigationHeader
+            externalCalendarControl
+            weekTimeline
+            calendarAgendaSection
+        }
+    }
+
+    private var dayCalendarContent: some View {
+        Group {
+            timelineNavigationHeader
+            externalCalendarControl
+            dayTimeline
+            calendarAgendaSection
         }
     }
 
@@ -1641,110 +1664,52 @@ private struct CalendarView: View {
     }
 
     private var monthHeader: some View {
-        HStack(spacing: 12) {
-            Button {
-                moveDisplayedMonth(by: -1)
-            } label: {
-                Image(systemName: "chevron.left")
-                    .frame(width: 40, height: 40)
+        CalendarPeriodNavigationHeader(
+            title: japaneseYearMonth(displayedMonth),
+            previousAccessibilityLabel: "前の月",
+            nextAccessibilityLabel: "次の月",
+            resetTitle: calendar.isDate(displayedMonth, equalTo: Date(), toGranularity: .month)
+                ? nil
+                : "今月へ戻る",
+            onPrevious: { moveDisplayedMonth(by: -1) },
+            onNext: { moveDisplayedMonth(by: 1) },
+            onReset: {
+                displayedMonth = Date().startOfMonth
+                selectedDate = Date()
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("前の月")
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(japaneseYearMonth(displayedMonth))
-                    .font(FavorecoTypography.sectionTitle)
-
-                if !calendar.isDate(displayedMonth, equalTo: Date(), toGranularity: .month) {
-                    Button("今月へ戻る") {
-                        displayedMonth = Date().startOfMonth
-                        selectedDate = Date()
-                    }
-                    .font(FavorecoTypography.captionStrong)
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            Button {
-                moveDisplayedMonth(by: 1)
-            } label: {
-                Image(systemName: "chevron.right")
-                    .frame(width: 40, height: 40)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("次の月")
-        }
+        )
     }
 
     private var monthStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(0..<5, id: \.self) { offset in
-                    let month = calendar.date(byAdding: .month, value: offset, to: displayedMonth) ?? displayedMonth
-                    let isDisplayed = calendar.isDate(month, equalTo: displayedMonth, toGranularity: .month)
+        CalendarMonthStrip(
+            months: displayedMonthStripMonths,
+            displayedMonth: displayedMonth,
+            calendar: calendar,
+            onSelect: selectMonth
+        )
+    }
 
-                    Button {
-                        selectMonth(month)
-                    } label: {
-                        Text(shortMonthTitle(month))
-                            .font(FavorecoTypography.bodyStrong)
-                            .foregroundStyle(isDisplayed ? Color.white : Color.primary)
-                            .frame(minWidth: 64)
-                            .padding(.vertical, 8)
-                            .background {
-                                Capsule(style: .continuous)
-                                    .fill(isDisplayed ? Color.accentColor : Color.clear)
-                            }
-                            .overlay {
-                                if !isDisplayed {
-                                    Capsule(style: .continuous)
-                                        .stroke(Color.secondary.opacity(0.7), lineWidth: 1)
-                                }
-                            }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 1)
+    private var displayedMonthStripMonths: [Date] {
+        (0..<5).map { offset in
+            calendar.date(byAdding: .month, value: offset, to: displayedMonth) ?? displayedMonth
         }
     }
 
     private var timelineNavigationHeader: some View {
-        HStack(spacing: 12) {
-            Button {
-                moveTimeline(by: -1)
-            } label: {
-                Image(systemName: "chevron.left")
-                    .frame(width: 40, height: 40)
+        CalendarPeriodNavigationHeader(
+            title: timelineTitle,
+            previousAccessibilityLabel: displayMode == .week ? "前の週" : "前の日",
+            nextAccessibilityLabel: displayMode == .week ? "次の週" : "次の日",
+            resetTitle: calendar.isDateInToday(selectedDate)
+                ? nil
+                : (displayMode == .week ? "今週へ戻る" : "今日へ戻る"),
+            onPrevious: { moveTimeline(by: -1) },
+            onNext: { moveTimeline(by: 1) },
+            onReset: {
+                selectedDate = Date()
+                displayedMonth = Date().startOfMonth
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(displayMode == .week ? "前の週" : "前の日")
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(timelineTitle)
-                    .font(FavorecoTypography.sectionTitle)
-
-                if !calendar.isDateInToday(selectedDate) {
-                    Button(displayMode == .week ? "今週へ戻る" : "今日へ戻る") {
-                        selectedDate = Date()
-                        displayedMonth = Date().startOfMonth
-                    }
-                    .font(FavorecoTypography.captionStrong)
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            Button {
-                moveTimeline(by: 1)
-            } label: {
-                Image(systemName: "chevron.right")
-                    .frame(width: 40, height: 40)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(displayMode == .week ? "次の週" : "次の日")
-        }
+        )
     }
 
     private var timelineTitle: String {
@@ -1768,42 +1733,12 @@ private struct CalendarView: View {
     }
 
     private var planListSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            if upcomingPlanGroups.isEmpty {
-                PlaceholderRow(
-                    icon: "calendar.badge.plus",
-                    title: "今後の予定はありません",
-                    message: "Homeまたは下部の「追加」から予定を立てられます。"
-                )
-                .padding(14)
-                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            } else {
-                ForEach(upcomingPlanGroups, id: \.month) { group in
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(japaneseYearMonth(group.month))
-                            .font(FavorecoTypography.sectionTitle)
-
-                        ForEach(group.plans) { plan in
-                            NavigationLink {
-                                PlanDetailView(plan: plan)
-                            } label: {
-                                PlanSummaryRow(plan: plan)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-        }
+        CalendarPlanListSection(groups: upcomingPlanGroups)
     }
 
     private func japaneseYearMonth(_ date: Date) -> String {
         let components = calendar.dateComponents([.year, .month], from: date)
         return "\(components.year ?? 0)年\(components.month ?? 0)月"
-    }
-
-    private func shortMonthTitle(_ date: Date) -> String {
-        "\(calendar.component(.month, from: date))月"
     }
 
     private func moveDisplayedMonth(by offset: Int) {
@@ -1823,56 +1758,23 @@ private struct CalendarView: View {
     }
 
     private var externalCalendarControl: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "calendar.badge.clock")
-                    .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("外部カレンダー")
-                        .font(FavorecoTypography.captionStrong)
-                    Text(externalCalendarStore.authorizationStatusText)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
+        CalendarExternalOverlayControl(
+            isEnabled: $showsExternalCalendarEvents,
+            statusText: externalCalendarStore.authorizationStatusText,
+            isLoading: externalCalendarStore.isLoading,
+            canReadEvents: externalCalendarStore.canReadEvents,
+            errorMessage: externalCalendarStore.errorMessage,
+            onRequestAccess: {
+                Task {
+                    await externalCalendarStore.requestAccessAndRefresh(interval: calendarFetchInterval)
                 }
-
-                if externalCalendarStore.isLoading {
-                    ProgressView()
-                        .controlSize(.mini)
+            },
+            onReload: {
+                Task {
+                    await refreshExternalCalendarIfNeeded()
                 }
-
-                Spacer()
-
-                if showsExternalCalendarEvents && !externalCalendarStore.canReadEvents {
-                    Button("許可する") {
-                        Task {
-                            await externalCalendarStore.requestAccessAndRefresh(interval: calendarFetchInterval)
-                        }
-                    }
-                    .font(FavorecoTypography.captionStrong)
-                } else if showsExternalCalendarEvents {
-                    Button {
-                        Task {
-                            await refreshExternalCalendarIfNeeded()
-                        }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("外部カレンダーを再読み込み")
-                }
-
-                Toggle("外部カレンダーを重ねる", isOn: $showsExternalCalendarEvents)
-                    .labelsHidden()
             }
-
-            if !externalCalendarStore.errorMessage.isEmpty {
-                Text(externalCalendarStore.errorMessage)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.red)
-            }
-        }
-        .padding(.vertical, 2)
+        )
     }
 
     private var monthGrid: some View {
@@ -1924,194 +1826,18 @@ private struct CalendarView: View {
     }
 
     private var calendarAgendaSection: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            ticketScheduleSection
-            nextActionSection
-            selectedDaySection
-            upcomingSection
-        }
-    }
-
-    @ViewBuilder
-    private var ticketScheduleSection: some View {
-        if ticketProgressItems.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("チケットスケジュール")
-                    .font(FavorecoTypography.sectionTitle)
-
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle")
-                        .foregroundStyle(.green)
-                    Text("進行中のチケット予定はありません")
-                        .font(FavorecoTypography.bodyStrong)
-                    Spacer(minLength: 0)
-                }
-                .padding(14)
-                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-        } else {
-            CategoryTicketProgressSection(
-                items: ticketProgressItems,
-                title: "チケットスケジュール",
-                usesLatinTitle: false,
-                usesTheaterStyle: false,
-                showsCategoryInSelector: true
-            )
-        }
-    }
-
-    private var nextActionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("次にやること")
-                    .font(FavorecoTypography.sectionTitle)
-                if !nextActionItems.isEmpty {
-                    Text("\(nextActionItems.count)")
-                        .font(FavorecoTypography.captionStrong)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-
-            if nextActionItems.isEmpty {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle")
-                        .foregroundStyle(.green)
-                    Text("今すぐ対応することはありません")
-                        .font(FavorecoTypography.bodyStrong)
-                    Spacer(minLength: 0)
-                }
-                .padding(14)
-                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            } else {
-                ForEach(nextActionItems.prefix(5)) { item in
-                    NavigationLink {
-                        PlanDetailView(plan: item.plan)
-                    } label: {
-                        CalendarNextActionRow(item: item)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if nextActionItems.count > 5 {
-                    Text("ほか\(nextActionItems.count - 5)件は各公演の準備・チケット欄で確認できます")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .trailing)
-                }
-            }
-        }
-    }
-
-    private var selectedDaySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(japaneseFullDate(selectedDate))
-                .font(FavorecoTypography.sectionTitle)
-
-            if selectedDayVisits.isEmpty && selectedDayPlans.isEmpty && (!showsExternalCalendarEvents || selectedDayExternalEvents.isEmpty) {
-                PlaceholderRow(
-                    icon: "calendar.badge.exclamationmark",
-                    title: "この日の記録はありません",
-                    message: "予定や訪問記録を追加するとここに表示されます。"
-                )
-                .padding(14)
-                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    if !selectedDayPlans.isEmpty {
-                        Text("予定・チケット")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.secondary)
-
-                        ForEach(selectedDayPlans) { plan in
-                            NavigationLink {
-                                PlanDetailView(plan: plan)
-                            } label: {
-                                PlanSummaryRow(plan: plan)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    if !selectedDayVisits.isEmpty {
-                        Text("記録")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, selectedDayPlans.isEmpty ? 0 : 4)
-
-                        ForEach(selectedDayVisits) { visit in
-                            NavigationLink {
-                                ExperienceDetailView(visit: visit)
-                            } label: {
-                                VisitSummaryRow(visit: visit)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    if showsExternalCalendarEvents && !selectedDayExternalEvents.isEmpty {
-                        Text("外部カレンダー")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, selectedDayVisits.isEmpty && selectedDayPlans.isEmpty ? 0 : 4)
-
-                        ForEach(selectedDayExternalEvents) { event in
-                            ExternalCalendarEventRow(event: event)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var upcomingSection: some View {
-        if !upcomingPlans.isEmpty || !upcomingVisits.isEmpty || (showsExternalCalendarEvents && !upcomingExternalEvents.isEmpty) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("直近の予定")
-                    .font(FavorecoTypography.sectionTitle)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    if !upcomingPlans.isEmpty {
-                        ForEach(upcomingPlans) { plan in
-                            NavigationLink {
-                                PlanDetailView(plan: plan)
-                            } label: {
-                                PlanSummaryRow(plan: plan)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    if !upcomingVisits.isEmpty {
-                        Text("記録")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, upcomingPlans.isEmpty ? 0 : 4)
-
-                        ForEach(upcomingVisits) { visit in
-                            NavigationLink {
-                                ExperienceDetailView(visit: visit)
-                            } label: {
-                                VisitSummaryRow(visit: visit)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    if showsExternalCalendarEvents && !upcomingExternalEvents.isEmpty {
-                        Text("外部カレンダー")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, upcomingVisits.isEmpty && upcomingPlans.isEmpty ? 0 : 4)
-
-                        ForEach(upcomingExternalEvents) { event in
-                            ExternalCalendarEventRow(event: event)
-                        }
-                    }
-                }
-            }
-        }
+        CalendarAgendaSection(
+            ticketProgressItems: ticketProgressItems,
+            nextActionItems: nextActionItems,
+            selectedDate: selectedDate,
+            selectedDayVisits: selectedDayVisits,
+            selectedDayPlans: selectedDayPlans,
+            selectedDayExternalEvents: selectedDayExternalEvents,
+            upcomingPlans: upcomingPlans,
+            upcomingVisits: upcomingVisits,
+            upcomingExternalEvents: upcomingExternalEvents,
+            showsExternalCalendarEvents: showsExternalCalendarEvents
+        )
     }
 
     private func refreshExternalCalendarIfNeeded() async {
@@ -2125,232 +1851,6 @@ private struct CalendarView: View {
         let weekdayNames = ["日", "月", "火", "水", "木", "金", "土"]
         let weekdayIndex = max(0, min((components.weekday ?? 1) - 1, weekdayNames.count - 1))
         return "\(components.year ?? 0)年\(components.month ?? 0)月\(components.day ?? 0)日（\(weekdayNames[weekdayIndex])）"
-    }
-}
-
-struct CalendarDay: Identifiable {
-    let date: Date
-    let isInDisplayedMonth: Bool
-
-    var id: Date { date }
-
-    static func days(for month: Date, calendar: Calendar) -> [CalendarDay] {
-        guard let monthInterval = calendar.dateInterval(of: .month, for: month),
-              let monthRange = calendar.range(of: .day, in: .month, for: month) else {
-            return []
-        }
-
-        let firstWeekday = calendar.component(.weekday, from: monthInterval.start)
-        let leadingCount = (firstWeekday - calendar.firstWeekday + 7) % 7
-        let leadingDays = (0..<leadingCount).compactMap { offset in
-            calendar.date(byAdding: .day, value: offset - leadingCount, to: monthInterval.start)
-        }
-        let currentMonthDays = monthRange.compactMap { day -> Date? in
-            calendar.date(byAdding: .day, value: day - 1, to: monthInterval.start)
-        }
-        let totalCount = leadingDays.count + currentMonthDays.count
-        let trailingCount = max(42 - totalCount, 0)
-        let trailingDays = (0..<trailingCount).compactMap { offset in
-            calendar.date(byAdding: .day, value: offset + 1, to: currentMonthDays.last ?? monthInterval.start)
-        }
-
-        return (leadingDays + currentMonthDays + trailingDays).map { date in
-            CalendarDay(
-                date: date,
-                isInDisplayedMonth: calendar.isDate(date, equalTo: monthInterval.start, toGranularity: .month)
-            )
-        }
-    }
-}
-
-private struct CalendarNextActionItem: Identifiable {
-    let id: String
-    let plan: Plan
-    let title: String
-    let date: Date
-    let systemImage: String
-    let isOverdue: Bool
-    let priority: Int
-}
-
-private struct CalendarNextActionRow: View {
-    let item: CalendarNextActionItem
-    @Environment(\.favorecoThemePalette) private var themePalette
-
-    private var tint: Color {
-        item.isOverdue
-            ? .red
-            : themePalette.categoryColor(hex: item.plan.category?.colorHex ?? "#147C88")
-    }
-
-    var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: item.systemImage)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 20)
-
-            Text(FavorecoDateText.compactDateTime(item.date))
-                .font(FavorecoTypography.captionStrong)
-                .foregroundStyle(item.isOverdue ? Color.red : .secondary)
-                .fixedSize(horizontal: true, vertical: false)
-
-            Text(item.title)
-                .font(FavorecoTypography.bodyStrong)
-                .lineLimit(1)
-
-            Text(item.plan.title.isEmpty ? "予定" : item.plan.title)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(tint.opacity(0.22), lineWidth: 0.75)
-        }
-    }
-}
-
-private struct PlanSummaryRow: View {
-    let plan: Plan
-    @Environment(\.favorecoThemePalette) private var themePalette
-
-    private var categoryColor: Color {
-        themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88")
-    }
-
-    private var activeAttempts: [TicketAttempt] {
-        plan.ticketAttempts?.filter { !$0.isArchived } ?? []
-    }
-
-    private var ticketAttempt: TicketAttempt? {
-        TicketAttemptPresentationOrder.sorted(activeAttempts).first
-    }
-
-    private var nextTicketAction: TicketNextActionDefinition? {
-        activeAttempts
-            .compactMap { TicketNextActionDefinition.nextAction(for: $0) }
-            .sorted {
-                if Calendar.current.isDate($0.date, inSameDayAs: $1.date) {
-                    return $0.priority < $1.priority
-                }
-                return $0.date < $1.date
-            }
-            .first
-    }
-
-    private var ticketInputIssue: TicketInputIssueDefinition? {
-        activeAttempts
-            .compactMap { TicketInputIssueDefinition.issue(for: $0) }
-            .sorted { $0.priority < $1.priority }
-            .first
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: plan.category?.iconSymbol ?? "ticket")
-                .font(.title3)
-                .foregroundStyle(categoryColor)
-                .frame(width: 44, height: 44)
-                .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(plan.title.isEmpty ? "予定" : plan.title)
-                        .font(FavorecoTypography.bodyStrong)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-
-                    Spacer(minLength: 8)
-
-                    if let ticketAttempt {
-                        Text(TicketStatusDefinition.name(for: ticketAttempt.statusKey))
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.orange)
-                            .lineLimit(1)
-                    }
-                }
-
-                HStack(spacing: 8) {
-                    Label(FavorecoDateText.time(plan.startsAt), systemImage: "clock")
-                    if !plan.venueNameSnapshot.isEmpty {
-                        Label(plan.venueNameSnapshot, systemImage: "mappin.and.ellipse")
-                    }
-                }
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-                if let ticketAttempt, !ticketAttempt.entryRouteKey.isEmpty {
-                    Text(TicketEntryRouteDefinition.name(for: ticketAttempt.entryRouteKey))
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                if let ticketInputIssue {
-                    Label(ticketInputIssue.title, systemImage: ticketInputIssue.systemImage)
-                        .font(FavorecoTypography.captionStrong)
-                        .foregroundStyle(.orange)
-                        .lineLimit(1)
-                } else if let nextTicketAction {
-                    Label(
-                        "\(nextTicketAction.title) \(FavorecoDateText.compactDateTime(nextTicketAction.date))",
-                        systemImage: nextTicketAction.systemImage
-                    )
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(nextTicketAction.isOverdue ? .red : .orange)
-                    .lineLimit(1)
-                }
-            }
-        }
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
-private struct ExternalCalendarEventRow: View {
-    let event: ExternalCalendarEvent
-
-    var body: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(Color(uiColor: event.color))
-                .frame(width: 5)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.title)
-                    .font(FavorecoTypography.bodyStrong)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-
-                HStack(spacing: 8) {
-                    Label(timeLabel, systemImage: event.isAllDay ? "sun.max" : "clock")
-                    Text(event.calendarTitle)
-                }
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private var timeLabel: String {
-        if event.isAllDay {
-            return "終日"
-        }
-        return "\(FavorecoDateText.time(event.startDate)) - \(FavorecoDateText.time(event.endDate))"
     }
 }
 
@@ -3731,7 +3231,7 @@ private struct StatsReportPreviewCard: View {
     }
 }
 
-private struct PlaceholderRow: View {
+struct PlaceholderRow: View {
     let icon: String
     let title: String
     let message: String

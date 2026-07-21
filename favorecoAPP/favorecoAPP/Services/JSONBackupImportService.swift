@@ -149,6 +149,7 @@ enum JSONBackupImportService {
             model.memo = item.memo
             model.externalIDsRaw = item.externalIDsRaw
             model.sourceSnapshotRaw = item.sourceSnapshotRaw
+            model.pilgrimageMembershipsRaw = item.pilgrimageMembershipsRaw ?? "[]"
             model.normalizedName = item.normalizedName
             model.normalizedAddress = item.normalizedAddress
             model.isArchived = item.isArchived

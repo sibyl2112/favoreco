@@ -8,6 +8,70 @@
 import Foundation
 import UserNotifications
 
+enum TicketPointNotificationTiming: String, CaseIterable, Identifiable {
+    case atTime
+    case oneHourBefore
+    case previousDayEvening
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .atTime: "設定時刻どおり"
+        case .oneHourBefore: "1時間前"
+        case .previousDayEvening: "前日20時"
+        }
+    }
+}
+
+enum TicketDeadlineNotificationTiming: String, CaseIterable, Identifiable {
+    case dayBeforeAndHourBefore
+    case dayBefore
+    case hourBefore
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .dayBeforeAndHourBefore: "前日＋1時間前"
+        case .dayBefore: "前日のみ"
+        case .hourBefore: "1時間前のみ"
+        }
+    }
+}
+
+enum PerformanceNotificationTiming: String, CaseIterable, Identifiable {
+    case previousDayAndSameDay
+    case previousDay
+    case sameDay
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .previousDayAndSameDay: "前日20時＋当日9時"
+        case .previousDay: "前日20時のみ"
+        case .sameDay: "当日9時のみ"
+        }
+    }
+}
+
+enum PreparationNotificationTiming: String, CaseIterable, Identifiable {
+    case previousDayEvening
+    case oneHourBefore
+    case atTime
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .previousDayEvening: "前日20時"
+        case .oneHourBefore: "1時間前"
+        case .atTime: "期限時刻どおり"
+        }
+    }
+}
+
 enum TicketNotificationScheduler {
     static let destinationPlanIDKey = "favorecoPlanID"
     static let destinationPreparationTaskIDKey = "favorecoPreparationTaskID"
@@ -135,19 +199,13 @@ enum TicketNotificationScheduler {
             guard !task.isCompleted,
                   let dueAt = task.dueAt,
                   dueAt > Date(),
-                  let previousDay = calendar.date(byAdding: .day, value: -1, to: dueAt),
-                  let fireDate = calendar.date(
-                    bySettingHour: 20,
-                    minute: 0,
-                    second: 0,
-                    of: previousDay
-                  ) else { return nil }
+                  let fireDate = preparationFireDate(dueAt: dueAt, calendar: calendar) else { return nil }
 
             let taskTitle = task.trimmedTitle.isEmpty ? "公演の準備" : task.trimmedTitle
             return TicketNotificationSpec(
-                identifier: "\(preparationIdentifierPrefix(planID: plan.id))\(task.id.uuidString).dayBefore",
+                identifier: "\(preparationIdentifierPrefix(planID: plan.id))\(task.id.uuidString).reminder",
                 fireDate: fireDate,
-                title: "明日まで：\(taskTitle)",
+                title: "準備期限：\(taskTitle)",
                 body: "\(planTitle(plan)) の準備期限が近づいています。"
             )
         }
@@ -179,10 +237,11 @@ enum TicketNotificationScheduler {
         var specs: [TicketNotificationSpec] = []
         if UserDefaults.standard.bool(forKey: AppStorageKeys.notificationApplicationStartEnabled),
            attempt.saleStartAt != Date.distantPast {
+            let timing = pointTiming(forKey: AppStorageKeys.notificationApplicationStartTiming)
             specs.append(
                 TicketNotificationSpec(
                     identifier: "ticket.\(attempt.id.uuidString).applicationStart",
-                    fireDate: attempt.saleStartAt,
+                    fireDate: pointFireDate(date: attempt.saleStartAt, timing: timing),
                     title: "申込開始",
                     body: "\(planTitle(plan)) の申込が始まります。"
                 )
@@ -199,7 +258,8 @@ enum TicketNotificationScheduler {
                 typeKey: "applicationDeadline",
                 date: attempt.applyDeadlineAt,
                 title: "申込締切",
-                body: "\(planTitle(plan)) の申込締切が近づいています。"
+                body: "\(planTitle(plan)) の申込締切が近づいています。",
+                timing: deadlineTiming(forKey: AppStorageKeys.notificationApplicationDeadlineTiming)
             ))
         }
 
@@ -208,10 +268,11 @@ enum TicketNotificationScheduler {
             defaultValue: true
         ),
            attempt.resultAnnounceAt != Date.distantPast {
+            let timing = pointTiming(forKey: AppStorageKeys.notificationLotteryResultTiming)
             specs.append(
                 TicketNotificationSpec(
                     identifier: "ticket.\(attempt.id.uuidString).lotteryResult",
-                    fireDate: attempt.resultAnnounceAt,
+                    fireDate: pointFireDate(date: attempt.resultAnnounceAt, timing: timing),
                     title: "当落発表",
                     body: "\(planTitle(plan)) の当落発表日です。"
                 )
@@ -228,7 +289,8 @@ enum TicketNotificationScheduler {
                 typeKey: "paymentDeadline",
                 date: attempt.paymentDeadlineAt,
                 title: "入金締切",
-                body: "\(planTitle(plan)) の入金締切が近づいています。"
+                body: "\(planTitle(plan)) の入金締切が近づいています。",
+                timing: deadlineTiming(forKey: AppStorageKeys.notificationPaymentDeadlineTiming)
             ))
         }
 
@@ -237,10 +299,11 @@ enum TicketNotificationScheduler {
             defaultValue: true
         ),
            attempt.issueStartAt != Date.distantPast {
+            let timing = pointTiming(forKey: AppStorageKeys.notificationTicketIssueTiming)
             specs.append(
                 TicketNotificationSpec(
                     identifier: "ticket.\(attempt.id.uuidString).ticketIssue",
-                    fireDate: attempt.issueStartAt,
+                    fireDate: pointFireDate(date: attempt.issueStartAt, timing: timing),
                     title: "発券開始",
                     body: "\(planTitle(plan)) の発券開始日です。"
                 )
@@ -253,8 +316,12 @@ enum TicketNotificationScheduler {
     private static func performanceReminderSpecs(plan: Plan) -> [TicketNotificationSpec] {
         var specs: [TicketNotificationSpec] = []
         let calendar = Calendar.current
+        let timing = PerformanceNotificationTiming(
+            rawValue: UserDefaults.standard.string(forKey: AppStorageKeys.notificationPerformanceTiming) ?? ""
+        ) ?? .previousDayAndSameDay
 
-        if let previousDay = calendar.date(byAdding: .day, value: -1, to: plan.startsAt),
+        if timing != .sameDay,
+           let previousDay = calendar.date(byAdding: .day, value: -1, to: plan.startsAt),
            let previousDayEvening = calendar.date(
             bySettingHour: 20,
             minute: 0,
@@ -271,7 +338,8 @@ enum TicketNotificationScheduler {
             )
         }
 
-        if let dayMorning = calendar.date(
+        if timing != .previousDay,
+           let dayMorning = calendar.date(
             bySettingHour: 9,
             minute: 0,
             second: 0,
@@ -295,10 +363,12 @@ enum TicketNotificationScheduler {
         typeKey: String,
         date: Date,
         title: String,
-        body: String
+        body: String,
+        timing: TicketDeadlineNotificationTiming
     ) -> [TicketNotificationSpec] {
         var specs: [TicketNotificationSpec] = []
-        if let dayBefore = Calendar.current.date(byAdding: .day, value: -1, to: date) {
+        if timing != .hourBefore,
+           let dayBefore = Calendar.current.date(byAdding: .day, value: -1, to: date) {
             specs.append(
                 TicketNotificationSpec(
                     identifier: "ticket.\(attemptID.uuidString).\(typeKey).dayBefore",
@@ -308,7 +378,8 @@ enum TicketNotificationScheduler {
                 )
             )
         }
-        if let hourBefore = Calendar.current.date(byAdding: .hour, value: -1, to: date) {
+        if timing != .dayBefore,
+           let hourBefore = Calendar.current.date(byAdding: .hour, value: -1, to: date) {
             specs.append(
                 TicketNotificationSpec(
                     identifier: "ticket.\(attemptID.uuidString).\(typeKey).hourBefore",
@@ -347,6 +418,42 @@ enum TicketNotificationScheduler {
 
     private static func planTitle(_ plan: Plan) -> String {
         plan.title.isEmpty ? "予定" : plan.title
+    }
+
+    private static func pointTiming(forKey key: String) -> TicketPointNotificationTiming {
+        TicketPointNotificationTiming(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .atTime
+    }
+
+    private static func deadlineTiming(forKey key: String) -> TicketDeadlineNotificationTiming {
+        TicketDeadlineNotificationTiming(rawValue: UserDefaults.standard.string(forKey: key) ?? "")
+            ?? .dayBeforeAndHourBefore
+    }
+
+    private static func pointFireDate(date: Date, timing: TicketPointNotificationTiming) -> Date {
+        switch timing {
+        case .atTime:
+            return date
+        case .oneHourBefore:
+            return Calendar.current.date(byAdding: .hour, value: -1, to: date) ?? date
+        case .previousDayEvening:
+            let previousDay = Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date
+            return Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: previousDay) ?? previousDay
+        }
+    }
+
+    private static func preparationFireDate(dueAt: Date, calendar: Calendar) -> Date? {
+        let timing = PreparationNotificationTiming(
+            rawValue: UserDefaults.standard.string(forKey: AppStorageKeys.notificationPreparationTiming) ?? ""
+        ) ?? .previousDayEvening
+        switch timing {
+        case .previousDayEvening:
+            guard let previousDay = calendar.date(byAdding: .day, value: -1, to: dueAt) else { return nil }
+            return calendar.date(bySettingHour: 20, minute: 0, second: 0, of: previousDay)
+        case .oneHourBefore:
+            return calendar.date(byAdding: .hour, value: -1, to: dueAt)
+        case .atTime:
+            return dueAt
+        }
     }
 
     private static func notificationPreference(

@@ -84,12 +84,36 @@ enum CategoryPresetSeeder {
             dateLabel: "飲んだ日"
         ),
         CategoryPreset(
-            name: "おでかけ施設",
-            templateKey: "outing_facility",
+            name: "テーマパーク",
+            templateKey: "theme_park",
             templateTypeKey: "visiting",
             iconSymbol: "ticket.fill",
             colorHex: "#2F7FB8",
             sortOrder: 60,
+            enabledUnitsRaw: "basic,ticketPlan,photos,importOCR,money,officialInfo,memo",
+            targetNameLabel: "施設",
+            recordUnitName: "訪問",
+            dateLabel: "訪問日"
+        ),
+        CategoryPreset(
+            name: "自然・いきもの",
+            templateKey: "nature_living",
+            templateTypeKey: "visiting",
+            iconSymbol: "pawprint.fill",
+            colorHex: "#2F7FB8",
+            sortOrder: 61,
+            enabledUnitsRaw: "basic,ticketPlan,photos,importOCR,money,officialInfo,memo",
+            targetNameLabel: "施設",
+            recordUnitName: "訪問",
+            dateLabel: "訪問日"
+        ),
+        CategoryPreset(
+            name: "その他・未分類",
+            templateKey: "outing_facility",
+            templateTypeKey: "visiting",
+            iconSymbol: "questionmark.folder.fill",
+            colorHex: "#2F7FB8",
+            sortOrder: 62,
             enabledUnitsRaw: "basic,ticketPlan,photos,importOCR,money,officialInfo,memo",
             targetNameLabel: "施設",
             recordUnitName: "訪問",
@@ -128,6 +152,9 @@ enum CategoryPresetSeeder {
             let existingCategories = try context.fetch(descriptor)
             let now = Date()
             let hasCompletedGenreOnboarding = UserDefaults.standard.bool(forKey: AppStorageKeys.hasCompletedGenreOnboarding)
+            let isFirstOutingSplit = !existingCategories.contains(where: { $0.isBuiltIn && $0.templateKey == "theme_park" })
+                || !existingCategories.contains(where: { $0.isBuiltIn && $0.templateKey == "nature_living" })
+            var resolvedCategories: [String: RecordCategory] = [:]
 
             for preset in presets {
                 if let existing = existingCategories.first(where: { $0.isBuiltIn && $0.templateKey == preset.templateKey }) {
@@ -144,8 +171,9 @@ enum CategoryPresetSeeder {
                         existing.isArchived = false
                     }
                     existing.updatedAt = now
+                    resolvedCategories[preset.templateKey] = existing
                 } else {
-                    context.insert(RecordCategory(
+                    let category = RecordCategory(
                         name: preset.name,
                         iconSymbol: preset.iconSymbol,
                         colorHex: preset.colorHex,
@@ -160,9 +188,18 @@ enum CategoryPresetSeeder {
                         isArchived: hasCompletedGenreOnboarding,
                         createdAt: now,
                         updatedAt: now
-                    ))
+                    )
+                    context.insert(category)
+                    resolvedCategories[preset.templateKey] = category
                 }
             }
+
+            migrateLegacyOutingCategoryIfNeeded(
+                existingCategories: existingCategories,
+                resolvedCategories: resolvedCategories,
+                isFirstSplit: isFirstOutingSplit,
+                now: now
+            )
 
             try ensureAtLeastOneActiveCategory(in: context)
 
@@ -186,5 +223,61 @@ enum CategoryPresetSeeder {
 
         categories[0].isArchived = false
         categories[0].updatedAt = Date()
+    }
+
+    @MainActor
+    private static func migrateLegacyOutingCategoryIfNeeded(
+        existingCategories: [RecordCategory],
+        resolvedCategories: [String: RecordCategory],
+        isFirstSplit: Bool,
+        now: Date
+    ) {
+        guard let legacyCategory = existingCategories.first(where: {
+            $0.isBuiltIn && $0.templateKey == "outing_facility"
+        }),
+        let themeParkCategory = resolvedCategories["theme_park"],
+        let natureCategory = resolvedCategories["nature_living"] else { return }
+
+        let legacyWasVisible = !legacyCategory.isArchived
+        if isFirstSplit && legacyWasVisible {
+            themeParkCategory.isArchived = false
+            natureCategory.isArchived = false
+        }
+
+        for event in legacyCategory.events ?? [] {
+            guard let facilityType = OutingFacilityType(rawValue: event.subTypeKey) else { continue }
+            switch facilityType.destinationTemplateKey {
+            case "theme_park":
+                event.category = themeParkCategory
+            case "nature_living":
+                event.category = natureCategory
+            default:
+                continue
+            }
+            event.updatedAt = now
+        }
+
+        for plan in legacyCategory.plans ?? [] {
+            guard let eventCategory = plan.event?.category,
+                  eventCategory.id != legacyCategory.id else { continue }
+            plan.category = eventCategory
+            plan.updatedAt = now
+        }
+
+        let hasUnclassifiedEvents = (legacyCategory.events ?? []).contains { event in
+            !event.isArchived && event.category?.id == legacyCategory.id
+        }
+        let hasUnclassifiedPlans = (legacyCategory.plans ?? []).contains { plan in
+            !plan.isArchived && (plan.category?.id == legacyCategory.id || plan.event?.category?.id == legacyCategory.id)
+        }
+
+        legacyCategory.name = "その他・未分類"
+        legacyCategory.iconSymbol = "questionmark.folder.fill"
+        legacyCategory.colorHex = "#2F7FB8"
+        legacyCategory.sortOrder = 62
+        if isFirstSplit {
+            legacyCategory.isArchived = legacyWasVisible ? !(hasUnclassifiedEvents || hasUnclassifiedPlans) : true
+        }
+        legacyCategory.updatedAt = now
     }
 }

@@ -12,7 +12,9 @@ struct VisitWeatherSnapshot: Sendable {
 }
 
 enum VisitWeatherService {
-    nonisolated private static let supportedTemplateKeys: Set<String> = ["theater", "museum", "live", "outing_facility"]
+    nonisolated private static let supportedTemplateKeys: Set<String> = [
+        "theater", "museum", "live", "outing_facility", "theme_park", "nature_living",
+    ]
 
     nonisolated static func isEligible(
         templateKey: String,

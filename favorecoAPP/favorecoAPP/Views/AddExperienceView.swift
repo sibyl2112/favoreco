@@ -15,6 +15,7 @@ struct AddExperienceView: View {
 
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
+    @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
     @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
@@ -43,7 +44,15 @@ struct AddExperienceView: View {
     ) {
         self.category = category
         self.onSave = onSave
-        _draft = State(initialValue: initialDraft)
+        var preparedDraft = initialDraft
+        if preparedDraft.subTypeKey.isEmpty {
+            switch category.templateKey {
+            case "theme_park": preparedDraft.subTypeKey = OutingFacilityType.themePark.rawValue
+            case "nature_living": preparedDraft.subTypeKey = OutingFacilityType.natureOther.rawValue
+            default: break
+            }
+        }
+        _draft = State(initialValue: preparedDraft)
     }
 
     var body: some View {
@@ -135,23 +144,29 @@ struct AddExperienceView: View {
     private func addContent(for unit: RecordUnitDefinition) -> some View {
         switch unit.id {
         case "basic":
-            ExperienceBasicUnitEditor(
-                template: template,
-                title: $draft.title,
-                seriesName: $draft.seriesName,
-                visitedAt: $draft.visitedAt,
-                venueName: venueNameBinding,
-                venueAddress: venueAddressBinding,
-                overallRating: $draft.overallRating,
-                latitude: draft.latitude,
-                longitude: draft.longitude,
-                placeMasters: placeMasters,
-                usesPlaceSuggestions: usesInputSuggestionDictionary,
-                usesMapSearchAssist: usesMapSearchAssist,
-                ratingText: draft.ratingLabel,
-                onSelectPlace: { draft.apply(placeMaster: $0) },
-                onOpenPlaceSearch: { isShowingPlaceSearch = true }
-            )
+            VStack(alignment: .leading, spacing: 12) {
+                ExperienceBasicUnitEditor(
+                    template: template,
+                    title: $draft.title,
+                    seriesName: $draft.seriesName,
+                    visitedAt: $draft.visitedAt,
+                    venueName: venueNameBinding,
+                    venueAddress: venueAddressBinding,
+                    overallRating: $draft.overallRating,
+                    latitude: draft.latitude,
+                    longitude: draft.longitude,
+                    placeMasters: placeMasters,
+                    usesPlaceSuggestions: usesInputSuggestionDictionary,
+                    usesMapSearchAssist: usesMapSearchAssist,
+                    ratingText: draft.ratingLabel,
+                    onSelectPlace: { draft.apply(placeMaster: $0) },
+                    onOpenPlaceSearch: { isShowingPlaceSearch = true }
+                )
+                if category.isOutingFacilityGenre {
+                    Divider()
+                    OutingFacilityTypePicker(selection: $draft.subTypeKey)
+                }
+            }
         case "officialInfo":
             ExperienceOfficialInfoUnitEditor(
                 officialURL: $draft.officialURL,
@@ -235,14 +250,24 @@ struct AddExperienceView: View {
 
     private func save() {
         let now = Date()
+        let resolvedCategory = outingCategory(
+            for: draft.subTypeKey,
+            fallback: category,
+            in: categories
+        )
+        if resolvedCategory?.isArchived == true {
+            resolvedCategory?.isArchived = false
+            resolvedCategory?.updatedAt = now
+        }
         let event = ExperienceEvent(
             title: draft.trimmedTitle,
             seriesName: draft.trimmedSeriesName,
+            subTypeKey: draft.subTypeKey,
             officialURL: draft.trimmedOfficialURL,
             unitFieldsRaw: draft.eventUnitFieldsRaw(for: category),
             createdAt: now,
             updatedAt: now,
-            category: category
+            category: resolvedCategory
         )
         let visit = Visit(
             visitedAt: draft.visitedAt,
@@ -273,7 +298,7 @@ struct AddExperienceView: View {
         do {
             try modelContext.save()
             Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
-            lastUsedCategoryTemplateKey = category.templateKey
+            lastUsedCategoryTemplateKey = resolvedCategory?.templateKey ?? category.templateKey
             if afterSaveRecordAction == "openDetail" {
                 savedVisit = visit
                 isShowingSavedDetail = true
@@ -325,6 +350,7 @@ struct EditExperienceView: View {
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
+    @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
     @Environment(\.dismiss) private var dismiss
@@ -440,23 +466,29 @@ struct EditExperienceView: View {
     private func editContent(for unit: RecordUnitDefinition) -> some View {
         switch unit.id {
         case "basic":
-            ExperienceBasicUnitEditor(
-                template: template,
-                title: $draft.title,
-                seriesName: $draft.seriesName,
-                visitedAt: $draft.visitedAt,
-                venueName: venueNameBinding,
-                venueAddress: venueAddressBinding,
-                overallRating: $draft.overallRating,
-                latitude: draft.latitude,
-                longitude: draft.longitude,
-                placeMasters: placeMasters,
-                usesPlaceSuggestions: usesInputSuggestionDictionary,
-                usesMapSearchAssist: usesMapSearchAssist,
-                ratingText: draft.ratingLabel,
-                onSelectPlace: { draft.apply(placeMaster: $0) },
-                onOpenPlaceSearch: { isShowingPlaceSearch = true }
-            )
+            VStack(alignment: .leading, spacing: 12) {
+                ExperienceBasicUnitEditor(
+                    template: template,
+                    title: $draft.title,
+                    seriesName: $draft.seriesName,
+                    visitedAt: $draft.visitedAt,
+                    venueName: venueNameBinding,
+                    venueAddress: venueAddressBinding,
+                    overallRating: $draft.overallRating,
+                    latitude: draft.latitude,
+                    longitude: draft.longitude,
+                    placeMasters: placeMasters,
+                    usesPlaceSuggestions: usesInputSuggestionDictionary,
+                    usesMapSearchAssist: usesMapSearchAssist,
+                    ratingText: draft.ratingLabel,
+                    onSelectPlace: { draft.apply(placeMaster: $0) },
+                    onOpenPlaceSearch: { isShowingPlaceSearch = true }
+                )
+                if category?.isOutingFacilityGenre == true {
+                    Divider()
+                    OutingFacilityTypePicker(selection: $draft.subTypeKey)
+                }
+            }
         case "officialInfo":
             ExperienceOfficialInfoUnitEditor(
                 officialURL: $draft.officialURL,
@@ -548,6 +580,23 @@ struct EditExperienceView: View {
         if let event {
             event.title = draft.trimmedTitle
             event.seriesName = draft.trimmedSeriesName
+            if event.category?.isOutingFacilityGenre == true {
+                event.subTypeKey = draft.subTypeKey
+                let destination = outingCategory(
+                    for: draft.subTypeKey,
+                    fallback: event.category,
+                    in: categories
+                )
+                if destination?.isArchived == true {
+                    destination?.isArchived = false
+                    destination?.updatedAt = now
+                }
+                event.category = destination
+                for plan in event.plans ?? [] {
+                    plan.category = destination
+                    plan.updatedAt = now
+                }
+            }
             event.officialURL = draft.trimmedOfficialURL
             if event.category?.templateKey == "book" {
                 var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
@@ -1017,6 +1066,7 @@ private struct SavedExperienceDetailView: View {
 struct AddExperienceDraft {
     var title: String = ""
     var seriesName: String = ""
+    var subTypeKey: String = ""
     var officialURL: String = ""
     var visitedAt: Date = Date()
     var venueName: String = ""
@@ -1038,6 +1088,7 @@ struct AddExperienceDraft {
     init(visit: Visit) {
         title = visit.event?.title ?? ""
         seriesName = visit.event?.seriesName ?? ""
+        subTypeKey = visit.event?.subTypeKey ?? ""
         officialURL = visit.event?.officialURL ?? ""
         visitedAt = visit.visitedAt
         venueName = visit.venueNameSnapshot
@@ -1177,6 +1228,39 @@ struct AddExperienceDraft {
         }
         return String(format: "%.1f", overallRating)
     }
+}
+
+private struct OutingFacilityTypePicker: View {
+    @Binding var selection: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker("施設種別", selection: $selection) {
+                Text("未分類").tag("")
+                ForEach(OutingFacilityType.allCases) { facilityType in
+                    Text(facilityType.displayName).tag(facilityType.rawValue)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Text("テーマパークと自然・いきものを分けて表示するために使います")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private func outingCategory(
+    for subTypeKey: String,
+    fallback: RecordCategory?,
+    in categories: [RecordCategory]
+) -> RecordCategory? {
+    guard let fallback, fallback.isOutingFacilityGenre else { return fallback }
+    let destinationTemplateKey = OutingFacilityType(rawValue: subTypeKey)?.destinationTemplateKey
+        ?? "outing_facility"
+    return categories.first(where: {
+        $0.isBuiltIn && $0.templateKey == destinationTemplateKey
+    }) ?? fallback
 }
 
 struct VisitDraft {

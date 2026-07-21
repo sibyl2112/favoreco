@@ -476,6 +476,52 @@ private struct PlaceMasterMergeView: View {
                 LabeledContent("利用", value: "\((place.visits?.count ?? 0) + (place.plans?.count ?? 0))件")
             }
 
+            Section("巡礼・札所") {
+                if draft.pilgrimageMemberships.isEmpty {
+                    Text("西国・坂東・四国など、霊場名と札所番号を必要な場所だけ登録できます。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(draft.pilgrimageMemberships.indices, id: \.self) { index in
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("巡礼・霊場名", text: $draft.pilgrimageMemberships[index].pilgrimageName)
+                        HStack {
+                            TextField(
+                                "札所番号",
+                                text: Binding(
+                                    get: {
+                                        draft.pilgrimageMemberships[index].siteNumber.map(String.init) ?? ""
+                                    },
+                                    set: { value in
+                                        let digits = value.filter(\.isNumber)
+                                        draft.pilgrimageMemberships[index].siteNumber = Int(digits)
+                                        let currentLabel = draft.pilgrimageMemberships[index].siteNumberLabel
+                                        if currentLabel.isEmpty || currentLabel.hasPrefix("第") {
+                                            draft.pilgrimageMemberships[index].siteNumberLabel = Int(digits).map { "第\($0)番" } ?? ""
+                                        }
+                                    }
+                                )
+                            )
+                            .keyboardType(.numberPad)
+
+                            TextField("表示（番外など）", text: $draft.pilgrimageMemberships[index].siteNumberLabel)
+                        }
+                        Button("この所属を削除", role: .destructive) {
+                            draft.pilgrimageMemberships.remove(at: index)
+                        }
+                        .font(FavorecoTypography.caption)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Button {
+                    draft.pilgrimageMemberships.append(PlacePilgrimageMembership())
+                } label: {
+                    Label("巡礼・札所を追加", systemImage: "plus.circle")
+                }
+            }
+
             Section {
                 DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
                     TextField("公式URL", text: $draft.officialURL)
@@ -560,6 +606,7 @@ private struct PlaceMasterMergeView: View {
         place.address = draft.trimmedAddress
         place.aliasesRaw = draft.trimmedAliasesRaw
         place.placeTagsRaw = draft.trimmedPlaceTagsRaw
+        place.pilgrimageMembershipsRaw = PlacePilgrimageMembership.encode(draft.validPilgrimageMemberships)
         place.officialURL = draft.trimmedOfficialURL
         place.memo = draft.trimmedMemo
         place.normalizedName = normalizedMasterText(draft.trimmedName)
@@ -644,6 +691,7 @@ private struct PlaceMasterDraft {
     var address: String
     var officialURL: String
     var memo: String
+    var pilgrimageMemberships: [PlacePilgrimageMembership]
 
     init(place: PlaceMaster) {
         name = place.name
@@ -654,6 +702,7 @@ private struct PlaceMasterDraft {
         address = place.address
         officialURL = place.officialURL
         memo = place.memo
+        pilgrimageMemberships = PlacePilgrimageMembership.decode(place.pilgrimageMembershipsRaw)
     }
 
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -664,7 +713,17 @@ private struct PlaceMasterDraft {
     var trimmedAddress: String { address.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedOfficialURL: String { officialURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
-    var canSave: Bool { !trimmedName.isEmpty && JapanPrefecture.all.contains(trimmedPrefecture) }
+    var validPilgrimageMemberships: [PlacePilgrimageMembership] {
+        pilgrimageMemberships.filter {
+            !$0.pilgrimageName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                (($0.siteNumber ?? 0) > 0 || !$0.siteNumberLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+    var canSave: Bool {
+        !trimmedName.isEmpty &&
+            JapanPrefecture.all.contains(trimmedPrefecture) &&
+            validPilgrimageMemberships.count == pilgrimageMemberships.count
+    }
 }
 
 private struct MasterListRow: View {

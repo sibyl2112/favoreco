@@ -753,11 +753,19 @@ struct NotificationSettingsView: View {
     @AppStorage(AppStorageKeys.notificationTicketIssueEnabled) private var ticketIssueEnabled = true
     @AppStorage(AppStorageKeys.notificationPerformanceReminderEnabled) private var performanceReminderEnabled = true
     @AppStorage(AppStorageKeys.notificationPreparationDeadlineEnabled) private var preparationDeadlineEnabled = true
+    @AppStorage(AppStorageKeys.notificationApplicationStartTiming) private var applicationStartTiming = TicketPointNotificationTiming.atTime.rawValue
+    @AppStorage(AppStorageKeys.notificationApplicationDeadlineTiming) private var applicationDeadlineTiming = TicketDeadlineNotificationTiming.dayBeforeAndHourBefore.rawValue
+    @AppStorage(AppStorageKeys.notificationLotteryResultTiming) private var lotteryResultTiming = TicketPointNotificationTiming.atTime.rawValue
+    @AppStorage(AppStorageKeys.notificationPaymentDeadlineTiming) private var paymentDeadlineTiming = TicketDeadlineNotificationTiming.dayBeforeAndHourBefore.rawValue
+    @AppStorage(AppStorageKeys.notificationTicketIssueTiming) private var ticketIssueTiming = TicketPointNotificationTiming.atTime.rawValue
+    @AppStorage(AppStorageKeys.notificationPerformanceTiming) private var performanceTiming = PerformanceNotificationTiming.previousDayAndSameDay.rawValue
+    @AppStorage(AppStorageKeys.notificationPreparationTiming) private var preparationTiming = PreparationNotificationTiming.previousDayEvening.rawValue
     @AppStorage(AppStorageKeys.notificationMembershipExpiryEnabled) private var membershipExpiryEnabled = false
     @AppStorage(AppStorageKeys.notificationMemoryReminderEnabled) private var memoryReminderEnabled = false
     @AppStorage(AppStorageKeys.notificationMonthlyReportEnabled) private var monthlyReportEnabled = false
     @State private var authorizationStatusText = "確認中"
     @State private var permissionMessage = ""
+    @State private var isShowingTicketTiming = false
 
     var body: some View {
         Form {
@@ -799,7 +807,42 @@ struct NotificationSettingsView: View {
                 Toggle("発券開始", isOn: $ticketIssueEnabled)
                 Toggle("公演前日/当日", isOn: $performanceReminderEnabled)
                 Toggle("公演準備の期限", isOn: $preparationDeadlineEnabled)
-                Text("期限付きの公演準備は、未完了の項目だけ前日の20時に1回お知らせします。")
+
+                DisclosureGroup("通知時刻を変更", isExpanded: $isShowingTicketTiming) {
+                    if applicationStartEnabled {
+                        pointTimingPicker("申込開始", selection: $applicationStartTiming)
+                    }
+                    if applicationDeadlineEnabled {
+                        deadlineTimingPicker("申込締切", selection: $applicationDeadlineTiming)
+                    }
+                    if lotteryResultEnabled {
+                        pointTimingPicker("当落発表", selection: $lotteryResultTiming)
+                    }
+                    if paymentDeadlineEnabled {
+                        deadlineTimingPicker("入金締切", selection: $paymentDeadlineTiming)
+                    }
+                    if ticketIssueEnabled {
+                        pointTimingPicker("発券開始", selection: $ticketIssueTiming)
+                    }
+                    if performanceReminderEnabled {
+                        Picker("公演", selection: $performanceTiming) {
+                            ForEach(PerformanceNotificationTiming.allCases) { timing in
+                                Text(timing.displayName).tag(timing.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    if preparationDeadlineEnabled {
+                        Picker("公演準備", selection: $preparationTiming) {
+                            ForEach(PreparationNotificationTiming.allCases) { timing in
+                                Text(timing.displayName).tag(timing.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+
+                Text("プリセットは通知する種類だけを変更し、ここで選んだ時刻は保持します。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                 Text("新規利用時は「おすすめ」です。個別に変更するとカスタム設定として保持します。")
@@ -913,7 +956,15 @@ struct NotificationSettingsView: View {
             preparationDeadlineEnabled,
         ]
         .map { $0 ? "1" : "0" }
-        .joined()
+        .joined() + [
+            applicationStartTiming,
+            applicationDeadlineTiming,
+            lotteryResultTiming,
+            paymentDeadlineTiming,
+            ticketIssueTiming,
+            performanceTiming,
+            preparationTiming,
+        ].joined(separator: "|")
     }
 
     private func applyTicketPreset(_ preset: TicketNotificationPreset) {
@@ -924,6 +975,24 @@ struct NotificationSettingsView: View {
         ticketIssueEnabled = preset.ticketIssue
         performanceReminderEnabled = preset.performanceReminder
         preparationDeadlineEnabled = preset.preparationDeadline
+    }
+
+    private func pointTimingPicker(_ title: String, selection: Binding<String>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(TicketPointNotificationTiming.allCases) { timing in
+                Text(timing.displayName).tag(timing.rawValue)
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    private func deadlineTimingPicker(_ title: String, selection: Binding<String>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(TicketDeadlineNotificationTiming.allCases) { timing in
+                Text(timing.displayName).tag(timing.rawValue)
+            }
+        }
+        .pickerStyle(.menu)
     }
 
     private func rescheduleMembershipNotificationsIfNeeded() {
