@@ -5,6 +5,39 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-22: 観劇スタイル表示と候補を調整
+
+### 変更概要
+- 記録詳細Heroのスタイル行から固定の`スタイル`接頭語を外し、タグアイコンと選択値だけを表示するようにした
+- 観劇スタイル候補へ`イマーシブ演劇`と`大衆演劇`を追加した
+- `VisitUnitFields`のJSON生成条件へ`styleNames`を追加し、スタイルだけを入力した記録でも値を保存できるようにした
+
+### 変更意図
+日付・会場・座席と同じ情報密度を保ち、Hero内でスタイル行だけ説明ラベルが重複して見える状態を解消するため。あわせて現行候補で不足していた観劇形式を選択しやすくし、スタイル単独入力の保存漏れを防ぐため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`
+- `favorecoAPP/favorecoAPP/Views/ExperienceBasicUnitEditor.swift`
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`
+- `favoreco/CLAUDE.md`
+- `docs/15-画面情報設計.md`
+- `docs/00-開発状況と残課題.md`
+- `docs/project-log.md`
+
+### 影響する画面・機能
+- 観劇の記録詳細Hero
+- 観劇の新規記録、回追加、記録編集にあるスタイル選択
+- `Visit.unitFieldsRaw`のJSON生成条件
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析成功
+- `git diff --check`成功
+- 既存の未コミット変更を保持した状態で、署名なしiPhoneOS向けDebugビルド成功
+
+### 既知のリスク・残課題
+- 実機で候補2件の選択・解除・複数選択・再編集と、長い組み合わせの折返しを確認する
+- スタイルだけ入力した記録の保存・再起動後表示を確認する
+
 ## 2026-07-22: 観劇の作品・公演詳細へ金額総計と内訳を追加
 
 ### 変更概要

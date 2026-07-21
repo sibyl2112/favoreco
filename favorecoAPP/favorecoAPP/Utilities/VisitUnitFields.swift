@@ -81,6 +81,7 @@ struct VisitUnitFields: Codable {
 
     var encodedRawValue: String {
         guard !ocrText.isEmpty
+                || !styleNames.isEmpty
                 || !eyecatchAspectRatioKey.isEmpty
                 || !goshuinBookSizeKey.isEmpty
                 || !weatherSymbolName.isEmpty

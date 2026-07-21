@@ -204,7 +204,7 @@ struct ExperienceDetailView: View {
                         if !snapshot.unitFields.styleNames.isEmpty {
                             recordMetadataRow(
                                 icon: "tag.fill",
-                                text: "スタイル  \(snapshot.unitFields.styleNames.joined(separator: "・"))",
+                                text: snapshot.unitFields.styleNames.joined(separator: "・"),
                                 accentColor: accentColor
                             )
                         }
