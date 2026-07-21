@@ -15,7 +15,6 @@ struct ExperienceDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @Environment(\.favorecoThemePalette) private var themePalette
-    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var isShowingEdit = false
     @State private var calendarDraft: CalendarEventDraft?
@@ -27,49 +26,58 @@ struct ExperienceDetailView: View {
         let accentColor = themePalette.categoryColor(hex: snapshot.category?.colorHex ?? "#6F8F7A")
         let template = CategoryRecordTemplate.template(for: snapshot.category)
         let isTheater = snapshot.category?.templateKey == "theater"
+        let eyecatchPhoto = detailEyecatchPhoto(in: snapshot)
+        let backgroundPhoto = detailBackgroundPhoto(in: snapshot, excluding: eyecatchPhoto)
 
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                recordHero(
+                    snapshot: snapshot,
+                    accentColor: accentColor,
+                    eyecatchPhoto: eyecatchPhoto,
+                    backgroundPhoto: backgroundPhoto
+                )
+                .padding(.horizontal, -20)
+                .padding(.top, -24)
+
+                memoSection(template: template)
+                photoSection(
+                    snapshot: snapshot,
+                    excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 })
+                )
+                classifiedPhotoSection(snapshot: snapshot, purpose: .ticket, accentColor: accentColor)
+                classifiedPhotoSection(snapshot: snapshot, purpose: .goods, accentColor: accentColor)
                 if isTheater {
-                    theaterHero(snapshot: snapshot, accentColor: accentColor)
-                        .padding(.horizontal, -8)
                     theaterCastSection(snapshot: snapshot, accentColor: accentColor)
-                } else {
-                    hero(snapshot: snapshot, accentColor: accentColor)
                 }
-                photoSection(snapshot: snapshot)
                 goshuinBookSection(snapshot: snapshot)
                 peopleSection(snapshot: snapshot, accentColor: accentColor)
                 ocrSection(snapshot: snapshot)
                 basicInfo(snapshot: snapshot, template: template)
                 advancedSection(snapshot: snapshot)
-                memoSection(template: template)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
-        .background(isTheater ? TheaterDetailStyle.background : Color(.systemGroupedBackground))
-        .environment(\.colorScheme, isTheater ? .dark : colorScheme)
-        .navigationTitle(isTheater ? "観劇回詳細" : snapshot.eventTitle)
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle(isTheater ? "観劇記録" : snapshot.eventTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !isTheater {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            isShowingEdit = true
-                        } label: {
-                            Label("編集", systemImage: "pencil")
-                        }
-
-                        Button(role: .destructive) {
-                            isShowingDeleteConfirmation = true
-                        } label: {
-                            Label("この記録だけ削除", systemImage: "trash")
-                        }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        isShowingEdit = true
                     } label: {
-                        Label("メニュー", systemImage: "ellipsis.circle")
+                        Label("編集", systemImage: "pencil")
                     }
+
+                    Button(role: .destructive) {
+                        isShowingDeleteConfirmation = true
+                    } label: {
+                        Label("この記録だけ削除", systemImage: "trash")
+                    }
+                } label: {
+                    Label("メニュー", systemImage: "ellipsis.circle")
                 }
             }
         }
@@ -110,118 +118,142 @@ struct ExperienceDetailView: View {
         }
     }
 
-    private func hero(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: snapshot.category?.iconSymbol ?? "sparkles.rectangle.stack")
-                    .font(.title2)
-                    .foregroundStyle(accentColor)
-                    .frame(width: 44, height: 44)
-                    .background(accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    private func recordHero(
+        snapshot: ExperienceDetailSnapshot,
+        accentColor: Color,
+        eyecatchPhoto: PhotoBlob?,
+        backgroundPhoto: PhotoBlob?
+    ) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            recordHeroBackground(photo: backgroundPhoto, accentColor: accentColor)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(snapshot.eventTitle)
-                        .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(snapshot.category?.name ?? "未分類")
-                        .font(FavorecoTypography.bodyStrong)
-                        .foregroundStyle(accentColor)
-                }
-            }
-
-            if let seriesName = snapshot.event?.seriesName, !seriesName.isEmpty {
-                Label(seriesName, systemImage: "rectangle.stack")
-                    .font(FavorecoTypography.body)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private func theaterHero(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            TheaterDetailPoster(event: snapshot.event)
-                .frame(width: 126)
-
-            VStack(alignment: .leading, spacing: 7) {
-                Text(snapshot.eventTitle)
-                    .font(FavorecoTypography.jpSerif(19, weight: .bold, relativeTo: .headline))
-                    .foregroundStyle(TheaterDetailStyle.ivory)
-                    .lineLimit(2)
-
-                Label(FavorecoDateText.fullDateTime(visit.visitedAt), systemImage: "calendar")
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-
-                if !visit.venueNameSnapshot.isEmpty {
-                    Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
-                        .lineLimit(1)
-                }
-
-                if !visit.seatText.isEmpty {
-                    Label(visit.seatText, systemImage: "chair")
-                        .lineLimit(1)
-                }
-
-                theaterRating
-
-                Spacer(minLength: 2)
-
-                HStack(spacing: 8) {
-                    Button {
-                        isShowingEdit = true
+            VStack(alignment: .leading, spacing: 14) {
+                if let event = snapshot.event {
+                    NavigationLink {
+                        EventDetailView(event: event)
                     } label: {
-                        Label("記録を編集", systemImage: "pencil")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(TheaterDetailStyle.gold)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 34)
-                            .overlay {
-                                Capsule().stroke(TheaterDetailStyle.gold.opacity(0.66), lineWidth: 1)
-                            }
+                        HStack(alignment: .firstTextBaseline, spacing: 7) {
+                            Text(snapshot.eventTitle)
+                                .font(FavorecoTypography.jpSerif(27, weight: .bold, relativeTo: .title2))
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(accentColor)
+                        }
                     }
                     .buttonStyle(.plain)
+                } else {
+                    Text(snapshot.eventTitle)
+                        .font(FavorecoTypography.jpSerif(27, weight: .bold, relativeTo: .title2))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                }
 
-                    Menu {
-                        Button(role: .destructive) {
-                            isShowingDeleteConfirmation = true
-                        } label: {
-                            Label("この記録だけ削除", systemImage: "trash")
+                if let seriesName = snapshot.event?.seriesName, !seriesName.isEmpty {
+                    Text(seriesName)
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                HStack(alignment: .top, spacing: 16) {
+                    RecordDetailEyecatch(
+                        event: snapshot.event,
+                        photo: eyecatchPhoto,
+                        aspectRatio: snapshot.eyecatchAspectRatio,
+                        fallbackSymbol: snapshot.category?.iconSymbol ?? "sparkles.rectangle.stack",
+                        tint: accentColor
+                    )
+                    .frame(width: 112)
+
+                    VStack(alignment: .leading, spacing: 11) {
+                        recordMetadataRow(
+                            icon: "calendar",
+                            text: FavorecoDateText.fullDateTime(visit.visitedAt),
+                            accentColor: accentColor
+                        )
+
+                        if !visit.venueNameSnapshot.isEmpty {
+                            recordMetadataRow(
+                                icon: "mappin.and.ellipse",
+                                text: visit.venueNameSnapshot,
+                                accentColor: accentColor
+                            )
                         }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(TheaterDetailStyle.gold)
-                            .frame(width: 34, height: 34)
-                            .overlay {
-                                Circle().stroke(TheaterDetailStyle.gold.opacity(0.66), lineWidth: 1)
-                            }
+
+                        if !visit.seatText.isEmpty {
+                            recordMetadataRow(
+                                icon: "chair",
+                                text: visit.seatText,
+                                accentColor: accentColor
+                            )
+                        }
+
+                        recordRating(accentColor: accentColor)
                     }
-                    .accessibilityLabel("記録メニュー")
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(TheaterDetailStyle.ivory.opacity(0.72))
-            .frame(maxWidth: .infinity, minHeight: 178, alignment: .topLeading)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
         }
-        .padding(12)
-        .background(TheaterDetailStyle.cardBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(TheaterDetailStyle.gold.opacity(0.42), lineWidth: 1)
-        }
+        .frame(minHeight: 390, alignment: .bottom)
+        .accessibilityElement(children: .contain)
     }
 
-    private var theaterRating: some View {
+    private func recordHeroBackground(photo: PhotoBlob?, accentColor: Color) -> some View {
+        ZStack {
+            if let photo {
+                RepresentativePhotoImage(photo: photo, maxPixelSize: 1600, contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            } else {
+                LinearGradient(
+                    colors: [accentColor.opacity(0.38), accentColor.opacity(0.08)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+
+            accentColor.opacity(photo == nil ? 0.04 : 0.12)
+
+            LinearGradient(
+                colors: [
+                    Color(.systemGroupedBackground).opacity(photo == nil ? 0.10 : 0.02),
+                    Color(.systemGroupedBackground).opacity(0.58),
+                    Color(.systemGroupedBackground),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+    }
+
+    private func recordMetadataRow(icon: String, text: String, accentColor: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(accentColor)
+                .frame(width: 18)
+            Text(text)
+                .foregroundStyle(.primary.opacity(0.78))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+        }
+        .font(FavorecoTypography.caption)
+    }
+
+    private func recordRating(accentColor: Color) -> some View {
         HStack(spacing: 3) {
             ForEach(1...5, id: \.self) { index in
                 Image(systemName: theaterRatingSymbol(at: index))
-                    .foregroundStyle(visit.overallRating > 0 ? TheaterDetailStyle.gold : TheaterDetailStyle.ivory.opacity(0.34))
+                    .foregroundStyle(visit.overallRating > 0 ? accentColor : Color.secondary.opacity(0.34))
             }
             Text(visit.overallRating > 0 ? String(format: "%.1f", visit.overallRating) : "未評価")
-                .foregroundStyle(TheaterDetailStyle.ivory.opacity(0.72))
+                .foregroundStyle(.secondary)
                 .padding(.leading, 4)
         }
         .font(FavorecoTypography.caption)
@@ -236,6 +268,92 @@ struct ExperienceDetailView: View {
         return "star"
     }
 
+    private func detailEyecatchPhoto(in snapshot: ExperienceDetailSnapshot) -> PhotoBlob? {
+        if snapshot.event?.eyecatchData != nil { return nil }
+        if let event = snapshot.event,
+           let representative = EventRepresentativePhotoResolver.photo(for: event) {
+            return representative
+        }
+        return memoryPhotos(in: snapshot).first
+    }
+
+    private func detailBackgroundPhoto(
+        in snapshot: ExperienceDetailSnapshot,
+        excluding eyecatchPhoto: PhotoBlob?
+    ) -> PhotoBlob? {
+        memoryPhotos(in: snapshot).first { photo in
+            photo.id != eyecatchPhoto?.id && photo.relativePath != eyecatchPhoto?.relativePath
+        }
+    }
+
+    private func memoryPhotos(in snapshot: ExperienceDetailSnapshot) -> [PhotoBlob] {
+        snapshot.photos.filter { photo in
+            ExperiencePhotoPurpose.resolved(from: photo.purpose) == .memory
+        }
+    }
+
+    @ViewBuilder
+    private func classifiedPhotoSection(
+        snapshot: ExperienceDetailSnapshot,
+        purpose: ExperiencePhotoPurpose,
+        accentColor: Color
+    ) -> some View {
+        let photos = snapshot.photos.filter {
+            ExperiencePhotoPurpose.resolved(from: $0.purpose) == purpose
+        }
+        if !photos.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("\(purpose.title)（\(photos.count)件）")
+
+                ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
+                    if index > 0 { Divider() }
+                    HStack(alignment: .top, spacing: 12) {
+                        RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
+                            .frame(width: 92, height: 92)
+                            .clipped()
+                            .background(Color(.secondarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 7) {
+                            Label("\(purpose.title) \(index + 1)", systemImage: purpose.systemImage)
+                                .font(FavorecoTypography.captionStrong)
+                                .foregroundStyle(accentColor)
+
+                            if photo.amount != Decimal(0) {
+                                Text(formattedPhotoAmount(photo.amount))
+                                    .font(FavorecoTypography.bodyStrong)
+                                    .foregroundStyle(.primary)
+                            }
+
+                            let text = photo.ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !text.isEmpty {
+                                Text(text)
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(4)
+                            } else if photo.amount == Decimal(0) {
+                                Text("画像として保存")
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .sectionCard()
+        }
+    }
+
+    private func formattedPhotoAmount(_ amount: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "JPY"
+        formatter.maximumFractionDigits = 0
+        return formatter.string(from: NSDecimalNumber(decimal: amount))
+            ?? "¥\(NSDecimalNumber(decimal: amount).stringValue)"
+    }
+
     @ViewBuilder
     private func theaterCastSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
         let castLinks = snapshot.linkedPeople.filter(isTheaterCastLink)
@@ -243,7 +361,7 @@ struct ExperienceDetailView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("キャスト（\(castLinks.count)人）")
                     .font(FavorecoTypography.sectionTitle)
-                    .foregroundStyle(TheaterDetailStyle.ivory)
+                    .foregroundStyle(.primary)
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 14) {
@@ -251,7 +369,9 @@ struct ExperienceDetailView: View {
                             TheaterCastItem(
                                 name: personName(for: link),
                                 role: link.displayRole.isEmpty ? roleName(for: link.roleKey) : link.displayRole,
+                                imageData: link.person?.imageData,
                                 imagePath: link.person?.imagePath ?? "",
+                                roleTagsRaw: link.person?.roleTagsRaw ?? "",
                                 tint: accentColor
                             )
                         }
@@ -263,13 +383,14 @@ struct ExperienceDetailView: View {
     }
 
     @ViewBuilder
-    private func photoSection(snapshot: ExperienceDetailSnapshot) -> some View {
-        if !snapshot.photos.isEmpty {
+    private func photoSection(snapshot: ExperienceDetailSnapshot, excluding excludedPhotoIDs: Set<UUID>) -> some View {
+        let galleryPhotos = memoryPhotos(in: snapshot).filter { !excludedPhotoIDs.contains($0.id) }
+        if !galleryPhotos.isEmpty {
             let contentMode: ContentMode = EyecatchAspectRatio.usesEyecatchFill(for: snapshot.category) ? .fill : .fit
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("写真")
 
-                if snapshot.photos.count == 1, let firstPhoto = snapshot.photos.first {
+                if galleryPhotos.count == 1, let firstPhoto = galleryPhotos.first {
                     RepresentativePhotoImage(photo: firstPhoto, maxPixelSize: 1600, contentMode: contentMode)
                         .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fit)
                         .frame(maxWidth: .infinity)
@@ -278,7 +399,7 @@ struct ExperienceDetailView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 10)], spacing: 10) {
-                        ForEach(snapshot.photos) { photo in
+                        ForEach(galleryPhotos) { photo in
                             ZStack(alignment: .bottomLeading) {
                                 RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: contentMode)
                                     .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fit)
@@ -367,11 +488,6 @@ struct ExperienceDetailView: View {
     private func basicInfo(snapshot: ExperienceDetailSnapshot, template: CategoryRecordTemplate) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle(template.visitSectionTitle)
-            DetailInfoRow(
-                icon: "calendar",
-                title: template.dateLabel,
-                value: FavorecoDateText.fullDate(visit.visitedAt)
-            )
 
             if !snapshot.unitFields.weatherSymbolName.isEmpty {
                 DetailInfoRow(
@@ -387,10 +503,6 @@ struct ExperienceDetailView: View {
                 }
             }
 
-            if !visit.venueNameSnapshot.isEmpty {
-                DetailInfoRow(icon: "mappin.and.ellipse", title: "場所", value: visit.venueNameSnapshot)
-            }
-
             if let address = visit.placeMaster?.address, !address.isEmpty {
                 DetailInfoRow(icon: "signpost.right", title: "住所", value: address)
             }
@@ -404,14 +516,8 @@ struct ExperienceDetailView: View {
                 }
             }
 
-            DetailInfoRow(icon: "star.fill", title: template.ratingLabel, value: snapshot.ratingText)
-
             if !visit.outcomeKey.isEmpty {
                 DetailInfoRow(icon: "ticket", title: "チケット状態", value: snapshot.ticketStatusText)
-            }
-
-            if !visit.seatText.isEmpty {
-                DetailInfoRow(icon: "chair", title: "座席・チケット", value: visit.seatText)
             }
 
             if visit.amount != Decimal(0) {
@@ -542,43 +648,38 @@ struct ExperienceDetailView: View {
     }
 }
 
-private enum TheaterDetailStyle {
-    static let background = Color(red: 0.035, green: 0.02, blue: 0.025)
-    static let cardBackground = Color(red: 0.075, green: 0.045, blue: 0.05).opacity(0.96)
-    static let wine = Color(red: 0.28, green: 0.035, blue: 0.08)
-    static let gold = Color(red: 0.82, green: 0.62, blue: 0.30)
-    static let ivory = Color(red: 0.96, green: 0.92, blue: 0.84)
-}
-
-private struct TheaterDetailPoster: View {
+private struct RecordDetailEyecatch: View {
     let event: ExperienceEvent?
-
-    private var representativePhoto: PhotoBlob? {
-        event.flatMap { EventRepresentativePhotoResolver.photo(for: $0) }
-    }
+    let photo: PhotoBlob?
+    let aspectRatio: Double
+    let fallbackSymbol: String
+    let tint: Color
 
     var body: some View {
         Group {
-            if let representativePhoto {
-                RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 720, contentMode: .fill)
-            } else if let data = event?.eyecatchData, let image = UIImage(data: data) {
+            if let data = event?.eyecatchData, let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+            } else if let photo {
+                RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fill)
             } else {
                 ZStack {
-                    TheaterDetailStyle.wine.opacity(0.72)
-                    Image(systemName: "theatermasks.fill")
+                    tint.opacity(0.18)
+                    Image(systemName: fallbackSymbol)
                         .font(.system(size: 34, weight: .light))
-                        .foregroundStyle(TheaterDetailStyle.gold)
+                        .foregroundStyle(tint)
                 }
             }
         }
-        .aspectRatio(CGFloat(EyecatchAspectRatio.bSeriesPoster.value), contentMode: .fit)
+        .aspectRatio(CGFloat(max(aspectRatio, 0.35)), contentMode: .fit)
         .frame(maxWidth: .infinity)
         .clipped()
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         .overlay {
-            Rectangle().stroke(TheaterDetailStyle.gold.opacity(0.54), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .stroke(tint.opacity(0.42), lineWidth: 0.8)
         }
     }
 }
@@ -586,7 +687,9 @@ private struct TheaterDetailPoster: View {
 private struct TheaterCastItem: View {
     let name: String
     let role: String
+    let imageData: Data?
     let imagePath: String
+    let roleTagsRaw: String
     let tint: Color
 
     var body: some View {
@@ -595,18 +698,18 @@ private struct TheaterCastItem: View {
                 .frame(width: 64, height: 64)
                 .clipShape(Circle())
                 .overlay {
-                    Circle().stroke(TheaterDetailStyle.gold.opacity(0.46), lineWidth: 1)
+                    Circle().stroke(tint.opacity(0.46), lineWidth: 1)
                 }
 
             Text(name)
                 .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
-                .foregroundStyle(TheaterDetailStyle.ivory)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .frame(width: 74)
 
             Text(role)
                 .font(FavorecoTypography.jpSans(9, weight: .regular, relativeTo: .caption2))
-                .foregroundStyle(TheaterDetailStyle.ivory.opacity(0.58))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(width: 74)
         }
@@ -622,18 +725,17 @@ private struct TheaterCastItem: View {
         } else {
             ZStack {
                 tint.opacity(0.22)
-                Text(initial)
-                    .font(FavorecoTypography.jpSerif(24, weight: .bold, relativeTo: .title3))
-                    .foregroundStyle(TheaterDetailStyle.ivory)
+                Image(systemName: PersonActivityTags.icon(for: roleTagsRaw))
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(tint)
             }
         }
     }
 
-    private var initial: String {
-        String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1))
-    }
-
     private var personImage: UIImage? {
+        if let imageData, let image = UIImage(data: imageData) {
+            return image
+        }
         let trimmedPath = imagePath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPath.isEmpty else { return nil }
         if let fileURL = URL(string: trimmedPath), fileURL.isFileURL,

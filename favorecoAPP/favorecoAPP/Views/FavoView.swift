@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct FavoView: View {
     @Query(sort: \FavoPin.sortOrder) private var favoPins: [FavoPin]
@@ -1453,23 +1454,39 @@ private struct FavoAvatar: View {
     let size: CGFloat
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: profile.colorHex), Color(hex: profile.colorHex).opacity(0.58)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            Text(String(person.displayName.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1)))
-                .font(.system(size: size * 0.38, weight: .semibold, design: .serif))
-                .foregroundStyle(.white)
+        Group {
+            if let image = personImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: profile.colorHex), Color(hex: profile.colorHex).opacity(0.58)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Image(systemName: PersonActivityTags.icon(for: person.roleTagsRaw, isFavorite: true))
+                        .font(.system(size: size * 0.36, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
         }
         .frame(width: size, height: size)
+        .clipShape(Circle())
         .overlay(Circle().stroke(.white.opacity(0.7), lineWidth: 2))
         .shadow(color: Color(hex: profile.colorHex).opacity(0.22), radius: 8, y: 4)
         .accessibilityLabel(person.displayName)
+    }
+
+    private var personImage: UIImage? {
+        if let imageData = person.imageData, let image = UIImage(data: imageData) {
+            return image
+        }
+        return PersonImageStore.image(at: person.imagePath)
     }
 }
 

@@ -1,47 +1,67 @@
 import CoreLocation
+import PhotosUI
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct PersonMasterManagementView: View {
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
     @State private var searchText = ""
     @State private var isShowingCreatePerson = false
+    @State private var selectedActivityTagIDs: Set<String> = []
+    @State private var favoritesOnly = false
 
     private var activePeople: [PersonMaster] {
         let active = people.filter { !$0.isArchived }
         let query = normalizedMasterText(searchText)
-        guard !query.isEmpty else { return active }
-        return active.filter {
-            normalizedMasterText($0.displayName).contains(query)
-                || normalizedMasterText($0.reading).contains(query)
-                || $0.aliasesRaw.components(separatedBy: CharacterSet(charactersIn: ",、\n"))
+        return active.filter { person in
+            let matchesSearch = query.isEmpty
+                || normalizedMasterText(person.displayName).contains(query)
+                || normalizedMasterText(person.reading).contains(query)
+                || person.aliasesRaw.components(separatedBy: CharacterSet(charactersIn: ",、\n"))
                     .contains { normalizedMasterText($0).contains(query) }
+                || PersonActivityTags.displayTitles(from: person.roleTagsRaw)
+                    .contains { normalizedMasterText($0).contains(query) }
+            let matchesFavorite = !favoritesOnly || person.favoriteProfile?.isFavorite == true
+            let matchesActivity = PersonActivityTags.matchesAny(selectedActivityTagIDs, rawValue: person.roleTagsRaw)
+            return matchesSearch && matchesFavorite && matchesActivity
         }
+    }
+
+    private var availableActivityTags: [PersonActivityTag] {
+        let usedIDs = Set(people.filter { !$0.isArchived }.flatMap {
+            PersonActivityTags.selectedPresetIDs(from: $0.roleTagsRaw)
+        })
+        return PersonActivityTags.presets.filter { usedIDs.contains($0.id) }
     }
 
     var body: some View {
         List {
+            Section {
+                PersonActivityFilterBar(
+                    availableTags: availableActivityTags,
+                    selectedIDs: $selectedActivityTagIDs,
+                    favoritesOnly: $favoritesOnly
+                )
+            }
+
             if activePeople.isEmpty {
-                ContentUnavailableView("人物・団体はまだありません", systemImage: "person.2")
+                ContentUnavailableView(
+                    people.contains(where: { !$0.isArchived }) ? "条件に一致する人物・団体がありません" : "人物・団体はまだありません",
+                    systemImage: "person.2"
+                )
             } else {
                 ForEach(activePeople) { person in
                     NavigationLink {
                         PersonMasterMergeView(person: person)
                     } label: {
-                        MasterListRow(
-                            title: person.displayName,
-                            subtitle: person.reading,
-                            countLabel: "\(person.eventLinks?.count ?? 0)件の紐付け",
-                            systemImage: person.favoriteProfile?.isFavorite == true
-                                ? "person.crop.circle.fill.badge.heart"
-                                : "person.crop.circle"
-                        )
+                        PersonMasterListRow(person: person)
                     }
                 }
             }
         }
         .navigationTitle("人物・団体マスター")
-        .searchable(text: $searchText, prompt: "名前・よみ・別名を検索")
+        .searchable(text: $searchText, prompt: "名前・よみ・別名・愛称を検索")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -70,6 +90,9 @@ private struct PersonMasterCreateView: View {
     @State private var memo = ""
     @State private var showsOptionalFields = false
     @State private var errorMessage = ""
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var selectedPhotoData: Data?
+    @State private var photoErrorMessage = ""
 
     private var trimmedName: String {
         displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -79,14 +102,22 @@ private struct PersonMasterCreateView: View {
         NavigationStack {
             Form {
                 Section("基本情報") {
+                    PersonPhotoEditor(
+                        storedData: nil,
+                        storedPath: "",
+                        selectedData: $selectedPhotoData,
+                        selectedPhoto: $selectedPhoto,
+                        removesStoredPhoto: .constant(false)
+                    )
                     TextField("表示名", text: $displayName)
                     TextField("よみ（任意）", text: $reading)
-                    TextField("タグ（カンマ区切り）", text: $roleTagsRaw)
                 }
+
+                PersonActivityTagEditor(rawValue: $roleTagsRaw)
 
                 Section {
                     DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
-                        TextField("別名（カンマ区切り）", text: $aliasesRaw)
+                        TextField("別名・愛称（カンマ区切り）", text: $aliasesRaw)
                         TextField("公式URL", text: $officialURL)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
@@ -100,6 +131,9 @@ private struct PersonMasterCreateView: View {
                 if !errorMessage.isEmpty {
                     Section { Text(errorMessage).foregroundStyle(.red) }
                 }
+                if !photoErrorMessage.isEmpty {
+                    Section { Text(photoErrorMessage).foregroundStyle(.red) }
+                }
             }
             .navigationTitle("人物・団体を追加")
             .navigationBarTitleDisplayMode(.inline)
@@ -112,12 +146,15 @@ private struct PersonMasterCreateView: View {
                         .disabled(trimmedName.isEmpty)
                 }
             }
+            .task(id: selectedPhoto) {
+                await loadSelectedPersonPhoto()
+            }
         }
     }
 
     private func save() {
         let now = Date()
-        modelContext.insert(PersonMaster(
+        let person = PersonMaster(
             displayName: trimmedName,
             reading: reading.trimmingCharacters(in: .whitespacesAndNewlines),
             aliasesRaw: aliasesRaw.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -128,14 +165,28 @@ private struct PersonMasterCreateView: View {
             normalizedName: normalizedMasterText(trimmedName),
             createdAt: now,
             updatedAt: now
-        ))
+        )
+        modelContext.insert(person)
         do {
+            person.imageData = selectedPhotoData
             try modelContext.save()
             dismiss()
         } catch {
             modelContext.rollback()
             errorMessage = "保存できませんでした: \(error.localizedDescription)"
         }
+    }
+
+    @MainActor
+    private func loadSelectedPersonPhoto() async {
+        guard let selectedPhoto else { return }
+        guard let data = try? await selectedPhoto.loadTransferable(type: Data.self),
+              let processed = PersonImageStore.processedAvatarData(from: data) else {
+            photoErrorMessage = "写真を読み込めませんでした。別の写真を選んでください。"
+            return
+        }
+        selectedPhotoData = processed
+        photoErrorMessage = ""
     }
 }
 
@@ -144,6 +195,7 @@ struct PlaceMasterManagementView: View {
     @State private var searchText = ""
     @State private var selectedArea: JapanArea?
     @State private var prefectureFilter: PlacePrefectureFilter = .all
+    @State private var categoryFilter: PlaceMasterCategoryFilter = .all
 
     private var allActivePlaces: [PlaceMaster] {
         places.filter { !$0.isArchived }
@@ -168,9 +220,20 @@ struct PlaceMasterManagementView: View {
                 || normalizedMasterText(place.reading).contains(query)
                 || normalizedMasterText(place.address).contains(query)
                 || normalizedMasterText(prefecture).contains(query)
+                || PlaceMasterCategories.displayTitles(from: place.placeTagsRaw)
+                    .contains { normalizedMasterText($0).contains(query) }
                 || place.aliasesRaw.components(separatedBy: CharacterSet(charactersIn: ",、\n"))
                     .contains { normalizedMasterText($0).contains(query) }
-            return matchesArea && matchesPrefecture && matchesSearch
+            let matchesCategory: Bool
+            switch categoryFilter {
+            case .all:
+                matchesCategory = true
+            case .missing:
+                matchesCategory = PlaceMasterCategories.resolvedCategories(from: place.placeTagsRaw).isEmpty
+            case let .category(category):
+                matchesCategory = PlaceMasterCategories.contains(category, rawValue: place.placeTagsRaw)
+            }
+            return matchesArea && matchesPrefecture && matchesCategory && matchesSearch
         }
     }
 
@@ -202,13 +265,28 @@ struct PlaceMasterManagementView: View {
                     }
                 }
 
+                Picker("カテゴリ", selection: $categoryFilter) {
+                    Text("すべて").tag(PlaceMasterCategoryFilter.all)
+                    ForEach(PlaceMasterCategory.allCases) { category in
+                        Label(category.title, systemImage: category.systemImage)
+                            .tag(PlaceMasterCategoryFilter.category(category))
+                    }
+                    Text("未分類").tag(PlaceMasterCategoryFilter.missing)
+                }
+
                 LabeledContent("表示件数", value: "\(activePlaces.count) / \(allActivePlaces.count)件")
             }
 
             Section {
-                if activePlaces.isEmpty {
+                if allActivePlaces.isEmpty {
                     ContentUnavailableView(
-                        allActivePlaces.isEmpty ? "場所はまだありません" : "条件に一致する場所がありません",
+                        "場所はまだありません",
+                        systemImage: "mappin.and.ellipse",
+                        description: Text("MAPは記録に保存した座標だけでも表示します。場所マスターは、住所から都道府県を確認できる場所を記録・編集した時に追加されます。")
+                    )
+                } else if activePlaces.isEmpty {
+                    ContentUnavailableView(
+                        "条件に一致する場所がありません",
                         systemImage: "mappin.and.ellipse"
                     )
                 } else {
@@ -218,7 +296,7 @@ struct PlaceMasterManagementView: View {
                         } label: {
                             MasterListRow(
                                 title: place.name,
-                                subtitle: place.address.isEmpty ? resolvedPrefecture(for: place) : place.address,
+                                subtitle: placeMasterSubtitle(place),
                                 countLabel: "\((place.visits?.count ?? 0) + (place.plans?.count ?? 0))件の利用",
                                 systemImage: "mappin.circle"
                             )
@@ -250,6 +328,18 @@ private enum PlacePrefectureFilter: Hashable {
     case missing
 }
 
+private enum PlaceMasterCategoryFilter: Hashable {
+    case all
+    case category(PlaceMasterCategory)
+    case missing
+}
+
+private func placeMasterSubtitle(_ place: PlaceMaster) -> String {
+    let location = place.address.isEmpty ? resolvedPrefecture(for: place) : place.address
+    let categories = PlaceMasterCategories.displayTitles(from: place.placeTagsRaw).prefix(2).joined(separator: "・")
+    return categories.isEmpty ? location : "\(categories)｜\(location)"
+}
+
 private struct PersonMasterMergeView: View {
     let person: PersonMaster
     @Environment(\.dismiss) private var dismiss
@@ -260,6 +350,10 @@ private struct PersonMasterMergeView: View {
     @State private var showsOptionalFields = false
     @State private var selectedDestination: PersonMaster?
     @State private var errorMessage = ""
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var selectedPhotoData: Data?
+    @State private var removesStoredPhoto = false
+    @State private var photoErrorMessage = ""
 
     init(person: PersonMaster) {
         self.person = person
@@ -274,12 +368,20 @@ private struct PersonMasterMergeView: View {
     var body: some View {
         Form {
             Section("基本情報") {
+                PersonPhotoEditor(
+                    storedData: person.imageData,
+                    storedPath: person.imagePath,
+                    selectedData: $selectedPhotoData,
+                    selectedPhoto: $selectedPhoto,
+                    removesStoredPhoto: $removesStoredPhoto
+                )
                 TextField("表示名", text: $draft.displayName)
                 TextField("よみ（任意）", text: $draft.reading)
-                TextField("別名（カンマ区切り）", text: $draft.aliasesRaw)
-                TextField("タグ（カンマ区切り）", text: $draft.roleTagsRaw)
+                TextField("別名・愛称（カンマ区切り）", text: $draft.aliasesRaw)
                 LabeledContent("紐付け", value: "\(person.eventLinks?.count ?? 0)件")
             }
+
+            PersonActivityTagEditor(rawValue: $draft.roleTagsRaw)
 
             Section {
                 DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
@@ -344,8 +446,14 @@ private struct PersonMasterMergeView: View {
             if !errorMessage.isEmpty {
                 Section { Text(errorMessage).foregroundStyle(.red) }
             }
+            if !photoErrorMessage.isEmpty {
+                Section { Text(photoErrorMessage).foregroundStyle(.red) }
+            }
         }
         .navigationTitle(person.displayName)
+        .task(id: selectedPhoto) {
+            await loadSelectedPersonPhoto()
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存") { save() }
@@ -379,6 +487,7 @@ private struct PersonMasterMergeView: View {
     }
 
     private func save() {
+        let previousImagePath = person.imagePath
         person.displayName = draft.trimmedDisplayName
         person.reading = draft.trimmedReading
         person.aliasesRaw = draft.trimmedAliasesRaw
@@ -389,15 +498,43 @@ private struct PersonMasterMergeView: View {
         person.normalizedName = normalizedMasterText(draft.trimmedDisplayName)
         person.updatedAt = Date()
         do {
+            if removesStoredPhoto {
+                person.imageData = nil
+                person.imagePath = ""
+            }
+            if let selectedPhotoData {
+                person.imageData = selectedPhotoData
+                person.imagePath = ""
+            }
             try saveFavoriteProfile()
             try modelContext.save()
+            if (removesStoredPhoto || selectedPhotoData != nil), !previousImagePath.isEmpty {
+                try? PersonImageStore.remove(path: previousImagePath)
+            }
             errorMessage = ""
+            selectedPhotoData = nil
+            removesStoredPhoto = false
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            dismiss()
         } catch {
             modelContext.rollback()
             draft = PersonMasterDraft(person: person)
             favoriteDraft = FavoriteProfileDraft(profile: person.favoriteProfile)
             errorMessage = "保存できませんでした: \(error.localizedDescription)"
         }
+    }
+
+    @MainActor
+    private func loadSelectedPersonPhoto() async {
+        guard let selectedPhoto else { return }
+        guard let data = try? await selectedPhoto.loadTransferable(type: Data.self),
+              let processed = PersonImageStore.processedAvatarData(from: data) else {
+            photoErrorMessage = "写真を読み込めませんでした。別の写真を選んでください。"
+            return
+        }
+        selectedPhotoData = processed
+        removesStoredPhoto = false
+        photoErrorMessage = ""
     }
 
     private func saveFavoriteProfile() throws {
@@ -472,9 +609,10 @@ private struct PlaceMasterMergeView: View {
                 TextField("住所", text: $draft.address)
                     .textContentType(.fullStreetAddress)
                 TextField("別名（カンマ区切り）", text: $draft.aliasesRaw)
-                TextField("タグ（カンマ区切り）", text: $draft.placeTagsRaw)
                 LabeledContent("利用", value: "\((place.visits?.count ?? 0) + (place.plans?.count ?? 0))件")
             }
+
+            PlaceMasterCategoryEditor(rawValue: $draft.placeTagsRaw)
 
             Section("巡礼・札所") {
                 if draft.pilgrimageMemberships.isEmpty {
@@ -524,6 +662,7 @@ private struct PlaceMasterMergeView: View {
 
             Section {
                 DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
+                    TextField("カテゴリ・タグの直接編集", text: $draft.placeTagsRaw)
                     TextField("公式URL", text: $draft.officialURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
@@ -623,6 +762,305 @@ private struct PlaceMasterMergeView: View {
     }
 }
 
+private struct PersonActivityFilterBar: View {
+    let availableTags: [PersonActivityTag]
+    @Binding var selectedIDs: Set<String>
+    @Binding var favoritesOnly: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("絞り込み")
+                    .font(FavorecoTypography.bodyStrong)
+                Spacer()
+                if favoritesOnly || !selectedIDs.isEmpty {
+                    Button("解除") {
+                        favoritesOnly = false
+                        selectedIDs.removeAll()
+                    }
+                    .font(FavorecoTypography.caption)
+                }
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    FilterCheckChip(title: "推しのみ", systemImage: "heart.fill", isSelected: favoritesOnly) {
+                        favoritesOnly.toggle()
+                    }
+                    ForEach(availableTags) { tag in
+                        FilterCheckChip(title: tag.title, systemImage: tag.systemImage, isSelected: selectedIDs.contains(tag.id)) {
+                            if selectedIDs.contains(tag.id) {
+                                selectedIDs.remove(tag.id)
+                            } else {
+                                selectedIDs.insert(tag.id)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct FilterCheckChip: View {
+    let title: String
+    let systemImage: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                Image(systemName: systemImage)
+                Text(title)
+            }
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 8)
+            .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.12), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(isSelected ? "選択中" : "未選択")
+    }
+}
+
+private struct PersonActivityTagEditor: View {
+    @Binding var rawValue: String
+    @State private var customText: String
+
+    init(rawValue: Binding<String>) {
+        _rawValue = rawValue
+        _customText = State(initialValue: PersonActivityTags.customValues(from: rawValue.wrappedValue).joined(separator: ", "))
+    }
+
+    private var selectedIDs: Set<String> {
+        PersonActivityTags.selectedPresetIDs(from: rawValue)
+    }
+
+    var body: some View {
+        Section {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(PersonActivityTags.presets) { tag in
+                    Button {
+                        toggle(tag)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: selectedIDs.contains(tag.id) ? "checkmark.circle.fill" : "circle")
+                            Image(systemName: tag.systemImage)
+                            Text(tag.title).lineLimit(1)
+                        }
+                        .font(FavorecoTypography.caption)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 8)
+                        .background(
+                            selectedIDs.contains(tag.id) ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 9)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(selectedIDs.contains(tag.id) ? "選択中" : "未選択")
+                }
+            }
+
+            TextField("その他の活動タグ（カンマ区切り）", text: $customText)
+                .onChange(of: customText) { _, newValue in
+                    updateRawValue(customText: newValue)
+                }
+        } header: {
+            Text("活動タグ（複数選択可）")
+        } footer: {
+            Text("人物・団体そのものの活動分野です。作品ごとの主演・出演・監督などの役割は、各記録との紐付け側へ保存されます。")
+        }
+    }
+
+    private func toggle(_ tag: PersonActivityTag) {
+        var ids = selectedIDs
+        if ids.contains(tag.id) {
+            ids.remove(tag.id)
+        } else {
+            ids.insert(tag.id)
+        }
+        rawValue = PersonActivityTags.replacingPresets(
+            with: ids,
+            customValues: PersonActivityTags.values(from: customText)
+        )
+    }
+
+    private func updateRawValue(customText: String) {
+        rawValue = PersonActivityTags.replacingPresets(
+            with: selectedIDs,
+            customValues: PersonActivityTags.values(from: customText)
+        )
+    }
+}
+
+private struct PersonMasterListRow: View {
+    let person: PersonMaster
+
+    private var tagTitles: [String] {
+        PersonActivityTags.displayTitles(from: person.roleTagsRaw)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            PersonAvatar(
+                imageData: person.imageData,
+                imagePath: person.imagePath,
+                systemImage: PersonActivityTags.icon(
+                    for: person.roleTagsRaw,
+                    isFavorite: person.favoriteProfile?.isFavorite == true
+                ),
+                size: 42
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(person.displayName)
+                    .font(FavorecoTypography.bodyStrong)
+                if !person.reading.isEmpty {
+                    Text(person.reading)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !tagTitles.isEmpty {
+                    Text(tagTitles.prefix(3).joined(separator: "・"))
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(Color.accentColor)
+                        .lineLimit(1)
+                }
+                Text("\(person.eventLinks?.count ?? 0)件の紐付け")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct PersonPhotoEditor: View {
+    let storedData: Data?
+    let storedPath: String
+    @Binding var selectedData: Data?
+    @Binding var selectedPhoto: PhotosPickerItem?
+    @Binding var removesStoredPhoto: Bool
+
+    private var hasPhoto: Bool {
+        selectedData != nil || (!removesStoredPhoto && (storedData != nil || PersonImageStore.image(at: storedPath) != nil))
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Group {
+                if let selectedData, let image = UIImage(data: selectedData) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    PersonAvatar(
+                        imageData: removesStoredPhoto ? nil : storedData,
+                        imagePath: removesStoredPhoto ? "" : storedPath,
+                        systemImage: "person.crop.circle",
+                        size: 72
+                    )
+                }
+            }
+            .frame(width: 72, height: 72)
+            .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 8) {
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Label(hasPhoto ? "写真を変更" : "写真を選ぶ", systemImage: "photo")
+                }
+                if hasPhoto {
+                    Button("写真を削除", role: .destructive) {
+                        selectedData = nil
+                        selectedPhoto = nil
+                        removesStoredPhoto = true
+                    }
+                    .font(FavorecoTypography.caption)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct PersonAvatar: View {
+    let imageData: Data?
+    let imagePath: String
+    let systemImage: String
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let imageData, let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if let image = PersonImageStore.image(at: imagePath) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    Color.accentColor.opacity(0.13)
+                    Image(systemName: systemImage)
+                        .font(.system(size: size * 0.45, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+}
+
+enum PersonImageStore {
+    private static let directoryName = "PersonImages"
+
+    static func processedAvatarData(from sourceData: Data) -> Data? {
+        guard let sourceImage = UIImage(data: sourceData), sourceImage.size.width > 0, sourceImage.size.height > 0 else {
+            return nil
+        }
+        let outputSize = CGSize(width: 640, height: 640)
+        let scale = max(outputSize.width / sourceImage.size.width, outputSize.height / sourceImage.size.height)
+        let drawSize = CGSize(width: sourceImage.size.width * scale, height: sourceImage.size.height * scale)
+        let origin = CGPoint(x: (outputSize.width - drawSize.width) / 2, y: (outputSize.height - drawSize.height) / 2)
+        let renderer = UIGraphicsImageRenderer(size: outputSize)
+        return renderer.image { _ in
+            sourceImage.draw(in: CGRect(origin: origin, size: drawSize))
+        }.jpegData(compressionQuality: 0.84)
+    }
+
+    static func image(at path: String) -> UIImage? {
+        let trimmedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPath.isEmpty else { return nil }
+        if let fileURL = URL(string: trimmedPath), fileURL.isFileURL,
+           let image = UIImage(contentsOfFile: fileURL.path) {
+            return image
+        }
+        if trimmedPath.hasPrefix("/"), let image = UIImage(contentsOfFile: trimmedPath) {
+            return image
+        }
+        guard let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return UIImage(contentsOfFile: baseURL.appendingPathComponent(trimmedPath).path)
+    }
+
+    static func remove(path: String) throws {
+        guard path.hasPrefix("\(directoryName)/"),
+              let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return
+        }
+        let fileURL = baseURL.appendingPathComponent(path)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            try FileManager.default.removeItem(at: fileURL)
+        }
+    }
+}
+
 private struct PersonMasterDraft {
     var displayName: String
     var reading: String
@@ -680,6 +1118,159 @@ private struct FavoriteProfileDraft {
     var trimmedNickname: String { nickname.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedOriginText: String { originText.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
+}
+
+private enum PlaceMasterCategory: String, CaseIterable, Identifiable {
+    case shrineTemple = "shrine_temple"
+    case landmark
+    case castle
+    case dam
+    case liveVenue = "live_venue_category"
+    case publicHall = "public_hall_category"
+    case stadiumArena = "stadium_arena"
+    case themePark = "theme_park_category"
+    case zooAquarium = "zoo_aquarium"
+    case museum
+    case naturePark = "nature_park"
+    case breweryIndustry = "brewery_industry"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .shrineTemple: "寺社仏閣・霊場"
+        case .landmark: "ランドマーク・史跡"
+        case .castle: "城郭・城跡"
+        case .dam: "ダム"
+        case .liveVenue: "ライブ・劇場・ホール"
+        case .publicHall: "公共ホール・文化会館"
+        case .stadiumArena: "スタジアム・アリーナ"
+        case .themePark: "テーマパーク・遊園地"
+        case .zooAquarium: "動物園・水族館"
+        case .museum: "美術館・博物館"
+        case .naturePark: "自然・公園・庭園"
+        case .breweryIndustry: "醸造・産業観光"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .shrineTemple: "building.columns"
+        case .landmark: "mappin.and.ellipse"
+        case .castle: "building.columns.fill"
+        case .dam: "drop.triangle.fill"
+        case .liveVenue: "music.mic"
+        case .publicHall: "building.2.crop.circle"
+        case .stadiumArena: "sportscourt"
+        case .themePark: "ferris.wheel"
+        case .zooAquarium: "pawprint"
+        case .museum: "building.2"
+        case .naturePark: "leaf"
+        case .breweryIndustry: "gearshape.2"
+        }
+    }
+
+    var canonicalTag: String {
+        switch self {
+        case .shrineTemple: "sacred_site"
+        case .landmark: "landmark"
+        case .castle: "castle"
+        case .dam: "dam"
+        case .liveVenue: "music_venue"
+        case .publicHall: "public_hall"
+        case .stadiumArena: "arena"
+        case .themePark: "theme_park"
+        case .zooAquarium: "zoo_aquarium"
+        case .museum: "museum"
+        case .naturePark: "nature_park"
+        case .breweryIndustry: "industrial_tourism"
+        }
+    }
+
+    var matchingTags: Set<String> {
+        switch self {
+        case .shrineTemple:
+            ["shrine", "temple", "buddhist_temple", "sacred_site", "pilgrimage_site"]
+        case .landmark:
+            ["landmark", "historic_site", "castle", "tower", "observation_deck", "bridge", "monument"]
+        case .castle:
+            ["castle", "japan_100_castles", "continued_japan_100_castles"]
+        case .dam:
+            ["dam", "reservoir", "hydroelectric_dam"]
+        case .liveVenue:
+            ["live_house", "music_venue", "concert_hall", "theater", "performing_arts_venue", "cultural_venue"]
+        case .publicHall:
+            ["public_hall", "civic_hall", "cultural_center", "municipal_hall", "prefectural_hall"]
+        case .stadiumArena:
+            ["stadium", "arena", "dome", "event_hall", "sports_venue"]
+        case .themePark:
+            ["theme_park", "amusement_park", "indoor_theme_park"]
+        case .zooAquarium:
+            ["zoo", "aquarium", "safari_park", "zoo_aquarium"]
+        case .museum:
+            ["museum", "art_museum", "science_museum"]
+        case .naturePark:
+            ["nature_park", "park", "garden", "botanical_garden", "natural_landmark", "scenic_spot", "visitor_center"]
+        case .breweryIndustry:
+            ["industrial_tourism", "brewery", "sake_brewery", "distillery", "winery", "industrial_heritage"]
+        }
+    }
+}
+
+private enum PlaceMasterCategories {
+    static func tokens(from rawValue: String) -> [String] {
+        rawValue
+            .components(separatedBy: CharacterSet(charactersIn: ",、|\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+    }
+
+    static func contains(_ category: PlaceMasterCategory, rawValue: String) -> Bool {
+        !Set(tokens(from: rawValue)).isDisjoint(with: category.matchingTags)
+    }
+
+    static func resolvedCategories(from rawValue: String) -> [PlaceMasterCategory] {
+        PlaceMasterCategory.allCases.filter { contains($0, rawValue: rawValue) }
+    }
+
+    static func displayTitles(from rawValue: String) -> [String] {
+        resolvedCategories(from: rawValue).map(\.title)
+    }
+
+    static func setting(_ category: PlaceMasterCategory, enabled: Bool, rawValue: String) -> String {
+        var values = tokens(from: rawValue)
+        if enabled {
+            if !contains(category, rawValue: rawValue) {
+                values.append(category.canonicalTag)
+            }
+        } else {
+            values.removeAll { category.matchingTags.contains($0) }
+        }
+        var seen: Set<String> = []
+        return values.filter { seen.insert($0).inserted }.joined(separator: ",")
+    }
+}
+
+private struct PlaceMasterCategoryEditor: View {
+    @Binding var rawValue: String
+
+    var body: some View {
+        Section("施設カテゴリ") {
+            ForEach(PlaceMasterCategory.allCases) { category in
+                Toggle(
+                    category.title,
+                    systemImage: category.systemImage,
+                    isOn: Binding(
+                        get: { PlaceMasterCategories.contains(category, rawValue: rawValue) },
+                        set: { rawValue = PlaceMasterCategories.setting(category, enabled: $0, rawValue: rawValue) }
+                    )
+                )
+            }
+            Text("複合施設は複数選択できます。個別タグは詳細オプションで編集できます。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
 }
 
 private struct PlaceMasterDraft {

@@ -33,6 +33,8 @@ struct HomeView: View {
     @State private var interestLayoutMode: CategoryLibraryLayoutMode = .gallery
     @State private var isShowingAllHomeUpcoming = false
     @State private var isShowingNextActionList = false
+    @State private var isShowingSampleDeletionConfirmation = false
+    @State private var sampleDeletionError = ""
     @State private var swipeDestinationCategoryID: UUID?
 
     private var categoryLayoutMode: HomeCategoryLayoutMode {
@@ -140,6 +142,10 @@ struct HomeView: View {
         )
         let ticketProgressItems = CategoryTicketProgressItem.activeItems(in: plans)
         let homeNextActionItems = nextActionItems(for: snapshot)
+        let hasSampleData = events.contains { event in
+            event.officialURL.starts(with: SampleDataSeeder.sampleURLPrefix)
+                || event.officialURL.starts(with: "https://example.com/favoreco/")
+        }
 
         NavigationStack {
             VStack(spacing: 0) {
@@ -158,6 +164,12 @@ struct HomeView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         homeHeroSection(items: snapshot.heroItems)
+
+                        if hasSampleData {
+                            HomeSampleDataNotice {
+                                isShowingSampleDeletionConfirmation = true
+                            }
+                        }
 
                         GenreSwipeContainer(
                             canMoveBackward: !snapshot.visibleCategories.isEmpty,
@@ -209,6 +221,31 @@ struct HomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $isShowingNextActionList) {
                 HomeAttentionListView(items: homeNextActionItems)
+            }
+            .confirmationDialog(
+                "サンプルデータを削除しますか？",
+                isPresented: $isShowingSampleDeletionConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("サンプルだけ削除", role: .destructive) {
+                    do {
+                        _ = try SampleDataSeeder.deleteSamples(in: modelContext)
+                    } catch {
+                        sampleDeletionError = "サンプルデータを削除できませんでした。"
+                        assertionFailure("Failed to delete sample data: \(error)")
+                    }
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("自分で追加した記録・予定・人物・場所マスターは削除されません。")
+            }
+            .alert("削除できませんでした", isPresented: Binding(
+                get: { !sampleDeletionError.isEmpty },
+                set: { if !$0 { sampleDeletionError = "" } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(sampleDeletionError)
             }
             .navigationDestination(
                 isPresented: Binding(
@@ -2308,6 +2345,40 @@ private struct EmptyStateRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct HomeSampleDataNotice: View {
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "sparkles.rectangle.stack.fill")
+                .font(.title3)
+                .foregroundStyle(Color(hex: "#B8792F"))
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("サンプルデータが入っています")
+                    .font(FavorecoTypography.bodyStrong)
+                Text("過去の記録、未来の予定、人物や場所の登録例を見ながら使い方を確認できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button("サンプルを削除", role: .destructive, action: onDelete)
+                    .font(FavorecoTypography.captionStrong)
+                    .padding(.top, 2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color(hex: "#B8792F").opacity(0.28), lineWidth: 0.8)
+        }
+        .accessibilityElement(children: .contain)
     }
 }
 

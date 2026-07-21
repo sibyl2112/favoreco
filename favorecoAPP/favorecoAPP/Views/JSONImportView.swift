@@ -64,6 +64,7 @@ struct JSONImportView: View {
                     previewRow("対象", preview.eventCount)
                     previewRow("訪問/鑑賞記録", preview.visitCount)
                     previewRow("人物・団体", preview.personCount)
+                    previewRow("同行者", preview.companionCount)
                     previewRow("人物リンク", preview.personLinkCount)
                     previewRow("場所", preview.placeCount)
                     previewRow("予定", preview.planCount)

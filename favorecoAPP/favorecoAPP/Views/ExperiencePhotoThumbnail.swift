@@ -12,7 +12,9 @@ struct PendingPhotoThumbnail: View {
     let aspectRatio: Double
     let fillsFrame: Bool
     let isCover: Bool
+    let purpose: ExperiencePhotoPurpose
     let onSetCover: () -> Void
+    let onEdit: () -> Void
     let onDelete: () -> Void
     @State private var image: UIImage?
 
@@ -23,7 +25,9 @@ struct PendingPhotoThumbnail: View {
             aspectRatio: aspectRatio,
             fillsFrame: fillsFrame,
             isCover: isCover,
+            purpose: purpose,
             onSetCover: onSetCover,
+            onEdit: onEdit,
             onDelete: onDelete
         )
         .task(id: cacheKey) {
@@ -51,7 +55,9 @@ struct SavedPhotoThumbnail: View {
     let aspectRatio: Double
     let fillsFrame: Bool
     let isCover: Bool
+    let purpose: ExperiencePhotoPurpose
     let onSetCover: () -> Void
+    let onEdit: () -> Void
     let onDelete: () -> Void
     @State private var image: UIImage?
 
@@ -62,7 +68,9 @@ struct SavedPhotoThumbnail: View {
             aspectRatio: aspectRatio,
             fillsFrame: fillsFrame,
             isCover: isCover,
+            purpose: purpose,
             onSetCover: onSetCover,
+            onEdit: onEdit,
             onDelete: onDelete
         )
         .task(id: cacheKey) {
@@ -90,7 +98,9 @@ private struct PhotoThumbnail: View {
     let aspectRatio: Double
     let fillsFrame: Bool
     let isCover: Bool
+    let purpose: ExperiencePhotoPurpose
     let onSetCover: () -> Void
+    let onEdit: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -113,6 +123,17 @@ private struct PhotoThumbnail: View {
             .clipped()
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            HStack {
+                Label(purpose.title, systemImage: purpose.systemImage)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.62), in: Capsule())
+                Spacer()
+            }
+            .padding(5)
 
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "xmark.circle.fill")
@@ -137,6 +158,15 @@ private struct PhotoThumbnail: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(isCover ? "カバー写真に設定済み" : "カバー写真に設定")
                     Spacer()
+                    Button(action: onEdit) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(7)
+                            .background(.black.opacity(0.55), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(title)の分類と情報を編集")
                 }
             }
             .padding(5)

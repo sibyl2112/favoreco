@@ -169,7 +169,7 @@ struct CalendarWeekTimelineView: View {
     let calendar: Calendar
     let onSelectDate: (Date) -> Void
 
-    private let hourHeight: CGFloat = 30
+    private let hourHeight: CGFloat = 60
     private let timeLabelWidth: CGFloat = 34
 
     var body: some View {
@@ -288,7 +288,7 @@ struct CalendarDayTimelineView: View {
     let snapshot: CalendarTimelineSnapshot
     let calendar: Calendar
 
-    private let hourHeight: CGFloat = 30
+    private let hourHeight: CGFloat = 60
     private let timeLabelWidth: CGFloat = 42
 
     private var interval: DateInterval {
@@ -362,7 +362,7 @@ private struct CalendarTimelineHourLabels: View {
                     .offset(y: CGFloat(hour) * hourHeight - 5)
             }
         }
-        .frame(height: hourHeight * 24)
+        .frame(height: hourHeight * 24, alignment: .topTrailing)
         .padding(.trailing, 4)
     }
 }

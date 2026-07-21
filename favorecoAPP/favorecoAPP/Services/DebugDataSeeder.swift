@@ -10,245 +10,711 @@ import SwiftData
 import UIKit
 
 struct DebugSampleDataSummary {
+    let eventCount: Int
     let visitCount: Int
     let planCount: Int
     let ticketAttemptCount: Int
 
+    static let empty = DebugSampleDataSummary(
+        eventCount: 0,
+        visitCount: 0,
+        planCount: 0,
+        ticketAttemptCount: 0
+    )
+
     var insertedMessage: String {
-        "記録\(visitCount)件・未来予定\(planCount)件・チケット申込\(ticketAttemptCount)件を追加しました。"
+        "サンプル(eventCount)件（記録(visitCount)件・未来予定(planCount)件）を追加しました。"
     }
 
     var deletedMessage: String {
-        "記録\(visitCount)件・予定\(planCount)件・チケット申込\(ticketAttemptCount)件を削除しました。ジャンルと有効ユニット設定は残ります。"
+        "サンプル(eventCount)件（記録(visitCount)件・予定(planCount)件）を削除しました。通常の記録とマスターは残ります。"
     }
 }
 
-enum DebugDataSeeder {
-    private static let debugURLPrefix = "https://example.com/favoreco/"
-    private static let debugPhotoPrefix = "debug/sample-"
-    private static let defaultSampleCountPerCategory = 10
-    private static let movieSampleCount = 13
-    private static let theaterSampleCount = 15
+enum SampleDataSeeder {
+    static let sampleURLPrefix = "https://sample.favoreco.app/v2/"
+    static let samplePhotoPrefix = "sample/v2/"
+
+    private static let legacyURLPrefix = "https://example.com/favoreco/"
+    private static let legacyPhotoPrefix = "debug/sample-"
+    private static let sampleMasterMarker = "favoreco-sample-v2"
+    private static let automaticInsertionKey = "hasInsertedAutomaticSampleDataV2"
+    private static let samplesPerCategory = 3
 
     @MainActor
     @discardableResult
-    static func insertSampleData(in context: ModelContext) throws -> DebugSampleDataSummary {
-        try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: context)
-        try deleteSampleData(in: context)
-
-        let categoryDescriptor = FetchDescriptor<RecordCategory>(
-            sortBy: [SortDescriptor(\.sortOrder)]
-        )
-        let categories = try context.fetch(categoryDescriptor)
-        let now = Date()
-        var insertedVisitCount = 0
-        var insertedPlanCount = 0
-        var insertedTicketAttemptCount = 0
-
-        for (categoryIndex, category) in categories.enumerated() {
-            category.isArchived = false
-            category.updatedAt = now
-            var firstSampleEvent: ExperienceEvent?
-
-            let sampleCount = sampleCount(for: category)
-            for sampleIndex in 0..<sampleCount {
-                let sampleNumber = sampleIndex + 1
-                let title = sampleTitle(for: category, index: sampleIndex)
-                let sampleImage = sampleImage(
-                    for: category,
-                    title: title,
-                    index: sampleIndex
-                )
-                let samplePath = "\(debugPhotoPrefix)\(category.templateKey)-\(sampleNumber).jpg"
-                let createdAt = now.addingTimeInterval(TimeInterval(-insertedVisitCount * 86400))
-                let event = ExperienceEvent(
-                    title: title,
-                    seriesName: sampleSeries(for: category, index: sampleIndex),
-                    subTypeKey: sampleSubTypeKey(for: category, index: sampleIndex),
-                    organizerNameSnapshot: sampleOrganizer(for: category),
-                    representativeEyecatchPath: samplePath,
-                    officialURL: "\(debugURLPrefix)\(category.templateKey)/\(sampleNumber)",
-                    memo: "デバッグ用の仮データです。\(category.name)のカード、一覧、詳細、編集導線を確認するために作成しました。",
-                    createdAt: createdAt,
-                    updatedAt: now,
-                    category: category
-                )
-                let unitFields = VisitUnitFields(
-                    ocrText: sampleOCRText(for: category, title: title, index: sampleIndex),
-                    eyecatchAspectRatioKey: EyecatchAspectRatio.recommended(for: category).key,
-                    goshuinBookSizeKey: category.templateKey == "goshuin" ? sampleGoshuinBookSizeKey(index: sampleIndex) : "",
-                    advancedEntries: sampleAdvancedEntries(for: category, index: sampleIndex)
-                )
-                let visit = Visit(
-                    visitedAt: createdAt,
-                    endedAt: createdAt.addingTimeInterval(7200),
-                    venueNameSnapshot: sampleVenue(for: category, index: sampleIndex),
-                    overallRating: sampleRating(index: sampleIndex),
-                    outcomeKey: sampleOutcomeKey(for: category, index: sampleIndex),
-                    seatText: sampleSeatText(for: category, index: sampleIndex),
-                    eyecatchPath: samplePath,
-                    note: sampleNote(for: category, title: title, index: sampleIndex),
-                    tagNamesRaw: sampleTags(for: category, index: sampleIndex),
-                    companionNamesRaw: sampleCompanions(index: sampleIndex),
-                    amount: sampleAmount(for: category, index: sampleIndex),
-                    unitFieldsRaw: unitFields.encodedRawValue,
-                    createdAt: createdAt,
-                    updatedAt: now,
-                    event: event
-                )
-                let photo = PhotoBlob(
-                    relativePath: samplePath,
-                    originalFilename: "sample-\(category.templateKey)-\(sampleNumber).jpg",
-                    mediaKind: "photo",
-                    purpose: "memory",
-                    byteCount: sampleImage.data.count,
-                    width: sampleImage.width,
-                    height: sampleImage.height,
-                    createdAt: createdAt,
-                    data: sampleImage.data,
-                    visit: visit
-                )
-
-                context.insert(event)
-                context.insert(visit)
-                context.insert(photo)
-                if firstSampleEvent == nil {
-                    firstSampleEvent = event
-                }
-                insertedVisitCount += 1
-            }
-
-            if let firstSampleEvent {
-                let planStart = samplePlanStart(now: now, categoryIndex: categoryIndex)
-                let usesDoorTime = ["theater", "live"].contains(category.templateKey)
-                let plan = Plan(
-                    title: firstSampleEvent.title,
-                    subtitle: "デバッグ用の未来予定",
-                    planKindKey: samplePlanKind(for: category),
-                    stateKey: "planned",
-                    startsAt: planStart,
-                    endsAt: planStart.addingTimeInterval(2 * 60 * 60),
-                    opensAt: usesDoorTime ? planStart.addingTimeInterval(-30 * 60) : Date.distantPast,
-                    venueNameSnapshot: sampleVenue(for: category, index: 0),
-                    organizerNameSnapshot: sampleOrganizer(for: category),
-                    officialURL: "\(debugURLPrefix)\(category.templateKey)/plan",
-                    sourceURL: "\(debugURLPrefix)\(category.templateKey)/plan/source",
-                    memo: "Homeの次の予定、カレンダー、予定詳細を確認するデバッグ用データです。",
-                    notificationLeadTimeKey: "none",
-                    createdAt: now,
-                    updatedAt: now,
-                    category: category,
-                    event: firstSampleEvent
-                )
-                context.insert(plan)
-                insertedPlanCount += 1
-
-                if let attempt = sampleTicketAttempt(for: category, plan: plan, planStart: planStart, now: now) {
-                    context.insert(attempt)
-                    insertedTicketAttemptCount += 1
-                }
-            }
+    static func insertAutomaticSamples(
+        in context: ModelContext,
+        categoryTemplateKeys: Set<String>
+    ) throws -> DebugSampleDataSummary {
+        guard !UserDefaults.standard.bool(forKey: automaticInsertionKey) else {
+            return .empty
         }
 
-        if let firstCategory = categories.first {
-            context.insert(ExperienceEvent(
-                title: "気になる候補",
-                officialURL: "\(debugURLPrefix)interested",
-                stateKey: "interested",
-                memo: "クイック登録後の対象詳細と、予定・記録の追加導線を確認する仮データです。",
-                importMemo: "読み取りメモの表示確認用テキスト",
-                createdAt: now,
-                updatedAt: now,
-                category: firstCategory
-            ))
+        let existingEvents = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        let hasPersonalData = existingEvents.contains { !isSampleEvent($0) }
+        guard !hasPersonalData else {
+            if existingEvents.contains(where: isSampleEvent) {
+                _ = try deleteSamples(in: context)
+            }
+            UserDefaults.standard.set(true, forKey: automaticInsertionKey)
+            return .empty
+        }
+
+        let summary = try replaceSamples(
+            in: context,
+            categoryTemplateKeys: categoryTemplateKeys
+        )
+        UserDefaults.standard.set(true, forKey: automaticInsertionKey)
+        return summary
+    }
+
+    @MainActor
+    @discardableResult
+    static func replaceSamples(
+        in context: ModelContext,
+        categoryTemplateKeys: Set<String>? = nil
+    ) throws -> DebugSampleDataSummary {
+        try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: context)
+        _ = try deleteSamples(in: context)
+
+        let descriptor = FetchDescriptor<RecordCategory>(
+            sortBy: [SortDescriptor(\RecordCategory.sortOrder)]
+        )
+        let categories = try context.fetch(descriptor).filter { category in
+            categoryTemplateKeys?.contains(category.templateKey) ?? true
+        }
+        let now = Date()
+        var placesByName: [String: PlaceMaster] = [:]
+        for place in try context.fetch(FetchDescriptor<PlaceMaster>()) where placesByName[place.name] == nil {
+            placesByName[place.name] = place
+        }
+        var peopleByName: [String: PersonMaster] = [:]
+        for person in try context.fetch(FetchDescriptor<PersonMaster>()) where peopleByName[person.displayName] == nil {
+            peopleByName[person.displayName] = person
+        }
+        var eventCount = 0
+        var visitCount = 0
+        var planCount = 0
+        var ticketAttemptCount = 0
+
+        for (categoryIndex, category) in categories.enumerated() {
+            for sampleIndex in 0..<samplesPerCategory {
+                let definition = sampleDefinition(for: category, index: sampleIndex)
+                let image = sampleImage(for: category, index: sampleIndex)
+                let imagePath = "\(samplePhotoPrefix)\(category.templateKey)-\(sampleIndex + 1).jpg"
+                let isFuture = sampleIndex == samplesPerCategory - 1
+                let itemDate = isFuture
+                    ? sampleFutureDate(now: now, categoryIndex: categoryIndex)
+                    : samplePastDate(now: now, categoryIndex: categoryIndex, sampleIndex: sampleIndex)
+                let aspectRatioKey = sampleAspectRatioKey(for: category)
+                let unitFields = VisitUnitFields(
+                    ocrText: sampleOCRText(for: category, title: definition.title),
+                    eyecatchAspectRatioKey: aspectRatioKey,
+                    goshuinBookSizeKey: category.templateKey == "goshuin" ? GoshuinBookSize.standard.key : "",
+                    advancedEntries: sampleAdvancedEntries(for: category, index: sampleIndex)
+                )
+                let placeSeed = samplePlace(for: category, index: sampleIndex)
+                let place = resolvePlace(
+                    placeSeed,
+                    context: context,
+                    placesByName: &placesByName,
+                    now: now
+                )
+                let event = ExperienceEvent(
+                    title: definition.title,
+                    seriesName: definition.seriesName,
+                    subTypeKey: definition.subTypeKey,
+                    organizerNameSnapshot: definition.organizer,
+                    representativeEyecatchPath: imagePath,
+                    officialURL: "\(sampleURLPrefix)\(category.templateKey)/\(sampleIndex + 1)",
+                    memo: "使い方を確認するためのサンプルデータです。いつでもサンプルだけ削除できます。",
+                    unitFieldsRaw: unitFields.encodedRawValue,
+                    createdAt: itemDate,
+                    updatedAt: now,
+                    eyecatchData: image.data,
+                    category: category
+                )
+                context.insert(event)
+                eventCount += 1
+
+                if let personSeed = samplePerson(for: category, index: sampleIndex) {
+                    let person = resolvePerson(
+                        personSeed,
+                        context: context,
+                        peopleByName: &peopleByName,
+                        now: now
+                    )
+                    context.insert(EventPersonLink(
+                        roleKey: personSeed.roleKey,
+                        displayRole: personSeed.displayRole,
+                        nameSnapshot: person.displayName,
+                        memo: "架空の人物・団体によるサンプルです。",
+                        createdAt: itemDate,
+                        updatedAt: now,
+                        person: person,
+                        event: event
+                    ))
+                }
+
+                if isFuture {
+                    let plan = Plan(
+                        title: definition.title,
+                        subtitle: "サンプルの未来予定",
+                        planKindKey: samplePlanKind(for: category),
+                        stateKey: "planned",
+                        startsAt: itemDate,
+                        endsAt: itemDate.addingTimeInterval(sampleDuration(for: category)),
+                        opensAt: ["theater", "live"].contains(category.templateKey)
+                            ? itemDate.addingTimeInterval(-30 * 60)
+                            : Date.distantPast,
+                        venueNameSnapshot: place.name,
+                        organizerNameSnapshot: definition.organizer,
+                        officialURL: "\(sampleURLPrefix)\(category.templateKey)/plan",
+                        sourceURL: "\(sampleURLPrefix)\(category.templateKey)/plan/source",
+                        memo: "Homeとカレンダーで未来予定の使い方を確認できるサンプルです。",
+                        notificationLeadTimeKey: "none",
+                        createdAt: now,
+                        updatedAt: now,
+                        category: category,
+                        event: event,
+                        placeMaster: place
+                    )
+                    context.insert(plan)
+                    planCount += 1
+
+                    if let attempt = sampleTicketAttempt(
+                        for: category,
+                        plan: plan,
+                        planStart: itemDate,
+                        now: now
+                    ) {
+                        context.insert(attempt)
+                        ticketAttemptCount += 1
+                    }
+                } else {
+                    let visit = Visit(
+                        visitedAt: itemDate,
+                        endedAt: itemDate.addingTimeInterval(sampleDuration(for: category)),
+                        venueNameSnapshot: place.name,
+                        overallRating: sampleIndex == 0 ? 4.5 : 4.0,
+                        outcomeKey: hasEnabledUnit("ticketPlan", in: category) ? "attended" : "",
+                        seatText: ["theater", "live"].contains(category.templateKey)
+                            ? "1階 \(10 + sampleIndex)列 \(12 + sampleIndex)番"
+                            : "",
+                        eyecatchPath: imagePath,
+                        note: sampleNote(for: category, title: definition.title),
+                        tagNamesRaw: "サンプル,\(category.name)",
+                        amount: sampleAmount(for: category, index: sampleIndex),
+                        latitude: place.latitude,
+                        longitude: place.longitude,
+                        unitFieldsRaw: unitFields.encodedRawValue,
+                        createdAt: itemDate,
+                        updatedAt: now,
+                        event: event,
+                        placeMaster: place
+                    )
+                    context.insert(visit)
+                    context.insert(PhotoBlob(
+                        relativePath: imagePath,
+                        originalFilename: "\(category.templateKey)-\(sampleIndex + 1).jpg",
+                        mediaKind: "photo",
+                        purpose: "memory",
+                        byteCount: image.data.count,
+                        width: image.width,
+                        height: image.height,
+                        createdAt: itemDate,
+                        data: image.data,
+                        visit: visit
+                    ))
+                    visitCount += 1
+                }
+            }
         }
 
         try context.save()
         return DebugSampleDataSummary(
-            visitCount: insertedVisitCount,
-            planCount: insertedPlanCount,
-            ticketAttemptCount: insertedTicketAttemptCount
+            eventCount: eventCount,
+            visitCount: visitCount,
+            planCount: planCount,
+            ticketAttemptCount: ticketAttemptCount
         )
     }
 
     @MainActor
     @discardableResult
-    static func deleteSampleData(in context: ModelContext) throws -> DebugSampleDataSummary {
-        let urlPrefix = debugURLPrefix
-        let photoPrefix = debugPhotoPrefix
+    static func deleteSamples(in context: ModelContext) throws -> DebugSampleDataSummary {
+        let currentURLPrefix = sampleURLPrefix
+        let oldURLPrefix = legacyURLPrefix
+        let currentPhotoPrefix = samplePhotoPrefix
+        let oldPhotoPrefix = legacyPhotoPrefix
 
-        let attemptDescriptor = FetchDescriptor<TicketAttempt>(
-            predicate: #Predicate { $0.purchaseURL.starts(with: urlPrefix) }
-        )
-        let debugAttempts = try context.fetch(attemptDescriptor)
-        for attempt in debugAttempts {
+        let sampleEvents = try context.fetch(FetchDescriptor<ExperienceEvent>(
+            predicate: #Predicate {
+                $0.officialURL.starts(with: currentURLPrefix)
+                    || $0.officialURL.starts(with: oldURLPrefix)
+            }
+        ))
+        let samplePlans = try context.fetch(FetchDescriptor<Plan>(
+            predicate: #Predicate {
+                $0.officialURL.starts(with: currentURLPrefix)
+                    || $0.officialURL.starts(with: oldURLPrefix)
+            }
+        ))
+        let sampleAttempts = try context.fetch(FetchDescriptor<TicketAttempt>(
+            predicate: #Predicate {
+                $0.purchaseURL.starts(with: currentURLPrefix)
+                    || $0.purchaseURL.starts(with: oldURLPrefix)
+            }
+        ))
+        let sampleVisits = try context.fetch(FetchDescriptor<Visit>(
+            predicate: #Predicate {
+                $0.eyecatchPath.starts(with: currentPhotoPrefix)
+                    || $0.eyecatchPath.starts(with: oldPhotoPrefix)
+            }
+        ))
+
+        for attempt in sampleAttempts {
             TicketNotificationScheduler.cancel(attemptID: attempt.id)
             context.delete(attempt)
         }
-
-        let planDescriptor = FetchDescriptor<Plan>(
-            predicate: #Predicate { $0.officialURL.starts(with: urlPrefix) }
-        )
-        let debugPlans = try context.fetch(planDescriptor)
-        for plan in debugPlans {
+        for plan in samplePlans {
             TicketNotificationScheduler.cancel(planID: plan.id, attemptID: nil)
             context.delete(plan)
         }
-
-        let visitDescriptor = FetchDescriptor<Visit>(
-            predicate: #Predicate { $0.eyecatchPath.starts(with: photoPrefix) }
-        )
-        let debugVisits = try context.fetch(visitDescriptor)
-        let deletedCount = debugVisits.count
-
-        // Delete the records explicitly so category counts cannot retain orphaned visits.
-        for visit in debugVisits {
-            context.delete(visit)
-        }
-
-        let eventDescriptor = FetchDescriptor<ExperienceEvent>(
-            predicate: #Predicate { $0.officialURL.starts(with: urlPrefix) }
-        )
-        for event in try context.fetch(eventDescriptor) {
+        for event in sampleEvents {
             context.delete(event)
         }
-
-        let inboxDescriptor = FetchDescriptor<InboxItem>(
-            predicate: #Predicate { $0.sourceURL.starts(with: urlPrefix) }
-        )
-        for item in try context.fetch(inboxDescriptor) {
-            context.delete(item)
-        }
-
         try context.save()
 
-        // Visitのcascade対象外になった古い孤立写真も、画像Dataを展開せず一括削除する。
         try context.delete(
             model: PhotoBlob.self,
-            where: #Predicate { $0.relativePath.starts(with: photoPrefix) }
+            where: #Predicate { $0.relativePath.starts(with: currentPhotoPrefix) }
+        )
+        try context.delete(
+            model: PhotoBlob.self,
+            where: #Predicate { $0.relativePath.starts(with: oldPhotoPrefix) }
         )
         try context.save()
+        try deleteOrphanedSampleMasters(in: context)
+
         return DebugSampleDataSummary(
-            visitCount: deletedCount,
-            planCount: debugPlans.count,
-            ticketAttemptCount: debugAttempts.count
+            eventCount: sampleEvents.count,
+            visitCount: sampleVisits.count,
+            planCount: samplePlans.count,
+            ticketAttemptCount: sampleAttempts.count
         )
     }
 
-    private static func samplePlanStart(now: Date, categoryIndex: Int) -> Date {
-        let calendar = Calendar(identifier: .gregorian)
-        let futureDay = calendar.date(byAdding: .day, value: 2 + categoryIndex * 3, to: now) ?? now
-        return calendar.date(bySettingHour: 19, minute: 0, second: 0, of: futureDay) ?? futureDay
+    static func isSampleEvent(_ event: ExperienceEvent) -> Bool {
+        event.officialURL.starts(with: sampleURLPrefix)
+            || event.officialURL.starts(with: legacyURLPrefix)
+    }
+
+    static func resetAutomaticInsertionState() {
+        UserDefaults.standard.set(false, forKey: automaticInsertionKey)
+    }
+
+    private struct SampleImage {
+        let data: Data
+        let width: Int
+        let height: Int
+    }
+
+    private struct SampleDefinition {
+        let title: String
+        let seriesName: String
+        let subTypeKey: String
+        let organizer: String
+    }
+
+    private struct SamplePlace {
+        let name: String
+        let reading: String
+        let tags: String
+        let prefecture: String
+        let address: String
+        let officialURL: String
+    }
+
+    private struct SamplePerson {
+        let name: String
+        let reading: String
+        let roleKey: String
+        let displayRole: String
+    }
+
+    private static func sampleDefinition(for category: RecordCategory, index: Int) -> SampleDefinition {
+        let titles: [String]
+        let seriesName: String
+        let organizer: String
+        switch category.templateKey {
+        case "theater":
+            titles = ["月影のアトリエ", "雨音の王国", "星屑の航路"]
+            seriesName = "2026年公演"
+            organizer = "灯台座"
+        case "museum":
+            titles = ["透明な記憶", "風を採集する", "深海の光譜"]
+            seriesName = "企画展"
+            organizer = "架空文化企画室"
+        case "live":
+            titles = ["LUMINA TOUR", "ECHOES AT DAWN", "NEON TIDE"]
+            seriesName = "2026 TOUR"
+            organizer = "North Light Music"
+        case "movie":
+            titles = ["夜を編む人", "光のメトロノーム", "白い海の記憶"]
+            seriesName = ""
+            organizer = "Orion Pictures"
+        case "sake":
+            titles = ["月灯り 純米吟醸", "山凪 クラフトビール", "燻樹 シングルモルト"]
+            seriesName = "試飲ノート"
+            organizer = ""
+        case "theme_park":
+            titles = ["星降る遊園地", "蒼海の冒険島", "森のからくり王国"]
+            seriesName = ""
+            organizer = ""
+        case "nature_living":
+            titles = ["水の森水族館", "光の丘どうぶつ園", "月草植物園"]
+            seriesName = ""
+            organizer = ""
+        case "outing_facility":
+            titles = ["風見塔展望台", "港の赤レンガ倉庫", "雲上ロープウェイ"]
+            seriesName = ""
+            organizer = ""
+        case "goshuin":
+            titles = ["明治神宮", "浅草寺", "伏見稲荷大社"]
+            seriesName = "参拝の記録"
+            organizer = ""
+        case "book":
+            titles = ["夜明けの標本室", "雨粒の図書館", "北へ帰る鳥"]
+            seriesName = "灯台文庫"
+            organizer = "架空書房"
+        default:
+            titles = ["はじめての\(category.name)", "思い出の\(category.name)", "次の\(category.name)"]
+            seriesName = ""
+            organizer = ""
+        }
+        return SampleDefinition(
+            title: titles[index % titles.count],
+            seriesName: seriesName,
+            subTypeKey: sampleSubTypeKey(for: category, index: index),
+            organizer: organizer
+        )
+    }
+
+    private static func samplePlace(for category: RecordCategory, index: Int) -> SamplePlace {
+        let places: [SamplePlace]
+        switch category.templateKey {
+        case "theater":
+            places = [
+                .init(name: "東京芸術劇場 プレイハウス", reading: "とうきょうげいじゅつげきじょうぷれいはうす", tags: "theater,performing_arts_venue", prefecture: "東京都", address: "東京都豊島区西池袋1-8-1", officialURL: "https://www.geigeki.jp/facilities/playhouse/"),
+                .init(name: "新国立劇場 中劇場", reading: "しんこくりつげきじょうちゅうげきじょう", tags: "theater,performing_arts_venue", prefecture: "東京都", address: "東京都渋谷区本町1-1-1", officialURL: "https://www.nntt.jac.go.jp/guide/playhouse/"),
+                .init(name: "南座", reading: "みなみざ", tags: "theater,kabuki_theater,historic_site", prefecture: "京都府", address: "京都府京都市東山区四条大橋東詰", officialURL: "https://www.shochiku.co.jp/play/theater/minamiza/")
+            ]
+        case "museum":
+            places = [
+                .init(name: "国立新美術館", reading: "こくりつしんびじゅつかん", tags: "art_museum,museum,cultural_facility", prefecture: "東京都", address: "東京都港区六本木7-22-2", officialURL: "https://www.nact.jp/"),
+                .init(name: "東京国立博物館", reading: "とうきょうこくりつはくぶつかん", tags: "museum,cultural_facility,historic_site", prefecture: "東京都", address: "東京都台東区上野公園13-9", officialURL: "https://www.tnm.jp/"),
+                .init(name: "国立科学博物館", reading: "こくりつかがくはくぶつかん", tags: "museum,science_museum,cultural_facility", prefecture: "東京都", address: "東京都台東区上野公園7-20", officialURL: "https://www.kahaku.go.jp/")
+            ]
+        case "live":
+            places = [
+                .init(name: "東京ドーム", reading: "とうきょうどーむ", tags: "dome,stadium,live_venue", prefecture: "東京都", address: "東京都文京区後楽1-3-61", officialURL: "https://www.tokyo-dome.co.jp/dome/"),
+                .init(name: "日本武道館", reading: "にっぽんぶどうかん", tags: "arena,live_venue,landmark", prefecture: "東京都", address: "東京都千代田区北の丸公園2-3", officialURL: "https://www.nipponbudokan.or.jp/"),
+                .init(name: "Zepp DiverCity (TOKYO)", reading: "ぜっぷだいばーしてぃとうきょう", tags: "live_house,music_venue", prefecture: "東京都", address: "東京都江東区青海1-1-10 ダイバーシティ東京 プラザ", officialURL: "https://www.zepp.co.jp/hall/divercity/")
+            ]
+        case "movie":
+            places = Array(repeating: .init(name: "桜坂劇場 ホールA", reading: "さくらざかげきじょうほーるえー", tags: "cinema,theater,cultural_venue", prefecture: "沖縄県", address: "沖縄県那覇市牧志3-6-10", officialURL: "https://sakura-zaka.com/"), count: samplesPerCategory)
+        case "sake":
+            places = [
+                .init(name: "月桂冠大倉記念館", reading: "げっけいかんおおくらきねんかん", tags: "sake_brewery,museum", prefecture: "京都府", address: "京都府京都市伏見区南浜町247", officialURL: "https://www.gekkeikan.co.jp/enjoy/museum/"),
+                .init(name: "白鶴酒造資料館", reading: "はくつるしゅぞうしりょうかん", tags: "sake_brewery,museum", prefecture: "兵庫県", address: "兵庫県神戸市東灘区住吉南町4丁目5-5", officialURL: "https://www.hakutsuru.co.jp/community/shiryo/"),
+                .init(name: "サントリー山崎蒸溜所", reading: "さんとりーやまざきじょうりゅうしょ", tags: "whisky_distillery,industrial_tourism", prefecture: "大阪府", address: "大阪府三島郡島本町山崎5-2-1", officialURL: "https://www.suntory.co.jp/factory/yamazaki/")
+            ]
+        case "theme_park":
+            places = [
+                .init(name: "東京ディズニーランド", reading: "とうきょうでぃずにーらんど", tags: "theme_park,leisure_facility", prefecture: "千葉県", address: "千葉県浦安市舞浜1-1", officialURL: "https://www.tokyodisneyresort.jp/tdl/"),
+                .init(name: "ユニバーサル・スタジオ・ジャパン", reading: "ゆにばーさるすたじおじゃぱん", tags: "theme_park,leisure_facility", prefecture: "大阪府", address: "大阪府大阪市此花区桜島2-1-33", officialURL: "https://www.usj.co.jp/web/"),
+                .init(name: "ハウステンボス", reading: "はうすてんぼす", tags: "theme_park,leisure_facility", prefecture: "長崎県", address: "長崎県佐世保市ハウステンボス町1-1", officialURL: "https://www.huistenbosch.co.jp/")
+            ]
+        case "nature_living":
+            places = [
+                .init(name: "海遊館", reading: "かいゆうかん", tags: "aquarium,museum,leisure_facility", prefecture: "大阪府", address: "大阪府大阪市港区海岸通1-1-10", officialURL: "https://www.kaiyukan.com/"),
+                .init(name: "上野動物園", reading: "うえのどうぶつえん", tags: "zoo,leisure_facility", prefecture: "東京都", address: "東京都台東区上野公園9-83", officialURL: "https://www.tokyo-zoo.net/zoo/ueno/"),
+                .init(name: "あしかがフラワーパーク", reading: "あしかがふらわーぱーく", tags: "botanical_garden,garden,leisure_facility", prefecture: "栃木県", address: "栃木県足利市迫間町607", officialURL: "https://www.ashikaga.co.jp/")
+            ]
+        case "outing_facility":
+            places = [
+                .init(name: "東京スカイツリー", reading: "とうきょうすかいつりー", tags: "tower,observation_deck,landmark", prefecture: "東京都", address: "東京都墨田区押上1-1-2", officialURL: "https://www.tokyo-skytree.jp/"),
+                .init(name: "大阪城天守閣", reading: "おおさかじょうてんしゅかく", tags: "castle,museum,historic_site", prefecture: "大阪府", address: "大阪府大阪市中央区大阪城1-1", officialURL: "https://www.osakacastle.net/"),
+                .init(name: "せんだいメディアテーク", reading: "せんだいめでぃあてーく", tags: "library,architecture,cultural_facility", prefecture: "宮城県", address: "宮城県仙台市青葉区春日町2-1", officialURL: "https://www.smt.jp/")
+            ]
+        case "goshuin":
+            places = [
+                .init(name: "明治神宮", reading: "めいじじんぐう", tags: "shrine,landmark", prefecture: "東京都", address: "東京都渋谷区代々木神園町1-1", officialURL: "https://www.meijijingu.or.jp/"),
+                .init(name: "浅草寺", reading: "せんそうじ", tags: "temple,historic_site,landmark", prefecture: "東京都", address: "東京都台東区浅草2-3-1", officialURL: "https://www.senso-ji.jp/"),
+                .init(name: "伏見稲荷大社", reading: "ふしみいなりたいしゃ", tags: "shrine,historic_site,landmark", prefecture: "京都府", address: "京都府京都市伏見区深草薮之内町68", officialURL: "https://inari.jp/")
+            ]
+        case "book":
+            places = [
+                .init(name: "金沢海みらい図書館", reading: "かなざわうみみらいとしょかん", tags: "library,architecture,cultural_facility", prefecture: "石川県", address: "石川県金沢市寺中町イ1番地1", officialURL: "https://www.lib.kanazawa.ishikawa.jp/umimirai/"),
+                .init(name: "武雄市図書館", reading: "たけおしとしょかん", tags: "library,architecture,cultural_facility", prefecture: "佐賀県", address: "佐賀県武雄市武雄町大字武雄5304番地1", officialURL: "https://takeo.city-library.jp/"),
+                .init(name: "小布施町立図書館まちとしょテラソ", reading: "おぶせちょうりつとしょかんまちとしょてらそ", tags: "library,architecture,cultural_facility", prefecture: "長野県", address: "長野県上高井郡小布施町小布施1491-2", officialURL: "https://www.town.obuse.nagano.jp/lib/")
+            ]
+        default:
+            places = Array(repeating: .init(name: "サンプル場所", reading: "さんぷるばしょ", tags: "sample", prefecture: "東京都", address: "東京都", officialURL: ""), count: samplesPerCategory)
+        }
+        return places[index % places.count]
+    }
+
+    private static func samplePerson(for category: RecordCategory, index: Int) -> SamplePerson? {
+        let people: [SamplePerson]
+        switch category.templateKey {
+        case "theater":
+            people = [
+                .init(name: "神崎 透", reading: "かんざきとおる", roleKey: "actor", displayRole: "出演"),
+                .init(name: "水城 紗英", reading: "みずきさえ", roleKey: "actor", displayRole: "主演"),
+                .init(name: "結城 蓮", reading: "ゆうきれん", roleKey: "director", displayRole: "演出")
+            ]
+        case "museum":
+            people = [
+                .init(name: "白瀬 碧", reading: "しらせあお", roleKey: "artist", displayRole: "作家"),
+                .init(name: "有馬 凪", reading: "ありまなぎ", roleKey: "artist", displayRole: "作家"),
+                .init(name: "久遠 澪", reading: "くおんみお", roleKey: "curator", displayRole: "キュレーター")
+            ]
+        case "live":
+            people = [
+                .init(name: "青凪ルカ", reading: "あおなぎるか", roleKey: "artist", displayRole: "アーティスト"),
+                .init(name: "The Lanterns", reading: "ざらんたんず", roleKey: "group", displayRole: "バンド"),
+                .init(name: "潮見ネオン", reading: "しおみねおん", roleKey: "artist", displayRole: "アーティスト")
+            ]
+        case "movie":
+            people = [
+                .init(name: "冬木 遥", reading: "ふゆきはるか", roleKey: "director", displayRole: "監督"),
+                .init(name: "朝倉 律", reading: "あさくらりつ", roleKey: "actor", displayRole: "主演"),
+                .init(name: "雪村 灯", reading: "ゆきむらあかり", roleKey: "director", displayRole: "監督")
+            ]
+        case "book":
+            people = [
+                .init(name: "遠野 灯子", reading: "とおのとうこ", roleKey: "author", displayRole: "著者"),
+                .init(name: "水瀬 栞", reading: "みなせしおり", roleKey: "author", displayRole: "著者"),
+                .init(name: "北原 澄", reading: "きたはらすみ", roleKey: "author", displayRole: "著者")
+            ]
+        default:
+            return nil
+        }
+        return people[index % people.count]
+    }
+
+    private static func resolvePlace(
+        _ seed: SamplePlace,
+        context: ModelContext,
+        placesByName: inout [String: PlaceMaster],
+        now: Date
+    ) -> PlaceMaster {
+        if let existing = placesByName[seed.name] {
+            return existing
+        }
+        let place = PlaceMaster(
+            name: seed.name,
+            reading: seed.reading,
+            placeTagsRaw: seed.tags,
+            prefecture: seed.prefecture,
+            address: seed.address,
+            officialURL: seed.officialURL,
+            memo: "共通場所カタログからサンプル用に登録しました。",
+            sourceSnapshotRaw: sampleMasterMarker,
+            normalizedName: normalized(seed.name),
+            normalizedAddress: normalized(seed.address),
+            createdAt: now,
+            updatedAt: now
+        )
+        context.insert(place)
+        placesByName[seed.name] = place
+        return place
+    }
+
+    private static func resolvePerson(
+        _ seed: SamplePerson,
+        context: ModelContext,
+        peopleByName: inout [String: PersonMaster],
+        now: Date
+    ) -> PersonMaster {
+        if let existing = peopleByName[seed.name] {
+            return existing
+        }
+        let person = PersonMaster(
+            displayName: seed.name,
+            reading: seed.reading,
+            roleTagsRaw: seed.displayRole,
+            memo: "Favorecoの使い方を示すために作成した架空の人物・団体です。",
+            sourceSnapshotRaw: sampleMasterMarker,
+            normalizedName: normalized(seed.name),
+            createdAt: now,
+            updatedAt: now
+        )
+        context.insert(person)
+        peopleByName[seed.name] = person
+        return person
+    }
+
+    @MainActor
+    private static func deleteOrphanedSampleMasters(in context: ModelContext) throws {
+        let marker = sampleMasterMarker
+        let samplePeople = try context.fetch(FetchDescriptor<PersonMaster>(
+            predicate: #Predicate { $0.sourceSnapshotRaw == marker }
+        ))
+        for person in samplePeople where (person.eventLinks ?? []).isEmpty && person.favoriteProfile == nil && (person.favoPins ?? []).isEmpty {
+            context.delete(person)
+        }
+
+        let samplePlaces = try context.fetch(FetchDescriptor<PlaceMaster>(
+            predicate: #Predicate { $0.sourceSnapshotRaw == marker }
+        ))
+        for place in samplePlaces where (place.visits ?? []).isEmpty && (place.plans ?? []).isEmpty && (place.favoPins ?? []).isEmpty {
+            context.delete(place)
+        }
+        if context.hasChanges {
+            try context.save()
+        }
+    }
+
+    private static func sampleImage(for category: RecordCategory, index: Int) -> SampleImage {
+        let resourceName = "\(category.templateKey)-\(index + 1)"
+        let resourceURL = Bundle.main.url(forResource: resourceName, withExtension: "jpg")
+            ?? Bundle.main.url(
+                forResource: resourceName,
+                withExtension: "jpg",
+                subdirectory: "Resources/SampleDataImages"
+            )
+        guard let url = resourceURL,
+              let data = try? Data(contentsOf: url),
+              let image = UIImage(data: data),
+              let cgImage = image.cgImage else {
+            return fallbackImage(for: category, title: sampleDefinition(for: category, index: index).title)
+        }
+        return SampleImage(data: data, width: cgImage.width, height: cgImage.height)
+    }
+
+    private static func fallbackImage(for category: RecordCategory, title: String) -> SampleImage {
+        let ratio = sampleRatio(for: category)
+        let height: CGFloat = 960
+        let size = CGSize(width: max(480, height * CGFloat(ratio)), height: height)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor(hexString: category.colorHex).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: max(28, size.width * 0.075), weight: .bold),
+                .foregroundColor: UIColor.white
+            ]
+            title.draw(
+                in: CGRect(x: size.width * 0.08, y: size.height * 0.72, width: size.width * 0.84, height: size.height * 0.2),
+                withAttributes: attributes
+            )
+        }
+        let data = image.jpegData(compressionQuality: 0.86) ?? Data()
+        return SampleImage(data: data, width: Int(size.width), height: Int(size.height))
+    }
+
+    private static func samplePastDate(now: Date, categoryIndex: Int, sampleIndex: Int) -> Date {
+        let daysAgo = 18 + categoryIndex * 7 + sampleIndex * 23
+        return Calendar.current.date(byAdding: .day, value: -daysAgo, to: now) ?? now
+    }
+
+    private static func sampleFutureDate(now: Date, categoryIndex: Int) -> Date {
+        let day = Calendar.current.date(byAdding: .day, value: 5 + categoryIndex * 3, to: now) ?? now
+        return Calendar.current.date(bySettingHour: 18, minute: 30, second: 0, of: day) ?? day
+    }
+
+    private static func sampleAspectRatioKey(for category: RecordCategory) -> String {
+        category.templateKey == "book"
+            ? EyecatchAspectRatio.hardcoverBook.key
+            : EyecatchAspectRatio.recommended(for: category).key
+    }
+
+    private static func sampleRatio(for category: RecordCategory) -> Double {
+        category.templateKey == "book"
+            ? EyecatchAspectRatio.hardcoverBook.value
+            : EyecatchAspectRatio.recommended(for: category).value
+    }
+
+    private static func sampleSubTypeKey(for category: RecordCategory, index: Int) -> String {
+        switch category.templateKey {
+        case "theme_park":
+            return OutingFacilityType.themePark.rawValue
+        case "nature_living":
+            return [OutingFacilityType.aquarium, .zoo, .botanicalGarden][index % 3].rawValue
+        case "outing_facility":
+            return OutingFacilityType.facilityOther.rawValue
+        default:
+            return ""
+        }
     }
 
     private static func samplePlanKind(for category: RecordCategory) -> String {
         switch category.templateKey {
-        case "movie": "screening"
-        case "book": "reading"
-        case "art": "exhibition"
-        case "outing", "goshuin": "visit"
-        case "sake": "tasting"
-        default: "performance"
+        case "movie": return "screening"
+        case "book": return "reading"
+        case "museum": return "exhibition"
+        case "sake": return "tasting"
+        case "theme_park", "nature_living", "outing_facility", "goshuin": return "visit"
+        default: return "performance"
+        }
+    }
+
+    private static func sampleDuration(for category: RecordCategory) -> TimeInterval {
+        switch category.templateKey {
+        case "book": return 60 * 60
+        case "theme_park", "nature_living", "outing_facility": return 5 * 60 * 60
+        default: return 2 * 60 * 60
+        }
+    }
+
+    private static func sampleAmount(for category: RecordCategory, index: Int) -> Decimal {
+        switch category.templateKey {
+        case "theater": return Decimal(8_800 + index * 1_200)
+        case "live": return Decimal(7_500 + index * 1_000)
+        case "movie": return Decimal(1_800 + index * 200)
+        case "museum": return Decimal(1_500 + index * 300)
+        case "sake": return Decimal(1_200 + index * 800)
+        case "theme_park": return Decimal(7_900 + index * 900)
+        case "nature_living", "outing_facility": return Decimal(1_800 + index * 400)
+        case "book": return Decimal(1_600 + index * 300)
+        default: return Decimal(0)
+        }
+    }
+
+    private static func sampleNote(for category: RecordCategory, title: String) -> String {
+        switch category.templateKey {
+        case "goshuin": return "\(title)でいただいた御朱印を残すサンプルです。"
+        case "book": return "読了後の感想や心に残った一節を記録するサンプルです。"
+        default: return "\(title)の写真、評価、場所、人物の記録方法を確認できます。"
+        }
+    }
+
+    private static func sampleOCRText(for category: RecordCategory, title: String) -> String {
+        switch category.templateKey {
+        case "theater", "live": return "\(title)\n開場 18:00 / 開演 18:30\nサンプルチケット"
+        case "museum": return "\(title)\n出品目録のサンプル"
+        case "book": return "\(title)\n読書メモのサンプル"
+        case "goshuin": return "\(title)\n参拝記録のサンプル"
+        default: return ""
+        }
+    }
+
+    private static func sampleAdvancedEntries(for category: RecordCategory, index: Int) -> [AdvancedFieldEntry] {
+        switch category.templateKey {
+        case "sake":
+            return [AdvancedFieldEntry(label: "飲み方", value: index == 2 ? "ロック" : "冷やして")]
+        case "book":
+            return [AdvancedFieldEntry(label: "読書状態", value: index == 2 ? "読みたい" : "読了")]
+        case "goshuin":
+            return [AdvancedFieldEntry(label: "御朱印帳", value: GoshuinBookSize.standard.name)]
+        default:
+            return []
         }
     }
 
@@ -263,14 +729,13 @@ enum DebugDataSeeder {
             return TicketAttempt(
                 statusKey: "waitingResult",
                 entryRouteKey: "lottery",
-                ticketSite: "チケットぴあ",
-                saleStartAt: now.addingTimeInterval(-2 * 24 * 60 * 60),
-                applyDeadlineAt: now.addingTimeInterval(24 * 60 * 60),
-                resultAnnounceAt: now.addingTimeInterval(3 * 24 * 60 * 60),
+                ticketSite: "サンプルプレイガイド",
+                applyDeadlineAt: now.addingTimeInterval(2 * 24 * 60 * 60),
+                resultAnnounceAt: now.addingTimeInterval(5 * 24 * 60 * 60),
                 issueStartAt: planStart.addingTimeInterval(-7 * 24 * 60 * 60),
                 price: Decimal(12_000),
-                purchaseURL: "\(debugURLPrefix)theater/ticket",
-                memo: "抽選応募予定から当落待ちまでの表示確認用です。通知は自動予約しません。",
+                purchaseURL: "\(sampleURLPrefix)theater/ticket",
+                memo: "当落待ち表示を確認するサンプルです。通知は予約しません。",
                 createdAt: now,
                 updatedAt: now,
                 plan: plan
@@ -279,13 +744,13 @@ enum DebugDataSeeder {
             return TicketAttempt(
                 statusKey: "waitingPayment",
                 entryRouteKey: "fanClub",
-                ticketSite: "イープラス",
+                ticketSite: "サンプルFC",
                 resultAnnounceAt: now.addingTimeInterval(-24 * 60 * 60),
                 paymentDeadlineAt: now.addingTimeInterval(2 * 24 * 60 * 60),
                 issueStartAt: planStart.addingTimeInterval(-5 * 24 * 60 * 60),
                 price: Decimal(9_800),
-                purchaseURL: "\(debugURLPrefix)live/ticket",
-                memo: "当選後の入金待ちと発券予定の表示確認用です。通知は自動予約しません。",
+                purchaseURL: "\(sampleURLPrefix)live/ticket",
+                memo: "入金待ち表示を確認するサンプルです。通知は予約しません。",
                 createdAt: now,
                 updatedAt: now,
                 plan: plan
@@ -293,349 +758,6 @@ enum DebugDataSeeder {
         default:
             return nil
         }
-    }
-
-    private struct SampleImage {
-        let data: Data
-        let width: Int
-        let height: Int
-    }
-
-    private static func sampleImage(for category: RecordCategory, title: String, index: Int) -> SampleImage {
-        let resourceIndex = ["movie", "theater", "book"].contains(category.templateKey)
-            ? index + 1
-            : (index % 3) + 1
-        let resourceName = "\(category.templateKey)-\(resourceIndex)"
-        let resourceURL = ["jpg", "png"].lazy.compactMap { fileExtension in
-            Bundle.main.url(forResource: resourceName, withExtension: fileExtension)
-                ?? Bundle.main.url(
-                    forResource: resourceName,
-                    withExtension: fileExtension,
-                    subdirectory: "Resources/DebugSampleImages"
-                )
-        }.first
-        if let url = resourceURL,
-           let data = try? Data(contentsOf: url),
-           let normalized = normalizedJPEG(from: data) {
-            return normalized
-        }
-
-        let size = sampleImageSize(for: category, index: index)
-        let data = sampleJPEGData(for: category, title: title, index: index, size: size)
-        return SampleImage(data: data, width: Int(size.width), height: Int(size.height))
-    }
-
-    private static func normalizedJPEG(from data: Data) -> SampleImage? {
-        guard let source = UIImage(data: data),
-              let cgImage = source.cgImage else {
-            return nil
-        }
-        let size = CGSize(width: cgImage.width, height: cgImage.height)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
-            UIColor.black.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            source.draw(in: CGRect(origin: .zero, size: size))
-        }
-        guard let jpegData = image.jpegData(compressionQuality: 0.82) else {
-            return nil
-        }
-        return SampleImage(data: jpegData, width: cgImage.width, height: cgImage.height)
-    }
-
-    private static func sampleJPEGData(for category: RecordCategory, title: String, index: Int, size: CGSize) -> Data {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        let baseColor = UIColor(hexString: category.colorHex)
-        let image = renderer.image { context in
-            let rect = CGRect(origin: .zero, size: size)
-            let cgContext = context.cgContext
-            baseColor.setFill()
-            context.fill(rect)
-
-            let accent = UIColor.white.withAlphaComponent(0.18)
-            accent.setFill()
-            cgContext.fillEllipse(in: CGRect(
-                x: size.width * 0.12,
-                y: size.height * 0.08,
-                width: size.width * 0.76,
-                height: size.width * 0.76
-            ))
-
-            UIColor.black.withAlphaComponent(0.18).setFill()
-            context.fill(CGRect(
-                x: 0,
-                y: size.height * 0.68,
-                width: size.width,
-                height: size.height * 0.32
-            ))
-
-            let symbol = sampleSymbol(for: category)
-            let symbolAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: min(size.width, size.height) * 0.24, weight: .bold),
-                .foregroundColor: UIColor.white.withAlphaComponent(0.92)
-            ]
-            let symbolSize = symbol.size(withAttributes: symbolAttributes)
-            symbol.draw(
-                at: CGPoint(x: (size.width - symbolSize.width) / 2, y: size.height * 0.28),
-                withAttributes: symbolAttributes
-            )
-
-            let numberText = String(format: "%02d", index + 1)
-            let numberAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.monospacedDigitSystemFont(ofSize: min(size.width, size.height) * 0.10, weight: .semibold),
-                .foregroundColor: UIColor.white.withAlphaComponent(0.72)
-            ]
-            numberText.draw(
-                at: CGPoint(x: size.width * 0.08, y: size.height * 0.08),
-                withAttributes: numberAttributes
-            )
-
-            let titleAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: max(18, min(size.width, size.height) * 0.09), weight: .bold),
-                .foregroundColor: UIColor.white
-            ]
-            let categoryAttributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: max(12, min(size.width, size.height) * 0.052), weight: .medium),
-                .foregroundColor: UIColor.white.withAlphaComponent(0.82)
-            ]
-            let titleLine = String(title.prefix(12))
-            titleLine.draw(
-                in: CGRect(x: size.width * 0.08, y: size.height * 0.74, width: size.width * 0.84, height: size.height * 0.12),
-                withAttributes: titleAttributes
-            )
-            category.name.draw(
-                in: CGRect(x: size.width * 0.08, y: size.height * 0.87, width: size.width * 0.84, height: size.height * 0.08),
-                withAttributes: categoryAttributes
-            )
-        }
-        return image.jpegData(compressionQuality: 0.82) ?? Data()
-    }
-
-    private static func sampleImageSize(for category: RecordCategory, index: Int) -> CGSize {
-        let ratio = category.templateKey == "goshuin" && sampleGoshuinBookSizeKey(index: index) == GoshuinBookSize.wide.key
-            ? EyecatchAspectRatio.labelLandscape.value
-            : EyecatchAspectRatio.recommended(for: category).value
-        let height: CGFloat = 720
-        return CGSize(width: max(360, height * CGFloat(ratio)), height: height)
-    }
-
-    private static func sampleTitle(for category: RecordCategory, index: Int) -> String {
-        let titles: [String]
-        switch category.templateKey {
-        case "movie":
-            titles = [
-                "マトリックス",
-                "シン・エヴァンゲリオン劇場版",
-                "秒速5センチメートル",
-                "スター・ウォーズ／マンダロリアン・アンド・グローグ",
-                "悪夢ちゃん The 夢ovie",
-                "TITANE／チタン",
-                "【推しの子】The Final Act",
-                "名探偵コナン 紺青の拳",
-                "国宝",
-                "気狂いピエロ",
-                "ジョーカー",
-                "トップガン",
-                "ショーシャンクの空に"
-            ]
-        case "theater":
-            titles = [
-                "ジェイミー",
-                "エリザベート 10th Anniversary",
-                "ピーター・パン",
-                "CATS",
-                "SPY×FAMILY",
-                "モアナと伝説の海2",
-                "ムーラン・ルージュ！ザ・ミュージカル",
-                "パリの恋人",
-                "RENT JAPAN TOUR 2018",
-                "CITY HUNTER／Fire Fever!",
-                "美女と野獣",
-                "カラーパープル",
-                "ラ・ボエーム ニューヨーク愛の歌",
-                "オペラ座の怪人",
-                "アルプススタンドのはしの方"
-            ]
-        case "book":
-            titles = [
-                "成瀬は都を駆け抜ける",
-                "僕のヒーローアカデミア 37",
-                "世界の歴史 1 オリエントと地中海の文明",
-                "Veil 7",
-                "すごいメモ。",
-                "余白のノート",
-                "海辺の短編集",
-                "静かなページ",
-                "月曜日の小説",
-                "読むための午後"
-            ]
-        case "sake":
-            titles = ["純米吟醸 霞", "山廃 月影", "初しぼり 青嵐", "大吟醸 白露", "にごり 雪待ち", "純米 原風景", "微発泡 星粒", "古酒 琥珀", "生酛 夕凪", "限定酒 花明かり"]
-        case "museum":
-            titles = ["光の断片展", "静物たちの部屋", "青の近代", "余白の彫刻", "紙と祈りの博物展", "夜の常設展", "色彩のアーカイブ", "小さな工芸展", "記憶の標本室", "風景を集める"]
-        case "live":
-            titles = ["夏のライブツアー", "Blue Hour", "星屑アリーナ", "週末フェス", "アンコールの夜", "Neon Session", "小さなクラブ公演", "音の記念日", "雨上がりのステージ", "ラストナンバー"]
-        case "theme_park":
-            titles = ["海辺のテーマパーク", "港の遊園地", "星空パーク", "森のアトラクション", "夏のウォーターパーク", "夜のパレード", "クラシック遊園地", "湖畔のパーク", "花火の夜", "冬のイルミネーション"]
-        case "nature_living":
-            titles = ["海辺の水族館", "森の温室", "朝の動物園", "湖畔の植物園", "夕暮れの庭園", "小さな水族館", "高原の動物園", "季節の花園", "野鳥の森", "海のいきもの館"]
-        case "outing_facility":
-            titles = ["未分類のおでかけ", "街の体験施設", "季節のイベント", "郊外のおでかけ", "旅先の施設", "週末スポット", "地域の催し", "展望スポット", "体験センター", "思い出の場所"]
-        case "goshuin":
-            titles = ["青葉神社", "白山寺", "水鏡稲荷", "月守神宮", "花霞寺", "千歳八幡宮", "風待不動尊", "椿森神社", "朝霧観音", "星川天満宮"]
-        default:
-            titles = (1...defaultSampleCountPerCategory).map { "\(category.name)のサンプル\($0)" }
-        }
-        return titles[index % titles.count]
-    }
-
-    private static func sampleCount(for category: RecordCategory) -> Int {
-        switch category.templateKey {
-        case "movie": movieSampleCount
-        case "theater": theaterSampleCount
-        default: defaultSampleCountPerCategory
-        }
-    }
-
-    private static func sampleSeries(for category: RecordCategory, index: Int) -> String {
-        switch category.templateKey {
-        case "book": return index.isMultiple(of: 2) ? "旅の本棚" : "夜の読書"
-        case "movie": return index.isMultiple(of: 2) ? "週末映画" : "名画座メモ"
-        case "sake": return index.isMultiple(of: 2) ? "試飲メモ" : "家飲み記録"
-        case "live": return "2026 Tour"
-        case "theater": return index.isMultiple(of: 3) ? "東京公演" : ""
-        default: return ""
-        }
-    }
-
-    private static func sampleSubTypeKey(for category: RecordCategory, index: Int) -> String {
-        switch category.templateKey {
-        case "theme_park":
-            return OutingFacilityType.themePark.rawValue
-        case "nature_living":
-            let types: [OutingFacilityType] = [.aquarium, .zoo, .botanicalGarden, .natureOther]
-            return types[index % types.count].rawValue
-        case "outing_facility":
-            return OutingFacilityType.facilityOther.rawValue
-        default:
-            return ""
-        }
-    }
-
-    private static func sampleVenue(for category: RecordCategory, index: Int) -> String {
-        let venues: [String]
-        switch category.templateKey {
-        case "movie": venues = ["favorecoシネマ", "日比谷シアター", "新宿スクリーン", "横浜ミニシアター"]
-        case "theater": venues = ["favoreco劇場", "東京芸術劇場", "世田谷パブリックシアター", "小劇場ルミエール"]
-        case "museum": venues = ["favoreco美術館", "国立西洋美術館", "東京都美術館", "森の博物館"]
-        case "live": venues = ["favorecoホール", "Zepp DiverCity", "日本武道館", "Blue Note Tokyo"]
-        case "sake": venues = ["自宅", "日本酒バー 澄", "蔵元試飲会", "友人宅"]
-        case "theme_park": venues = ["favorecoパーク", "港の遊園地", "星空パーク", "湖畔のパーク"]
-        case "nature_living": venues = ["海辺の水族館", "朝の動物園", "森の植物園", "夕暮れの庭園"]
-        case "outing_facility": venues = ["街の体験施設", "旅先の施設", "展望スポット", "地域の催し"]
-        case "goshuin": venues = ["favoreco神社", "青葉神社", "白山寺", "月守神宮"]
-        case "book": venues = ["読書メモ", "自宅", "カフェ", "移動中"]
-        default: venues = ["favoreco"]
-        }
-        return venues[index % venues.count]
-    }
-
-    private static func sampleOrganizer(for category: RecordCategory) -> String {
-        switch category.templateKey {
-        case "movie": return "Favoreco Pictures"
-        case "theater": return "Favoreco Stage"
-        case "museum": return "Favoreco Museum"
-        case "live": return "Favoreco Music"
-        default: return ""
-        }
-    }
-
-    private static func sampleOCRText(for category: RecordCategory, title: String, index: Int) -> String {
-        switch category.templateKey {
-        case "theater":
-            return sampleTheaterOCRText(title: title, index: index)
-        case "museum", "live", "movie":
-            return "\(title)\n開場 17:30 / 開演 18:30\n電子チケット控え"
-        case "book":
-            return "\(title)\n気になった一節と読了メモ"
-        case "goshuin":
-            return "\(title)\n参拝日と御朱印の控え"
-        default:
-            return ""
-        }
-    }
-
-    private static func sampleTheaterOCRText(title: String, index: Int) -> String {
-        switch index {
-        case 10:
-            return """
-            Disney
-            BEAUTY AND THE BEAST
-            """
-        case 11:
-            return """
-            カラーパープル
-            ゴールデングローブ賞 Wノミネート
-            不朽の名作がミュージカルとしてよみがえる！
-            2.9 (Fri) 魂の歌声が心を揺さぶる
-            """
-        case 12:
-            return """
-            ラ・ボエーム ニューヨーク愛の歌
-            新たな感動、圧巻の歌声！ミュージカルに生まれ変わったオペラ最高傑作！
-            夢に生きた 愛にもがいた 永遠を信じた
-            格差、貧困、マイノリティー
-            苦境を前に声の限り命を燃やす、若者たちの青春賛歌
-            """
-        case 13:
-            return "The Phantom of the Opera"
-        case 14:
-            return """
-            アルプススタンドのはしの方
-            小野莉奈 / 平井亜門 / 西本まりん / 中村守里 / 黒木ひかり / 平井珠生
-            そこは、輝けない私たちのちょっとだけ輝かしい特等席。
-            第15回 大阪アジアン映画祭 正式出品作品
-            カラー / 16:9 / 5.1ch / 75分
-            """
-        default:
-            return "\(title)\n開場 17:30 / 開演 18:30\n電子チケット控え"
-        }
-    }
-
-    private static func sampleAdvancedEntries(for category: RecordCategory, index: Int) -> [AdvancedFieldEntry] {
-        switch category.templateKey {
-        case "sake":
-            return [
-                AdvancedFieldEntry(label: "精米歩合", value: "\(50 + (index % 5) * 5)%"),
-                AdvancedFieldEntry(label: "温度", value: index.isMultiple(of: 2) ? "冷酒" : "常温")
-            ]
-        case "book":
-            return [AdvancedFieldEntry(label: "読書状態", value: index.isMultiple(of: 3) ? "読了" : "読書中")]
-        case "goshuin":
-            return [AdvancedFieldEntry(label: "御朱印帳", value: GoshuinBookSize.option(for: sampleGoshuinBookSizeKey(index: index)).name)]
-        default:
-            return []
-        }
-    }
-
-    private static func sampleGoshuinBookSizeKey(index: Int) -> String {
-        GoshuinBookSize.all[index % GoshuinBookSize.all.count].key
-    }
-
-    private static func sampleOutcomeKey(for category: RecordCategory, index: Int) -> String {
-        guard hasEnabledUnit("ticketPlan", in: category) else { return "" }
-        let states = ["planned", "applied", "won", "paid", "ticketed", "attended"]
-        return states[index % states.count]
-    }
-
-    private static func sampleSeatText(for category: RecordCategory, index: Int) -> String {
-        guard hasEnabledUnit("ticketPlan", in: category) else { return "" }
-        return "\(1 + index % 3)階 \(8 + index)列 \(12 + index)番"
     }
 
     private static func hasEnabledUnit(_ unitID: String, in category: RecordCategory) -> Bool {
@@ -645,53 +767,28 @@ enum DebugDataSeeder {
             .contains(unitID)
     }
 
-    private static func sampleRating(index: Int) -> Double {
-        [4.8, 4.5, 4.2, 5.0, 3.8][index % 5]
-    }
-
-    private static func sampleNote(for category: RecordCategory, title: String, index: Int) -> String {
-        switch category.templateKey {
-        case "goshuin":
-            return "\(title)でいただいた御朱印。御朱印帳サイズと画像表示の確認用サンプルです。"
-        case "book":
-            return "読み終わったあとに残った印象をメモ。書影比率と読書記録の確認用サンプルです。"
-        default:
-            return "写真付きサンプル記録。アイキャッチ比率、一覧表示、詳細表示の確認用です。"
-        }
-    }
-
-    private static func sampleTags(for category: RecordCategory, index: Int) -> String {
-        ["デバッグ", category.name, index.isMultiple(of: 2) ? "お気に入り" : "確認用"].joined(separator: ",")
-    }
-
-    private static func sampleCompanions(index: Int) -> String {
-        index.isMultiple(of: 3) ? "友人" : ""
-    }
-
-    private static func sampleAmount(for category: RecordCategory, index: Int) -> Decimal {
-        switch category.templateKey {
-        case "theater", "live": return Decimal(6500 + index * 800)
-        case "museum", "movie", "outing_facility", "theme_park", "nature_living": return Decimal(1200 + index * 300)
-        case "sake": return Decimal(1800 + index * 450)
-        case "book": return Decimal(900 + index * 120)
-        default: return Decimal(0)
-        }
-    }
-
-    private static func sampleSymbol(for category: RecordCategory) -> String {
-        switch category.templateKey {
-        case "movie": return "映画"
-        case "theater": return "観劇"
-        case "book": return "本"
-        case "sake": return "酒"
-        case "museum": return "展"
-        case "live": return "音"
-        case "outing_facility", "theme_park", "nature_living": return "旅"
-        case "goshuin": return "印"
-        default: return String(category.name.prefix(1))
-        }
+    private static func normalized(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+            .lowercased()
     }
 }
+
+#if DEBUG
+enum DebugDataSeeder {
+    @MainActor
+    @discardableResult
+    static func insertSampleData(in context: ModelContext) throws -> DebugSampleDataSummary {
+        try SampleDataSeeder.replaceSamples(in: context)
+    }
+
+    @MainActor
+    @discardableResult
+    static func deleteSampleData(in context: ModelContext) throws -> DebugSampleDataSummary {
+        try SampleDataSeeder.deleteSamples(in: context)
+    }
+}
+#endif
 
 private extension UIColor {
     convenience init(hexString: String) {
@@ -699,10 +796,11 @@ private extension UIColor {
         let scanner = Scanner(string: cleaned)
         var value: UInt64 = 0
         scanner.scanHexInt64(&value)
-
-        let red = CGFloat((value >> 16) & 0xFF) / 255
-        let green = CGFloat((value >> 8) & 0xFF) / 255
-        let blue = CGFloat(value & 0xFF) / 255
-        self.init(red: red, green: green, blue: blue, alpha: 1)
+        self.init(
+            red: CGFloat((value >> 16) & 0xFF) / 255,
+            green: CGFloat((value >> 8) & 0xFF) / 255,
+            blue: CGFloat(value & 0xFF) / 255,
+            alpha: 1
+        )
     }
 }

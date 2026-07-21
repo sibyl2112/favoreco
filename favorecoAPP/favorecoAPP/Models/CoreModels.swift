@@ -120,6 +120,7 @@ final class PersonMaster {
     var officialURL: String = ""
     var socialLinksRaw: String = ""
     var imagePath: String = ""
+    @Attribute(.externalStorage) var imageData: Data?
     var musicBrainzID: String = ""
     var wikidataQID: String = ""
     var appleMusicID: String = ""
@@ -148,6 +149,7 @@ final class PersonMaster {
         officialURL: String = "",
         socialLinksRaw: String = "",
         imagePath: String = "",
+        imageData: Data? = nil,
         musicBrainzID: String = "",
         wikidataQID: String = "",
         appleMusicID: String = "",
@@ -166,11 +168,41 @@ final class PersonMaster {
         self.officialURL = officialURL
         self.socialLinksRaw = socialLinksRaw
         self.imagePath = imagePath
+        self.imageData = imageData
         self.musicBrainzID = musicBrainzID
         self.wikidataQID = wikidataQID
         self.appleMusicID = appleMusicID
         self.sourceSnapshotRaw = sourceSnapshotRaw
         self.normalizedName = normalizedName
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+@Model
+final class CompanionMaster {
+    var id: UUID = UUID()
+    var name: String = ""
+    var normalizedName: String = ""
+    var iconSymbol: String = "person.crop.circle"
+    var isArchived: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    init(
+        id: UUID = UUID(),
+        name: String = "",
+        normalizedName: String = "",
+        iconSymbol: String = "person.crop.circle",
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.normalizedName = normalizedName
+        self.iconSymbol = iconSymbol
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -925,6 +957,8 @@ final class PhotoBlob {
     var originalFilename: String = ""
     var mediaKind: String = "photo"
     var purpose: String = "memory"
+    var ocrText: String = ""
+    var amount: Decimal = Decimal(0)
     var byteCount: Int = 0
     var width: Int = 0
     var height: Int = 0
@@ -945,6 +979,8 @@ final class PhotoBlob {
         originalFilename: String = "",
         mediaKind: String = "photo",
         purpose: String = "memory",
+        ocrText: String = "",
+        amount: Decimal = Decimal(0),
         byteCount: Int = 0,
         width: Int = 0,
         height: Int = 0,
@@ -957,6 +993,8 @@ final class PhotoBlob {
         self.originalFilename = originalFilename
         self.mediaKind = mediaKind
         self.purpose = purpose
+        self.ocrText = ocrText
+        self.amount = amount
         self.byteCount = byteCount
         self.width = width
         self.height = height

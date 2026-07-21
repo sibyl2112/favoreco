@@ -276,6 +276,10 @@ struct GenreOnboardingView: View {
 
         do {
             try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: modelContext)
+            _ = try SampleDataSeeder.insertAutomaticSamples(
+                in: modelContext,
+                categoryTemplateKeys: selectedKeys
+            )
             try modelContext.save()
             hasCompletedGenreOnboarding = true
         } catch {

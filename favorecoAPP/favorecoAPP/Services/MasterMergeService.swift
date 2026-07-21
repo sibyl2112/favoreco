@@ -29,6 +29,9 @@ enum MasterMergeService {
         destination.officialURL = preferred(destination.officialURL, fallback: source.officialURL)
         destination.socialLinksRaw = preferred(destination.socialLinksRaw, fallback: source.socialLinksRaw)
         destination.imagePath = preferred(destination.imagePath, fallback: source.imagePath)
+        if destination.imageData == nil {
+            destination.imageData = source.imageData
+        }
         destination.musicBrainzID = preferred(destination.musicBrainzID, fallback: source.musicBrainzID)
         destination.wikidataQID = preferred(destination.wikidataQID, fallback: source.wikidataQID)
         destination.appleMusicID = preferred(destination.appleMusicID, fallback: source.appleMusicID)

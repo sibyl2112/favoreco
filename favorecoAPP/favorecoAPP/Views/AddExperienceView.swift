@@ -194,6 +194,7 @@ struct AddExperienceView: View {
             PhotoUnitEditor(
                 existingPhotos: [],
                 deletedPhotoIDs: .constant([]),
+                existingPhotoMetadata: .constant([:]),
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems,
                 category: category,
@@ -362,6 +363,7 @@ struct EditExperienceView: View {
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var coverPhotoPath: String
     @State private var deletedPhotoIDs: Set<UUID> = []
+    @State private var existingPhotoMetadata: [UUID: PhotoMetadataDraft] = [:]
     @State private var pendingPeople: [PendingPersonLink] = []
     @State private var deletedPersonLinkIDs: Set<UUID> = []
     @State private var isShowingPlaceSearch = false
@@ -516,6 +518,7 @@ struct EditExperienceView: View {
             PhotoUnitEditor(
                 existingPhotos: visibleExistingPhotos,
                 deletedPhotoIDs: $deletedPhotoIDs,
+                existingPhotoMetadata: $existingPhotoMetadata,
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems,
                 category: event?.category,
@@ -626,6 +629,7 @@ struct EditExperienceView: View {
         visit.updatedAt = now
         deleteMarkedPersonLinks()
         insertPendingPeople(for: event, visit: nil)
+        applyExistingPhotoMetadata()
         deleteMarkedPhotos()
         insertPendingPhotos(for: visit)
 
@@ -658,6 +662,17 @@ struct EditExperienceView: View {
         guard let photos = visit.photos else { return }
         for photo in photos where deletedPhotoIDs.contains(photo.id) {
             modelContext.delete(photo)
+        }
+    }
+
+    private func applyExistingPhotoMetadata() {
+        for photo in visibleExistingPhotos {
+            guard let metadata = existingPhotoMetadata[photo.id] else { continue }
+            photo.purpose = metadata.purpose.rawValue
+            photo.ocrText = metadata.purpose.supportsAmount
+                ? metadata.ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
+                : ""
+            photo.amount = metadata.purpose.supportsAmount ? metadata.amount : Decimal(0)
         }
     }
 
@@ -868,6 +883,7 @@ struct AddVisitView: View {
             PhotoUnitEditor(
                 existingPhotos: [],
                 deletedPhotoIDs: .constant([]),
+                existingPhotoMetadata: .constant([:]),
                 pendingPhotos: $pendingPhotos,
                 selectedItems: $selectedPhotoItems,
                 category: event.category,

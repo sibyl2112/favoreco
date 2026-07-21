@@ -7,12 +7,87 @@ import Foundation
 import UIKit
 import ImageIO
 
+enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sendable {
+    case memory
+    case ticket
+    case goods
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .memory: return "思い出"
+        case .ticket: return "チケット"
+        case .goods: return "グッズ"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .memory: return "photo.on.rectangle"
+        case .ticket: return "ticket"
+        case .goods: return "bag"
+        }
+    }
+
+    var supportsAmount: Bool { self != .memory }
+
+    static func resolved(from rawValue: String) -> ExperiencePhotoPurpose {
+        ExperiencePhotoPurpose(rawValue: rawValue) ?? .memory
+    }
+}
+
+struct PhotoMetadataDraft: Sendable {
+    var purpose: ExperiencePhotoPurpose = .memory
+    var ocrText: String = ""
+    var amountText: String = ""
+
+    init(
+        purpose: ExperiencePhotoPurpose = .memory,
+        ocrText: String = "",
+        amountText: String = ""
+    ) {
+        self.purpose = purpose
+        self.ocrText = ocrText
+        self.amountText = amountText
+    }
+
+    init(photo: PhotoBlob) {
+        purpose = .resolved(from: photo.purpose)
+        ocrText = photo.ocrText
+        amountText = Self.formattedAmount(photo.amount)
+    }
+
+    var amount: Decimal {
+        let normalized = amountText
+            .replacingOccurrences(of: ",", with: "")
+            .replacingOccurrences(of: "¥", with: "")
+            .replacingOccurrences(of: "￥", with: "")
+            .replacingOccurrences(of: "円", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return Decimal(0) }
+        return Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX")) ?? Decimal(0)
+    }
+
+    mutating func normalizeForPurpose() {
+        guard purpose == .memory else { return }
+        ocrText = ""
+        amountText = ""
+    }
+
+    private static func formattedAmount(_ amount: Decimal) -> String {
+        guard amount != Decimal(0) else { return "" }
+        return NSDecimalNumber(decimal: amount).stringValue
+    }
+}
+
 struct PendingPhoto: Identifiable, Sendable {
     let id = UUID()
     var data: Data
     var originalFilename: String
     var width: Int
     var height: Int
+    var metadata = PhotoMetadataDraft()
 
     var relativePath: String {
         "local/\(id.uuidString).jpg"
@@ -23,7 +98,9 @@ struct PendingPhoto: Identifiable, Sendable {
             relativePath: relativePath,
             originalFilename: originalFilename,
             mediaKind: "photo",
-            purpose: "memory",
+            purpose: metadata.purpose.rawValue,
+            ocrText: metadata.ocrText.trimmingCharacters(in: .whitespacesAndNewlines),
+            amount: metadata.purpose.supportsAmount ? metadata.amount : Decimal(0),
             byteCount: data.count,
             width: width,
             height: height,

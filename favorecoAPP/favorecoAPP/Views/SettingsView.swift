@@ -28,6 +28,16 @@ struct SettingsView: View {
                 }
 
                 NavigationLink {
+                    MasterDataSettingsHubView()
+                } label: {
+                    SettingsNavigationLabel(
+                        title: "マスターデータ",
+                        detail: "人物・団体、場所、タグ、同行者",
+                        systemImage: "tray.full"
+                    )
+                }
+
+                NavigationLink {
                     AppSettingsHubView()
                 } label: {
                     SettingsNavigationLabel(
@@ -42,7 +52,7 @@ struct SettingsView: View {
                 } label: {
                     SettingsNavigationLabel(
                         title: "データと同期",
-                        detail: "マスター、書き出し、バックアップ、iCloud",
+                        detail: "書き出し、バックアップ、iCloud",
                         systemImage: "externaldrive.badge.icloud"
                     )
                 }
@@ -144,6 +154,650 @@ private struct MySettingsHubView: View {
         .navigationTitle("マイ・登録情報")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+private struct MasterDataSettingsHubView: View {
+    @Query private var people: [PersonMaster]
+    @Query private var places: [PlaceMaster]
+    @Query private var companions: [CompanionMaster]
+    @Query private var visits: [Visit]
+
+    private var activePeopleCount: Int {
+        people.filter { !$0.isArchived }.count
+    }
+
+    private var activePlaceCount: Int {
+        places.filter { !$0.isArchived }.count
+    }
+
+    private var tagCount: Int {
+        recordFacetMasterValues(in: visits, kind: .tag).count
+    }
+
+    private var companionCount: Int {
+        let recorded = recordFacetMasterValues(in: visits, kind: .companion).map(\.id)
+        let registered = companions.filter { !$0.isArchived }.map { normalizedRecordFacetMasterName($0.name) }
+        return Set(recorded + registered).count
+    }
+
+    var body: some View {
+        List {
+            Section("基本マスター") {
+                NavigationLink {
+                    PersonMasterManagementView()
+                } label: {
+                    LabeledContent("人物・団体", value: "\(activePeopleCount)件")
+                }
+
+                NavigationLink {
+                    PlaceMasterManagementView()
+                } label: {
+                    LabeledContent("場所", value: "\(activePlaceCount)件")
+                }
+            }
+
+            Section {
+                NavigationLink {
+                    RecordFacetMasterManagementView(kind: .tag)
+                } label: {
+                    LabeledContent("タグ", value: "\(tagCount)件")
+                }
+
+                NavigationLink {
+                    CompanionMasterManagementView()
+                } label: {
+                    LabeledContent("同行者", value: "\(companionCount)件")
+                }
+            } header: {
+                Text("記録から集約")
+            } footer: {
+                Text("タグは記録の表記を集約します。同行者は記録の表記を保ちながら、表示アイコンをマスターへ保存できます。改名・統合・削除は関連記録へ反映されます。")
+            }
+        }
+        .navigationTitle("マスターデータ")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private enum RecordFacetMasterKind: String, Identifiable {
+    case tag
+    case companion
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .tag: "タグ"
+        case .companion: "同行者"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .tag: "tag"
+        case .companion: "person.2"
+        }
+    }
+
+    func rawValue(from visit: Visit) -> String {
+        switch self {
+        case .tag: visit.tagNamesRaw
+        case .companion: visit.companionNamesRaw
+        }
+    }
+
+    func setRawValue(_ value: String, on visit: Visit) {
+        switch self {
+        case .tag: visit.tagNamesRaw = value
+        case .companion: visit.companionNamesRaw = value
+        }
+    }
+}
+
+private struct RecordFacetMasterValue: Identifiable {
+    let name: String
+    let usageCount: Int
+
+    var id: String { normalizedRecordFacetMasterName(name) }
+}
+
+private struct RecordFacetMasterManagementView: View {
+    let kind: RecordFacetMasterKind
+
+    @Environment(\.modelContext) private var modelContext
+    @Query private var visits: [Visit]
+    @State private var searchText = ""
+    @State private var editingValue: RecordFacetMasterValue?
+    @State private var draftName = ""
+    @State private var valuePendingDeletion: RecordFacetMasterValue?
+    @State private var errorMessage = ""
+
+    private var values: [RecordFacetMasterValue] {
+        let allValues = recordFacetMasterValues(in: visits, kind: kind)
+        let query = normalizedRecordFacetMasterName(searchText)
+        guard !query.isEmpty else { return allValues }
+        return allValues.filter { normalizedRecordFacetMasterName($0.name).contains(query) }
+    }
+
+    var body: some View {
+        List {
+            if values.isEmpty {
+                ContentUnavailableView(
+                    searchText.isEmpty ? "\(kind.title)はまだありません" : "条件に一致する\(kind.title)がありません",
+                    systemImage: kind.systemImage,
+                    description: Text("記録へ保存した\(kind.title)がここへ自動的にまとまります。")
+                )
+            } else {
+                ForEach(values) { value in
+                    Button {
+                        editingValue = value
+                        draftName = value.name
+                    } label: {
+                        HStack {
+                            Label(value.name, systemImage: kind.systemImage)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text("\(value.usageCount)件の記録")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions {
+                        Button("削除", role: .destructive) {
+                            valuePendingDeletion = value
+                        }
+                    }
+                }
+            }
+
+            if !errorMessage.isEmpty {
+                Section {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .navigationTitle("\(kind.title)マスター")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "\(kind.title)を検索")
+        .sheet(item: $editingValue) { value in
+            NavigationStack {
+                Form {
+                    Section("表記") {
+                        TextField(kind.title, text: $draftName)
+                    }
+                    Section {
+                        Text("同じ表記がすでにある場合は1つへ統合します。関連する\(value.usageCount)件の記録へ反映されます。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .navigationTitle("\(kind.title)を編集")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("キャンセル") { editingValue = nil }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存") { rename(value, to: draftName) }
+                            .disabled(draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+        }
+        .confirmationDialog(
+            "「\(valuePendingDeletion?.name ?? "")」を削除しますか？",
+            isPresented: Binding(
+                get: { valuePendingDeletion != nil },
+                set: { if !$0 { valuePendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let value = valuePendingDeletion {
+                Button("\(value.usageCount)件の記録から削除", role: .destructive) {
+                    delete(value)
+                }
+            }
+            Button("キャンセル", role: .cancel) { valuePendingDeletion = nil }
+        } message: {
+            Text("人物・場所・写真など、ほかの記録内容は変更しません。")
+        }
+    }
+
+    private func rename(_ value: RecordFacetMasterValue, to newName: String) {
+        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        applyChange(for: value) { names in
+            names.map {
+                normalizedRecordFacetMasterName($0) == value.id ? trimmedName : $0
+            }
+        }
+        if errorMessage.isEmpty {
+            editingValue = nil
+        }
+    }
+
+    private func delete(_ value: RecordFacetMasterValue) {
+        applyChange(for: value) { names in
+            names.filter { normalizedRecordFacetMasterName($0) != value.id }
+        }
+        if errorMessage.isEmpty {
+            valuePendingDeletion = nil
+        }
+    }
+
+    private func applyChange(
+        for value: RecordFacetMasterValue,
+        transform: ([String]) -> [String]
+    ) {
+        let now = Date()
+        for visit in visits {
+            let currentNames = recordFacetMasterNames(from: kind.rawValue(from: visit))
+            guard currentNames.contains(where: { normalizedRecordFacetMasterName($0) == value.id }) else {
+                continue
+            }
+            let changedNames = deduplicatedRecordFacetMasterNames(transform(currentNames))
+            kind.setRawValue(changedNames.joined(separator: "、"), on: visit)
+            visit.updatedAt = now
+        }
+
+        do {
+            try modelContext.save()
+            errorMessage = ""
+        } catch {
+            modelContext.rollback()
+            errorMessage = "更新できませんでした: \(error.localizedDescription)"
+        }
+    }
+}
+
+private struct CompanionMasterListValue: Identifiable {
+    let name: String
+    let usageCount: Int
+    let iconSymbol: String
+    let masterID: UUID?
+
+    var id: String { normalizedRecordFacetMasterName(name) }
+}
+
+private struct CompanionMasterManagementView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \CompanionMaster.name) private var companions: [CompanionMaster]
+    @Query private var visits: [Visit]
+    @State private var searchText = ""
+    @State private var editingValue: CompanionMasterListValue?
+    @State private var isShowingCreate = false
+    @State private var draftName = ""
+    @State private var draftIcon = CompanionIconCatalog.defaultSymbol
+    @State private var valuePendingDeletion: CompanionMasterListValue?
+    @State private var errorMessage = ""
+
+    private var allValues: [CompanionMasterListValue] {
+        var valuesByKey: [String: CompanionMasterListValue] = [:]
+        let activeMasters = companions.filter { !$0.isArchived }
+
+        for recorded in recordFacetMasterValues(in: visits, kind: .companion) {
+            let master = activeMasters.first {
+                normalizedRecordFacetMasterName($0.name) == recorded.id
+                    || $0.normalizedName == recorded.id
+            }
+            let displayName = master.flatMap { $0.name.isEmpty ? nil : $0.name } ?? recorded.name
+            valuesByKey[recorded.id] = CompanionMasterListValue(
+                name: displayName,
+                usageCount: recorded.usageCount,
+                iconSymbol: CompanionIconCatalog.validated(master?.iconSymbol),
+                masterID: master?.id
+            )
+        }
+
+        for master in activeMasters {
+            let key = normalizedRecordFacetMasterName(master.name)
+            guard !key.isEmpty, valuesByKey[key] == nil else { continue }
+            valuesByKey[key] = CompanionMasterListValue(
+                name: master.name,
+                usageCount: 0,
+                iconSymbol: CompanionIconCatalog.validated(master.iconSymbol),
+                masterID: master.id
+            )
+        }
+
+        return valuesByKey.values.sorted {
+            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+    }
+
+    private var filteredValues: [CompanionMasterListValue] {
+        let query = normalizedRecordFacetMasterName(searchText)
+        guard !query.isEmpty else { return allValues }
+        return allValues.filter { normalizedRecordFacetMasterName($0.name).contains(query) }
+    }
+
+    var body: some View {
+        List {
+            if filteredValues.isEmpty {
+                ContentUnavailableView(
+                    searchText.isEmpty ? "同行者はまだありません" : "条件に一致する同行者がありません",
+                    systemImage: "person.2",
+                    description: Text("記録へ保存した同行者は自動的にまとまります。ここから先に登録することもできます。")
+                )
+            } else {
+                ForEach(filteredValues) { value in
+                    Button {
+                        beginEditing(value)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: value.iconSymbol)
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 30, height: 30)
+                                .background(Color.accentColor.opacity(0.12), in: Circle())
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(value.name)
+                                    .foregroundStyle(.primary)
+                                Text(value.usageCount == 0 ? "記録では未使用" : "\(value.usageCount)件の記録")
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions {
+                        Button("削除", role: .destructive) {
+                            valuePendingDeletion = value
+                        }
+                    }
+                }
+            }
+
+            if !errorMessage.isEmpty {
+                Section { Text(errorMessage).foregroundStyle(.red) }
+            }
+        }
+        .navigationTitle("同行者マスター")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "同行者を検索")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    draftName = ""
+                    draftIcon = CompanionIconCatalog.defaultSymbol
+                    isShowingCreate = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("同行者を追加")
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { isShowingCreate || editingValue != nil },
+            set: { isPresented in
+                if !isPresented {
+                    isShowingCreate = false
+                    editingValue = nil
+                }
+            }
+        )) {
+            CompanionMasterEditor(
+                title: editingValue == nil ? "同行者を追加" : "同行者を編集",
+                name: $draftName,
+                iconSymbol: $draftIcon,
+                usageCount: editingValue?.usageCount ?? 0,
+                onCancel: {
+                    isShowingCreate = false
+                    editingValue = nil
+                },
+                onSave: saveDraft
+            )
+        }
+        .confirmationDialog(
+            "「\(valuePendingDeletion?.name ?? "")」を削除しますか？",
+            isPresented: Binding(
+                get: { valuePendingDeletion != nil },
+                set: { if !$0 { valuePendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let value = valuePendingDeletion {
+                Button(
+                    value.usageCount == 0 ? "同行者マスターを削除" : "\(value.usageCount)件の記録から削除",
+                    role: .destructive
+                ) {
+                    delete(value)
+                }
+            }
+            Button("キャンセル", role: .cancel) { valuePendingDeletion = nil }
+        } message: {
+            Text("人物・場所・写真など、ほかの記録内容は変更しません。")
+        }
+    }
+
+    private func beginEditing(_ value: CompanionMasterListValue) {
+        editingValue = value
+        draftName = value.name
+        draftIcon = value.iconSymbol
+    }
+
+    private func saveDraft() {
+        let trimmedName = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newKey = normalizedRecordFacetMasterName(trimmedName)
+        guard !newKey.isEmpty else { return }
+        let oldKey = editingValue?.id
+        let now = Date()
+
+        if let oldKey {
+            replaceCompanionName(oldKey: oldKey, newName: trimmedName, now: now)
+        }
+
+        let sourceMaster = editingValue?.masterID.flatMap { id in companions.first { $0.id == id } }
+        let destinationMaster = companions.first {
+            !$0.isArchived && $0.id != sourceMaster?.id
+                && (normalizedRecordFacetMasterName($0.name) == newKey || $0.normalizedName == newKey)
+        }
+
+        if let destinationMaster {
+            destinationMaster.name = trimmedName
+            destinationMaster.normalizedName = newKey
+            destinationMaster.iconSymbol = CompanionIconCatalog.validated(draftIcon)
+            destinationMaster.updatedAt = now
+            if let sourceMaster {
+                modelContext.delete(sourceMaster)
+            }
+        } else if let sourceMaster {
+            sourceMaster.name = trimmedName
+            sourceMaster.normalizedName = newKey
+            sourceMaster.iconSymbol = CompanionIconCatalog.validated(draftIcon)
+            sourceMaster.updatedAt = now
+        } else {
+            modelContext.insert(CompanionMaster(
+                name: trimmedName,
+                normalizedName: newKey,
+                iconSymbol: CompanionIconCatalog.validated(draftIcon),
+                createdAt: now,
+                updatedAt: now
+            ))
+        }
+
+        do {
+            try modelContext.save()
+            errorMessage = ""
+            isShowingCreate = false
+            editingValue = nil
+        } catch {
+            modelContext.rollback()
+            errorMessage = "保存できませんでした: \(error.localizedDescription)"
+        }
+    }
+
+    private func delete(_ value: CompanionMasterListValue) {
+        let now = Date()
+        for visit in visits {
+            let names = recordFacetMasterNames(from: visit.companionNamesRaw)
+            guard names.contains(where: { normalizedRecordFacetMasterName($0) == value.id }) else { continue }
+            visit.companionNamesRaw = deduplicatedRecordFacetMasterNames(
+                names.filter { normalizedRecordFacetMasterName($0) != value.id }
+            ).joined(separator: "、")
+            visit.updatedAt = now
+        }
+        companions.filter {
+            $0.id == value.masterID
+                || normalizedRecordFacetMasterName($0.name) == value.id
+                || $0.normalizedName == value.id
+        }.forEach(modelContext.delete)
+
+        do {
+            try modelContext.save()
+            errorMessage = ""
+            valuePendingDeletion = nil
+        } catch {
+            modelContext.rollback()
+            errorMessage = "削除できませんでした: \(error.localizedDescription)"
+        }
+    }
+
+    private func replaceCompanionName(oldKey: String, newName: String, now: Date) {
+        for visit in visits {
+            let currentNames = recordFacetMasterNames(from: visit.companionNamesRaw)
+            guard currentNames.contains(where: { normalizedRecordFacetMasterName($0) == oldKey }) else { continue }
+            visit.companionNamesRaw = deduplicatedRecordFacetMasterNames(currentNames.map {
+                normalizedRecordFacetMasterName($0) == oldKey ? newName : $0
+            }).joined(separator: "、")
+            visit.updatedAt = now
+        }
+    }
+}
+
+private struct CompanionMasterEditor: View {
+    let title: String
+    @Binding var name: String
+    @Binding var iconSymbol: String
+    let usageCount: Int
+    let onCancel: () -> Void
+    let onSave: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("同行者") {
+                    HStack(spacing: 12) {
+                        Image(systemName: CompanionIconCatalog.validated(iconSymbol))
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 44, height: 44)
+                            .background(Color.accentColor.opacity(0.12), in: Circle())
+                        TextField("名前", text: $name)
+                    }
+                }
+
+                Section("アイコン") {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 12)], spacing: 12) {
+                        ForEach(CompanionIconCatalog.symbols, id: \.self) { symbol in
+                            Button {
+                                iconSymbol = symbol
+                            } label: {
+                                Image(systemName: symbol)
+                                    .font(.title3)
+                                    .frame(width: 44, height: 44)
+                                    .foregroundStyle(iconSymbol == symbol ? Color.white : Color.accentColor)
+                                    .background(iconSymbol == symbol ? Color.accentColor : Color.accentColor.opacity(0.1), in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("アイコン \(symbol)")
+                            .accessibilityValue(iconSymbol == symbol ? "選択中" : "未選択")
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                if usageCount > 0 {
+                    Section {
+                        Text("名前を変更すると、関連する\(usageCount)件の記録に反映されます。アイコンの変更では記録内容を変更しません。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存", action: onSave)
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+private enum CompanionIconCatalog {
+    static let defaultSymbol = "person.crop.circle"
+    static let symbols = [
+        "person.crop.circle", "person.circle", "person.2.circle", "figure.2",
+        "heart.circle", "star.circle", "face.smiling", "hand.thumbsup",
+        "figure.walk", "figure.run", "car.circle", "tram.circle",
+        "cup.and.saucer", "fork.knife.circle", "camera.circle", "music.note",
+        "gamecontroller", "book.circle", "pawprint.circle", "house.circle",
+    ]
+
+    static func validated(_ symbol: String?) -> String {
+        guard let symbol, symbols.contains(symbol) else { return defaultSymbol }
+        return symbol
+    }
+}
+
+private func recordFacetMasterValues(
+    in visits: [Visit],
+    kind: RecordFacetMasterKind
+) -> [RecordFacetMasterValue] {
+    var displayNames: [String: String] = [:]
+    var usageCounts: [String: Int] = [:]
+
+    for visit in visits {
+        let uniqueNames = deduplicatedRecordFacetMasterNames(
+            recordFacetMasterNames(from: kind.rawValue(from: visit))
+        )
+        for name in uniqueNames {
+            let key = normalizedRecordFacetMasterName(name)
+            displayNames[key] = displayNames[key] ?? name
+            usageCounts[key, default: 0] += 1
+        }
+    }
+
+    return usageCounts.compactMap { key, count in
+        guard let name = displayNames[key] else { return nil }
+        return RecordFacetMasterValue(name: name, usageCount: count)
+    }
+    .sorted {
+        if $0.usageCount != $1.usageCount { return $0.usageCount > $1.usageCount }
+        return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+    }
+}
+
+private func recordFacetMasterNames(from rawValue: String) -> [String] {
+    rawValue
+        .components(separatedBy: CharacterSet(charactersIn: ",、;；\n"))
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+}
+
+private func deduplicatedRecordFacetMasterNames(_ names: [String]) -> [String] {
+    var seen = Set<String>()
+    return names.filter { seen.insert(normalizedRecordFacetMasterName($0)).inserted }
+}
+
+private func normalizedRecordFacetMasterName(_ value: String) -> String {
+    value
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+        .replacingOccurrences(of: " ", with: "")
+        .replacingOccurrences(of: "　", with: "")
 }
 
 private struct AppSettingsHubView: View {
@@ -452,6 +1106,9 @@ struct RecordInputAssistSettingsView: View {
 struct RegistrationIntegrationSettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
+    @AppStorage(AppStorageKeys.showsExternalCalendarEvents) private var showsExternalCalendarEvents = true
+    @AppStorage(AppStorageKeys.selectedExternalCalendarIdentifiers) private var selectedExternalCalendarIdentifiers = ""
+    @StateObject private var externalCalendarStore = ExternalCalendarOverlayStore()
     @State private var isShowingAccountEditor = false
     @State private var editingAccount: TicketAccount?
 
@@ -491,9 +1148,63 @@ struct RegistrationIntegrationSettingsView: View {
 
             Section("外部カレンダー") {
                 LabeledContent("連携方式", value: "iOSカレンダー経由")
-                Text("GoogleカレンダーもiOS標準カレンダーに登録されていれば、カレンダー画面に読み取り重ね表示できます。")
+                Toggle("カレンダー画面に重ねて表示", isOn: $showsExternalCalendarEvents)
+                LabeledContent("読み取り許可", value: externalCalendarStore.authorizationStatusText)
+
+                if !externalCalendarStore.canReadEvents {
+                    Button {
+                        Task {
+                            await externalCalendarStore.requestAccessAndLoadSources()
+                        }
+                    } label: {
+                        Label("カレンダーの読み取りを許可", systemImage: "calendar.badge.plus")
+                    }
+                } else {
+                    HStack {
+                        Button("すべて選択") {
+                            selectedExternalCalendarIdentifiers = ""
+                        }
+                        Spacer()
+                        Button("すべて解除") {
+                            selectedExternalCalendarIdentifiers = ExternalCalendarSelection.rawValue(for: [])
+                        }
+                    }
+                    .font(FavorecoTypography.captionStrong)
+
+                    if externalCalendarStore.calendarSources.isEmpty {
+                        Text("読み取り可能なカレンダーがありません。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(externalCalendarStore.calendarSources) { source in
+                            Toggle(isOn: calendarSourceBinding(source)) {
+                                HStack(spacing: 10) {
+                                    Circle()
+                                        .fill(Color(uiColor: source.color))
+                                        .frame(width: 10, height: 10)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(source.title)
+                                            .font(FavorecoTypography.bodyStrong)
+                                        Text(source.accountTitle)
+                                            .font(FavorecoTypography.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .disabled(!showsExternalCalendarEvents)
+                        }
+                    }
+                }
+
+                Text("GoogleカレンダーもiOS標準カレンダーに登録済みなら、アカウント名とカレンダー名を確認して読み込む対象を選べます。未選択のカレンダーはFavorecoへ表示しません。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
+
+                if !externalCalendarStore.errorMessage.isEmpty {
+                    Text(externalCalendarStore.errorMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.red)
+                }
             }
 
             Section("セキュリティ") {
@@ -504,6 +1215,10 @@ struct RegistrationIntegrationSettingsView: View {
         }
         .navigationTitle("登録情報・連携")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            externalCalendarStore.updateAuthorizationStatus()
+            externalCalendarStore.reloadCalendarSources()
+        }
         .sheet(isPresented: $isShowingAccountEditor) {
             NavigationStack {
                 EditTicketAccountView(account: nil)
@@ -514,6 +1229,26 @@ struct RegistrationIntegrationSettingsView: View {
                 EditTicketAccountView(account: account)
             }
         }
+    }
+
+    private func calendarSourceBinding(_ source: ExternalCalendarSource) -> Binding<Bool> {
+        Binding(
+            get: {
+                ExternalCalendarSelection.identifiers(from: selectedExternalCalendarIdentifiers)?
+                    .contains(source.id) ?? true
+            },
+            set: { isSelected in
+                var identifiers = ExternalCalendarSelection.identifiers(
+                    from: selectedExternalCalendarIdentifiers
+                ) ?? Set(externalCalendarStore.calendarSources.map(\.id))
+                if isSelected {
+                    identifiers.insert(source.id)
+                } else {
+                    identifiers.remove(source.id)
+                }
+                selectedExternalCalendarIdentifiers = ExternalCalendarSelection.rawValue(for: identifiers)
+            }
+        )
     }
 }
 
@@ -1438,22 +2173,6 @@ struct DataManagementView: View {
                 }
             }
 
-            Section("マスター管理") {
-                NavigationLink {
-                    PersonMasterManagementView()
-                } label: {
-                    LabeledContent("人物・団体", value: "\(people.filter { !$0.isArchived }.count)")
-                }
-                NavigationLink {
-                    PlaceMasterManagementView()
-                } label: {
-                    LabeledContent("場所", value: "\(places.filter { !$0.isArchived }.count)")
-                }
-                Text("似た候補を確認し、過去の表示スナップショットを変えずに統合できます。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Section("インポート・エクスポート") {
                 NavigationLink {
                     FullBackupView()
@@ -1907,6 +2626,7 @@ struct JSONExportView: View {
     @Query(sort: \PhotoBlob.createdAt, order: .reverse) private var photos: [PhotoBlob]
     @Query(sort: \SocialAccount.sortOrder) private var socialAccounts: [SocialAccount]
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
+    @Query(sort: \CompanionMaster.name) private var companions: [CompanionMaster]
     @Query(sort: \FavoriteProfile.sortOrder) private var favoriteProfiles: [FavoriteProfile]
     @Query(sort: \FavoPin.sortOrder) private var favoPins: [FavoPin]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
@@ -1924,7 +2644,7 @@ struct JSONExportView: View {
     }
 
     private var totalRecordCount: Int {
-        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + favoriteProfiles.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
+        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
     }
 
     var body: some View {
@@ -1933,7 +2653,7 @@ struct JSONExportView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("JSONバックアップ")
                         .font(FavorecoTypography.sectionTitle)
-                    Text("アプリに戻せる形式を想定した手動バックアップです。現時点では写真のバイナリデータは含めず、記録本体と紐付け情報を書き出します。")
+                    Text("アプリに戻せる形式の手動バックアップです。人物プロフィール写真は含みますが、記録へ添付した写真・動画本体は含めず、記録本体と紐付け情報を書き出します。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1945,6 +2665,7 @@ struct JSONExportView: View {
                 LabeledContent("対象", value: "\(events.count)")
                 LabeledContent("訪問/鑑賞記録", value: "\(visits.count)")
                 LabeledContent("人物・団体", value: "\(people.count)")
+                LabeledContent("同行者", value: "\(companions.count)")
                 LabeledContent("FAVO", value: "\(favoriteProfiles.filter(\.isFavorite).count)")
                 LabeledContent("MY FAVO固定", value: "\(favoPins.count)")
                 LabeledContent("人物リンク", value: "\(personLinks.count)")
@@ -1971,6 +2692,7 @@ struct JSONExportView: View {
                             photos: photos,
                             socialAccounts: socialAccounts,
                             people: people,
+                            companions: companions,
                             favoriteProfiles: favoriteProfiles,
                             favoPins: favoPins,
                             personLinks: personLinks,

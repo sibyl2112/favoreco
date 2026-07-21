@@ -13,6 +13,7 @@ struct PhotoUnitEditor: View {
     @AppStorage(AppStorageKeys.photoAddStartMode) private var photoAddStartMode = "camera"
     let existingPhotos: [PhotoBlob]
     @Binding var deletedPhotoIDs: Set<UUID>
+    @Binding var existingPhotoMetadata: [UUID: PhotoMetadataDraft]
     @Binding var pendingPhotos: [PendingPhoto]
     @Binding var selectedItems: [PhotosPickerItem]
     let category: RecordCategory?
@@ -22,6 +23,7 @@ struct PhotoUnitEditor: View {
     @State private var isShowingCameraUnavailableAlert = false
     @State private var importCompletedCount = 0
     @State private var importTotalCount = 0
+    @State private var editingTarget: PhotoEditorTarget?
 
     private let largePhotoNoticeThreshold = 50
 
@@ -126,6 +128,7 @@ struct PhotoUnitEditor: View {
             }
         }
         .onAppear {
+            initializeExistingMetadataDrafts()
             if aspectRatioKey.isEmpty {
                 aspectRatioKey = category?.templateKey == "book"
                     ? EyecatchAspectRatio.hardcoverBook.key
@@ -148,6 +151,19 @@ struct PhotoUnitEditor: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("この端末ではカメラを起動できません。写真ライブラリから追加してください。")
+        }
+        .sheet(item: $editingTarget) { target in
+            NavigationStack {
+                metadataEditor(for: target)
+                    .navigationTitle("写真の情報")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("完了") { editingTarget = nil }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
         }
     }
 
@@ -244,7 +260,7 @@ struct PhotoUnitEditor: View {
     }
 
     private var photoGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], spacing: 10) {
             ForEach(activeExistingPhotos) { photo in
                 SavedPhotoThumbnail(
                     photo: photo,
@@ -252,8 +268,12 @@ struct PhotoUnitEditor: View {
                     aspectRatio: selectedAspectRatio.value,
                     fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
                     isCover: coverPhotoPath == photo.relativePath,
+                    purpose: existingMetadata(for: photo).purpose,
                     onSetCover: {
                         coverPhotoPath = photo.relativePath
+                    },
+                    onEdit: {
+                        editingTarget = PhotoEditorTarget(id: photo.id, kind: .existing)
                     },
                     onDelete: {
                         deletedPhotoIDs.insert(photo.id)
@@ -269,8 +289,12 @@ struct PhotoUnitEditor: View {
                     aspectRatio: selectedAspectRatio.value,
                     fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
                     isCover: coverPhotoPath == photo.relativePath,
+                    purpose: photo.metadata.purpose,
                     onSetCover: {
                         coverPhotoPath = photo.relativePath
+                    },
+                    onEdit: {
+                        editingTarget = PhotoEditorTarget(id: photo.id, kind: .pending)
                     },
                     onDelete: {
                         pendingPhotos.removeAll { $0.id == photo.id }
@@ -279,6 +303,50 @@ struct PhotoUnitEditor: View {
                 )
             }
         }
+    }
+
+    @ViewBuilder
+    private func metadataEditor(for target: PhotoEditorTarget) -> some View {
+        switch target.kind {
+        case .existing:
+            if let photo = activeExistingPhotos.first(where: { $0.id == target.id }) {
+                PhotoMetadataEditor(
+                    metadata: existingMetadataBinding(for: photo),
+                    imageData: photo.data
+                )
+            } else {
+                ContentUnavailableView("写真が見つかりません", systemImage: "photo")
+            }
+        case .pending:
+            if let index = pendingPhotos.firstIndex(where: { $0.id == target.id }) {
+                PhotoMetadataEditor(
+                    metadata: Binding(
+                        get: { pendingPhotos[index].metadata },
+                        set: { pendingPhotos[index].metadata = $0 }
+                    ),
+                    imageData: pendingPhotos[index].data
+                )
+            } else {
+                ContentUnavailableView("写真が見つかりません", systemImage: "photo")
+            }
+        }
+    }
+
+    private func initializeExistingMetadataDrafts() {
+        for photo in existingPhotos where existingPhotoMetadata[photo.id] == nil {
+            existingPhotoMetadata[photo.id] = PhotoMetadataDraft(photo: photo)
+        }
+    }
+
+    private func existingMetadata(for photo: PhotoBlob) -> PhotoMetadataDraft {
+        existingPhotoMetadata[photo.id] ?? PhotoMetadataDraft(photo: photo)
+    }
+
+    private func existingMetadataBinding(for photo: PhotoBlob) -> Binding<PhotoMetadataDraft> {
+        Binding(
+            get: { existingMetadata(for: photo) },
+            set: { existingPhotoMetadata[photo.id] = $0 }
+        )
     }
 
     @MainActor
@@ -338,6 +406,119 @@ struct PhotoUnitEditor: View {
             pendingPhotos.append(pendingPhoto)
             if coverPhotoPath.isEmpty {
                 coverPhotoPath = pendingPhoto.relativePath
+            }
+        }
+    }
+}
+
+private struct PhotoEditorTarget: Identifiable {
+    enum Kind {
+        case existing
+        case pending
+    }
+
+    let id: UUID
+    let kind: Kind
+}
+
+private struct PhotoMetadataEditor: View {
+    @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
+    @Binding var metadata: PhotoMetadataDraft
+    let imageData: Data
+    @State private var isRecognizing = false
+    @State private var statusText = ""
+    @State private var suggestions: [OCRImportSuggestion] = []
+
+    var body: some View {
+        Form {
+            Section("分類") {
+                Picker("写真の種類", selection: $metadata.purpose) {
+                    ForEach(ExperiencePhotoPurpose.allCases) { purpose in
+                        Label(purpose.title, systemImage: purpose.systemImage)
+                            .tag(purpose)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            if metadata.purpose != .memory {
+                Section("画像から読み取った情報") {
+                    Button {
+                        recognizeText()
+                    } label: {
+                        Label(isRecognizing ? "読み取り中" : "この写真から文字を読み取る", systemImage: "text.viewfinder")
+                    }
+                    .disabled(isRecognizing || !usesOCRImportAssist)
+
+                    if !usesOCRImportAssist {
+                        Text("画像OCRは設定でOFFになっています。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if !statusText.isEmpty {
+                        Text(statusText)
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    TextEditor(text: $metadata.ocrText)
+                        .frame(minHeight: 120)
+
+                    ForEach(amountSuggestions) { suggestion in
+                        Button {
+                            metadata.amountText = suggestion.value
+                            statusText = "金額候補を反映しました。"
+                        } label: {
+                            Label("金額候補 \(suggestion.displayValue)を使う", systemImage: "wand.and.stars")
+                        }
+                    }
+                }
+
+                Section(metadata.purpose == .ticket ? "チケット金額" : "グッズ金額") {
+                    TextField("0", text: $metadata.amountText)
+                        .keyboardType(.decimalPad)
+                    Text("合計金額は後続Stepで、記録全体の費用と分けて表示します。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section {
+                    Text("思い出写真はトップ背景や写真一覧に使用されます。OCR本文と金額は表示・集計しません。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .onAppear { refreshSuggestions() }
+        .onChange(of: metadata.ocrText) { _, _ in refreshSuggestions() }
+    }
+
+    private var amountSuggestions: [OCRImportSuggestion] {
+        suggestions.filter { $0.kind == .amount }
+    }
+
+    private func refreshSuggestions() {
+        suggestions = OCRImportSuggestionParser.suggestions(from: metadata.ocrText)
+    }
+
+    private func recognizeText() {
+        guard usesOCRImportAssist, !isRecognizing else { return }
+        isRecognizing = true
+        statusText = ""
+        let data = imageData
+        Task {
+            let recognizedText = await Task.detached(priority: .userInitiated) {
+                QuickCaptureImageService.recognizedText(from: data)
+            }.value
+            await MainActor.run {
+                isRecognizing = false
+                guard !recognizedText.isEmpty else {
+                    statusText = "文字を読み取れませんでした。必要なら手入力してください。"
+                    return
+                }
+                metadata.ocrText = recognizedText
+                statusText = "読み取り結果を保存候補へ反映しました。"
             }
         }
     }

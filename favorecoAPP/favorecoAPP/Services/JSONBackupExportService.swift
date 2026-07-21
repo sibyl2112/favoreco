@@ -10,7 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    static let schemaVersion = 4
+    static let schemaVersion = 6
 
     static func makeBackupJSON(
         categories: [RecordCategory],
@@ -20,6 +20,7 @@ enum JSONBackupExportService {
         photos: [PhotoBlob],
         socialAccounts: [SocialAccount],
         people: [PersonMaster],
+        companions: [CompanionMaster],
         favoriteProfiles: [FavoriteProfile],
         favoPins: [FavoPin],
         personLinks: [EventPersonLink],
@@ -50,6 +51,7 @@ enum JSONBackupExportService {
             },
             socialAccounts: socialAccounts.sorted { $0.sortOrder < $1.sortOrder }.map(BackupSocialAccount.init),
             people: people.sorted { $0.displayName < $1.displayName }.map(BackupPerson.init),
+            companions: companions.sorted { $0.name < $1.name }.map(BackupCompanion.init),
             favoriteProfiles: favoriteProfiles.sorted { $0.sortOrder < $1.sortOrder }.map(BackupFavoriteProfile.init),
             favoPins: favoPins.sorted { $0.sortOrder < $1.sortOrder }.map(BackupFavoPin.init),
             personLinks: personLinks.sorted { $0.sortOrder < $1.sortOrder }.map(BackupPersonLink.init),
@@ -79,6 +81,7 @@ struct FavorecoBackupEnvelope: Codable {
     var photos: [BackupPhoto]
     var socialAccounts: [BackupSocialAccount]
     var people: [BackupPerson]
+    var companions: [BackupCompanion]?
     var favoriteProfiles: [BackupFavoriteProfile]?
     var favoPins: [BackupFavoPin]?
     var personLinks: [BackupPersonLink]
@@ -247,6 +250,8 @@ struct BackupPhoto: Codable {
     var originalFilename: String
     var mediaKind: String
     var purpose: String
+    var ocrText: String?
+    var amount: Decimal?
     var byteCount: Int
     var width: Int
     var height: Int
@@ -260,6 +265,8 @@ struct BackupPhoto: Codable {
         originalFilename = photo.originalFilename
         mediaKind = photo.mediaKind
         purpose = photo.purpose
+        ocrText = photo.ocrText
+        amount = photo.amount
         byteCount = photo.byteCount
         width = photo.width
         height = photo.height
@@ -304,6 +311,7 @@ struct BackupPerson: Codable {
     var officialURL: String
     var socialLinksRaw: String
     var imagePath: String
+    var imageDataBase64: String?
     var musicBrainzID: String
     var wikidataQID: String
     var appleMusicID: String
@@ -323,6 +331,7 @@ struct BackupPerson: Codable {
         officialURL = person.officialURL
         socialLinksRaw = person.socialLinksRaw
         imagePath = person.imagePath
+        imageDataBase64 = person.imageData?.base64EncodedString()
         musicBrainzID = person.musicBrainzID
         wikidataQID = person.wikidataQID
         appleMusicID = person.appleMusicID
@@ -331,6 +340,26 @@ struct BackupPerson: Codable {
         isArchived = person.isArchived
         createdAt = person.createdAt
         updatedAt = person.updatedAt
+    }
+}
+
+struct BackupCompanion: Codable {
+    var id: UUID
+    var name: String
+    var normalizedName: String
+    var iconSymbol: String
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ companion: CompanionMaster) {
+        id = companion.id
+        name = companion.name
+        normalizedName = companion.normalizedName
+        iconSymbol = companion.iconSymbol
+        isArchived = companion.isArchived
+        createdAt = companion.createdAt
+        updatedAt = companion.updatedAt
     }
 }
 

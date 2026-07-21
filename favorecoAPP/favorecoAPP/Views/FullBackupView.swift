@@ -12,6 +12,7 @@ struct FullBackupView: View {
     @Query(sort: \PhotoBlob.createdAt, order: .reverse) private var photos: [PhotoBlob]
     @Query(sort: \SocialAccount.sortOrder) private var socialAccounts: [SocialAccount]
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
+    @Query(sort: \CompanionMaster.name) private var companions: [CompanionMaster]
     @Query(sort: \FavoriteProfile.sortOrder) private var favoriteProfiles: [FavoriteProfile]
     @Query(sort: \FavoPin.sortOrder) private var favoPins: [FavoPin]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
@@ -32,7 +33,7 @@ struct FullBackupView: View {
 
     private var totalModelCount: Int {
         categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count
-            + people.count + favoriteProfiles.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
+            + people.count + companions.count + favoriteProfiles.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
     }
 
     private var totalPhotoBytes: Int64 {
@@ -131,6 +132,7 @@ struct FullBackupView: View {
                 photos: photos,
                 socialAccounts: socialAccounts,
                 people: people,
+                companions: companions,
                 favoriteProfiles: favoriteProfiles,
                 favoPins: favoPins,
                 personLinks: personLinks,

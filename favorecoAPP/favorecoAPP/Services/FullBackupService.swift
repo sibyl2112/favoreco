@@ -124,6 +124,8 @@ enum FullBackupService {
             model.originalFilename = item.originalFilename
             model.mediaKind = item.mediaKind
             model.purpose = item.purpose
+            model.ocrText = item.ocrText ?? ""
+            model.amount = item.amount ?? Decimal(0)
             model.byteCount = data.count
             model.width = item.width
             model.height = item.height

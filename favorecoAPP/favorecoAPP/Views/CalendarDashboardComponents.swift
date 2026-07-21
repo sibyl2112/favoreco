@@ -47,7 +47,7 @@ struct CalendarDisplayToolbar: View {
     }
 }
 
-struct CalendarPeriodNavigationHeader: View {
+struct CalendarPeriodStepControls: View {
     let title: String
     let previousAccessibilityLabel: String
     let nextAccessibilityLabel: String
@@ -64,17 +64,18 @@ struct CalendarPeriodNavigationHeader: View {
                 action: onPrevious
             )
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(spacing: 2) {
                 Text(title)
-                    .font(FavorecoTypography.sectionTitle)
+                    .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
 
                 if let resetTitle {
                     Button(resetTitle, action: onReset)
                         .font(FavorecoTypography.captionStrong)
                 }
             }
-
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity)
 
             navigationButton(
                 systemImage: "chevron.right",
@@ -95,108 +96,5 @@ struct CalendarPeriodNavigationHeader: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
-    }
-}
-
-struct CalendarMonthStrip: View {
-    let months: [Date]
-    let displayedMonth: Date
-    let calendar: Calendar
-    let onSelect: (Date) -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(months, id: \.self) { month in
-                    monthButton(month)
-                }
-            }
-            .padding(.horizontal, 1)
-        }
-    }
-
-    private func monthButton(_ month: Date) -> some View {
-        let isDisplayed = calendar.isDate(month, equalTo: displayedMonth, toGranularity: .month)
-
-        return Button {
-            onSelect(month)
-        } label: {
-            Text("\(calendar.component(.month, from: month))月")
-                .font(FavorecoTypography.bodyStrong)
-                .foregroundStyle(isDisplayed ? Color.white : Color.primary)
-                .frame(minWidth: 64)
-                .padding(.vertical, 8)
-                .background {
-                    Capsule(style: .continuous)
-                        .fill(isDisplayed ? Color.accentColor : Color.clear)
-                }
-                .overlay {
-                    if !isDisplayed {
-                        Capsule(style: .continuous)
-                            .stroke(Color.secondary.opacity(0.7), lineWidth: 1)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-struct CalendarExternalOverlayControl: View {
-    @Binding var isEnabled: Bool
-    let statusText: String
-    let isLoading: Bool
-    let canReadEvents: Bool
-    let errorMessage: String
-    let onRequestAccess: () -> Void
-    let onReload: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "calendar.badge.clock")
-                    .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("外部カレンダー")
-                        .font(FavorecoTypography.captionStrong)
-                    Text(statusText)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.mini)
-                }
-
-                Spacer()
-
-                actionControl
-
-                Toggle("外部カレンダーを重ねる", isOn: $isEnabled)
-                    .labelsHidden()
-            }
-
-            if !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.red)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    @ViewBuilder
-    private var actionControl: some View {
-        if isEnabled && !canReadEvents {
-            Button("許可する", action: onRequestAccess)
-                .font(FavorecoTypography.captionStrong)
-        } else if isEnabled {
-            Button(action: onReload) {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("外部カレンダーを再読み込み")
-        }
     }
 }

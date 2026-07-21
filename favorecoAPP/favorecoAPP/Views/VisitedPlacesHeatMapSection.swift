@@ -11,6 +11,7 @@ struct VisitedPlacesHeatMapSection: View {
     @State private var selectedPrefecture = ""
     @State private var isShowingDetailedSearch = false
     @State private var cameraPosition: MapCameraPosition = .region(JapanVisitArea.nationwide.region)
+    @State private var selectedPointID: String?
 
     private var allPoints: [VisitedPlaceHeatPoint] {
         VisitedPlaceHeatPoint.make(from: visits)
@@ -95,6 +96,7 @@ struct VisitedPlacesHeatMapSection: View {
         }
         .onChange(of: selectedArea) { _, area in
             selectedPrefecture = ""
+            selectedPointID = nil
             cameraPosition = .region(area.region)
         }
         .onChange(of: searchText) { _, _ in focusFilteredPoints() }
@@ -141,12 +143,19 @@ struct VisitedPlacesHeatMapSection: View {
         Map(position: $cameraPosition, interactionModes: [.pan, .zoom]) {
             ForEach(filteredPoints) { point in
                 Annotation(point.name, coordinate: point.coordinate, anchor: .center) {
-                    VisitedPlaceHeatMarker(
-                        visitCount: point.visitCount,
-                        maximumVisitCount: allPoints.map(\.visitCount).max() ?? 1,
-                        tint: tint
-                    )
+                    Button {
+                        focus(on: point)
+                    } label: {
+                        VisitedPlaceHeatMarker(
+                            visitCount: point.visitCount,
+                            maximumVisitCount: allPoints.map(\.visitCount).max() ?? 1,
+                            tint: tint,
+                            isSelected: selectedPointID == point.id
+                        )
+                    }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("\(point.name)、\(point.visitCount)回")
+                    .accessibilityHint("この場所を地図の中央に表示")
                 }
             }
         }
@@ -180,11 +189,23 @@ struct VisitedPlacesHeatMapSection: View {
     }
 
     private func focusFilteredPoints() {
+        selectedPointID = nil
         guard !filteredPoints.isEmpty else {
             cameraPosition = .region(selectedArea.region)
             return
         }
         cameraPosition = .region(VisitedPlaceHeatPoint.region(for: filteredPoints))
+    }
+
+    private func focus(on point: VisitedPlaceHeatPoint) {
+        selectedPointID = point.id
+        let region = MKCoordinateRegion(
+            center: point.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.035, longitudeDelta: 0.035)
+        )
+        withAnimation(.easeInOut(duration: 0.25)) {
+            cameraPosition = .region(region)
+        }
     }
 }
 
@@ -192,6 +213,7 @@ private struct VisitedPlaceHeatMarker: View {
     let visitCount: Int
     let maximumVisitCount: Int
     let tint: Color
+    let isSelected: Bool
 
     private var strength: Double {
         guard maximumVisitCount > 1 else { return 0.55 }
@@ -204,6 +226,13 @@ private struct VisitedPlaceHeatMarker: View {
 
     var body: some View {
         ZStack {
+            if isSelected {
+                Circle()
+                    .stroke(tint, lineWidth: 3)
+                    .frame(width: diameter + 10, height: diameter + 10)
+                    .shadow(color: tint.opacity(0.35), radius: 4)
+            }
+
             Circle()
                 .fill(tint.opacity(0.15 + strength * 0.18))
                 .frame(width: diameter * 1.65, height: diameter * 1.65)

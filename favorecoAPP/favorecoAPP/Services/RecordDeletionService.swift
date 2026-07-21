@@ -99,6 +99,7 @@ enum RecordDeletionService {
         let accounts = try context.fetch(FetchDescriptor<TicketAccount>())
         let socialAccounts = try context.fetch(FetchDescriptor<SocialAccount>())
         let people = try context.fetch(FetchDescriptor<PersonMaster>())
+        let companions = try context.fetch(FetchDescriptor<CompanionMaster>())
         let places = try context.fetch(FetchDescriptor<PlaceMaster>())
         let links = try context.fetch(FetchDescriptor<EventPersonLink>())
 
@@ -115,6 +116,7 @@ enum RecordDeletionService {
         }
         let archivedAccounts = accounts.filter(\.isArchived)
         let archivedPeople = people.filter(\.isArchived)
+        let archivedCompanions = companions.filter(\.isArchived)
         let archivedPersonIDs = Set(archivedPeople.map(\.id))
         let archivedPlaces = places.filter(\.isArchived)
         let archivedSocialAccounts = socialAccounts.filter(\.isArchived)
@@ -146,6 +148,7 @@ enum RecordDeletionService {
         for account in archivedAccounts { context.delete(account) }
         for account in archivedSocialAccounts { context.delete(account) }
         for person in archivedPeople { context.delete(person) }
+        for companion in archivedCompanions { context.delete(companion) }
         for place in archivedPlaces { context.delete(place) }
 
         try context.save()
@@ -169,6 +172,7 @@ enum RecordDeletionService {
             masterCount: archivedAccounts.count
                 + archivedSocialAccounts.count
                 + archivedPeople.count
+                + archivedCompanions.count
                 + archivedPlaces.count,
             linkCount: archivedLinks.count,
             externalCalendarTargets: externalCalendarTargets
@@ -186,6 +190,7 @@ enum RecordDeletionService {
         let photos = try context.fetch(FetchDescriptor<PhotoBlob>())
         let socialAccounts = try context.fetch(FetchDescriptor<SocialAccount>())
         let people = try context.fetch(FetchDescriptor<PersonMaster>())
+        let companions = try context.fetch(FetchDescriptor<CompanionMaster>())
         let favoriteProfiles = try context.fetch(FetchDescriptor<FavoriteProfile>())
         let favoPins = try context.fetch(FetchDescriptor<FavoPin>())
         let links = try context.fetch(FetchDescriptor<EventPersonLink>())
@@ -199,7 +204,7 @@ enum RecordDeletionService {
         let accountNotificationIDs = accounts.map(\.id)
 
         let deletedModelCount = categories.count + events.count + visits.count
-            + inboxItems.count + photos.count + socialAccounts.count + people.count + favoriteProfiles.count + favoPins.count
+            + inboxItems.count + photos.count + socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoPins.count
             + links.count + places.count + plans.count + accounts.count + attempts.count
 
         // 親を先に削除し、親を持たない孤立モデルだけを個別削除する。
@@ -214,6 +219,7 @@ enum RecordDeletionService {
         for pin in favoPins { context.delete(pin) }
         for profile in favoriteProfiles where profile.person == nil { context.delete(profile) }
         for person in people { context.delete(person) }
+        for companion in companions { context.delete(companion) }
         for place in places { context.delete(place) }
         for account in accounts { context.delete(account) }
         for category in categories { context.delete(category) }
@@ -254,6 +260,7 @@ enum RecordDeletionService {
         }
 
         UserDefaults.standard.set(false, forKey: AppStorageKeys.hasCompletedGenreOnboarding)
+        SampleDataSeeder.resetAutomaticInsertionState()
         UserDefaults.standard.set(false, forKey: AppStorageKeys.hasMigratedLegacyFavoritesToFavoPins)
 
         return AllDataDeletionResult(

@@ -72,6 +72,7 @@ enum AutomaticBackupService {
         let photos = try snapshotContext.fetch(FetchDescriptor<PhotoBlob>())
         let socialAccounts = try snapshotContext.fetch(FetchDescriptor<SocialAccount>())
         let people = try snapshotContext.fetch(FetchDescriptor<PersonMaster>())
+        let companions = try snapshotContext.fetch(FetchDescriptor<CompanionMaster>())
         let favoriteProfiles = try snapshotContext.fetch(FetchDescriptor<FavoriteProfile>())
         let favoPins = try snapshotContext.fetch(FetchDescriptor<FavoPin>())
         let personLinks = try snapshotContext.fetch(FetchDescriptor<EventPersonLink>())
@@ -79,10 +80,12 @@ enum AutomaticBackupService {
         let plans = try snapshotContext.fetch(FetchDescriptor<Plan>())
         let ticketAccounts = try snapshotContext.fetch(FetchDescriptor<TicketAccount>())
         let ticketAttempts = try snapshotContext.fetch(FetchDescriptor<TicketAttempt>())
-        let userContentCount = categories.filter { !$0.isBuiltIn }.count
+        let primaryContentCount = categories.filter { !$0.isBuiltIn }.count
             + events.count + visits.count + inboxItems.count + photos.count
-            + socialAccounts.count + people.count + favoriteProfiles.count + favoPins.count + personLinks.count + places.count
-            + plans.count + ticketAccounts.count + ticketAttempts.count
+        let masterContentCount = socialAccounts.count + people.count + companions.count
+            + favoriteProfiles.count + favoPins.count + personLinks.count + places.count
+        let planningContentCount = plans.count + ticketAccounts.count + ticketAttempts.count
+        let userContentCount = primaryContentCount + masterContentCount + planningContentCount
         guard userContentCount > 0 else { return nil }
 
         let totalPhotoBytes = photos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
@@ -97,6 +100,7 @@ enum AutomaticBackupService {
             photos: photos,
             socialAccounts: socialAccounts,
             people: people,
+            companions: companions,
             favoriteProfiles: favoriteProfiles,
             favoPins: favoPins,
             personLinks: personLinks,

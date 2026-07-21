@@ -24,9 +24,37 @@ struct ExternalCalendarEvent: Identifiable, Hashable {
     }
 }
 
+struct ExternalCalendarSource: Identifiable {
+    let id: String
+    let title: String
+    let accountTitle: String
+    let color: UIColor
+}
+
+enum ExternalCalendarSelection {
+    static func identifiers(from rawValue: String) -> Set<String>? {
+        guard !rawValue.isEmpty else { return nil }
+        guard let data = rawValue.data(using: .utf8),
+              let identifiers = try? JSONDecoder().decode([String].self, from: data) else {
+            return nil
+        }
+        return Set(identifiers)
+    }
+
+    static func rawValue(for identifiers: Set<String>) -> String {
+        let values = identifiers.sorted()
+        guard let data = try? JSONEncoder().encode(values),
+              let rawValue = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return rawValue
+    }
+}
+
 @MainActor
 final class ExternalCalendarOverlayStore: ObservableObject {
     @Published private(set) var events: [ExternalCalendarEvent] = []
+    @Published private(set) var calendarSources: [ExternalCalendarSource] = []
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage = ""
     @Published private(set) var authorizationStatusText = "未確認"
@@ -37,11 +65,32 @@ final class ExternalCalendarOverlayStore: ObservableObject {
         Self.canReadEvents(status: EKEventStore.authorizationStatus(for: .event))
     }
 
-    func refresh(interval: DateInterval) async {
+    func refresh(interval: DateInterval, selectedCalendarIDs: Set<String>? = nil) async {
         updateAuthorizationStatus()
         guard canReadEvents else {
             events = []
+            calendarSources = []
             return
+        }
+
+        reloadCalendarSources()
+
+        let calendars: [EKCalendar]?
+        if let selectedCalendarIDs {
+            guard !selectedCalendarIDs.isEmpty else {
+                events = []
+                return
+            }
+            let selectedCalendars = eventStore.calendars(for: .event).filter {
+                selectedCalendarIDs.contains($0.calendarIdentifier)
+            }
+            guard !selectedCalendars.isEmpty else {
+                events = []
+                return
+            }
+            calendars = selectedCalendars
+        } else {
+            calendars = nil
         }
 
         isLoading = true
@@ -51,7 +100,7 @@ final class ExternalCalendarOverlayStore: ObservableObject {
         let predicate = eventStore.predicateForEvents(
             withStart: interval.start,
             end: interval.end,
-            calendars: nil
+            calendars: calendars
         )
         events = eventStore.events(matching: predicate)
             .filter { !$0.isDetached }
@@ -59,12 +108,45 @@ final class ExternalCalendarOverlayStore: ObservableObject {
             .sorted { $0.startDate < $1.startDate }
     }
 
-    func requestAccessAndRefresh(interval: DateInterval) async {
+    func requestAccessAndRefresh(
+        interval: DateInterval,
+        selectedCalendarIDs: Set<String>? = nil
+    ) async {
         let granted = await requestCalendarAccess()
         updateAuthorizationStatus()
         if granted {
-            await refresh(interval: interval)
+            await refresh(interval: interval, selectedCalendarIDs: selectedCalendarIDs)
         }
+    }
+
+    func requestAccessAndLoadSources() async {
+        let granted = await requestCalendarAccess()
+        updateAuthorizationStatus()
+        if granted {
+            reloadCalendarSources()
+        }
+    }
+
+    func reloadCalendarSources() {
+        guard canReadEvents else {
+            calendarSources = []
+            return
+        }
+        calendarSources = eventStore.calendars(for: .event)
+            .map { calendar in
+                ExternalCalendarSource(
+                    id: calendar.calendarIdentifier,
+                    title: calendar.title,
+                    accountTitle: calendar.source?.title ?? "この端末",
+                    color: calendar.cgColor.map(UIColor.init(cgColor:)) ?? .systemGray
+                )
+            }
+            .sorted {
+                if $0.accountTitle != $1.accountTitle {
+                    return $0.accountTitle.localizedStandardCompare($1.accountTitle) == .orderedAscending
+                }
+                return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            }
     }
 
     func updateAuthorizationStatus() {

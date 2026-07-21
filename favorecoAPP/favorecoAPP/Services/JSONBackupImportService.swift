@@ -26,6 +26,7 @@ enum JSONBackupImportService {
 
         var categories = Dictionary(grouping: try context.fetch(FetchDescriptor<RecordCategory>()), by: \.id).compactMapValues(\.first)
         var people = Dictionary(grouping: try context.fetch(FetchDescriptor<PersonMaster>()), by: \.id).compactMapValues(\.first)
+        var companions = Dictionary(grouping: try context.fetch(FetchDescriptor<CompanionMaster>()), by: \.id).compactMapValues(\.first)
         var favoriteProfiles = Dictionary(grouping: try context.fetch(FetchDescriptor<FavoriteProfile>()), by: \.id).compactMapValues(\.first)
         var favoPins = Dictionary(grouping: try context.fetch(FetchDescriptor<FavoPin>()), by: \.id).compactMapValues(\.first)
         var places = Dictionary(grouping: try context.fetch(FetchDescriptor<PlaceMaster>()), by: \.id).compactMapValues(\.first)
@@ -84,11 +85,31 @@ enum JSONBackupImportService {
             model.officialURL = item.officialURL
             model.socialLinksRaw = item.socialLinksRaw
             model.imagePath = item.imagePath
+            model.imageData = item.imageDataBase64.flatMap { Data(base64Encoded: $0) }
             model.musicBrainzID = item.musicBrainzID
             model.wikidataQID = item.wikidataQID
             model.appleMusicID = item.appleMusicID
             model.sourceSnapshotRaw = item.sourceSnapshotRaw
             model.normalizedName = item.normalizedName
+            model.isArchived = item.isArchived
+            model.createdAt = item.createdAt
+            model.updatedAt = item.updatedAt
+        }
+
+        for item in envelope.companions ?? [] {
+            let model: CompanionMaster
+            if let existing = companions[item.id] {
+                model = existing
+                updatedCount += 1
+            } else {
+                model = CompanionMaster(id: item.id)
+                context.insert(model)
+                companions[item.id] = model
+                insertedCount += 1
+            }
+            model.name = item.name
+            model.normalizedName = item.normalizedName
+            model.iconSymbol = item.iconSymbol
             model.isArchived = item.isArchived
             model.createdAt = item.createdAt
             model.updatedAt = item.updatedAt
@@ -512,6 +533,7 @@ struct JSONBackupPreview {
     let photoMetadataCount: Int
     let socialAccountCount: Int
     let personCount: Int
+    let companionCount: Int
     let favoriteProfileCount: Int
     let favoPinCount: Int
     let personLinkCount: Int
@@ -531,6 +553,7 @@ struct JSONBackupPreview {
         photoMetadataCount = envelope.photos.count
         socialAccountCount = envelope.socialAccounts.count
         personCount = envelope.people.count
+        companionCount = envelope.companions?.count ?? 0
         favoriteProfileCount = envelope.favoriteProfiles?.count ?? 0
         favoPinCount = envelope.favoPins?.count ?? 0
         personLinkCount = envelope.personLinks.count
@@ -547,6 +570,7 @@ struct JSONBackupPreview {
             + inboxCount
             + socialAccountCount
             + personCount
+            + companionCount
             + favoriteProfileCount
             + favoPinCount
             + personLinkCount

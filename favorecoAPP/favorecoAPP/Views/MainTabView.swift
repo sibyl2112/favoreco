@@ -1303,6 +1303,7 @@ private struct CalendarView: View {
     @Query(sort: \Plan.startsAt, order: .forward) private var plans: [Plan]
     @Query private var ticketAttempts: [TicketAttempt]
     @AppStorage(AppStorageKeys.showsExternalCalendarEvents) private var showsExternalCalendarEvents = true
+    @AppStorage(AppStorageKeys.selectedExternalCalendarIdentifiers) private var selectedExternalCalendarIdentifiers = ""
     @StateObject private var externalCalendarStore = ExternalCalendarOverlayStore()
     @State private var displayedMonth = Date().startOfMonth
     @State private var selectedDate = Date()
@@ -1532,6 +1533,9 @@ private struct CalendarView: View {
             .onChange(of: showsExternalCalendarEvents) { _, newValue in
                 handleExternalCalendarVisibilityChange(isVisible: newValue)
             }
+            .onChange(of: selectedExternalCalendarIdentifiers) { _, _ in
+                refreshExternalCalendar()
+            }
     }
 
     private var decoratedCalendarScreen: some View {
@@ -1568,14 +1572,23 @@ private struct CalendarView: View {
 
     private var calendarScreen: some View {
         VStack(spacing: 0) {
-            MainScreenHeader(title: "カレンダー")
+            MainScreenHeader(
+                title: "Calendar",
+                usesBrandFont: true,
+                usesCompactBrand: true
+            )
                 .padding(.horizontal, 20)
                 .padding(.top, -4)
                 .padding(.bottom, 6)
 
+            CalendarDisplayToolbar(displayMode: $displayMode)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 10)
+
+            MainHeaderDivider()
+
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
-                    CalendarDisplayToolbar(displayMode: $displayMode)
                     displayedCalendarContent
                 }
                 .padding(20)
@@ -1600,8 +1613,6 @@ private struct CalendarView: View {
     private var monthCalendarContent: some View {
         Group {
             monthHeader
-            monthStrip
-            externalCalendarControl
             monthGrid
             calendarAgendaSection
         }
@@ -1610,7 +1621,6 @@ private struct CalendarView: View {
     private var weekCalendarContent: some View {
         Group {
             timelineNavigationHeader
-            externalCalendarControl
             weekTimeline
             calendarAgendaSection
         }
@@ -1619,7 +1629,6 @@ private struct CalendarView: View {
     private var dayCalendarContent: some View {
         Group {
             timelineNavigationHeader
-            externalCalendarControl
             dayTimeline
             calendarAgendaSection
         }
@@ -1664,7 +1673,7 @@ private struct CalendarView: View {
     }
 
     private var monthHeader: some View {
-        CalendarPeriodNavigationHeader(
+        CalendarPeriodStepControls(
             title: japaneseYearMonth(displayedMonth),
             previousAccessibilityLabel: "前の月",
             nextAccessibilityLabel: "次の月",
@@ -1680,23 +1689,8 @@ private struct CalendarView: View {
         )
     }
 
-    private var monthStrip: some View {
-        CalendarMonthStrip(
-            months: displayedMonthStripMonths,
-            displayedMonth: displayedMonth,
-            calendar: calendar,
-            onSelect: selectMonth
-        )
-    }
-
-    private var displayedMonthStripMonths: [Date] {
-        (0..<5).map { offset in
-            calendar.date(byAdding: .month, value: offset, to: displayedMonth) ?? displayedMonth
-        }
-    }
-
     private var timelineNavigationHeader: some View {
-        CalendarPeriodNavigationHeader(
+        CalendarPeriodStepControls(
             title: timelineTitle,
             previousAccessibilityLabel: displayMode == .week ? "前の週" : "前の日",
             nextAccessibilityLabel: displayMode == .week ? "次の週" : "次の日",
@@ -1757,26 +1751,6 @@ private struct CalendarView: View {
         selectedDate = calendar.date(from: components) ?? monthStart
     }
 
-    private var externalCalendarControl: some View {
-        CalendarExternalOverlayControl(
-            isEnabled: $showsExternalCalendarEvents,
-            statusText: externalCalendarStore.authorizationStatusText,
-            isLoading: externalCalendarStore.isLoading,
-            canReadEvents: externalCalendarStore.canReadEvents,
-            errorMessage: externalCalendarStore.errorMessage,
-            onRequestAccess: {
-                Task {
-                    await externalCalendarStore.requestAccessAndRefresh(interval: calendarFetchInterval)
-                }
-            },
-            onReload: {
-                Task {
-                    await refreshExternalCalendarIfNeeded()
-                }
-            }
-        )
-    }
-
     private var monthGrid: some View {
         let snapshot = CalendarMonthSnapshot.make(
             days: daysInDisplayedMonth,
@@ -1801,6 +1775,12 @@ private struct CalendarView: View {
             }
         }
         .padding(.horizontal, -20)
+        .simultaneousGesture(
+            calendarPeriodSwipeGesture(
+                onPrevious: { moveDisplayedMonth(by: -1) },
+                onNext: { moveDisplayedMonth(by: 1) }
+            )
+        )
     }
 
     private var weekTimeline: some View {
@@ -1814,6 +1794,12 @@ private struct CalendarView: View {
             displayedMonth = date.startOfMonth
         }
         .padding(.horizontal, -20)
+        .simultaneousGesture(
+            calendarPeriodSwipeGesture(
+                onPrevious: { moveTimeline(by: -1) },
+                onNext: { moveTimeline(by: 1) }
+            )
+        )
     }
 
     private var dayTimeline: some View {
@@ -1823,6 +1809,33 @@ private struct CalendarView: View {
             calendar: calendar
         )
         .padding(.horizontal, -20)
+        .simultaneousGesture(
+            calendarPeriodSwipeGesture(
+                onPrevious: { moveTimeline(by: -1) },
+                onNext: { moveTimeline(by: 1) }
+            )
+        )
+    }
+
+    private func calendarPeriodSwipeGesture(
+        onPrevious: @escaping () -> Void,
+        onNext: @escaping () -> Void
+    ) -> some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onEnded { value in
+                let horizontalDistance = value.translation.width
+                let verticalDistance = value.translation.height
+                guard abs(horizontalDistance) >= 50,
+                      abs(horizontalDistance) > abs(verticalDistance) else { return }
+
+                withAnimation(.easeOut(duration: 0.18)) {
+                    if horizontalDistance < 0 {
+                        onNext()
+                    } else {
+                        onPrevious()
+                    }
+                }
+            }
     }
 
     private var calendarAgendaSection: some View {
@@ -1843,7 +1856,12 @@ private struct CalendarView: View {
     private func refreshExternalCalendarIfNeeded() async {
         externalCalendarStore.updateAuthorizationStatus()
         guard showsExternalCalendarEvents else { return }
-        await externalCalendarStore.refresh(interval: calendarFetchInterval)
+        await externalCalendarStore.refresh(
+            interval: calendarFetchInterval,
+            selectedCalendarIDs: ExternalCalendarSelection.identifiers(
+                from: selectedExternalCalendarIdentifiers
+            )
+        )
     }
 
     private func japaneseFullDate(_ date: Date) -> String {
@@ -3259,5 +3277,5 @@ struct PlaceholderRow: View {
 #Preview {
     MainTabView()
         .environmentObject(PurchaseManager.shared)
-        .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self, PersonMaster.self, FavoriteProfile.self, FavoPin.self, EventPersonLink.self, PlaceMaster.self, Plan.self, TicketAccount.self, TicketAttempt.self], inMemory: true)
+        .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self, PersonMaster.self, CompanionMaster.self, FavoriteProfile.self, FavoPin.self, EventPersonLink.self, PlaceMaster.self, Plan.self, TicketAccount.self, TicketAttempt.self], inMemory: true)
 }
