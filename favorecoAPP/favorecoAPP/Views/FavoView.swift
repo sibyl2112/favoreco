@@ -373,7 +373,9 @@ private struct FavoPinManagementView: View {
                     ForEach(visiblePlaces) { place in
                         candidateButton(
                             title: place.name.isEmpty ? "名称未設定の場所" : place.name,
-                            subtitle: place.prefecture.isEmpty ? "場所" : place.prefecture,
+                            subtitle: place.isClosed
+                                ? "閉館 · \(place.prefecture.isEmpty ? "場所" : place.prefecture)"
+                                : (place.prefecture.isEmpty ? "場所" : place.prefecture),
                             icon: "mappin.and.ellipse",
                             colorHex: "#2F7FB8",
                             kind: .place,

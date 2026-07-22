@@ -1,0 +1,14 @@
+placeID,placeKind,templeSect,enshrinedDeities,sourceURL,verifiedAt,notes
+jp-hokkaido-hakodate-hachimangu,shrine,,品陀和気命|住吉大神|金刀比羅大神,https://hokkaidojinjacho.jp/%E5%87%BD%E9%A4%A8%E5%85%AB%E5%B9%A1%E5%AE%AE/,2026-07-22,北海道神社庁の祭神欄で確認
+jp-hokkaido-otaru-sumiyoshi-jinja,shrine,,底筒男神|中筒男神|表筒男神|息長帯姫命,https://hokkaidojinjacho.jp/%E4%BD%8F%E5%90%89%E7%A5%9E%E7%A4%BE-3/,2026-07-22,北海道神社庁の祭神欄で確認
+jp-aomori-iwakiyama-jinja,shrine,,顕國魂神|多都比姫神|宇賀能賣神|大山祇神|坂上刈田麿命,https://www.iwakiyamajinja.or.jp/history.html,2026-07-22,神社公式の祭神欄で確認
+jp-aomori-takayama-inari-jinja,shrine,,大宮能売命|佐田彦命|宇迦之御魂命,https://takayamainari.jp/gosaishin/,2026-07-22,神社公式の御祭神ページで確認
+jp-iwate-takkoku-no-iwaya,temple,天台宗,,https://tohoku36fudo.jp/acala23/,2026-07-22,東北三十六不動尊霊場公式の札所案内で確認
+jp-iwate-morioka-hachimangu,shrine,,品陀和気命,https://morioka8man.jp/,2026-07-22,神社公式の由緒で確認
+jp-miyagi-osaki-hachimangu,shrine,,応神天皇|神功皇后|仲哀天皇,https://www.oosaki-hachiman.or.jp/gosyuin/,2026-07-22,神社公式の御朱印・五社ページで確認
+jp-miyagi-matsushima-entuuin,temple,臨済宗妙心寺派,,https://www.entuuin.or.jp/about/,2026-07-22,寺院公式の円通院についてで確認
+jp-akita-oga-unshoji,temple,曹洞宗,,https://oganavi.com/ajisai/,2026-07-22,男鹿市観光協会公式の寺院紹介で確認
+jp-akita-oga-akagami-goshado,shrine,,天津彦火瓊々杵之命|天手力男命|大山祇命|天照皇大神,https://akita-jinjacho.sakura.ne.jp/shrine_search/%E8%B5%A4%E7%A5%9E%E7%A5%9E%E7%A4%BE/,2026-07-22,秋田県神社庁は実名4柱に加えて外二柱と記載。未詳2柱は推測せず除外
+jp-yamagata-yonezawa-uesugi-jinja,shrine,,上杉謙信公,https://uesugi-jinja.or.jp/history/,2026-07-22,神社公式の御由緒で確認
+jp-yamagata-dewa-sanzan-sanjin-gosaiden,shrine,,月読命|稲倉命|大己貴命|少彦名命|大山祇命,https://www.dewasanzan.jp/smarts/index/67/,2026-07-22,出羽三山神社公式の三神社案内で月山・出羽・湯殿山の祭神を確認。公式ページの大山紙命は一般表記の大山祇命へ正規化
+jp-fukushima-isasumi-jinja,shrine,,伊弉諾尊|伊弉冉尊|大毘古命|建沼河別命,https://www.aizu-reichi.gr.jp/isasumi/index.html,2026-07-22,会津六詣出公式の由緒で国土開拓二神と四道将軍父子を確認

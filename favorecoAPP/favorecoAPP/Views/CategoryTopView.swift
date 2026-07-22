@@ -96,6 +96,8 @@ struct CategoryTopView: View {
                             Group {
                                 if activeCategory.templateKey == "goshuin" {
                                     goshuinHero(category: activeCategory, snapshot: snapshot)
+                                } else if activeCategory.templateKey == "random_goods" {
+                                    collectibleHero(category: activeCategory, snapshot: snapshot)
                                 } else {
                                     categoryPriorityHero(category: activeCategory, snapshot: snapshot)
                                 }
@@ -128,6 +130,13 @@ struct CategoryTopView: View {
                                         categoryStats(category: activeCategory, snapshot: snapshot)
                                         goshuinContent(category: activeCategory, snapshot: snapshot)
                                             .id(CategoryScrollAnchor.events)
+                                    } else if activeCategory.templateKey == "random_goods" {
+                                        CollectibleCategorySeriesGrid(
+                                            events: snapshot.events.map(\.event),
+                                            tint: categoryAccent(activeCategory),
+                                            onAdd: { isShowingAddExperience = true }
+                                        )
+                                        .id(CategoryScrollAnchor.events)
                                     } else {
                                         categoryStats(category: activeCategory, snapshot: snapshot)
                                         categoryTicketProgressSection(category: activeCategory)
@@ -175,7 +184,11 @@ struct CategoryTopView: View {
         .animation(categorySwitchAnimation, value: activeCategory.id)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingAddExperience) {
-            AddExperienceView(category: activeCategory)
+            if activeCategory.templateKey == "random_goods" {
+                AddCollectibleSeriesView(category: activeCategory)
+            } else {
+                AddExperienceView(category: activeCategory)
+            }
         }
         .sheet(item: $selectedEventForNewVisit) { event in
             AddVisitView(event: event)
@@ -205,6 +218,36 @@ struct CategoryTopView: View {
         .task(id: activeCategory.id) {
             await preloadAdjacentCategoryThumbnails(around: activeCategory)
         }
+    }
+
+    private func collectibleHero(category: RecordCategory, snapshot: CategoryTopSnapshot) -> some View {
+        let summaries = snapshot.events.map { CollectibleSeriesSummary.make(series: $0.event) }
+        let collected = summaries.reduce(0) { $0 + $1.collectedCount }
+        let target = summaries.reduce(0) { $0 + $1.targetCount }
+        let duplicates = summaries.reduce(0) { $0 + $1.duplicateQuantity }
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "shippingbox.fill")
+                    .font(.title)
+                    .foregroundStyle(categoryAccent(category))
+                    .frame(width: 48, height: 48)
+                    .background(categoryAccent(category).opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("ランダムグッズ")
+                        .font(FavorecoTypography.jpSerif(25, weight: .bold, relativeTo: .title2))
+                    Text(snapshot.events.isEmpty ? "シリーズを登録して、何種類・何個集まったか残せます。" : "全 \(snapshot.eventCount) シリーズ・\(collected)/\(target) 種類・ダブり \(duplicates) 個")
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Button { isShowingAddExperience = true } label: {
+                Label("シリーズを追加", systemImage: "plus.circle.fill").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(categoryAccent(category))
+        }
+        .padding(20)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func hero(

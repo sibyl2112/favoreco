@@ -3,6 +3,7 @@ import SwiftUI
 struct ExperienceOfficialInfoUnitEditor: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @Binding var officialURL: String
+    @Binding var socialLinksText: String
     @Binding var title: String
     @Binding var seriesName: String
     @Binding var visitedAt: Date
@@ -21,6 +22,11 @@ struct ExperienceOfficialInfoUnitEditor: View {
             TextField("公式URL（任意）", text: $officialURL)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
+
+            TextField("SNSリンク（1行1件・任意）", text: $socialLinksText, axis: .vertical)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+                .lineLimit(2...5)
 
             if usesURLImportAssist {
                 Button {

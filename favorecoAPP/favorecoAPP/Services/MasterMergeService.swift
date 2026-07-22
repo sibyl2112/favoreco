@@ -130,6 +130,10 @@ enum MasterMergeService {
             destination.pilgrimageMembershipsRaw,
             source.pilgrimageMembershipsRaw
         )
+        destination.operationalStatusRaw = preferred(
+            destination.operationalStatusRaw,
+            fallback: source.operationalStatusRaw
+        )
         destination.normalizedAddress = preferred(destination.normalizedAddress, fallback: source.normalizedAddress)
         mergeFavoPins(from: source, into: destination, at: now, in: context)
         destination.updatedAt = now

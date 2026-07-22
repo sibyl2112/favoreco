@@ -227,8 +227,18 @@ struct ExperienceBasicUnitEditor: View {
                             Image(systemName: "mappin.and.ellipse")
                                 .foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(place.name)
-                                    .foregroundStyle(.primary)
+                                HStack(spacing: 7) {
+                                    Text(place.name)
+                                        .foregroundStyle(.primary)
+                                    if place.isClosed {
+                                        Text("閉館")
+                                            .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption2))
+                                            .foregroundStyle(.red)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.red.opacity(0.1), in: Capsule())
+                                    }
+                                }
                                 if !place.address.isEmpty {
                                     Text(place.address)
                                         .font(FavorecoTypography.caption)

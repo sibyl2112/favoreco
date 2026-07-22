@@ -80,6 +80,8 @@ struct EventDetailView: View {
                         items: snapshot.memoryPhotos,
                         accentColor: accentColor
                     )
+                } else if category?.templateKey == "random_goods" {
+                    CollectibleSeriesDashboard(series: event, accentColor: accentColor)
                 } else {
                     eventMemoSection
                     stats(snapshot: snapshot)
@@ -126,7 +128,11 @@ struct EventDetailView: View {
             }
         }
         .sheet(isPresented: $isShowingAddVisit) {
-            AddVisitView(event: event)
+            if category?.templateKey == "random_goods" {
+                CollectibleTransactionEditorView(series: event)
+            } else {
+                AddVisitView(event: event)
+            }
         }
         .sheet(isPresented: $isShowingAddPlan) {
             AddTicketPlanView(event: event, entryMode: .plan)
@@ -623,6 +629,10 @@ struct EditEventView: View {
                     TextField("公式URL（任意）", text: $draft.officialURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
+                    TextField("SNSリンク（1行1件・任意）", text: $draft.socialLinksText, axis: .vertical)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .lineLimit(2...5)
                 }
 
                 Section("対象メモ") {
@@ -714,14 +724,15 @@ struct EditEventView: View {
         event.title = draft.trimmedTitle
         event.seriesName = draft.trimmedSeriesName
         event.officialURL = draft.trimmedOfficialURL
+        var unitFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        unitFields.socialLinks = draft.normalizedSocialLinks
         event.memo = draft.trimmedMemo
         event.importMemo = draft.trimmedImportMemo
         event.eyecatchData = eyecatchData
         if event.category?.templateKey == "book" {
-            var unitFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
             unitFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
-            event.unitFieldsRaw = unitFields.encodedRawValue
         }
+        event.unitFieldsRaw = unitFields.encodedRawValue
         event.updatedAt = Date()
 
         do {
@@ -750,6 +761,7 @@ private struct EventDraft {
     var title: String
     var seriesName: String
     var officialURL: String
+    var socialLinksText: String
     var memo: String
     var importMemo: String
     var eyecatchAspectRatioKey: String
@@ -758,6 +770,7 @@ private struct EventDraft {
         title = event.title
         seriesName = event.seriesName
         officialURL = event.officialURL
+        socialLinksText = VisitUnitFields(rawValue: event.unitFieldsRaw).socialLinks.joined(separator: "\n")
         memo = event.memo
         importMemo = event.importMemo
         eyecatchAspectRatioKey = EyecatchAspectRatio.resolved(for: event).key
@@ -773,6 +786,13 @@ private struct EventDraft {
 
     var trimmedOfficialURL: String {
         officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedSocialLinks: [String] {
+        socialLinksText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     var trimmedMemo: String {

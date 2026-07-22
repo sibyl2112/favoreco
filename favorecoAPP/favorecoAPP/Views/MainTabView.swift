@@ -166,9 +166,17 @@ struct MainTabView: View {
         .sheet(item: $recordDestination) { destination in
             switch destination {
             case .new(let category):
-                AddExperienceView(category: category)
+                if category.templateKey == "random_goods" {
+                    AddCollectibleSeriesView(category: category)
+                } else {
+                    AddExperienceView(category: category)
+                }
             case .existing(let event):
-                AddVisitView(event: event)
+                if event.category?.templateKey == "random_goods" {
+                    CollectibleTransactionEditorView(series: event)
+                } else {
+                    AddVisitView(event: event)
+                }
             }
         }
         .sheet(isPresented: $isShowingAddPlan) {

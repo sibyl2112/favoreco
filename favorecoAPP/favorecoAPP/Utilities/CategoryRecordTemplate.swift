@@ -199,6 +199,18 @@ struct CategoryRecordTemplate {
                 memoSectionTitle: "読書メモ",
                 memoPlaceholder: "好きな章、引用したい言葉、読み返したい理由など"
             )
+        case "random_goods":
+            return CategoryRecordTemplate(
+                targetSectionTitle: "シリーズ",
+                titlePlaceholder: "シリーズ名",
+                seriesPlaceholder: "発売時期（任意）",
+                visitSectionTitle: "入手・手放し",
+                dateLabel: "記録日",
+                venuePlaceholder: "場所・店舗（任意）",
+                ratingLabel: "満足度",
+                memoSectionTitle: "グッズメモ",
+                memoPlaceholder: "メーカー、発売情報、残しておきたいこと"
+            )
         default:
             return CategoryRecordTemplate(
                 targetSectionTitle: "対象",

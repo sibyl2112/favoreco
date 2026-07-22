@@ -348,7 +348,8 @@ struct FavoSnapshot {
                     let relatedPlans = activePlans
                         .filter { $0.placeMaster?.id == place.id && $0.startsAt >= startOfToday }
                         .sorted { $0.startsAt < $1.startsAt }
-                    let placeContext = place.prefecture.isEmpty ? "場所" : place.prefecture
+                    let location = place.prefecture.isEmpty ? "場所" : place.prefecture
+                    let placeContext = place.isClosed ? "閉館 · \(location)" : location
                     return FavoPinnedTargetSnapshot(
                         pin: pin,
                         kind: .place,

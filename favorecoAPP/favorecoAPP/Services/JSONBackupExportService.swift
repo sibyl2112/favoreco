@@ -10,7 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    static let schemaVersion = 6
+    static let schemaVersion = 8
 
     static func makeBackupJSON(
         categories: [RecordCategory],
@@ -148,6 +148,7 @@ struct BackupEvent: Codable {
     var sakeMeterValue: Double
     var sakeAcidity: Double
     var alcoholPercentage: Double
+    var collectibleItems: [BackupCollectibleItem]?
 
     nonisolated init(_ event: ExperienceEvent, includesBinaryData: Bool = false) {
         id = event.id
@@ -170,6 +171,61 @@ struct BackupEvent: Codable {
         sakeMeterValue = event.sakeMeterValue
         sakeAcidity = event.sakeAcidity
         alcoholPercentage = event.alcoholPercentage
+        collectibleItems = (event.collectibleItems ?? [])
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map { BackupCollectibleItem($0, includesBinaryData: includesBinaryData) }
+    }
+}
+
+struct BackupCollectibleItem: Codable {
+    var id: UUID
+    var name: String
+    var variantName: String
+    var sortOrder: Int
+    var isCompletionTarget: Bool
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var imageDataBase64: String?
+    var transactions: [BackupCollectibleTransaction]?
+
+    nonisolated init(_ item: CollectibleItem, includesBinaryData: Bool) {
+        id = item.id
+        name = item.name
+        variantName = item.variantName
+        sortOrder = item.sortOrder
+        isCompletionTarget = item.isCompletionTarget
+        isArchived = item.isArchived
+        createdAt = item.createdAt
+        updatedAt = item.updatedAt
+        imageDataBase64 = includesBinaryData ? item.imageData?.base64EncodedString() : nil
+        transactions = (item.transactions ?? [])
+            .sorted { $0.occurredAt < $1.occurredAt }
+            .map(BackupCollectibleTransaction.init)
+    }
+}
+
+struct BackupCollectibleTransaction: Codable {
+    var id: UUID
+    var kindKey: String
+    var quantity: Int
+    var occurredAt: Date
+    var amount: Decimal
+    var placeNameSnapshot: String
+    var memo: String
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ transaction: CollectibleTransaction) {
+        id = transaction.id
+        kindKey = transaction.kindKey
+        quantity = transaction.quantity
+        occurredAt = transaction.occurredAt
+        amount = transaction.amount
+        placeNameSnapshot = transaction.placeNameSnapshot
+        memo = transaction.memo
+        createdAt = transaction.createdAt
+        updatedAt = transaction.updatedAt
     }
 }
 
@@ -472,6 +528,7 @@ struct BackupPlace: Codable {
     var externalIDsRaw: String
     var sourceSnapshotRaw: String
     var pilgrimageMembershipsRaw: String?
+    var operationalStatusRaw: String?
     var normalizedName: String
     var normalizedAddress: String
     var isArchived: Bool
@@ -493,6 +550,7 @@ struct BackupPlace: Codable {
         externalIDsRaw = place.externalIDsRaw
         sourceSnapshotRaw = place.sourceSnapshotRaw
         pilgrimageMembershipsRaw = place.pilgrimageMembershipsRaw
+        operationalStatusRaw = place.operationalStatusRaw
         normalizedName = place.normalizedName
         normalizedAddress = place.normalizedAddress
         isArchived = place.isArchived

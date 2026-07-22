@@ -53,6 +53,8 @@ struct ExperienceDetailView: View {
                 .padding(.horizontal, -20)
                 .padding(.top, -24)
 
+                officialLinksSection(snapshot: snapshot, accentColor: accentColor)
+                venueMapSection(snapshot: snapshot, accentColor: accentColor)
                 memoSection(template: template)
                 photoSection(
                     snapshot: snapshot,
@@ -142,7 +144,8 @@ struct ExperienceDetailView: View {
         eyecatchPhoto: PhotoBlob?,
         backgroundPhoto: PhotoBlob?
     ) -> some View {
-        ZStack(alignment: .bottomLeading) {
+        let heroSeatText = resolvedHeroSeatText
+        return ZStack(alignment: .bottomLeading) {
             recordHeroBackground(photo: backgroundPhoto, genreColor: genreColor)
 
             VStack(alignment: .leading, spacing: 14) {
@@ -217,10 +220,10 @@ struct ExperienceDetailView: View {
                             )
                         }
 
-                        if !visit.seatText.isEmpty {
+                        if !heroSeatText.isEmpty {
                             recordMetadataRow(
                                 icon: "chair",
-                                text: visit.seatText,
+                                text: heroSeatText,
                                 accentColor: .white.opacity(0.86)
                             )
                         }
@@ -423,6 +426,188 @@ struct ExperienceDetailView: View {
         }
     }
 
+    private func officialLinksSection(
+        snapshot: ExperienceDetailSnapshot,
+        accentColor: Color
+    ) -> some View {
+        let officialURLText = snapshot.event?.officialURL.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let socialLinks = VisitUnitFields(rawValue: snapshot.event?.unitFieldsRaw ?? "").socialLinks
+
+        return VStack(alignment: .leading, spacing: 14) {
+            sectionTitle("公式情報")
+
+            officialLinkRow(
+                icon: "link",
+                title: "公式URL",
+                value: officialURLText,
+                emptyText: "未登録",
+                accentColor: accentColor
+            )
+
+            Divider()
+                .overlay(Color.white.opacity(0.12))
+
+            VStack(alignment: .leading, spacing: 10) {
+                Label("SNS", systemImage: "at")
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.secondary)
+
+                if socialLinks.isEmpty {
+                    Text("未登録")
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(socialLinks.enumerated()), id: \.offset) { _, link in
+                        officialLinkButton(
+                            value: link,
+                            label: socialLinkLabel(for: link),
+                            accentColor: accentColor
+                        )
+                    }
+                }
+            }
+        }
+        .sectionCard()
+    }
+
+    @ViewBuilder
+    private func officialLinkRow(
+        icon: String,
+        title: String,
+        value: String,
+        emptyText: String,
+        accentColor: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: icon)
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.secondary)
+
+            if value.isEmpty {
+                Text(emptyText)
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.secondary)
+            } else {
+                officialLinkButton(value: value, label: value, accentColor: accentColor)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func officialLinkButton(value: String, label: String, accentColor: Color) -> some View {
+        if let url = normalizedWebURL(from: value) {
+            Button {
+                openURL(url)
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "arrow.up.right.square")
+                    Text(label)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                }
+                .font(FavorecoTypography.body)
+                .foregroundStyle(accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Text(value)
+                .font(FavorecoTypography.body)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+    }
+
+    private func normalizedWebURL(from value: String) -> URL? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let candidate = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard let url = URL(string: candidate),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              url.host != nil else { return nil }
+        return url
+    }
+
+    private func socialLinkLabel(for value: String) -> String {
+        guard let url = normalizedWebURL(from: value), let host = url.host?.lowercased() else {
+            return value
+        }
+        if host.contains("instagram.com") { return "Instagram" }
+        if host == "x.com" || host.hasSuffix(".x.com") || host.contains("twitter.com") { return "X" }
+        if host.contains("threads.net") { return "Threads" }
+        if host.contains("facebook.com") { return "Facebook" }
+        if host.contains("tiktok.com") { return "TikTok" }
+        if host.contains("youtube.com") || host == "youtu.be" { return "YouTube" }
+        return host.replacingOccurrences(of: "www.", with: "")
+    }
+
+    private func venueMapSection(
+        snapshot: ExperienceDetailSnapshot,
+        accentColor: Color
+    ) -> some View {
+        let venueName = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+        let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
+        let latitude = hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0)
+        let longitude = hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
+        let hasMapSource = !venueName.isEmpty || !address.isEmpty || latitude != 0 || longitude != 0
+        let geocodeText = address.isEmpty ? venueName : address
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                sectionTitle("会場")
+                Spacer()
+                if let mapURL = snapshot.mapURL, hasMapSource {
+                    Button {
+                        openURL(mapURL)
+                    } label: {
+                        Label("マップで開く", systemImage: "arrow.up.right")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(accentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if hasMapSource {
+                if !venueName.isEmpty {
+                    Text(venueName)
+                        .font(FavorecoTypography.bodyStrong)
+                }
+                if !address.isEmpty {
+                    Text(address)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                ZStack {
+                    Color.white.opacity(0.06)
+                    Image(systemName: "map")
+                        .font(.system(size: 30, weight: .light))
+                        .foregroundStyle(accentColor.opacity(0.52))
+                    PlaceMapPreview(
+                        venueName: venueName,
+                        address: geocodeText,
+                        latitude: latitude,
+                        longitude: longitude
+                    )
+                }
+                .frame(height: 180)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .allowsHitTesting(false)
+            } else {
+                ContentUnavailableView(
+                    "会場未登録",
+                    systemImage: "map",
+                    description: Text("会場や住所を登録すると地図が表示されます")
+                )
+                .frame(maxWidth: .infinity, minHeight: 150)
+            }
+        }
+        .sectionCard()
+    }
+
     @ViewBuilder
     private func classifiedPhotoSection(
         snapshot: ExperienceDetailSnapshot,
@@ -500,6 +685,8 @@ struct ExperienceDetailView: View {
     ) -> some View {
         let supportsTicketManagement = ["theater", "live"].contains(snapshot.category?.templateKey ?? "")
         VStack(alignment: .leading, spacing: 12) {
+            ticketAndSeatCard(snapshot: snapshot, plan: plan, accentColor: accentColor)
+
             ExperienceExpenseSummaryCard(
                 summary: ExperienceExpenseSummary.make(visit: visit, plan: plan),
                 tint: accentColor
@@ -533,6 +720,109 @@ struct ExperienceDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    @ViewBuilder
+    private func ticketAndSeatCard(
+        snapshot: ExperienceDetailSnapshot,
+        plan: Plan?,
+        accentColor: Color
+    ) -> some View {
+        let attempts = securedTicketAttempts(in: plan)
+        let hasVisitDetails = !visit.seatText.isEmpty || !visit.outcomeKey.isEmpty
+
+        if hasVisitDetails || !attempts.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("チケット・座席")
+
+                if !visit.seatText.isEmpty {
+                    DetailInfoRow(icon: "chair", title: "座席", value: visit.seatText)
+                }
+
+                if attempts.isEmpty, !visit.outcomeKey.isEmpty {
+                    DetailInfoRow(
+                        icon: "ticket",
+                        title: "状態",
+                        value: snapshot.ticketStatusText
+                    )
+                }
+
+                ForEach(Array(attempts.enumerated()), id: \.element.id) { index, attempt in
+                    if index > 0 {
+                        Divider()
+                            .overlay(Color.white.opacity(0.12))
+                    }
+
+                    if attempts.count > 1 {
+                        Text("チケット \(index + 1)")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(accentColor)
+                    }
+
+                    DetailInfoRow(
+                        icon: "ticket",
+                        title: "状態",
+                        value: TicketStatusDefinition.name(for: attempt.statusKey)
+                    )
+
+                    if !attempt.entryRouteKey.isEmpty {
+                        DetailInfoRow(
+                            icon: "person.text.rectangle",
+                            title: "申込",
+                            value: TicketEntryRouteDefinition.name(for: attempt.entryRouteKey)
+                        )
+                    }
+
+                    if !attempt.ticketSite.isEmpty {
+                        DetailInfoRow(icon: "safari", title: "購入元", value: attempt.ticketSite)
+                    }
+
+                    if !attempt.seatText.isEmpty, attempt.seatText != visit.seatText {
+                        DetailInfoRow(icon: "chair", title: "座席", value: attempt.seatText)
+                    }
+
+                    if attempt.price > 0 {
+                        DetailInfoRow(
+                            icon: "ticket.fill",
+                            title: "券面",
+                            value: ticketAmountText(attempt.price, quantity: attempt.quantity)
+                        )
+                    }
+
+                    if attempt.fee > 0 {
+                        DetailInfoRow(
+                            icon: "plus.circle",
+                            title: "手数料",
+                            value: ticketAmountText(attempt.fee, quantity: attempt.quantity)
+                        )
+                    }
+                }
+            }
+            .sectionCard()
+        }
+    }
+
+    private func securedTicketAttempts(in plan: Plan?) -> [TicketAttempt] {
+        let securedStatusKeys: Set<String> = [
+            "won", "waitingPayment", "waitingIssue", "issued", "attended",
+        ]
+        return TicketAttemptPresentationOrder.sorted(
+            (plan?.ticketAttempts ?? []).filter {
+                !$0.isArchived && securedStatusKeys.contains($0.statusKey)
+            }
+        )
+    }
+
+    private var resolvedHeroSeatText: String {
+        if !visit.seatText.isEmpty { return visit.seatText }
+        return securedTicketAttempts(in: activePlan)
+            .first(where: { !$0.seatText.isEmpty })?
+            .seatText ?? ""
+    }
+
+    private func ticketAmountText(_ amount: Decimal, quantity: Int) -> String {
+        let amountText = formattedPhotoAmount(amount)
+        return quantity > 1 ? "\(amountText) × \(quantity)枚" : amountText
     }
 
     private func ensureTicketPlan(snapshot: ExperienceDetailSnapshot) -> Plan? {
@@ -599,36 +889,28 @@ struct ExperienceDetailView: View {
     private func photoSection(snapshot: ExperienceDetailSnapshot, excluding excludedPhotoIDs: Set<UUID>) -> some View {
         let galleryPhotos = memoryPhotos(in: snapshot).filter { !excludedPhotoIDs.contains($0.id) }
         if !galleryPhotos.isEmpty {
-            let contentMode: ContentMode = EyecatchAspectRatio.usesEyecatchFill(for: snapshot.category) ? .fill : .fit
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle("写真")
 
-                if galleryPhotos.count == 1, let firstPhoto = galleryPhotos.first {
-                    RepresentativePhotoImage(photo: firstPhoto, maxPixelSize: 1600, contentMode: contentMode)
-                        .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fit)
-                        .frame(maxWidth: .infinity)
-                        .clipped()
-                        .background(Color(.secondarySystemFill))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 10)], spacing: 10) {
-                        ForEach(galleryPhotos) { photo in
-                            ZStack(alignment: .bottomLeading) {
-                                RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: contentMode)
-                                    .aspectRatio(CGFloat(snapshot.eyecatchAspectRatio), contentMode: .fit)
-                                    .frame(maxWidth: .infinity)
-                                    .clipped()
-                                    .background(Color(.secondarySystemFill))
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                if photo.relativePath == visit.eyecatchPath {
-                                    Label("カバー", systemImage: "star.fill")
-                                        .font(FavorecoTypography.captionStrong)
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 5)
-                                        .background(.black.opacity(0.58), in: Capsule())
-                                        .padding(7)
-                                }
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                    spacing: 8
+                ) {
+                    ForEach(galleryPhotos) { photo in
+                        ZStack(alignment: .bottomLeading) {
+                            RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
+                                .frame(maxWidth: .infinity)
+                                .aspectRatio(1, contentMode: .fit)
+                                .clipped()
+                                .background(Color(.secondarySystemFill))
+                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            if photo.relativePath == visit.eyecatchPath {
+                                Image(systemName: "star.fill")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .padding(6)
+                                    .background(.black.opacity(0.58), in: Circle())
+                                    .padding(5)
                             }
                         }
                     }
@@ -714,23 +996,6 @@ struct ExperienceDetailView: View {
                             .font(FavorecoTypography.caption)
                     }
                 }
-            }
-
-            if let address = visit.placeMaster?.address, !address.isEmpty {
-                DetailInfoRow(icon: "signpost.right", title: "住所", value: address)
-            }
-
-            if let mapURL = snapshot.mapURL {
-                Button {
-                    openURL(mapURL)
-                } label: {
-                    Label("地図で見る", systemImage: "map")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-
-            if !visit.outcomeKey.isEmpty {
-                DetailInfoRow(icon: "ticket", title: "チケット状態", value: snapshot.ticketStatusText)
             }
 
             Button {

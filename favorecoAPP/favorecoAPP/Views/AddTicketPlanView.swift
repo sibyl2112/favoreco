@@ -1235,7 +1235,7 @@ private struct TicketPlanDraft {
         let query = normalizedPlaceText(trimmedVenueName)
         guard !query.isEmpty else { return [] }
         return placeMasters
-            .filter { !$0.isArchived && normalizedPlaceText($0.name).contains(query) }
+            .filter { !$0.isArchived && !$0.isClosed && normalizedPlaceText($0.name).contains(query) }
             .prefix(4)
             .map { $0 }
     }

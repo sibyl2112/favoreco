@@ -466,6 +466,7 @@ final class PlaceMaster {
     var externalIDsRaw: String = ""
     var sourceSnapshotRaw: String = ""
     var pilgrimageMembershipsRaw: String = "[]"
+    var operationalStatusRaw: String = ""
     var normalizedName: String = ""
     var normalizedAddress: String = ""
     var isArchived: Bool = false
@@ -496,6 +497,7 @@ final class PlaceMaster {
         externalIDsRaw: String = "",
         sourceSnapshotRaw: String = "",
         pilgrimageMembershipsRaw: String = "[]",
+        operationalStatusRaw: String = "",
         normalizedName: String = "",
         normalizedAddress: String = "",
         isArchived: Bool = false,
@@ -516,11 +518,35 @@ final class PlaceMaster {
         self.externalIDsRaw = externalIDsRaw
         self.sourceSnapshotRaw = sourceSnapshotRaw
         self.pilgrimageMembershipsRaw = pilgrimageMembershipsRaw
+        self.operationalStatusRaw = operationalStatusRaw
         self.normalizedName = normalizedName
         self.normalizedAddress = normalizedAddress
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    var operationalStatus: PlaceOperationalStatus {
+        get { PlaceOperationalStatus(rawValue: operationalStatusRaw) ?? .unknown }
+        set { operationalStatusRaw = newValue.rawValue }
+    }
+
+    var isClosed: Bool { operationalStatus == .closed }
+}
+
+enum PlaceOperationalStatus: String, CaseIterable, Identifiable {
+    case unknown = ""
+    case open
+    case closed
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .unknown: "未設定"
+        case .open: "営業中"
+        case .closed: "閉館・閉園"
+        }
     }
 }
 
@@ -562,6 +588,9 @@ final class ExperienceEvent {
 
     @Relationship(deleteRule: .cascade, inverse: \FavoPin.event)
     var favoPins: [FavoPin]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \CollectibleItem.series)
+    var collectibleItems: [CollectibleItem]? = []
 
     init(
         id: UUID = UUID(),

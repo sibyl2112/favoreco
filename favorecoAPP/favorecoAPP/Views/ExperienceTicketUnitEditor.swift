@@ -18,7 +18,7 @@ struct ExperienceTicketUnitEditor: View {
             }
 
             TextField(
-                "座席・チケットメモ（例: 1階A列12番 / 整理番号B120）",
+                "席種・座席・メモ（例: S席・1階A列12番 / 整理番号B120）",
                 text: $seatText,
                 axis: .vertical
             )

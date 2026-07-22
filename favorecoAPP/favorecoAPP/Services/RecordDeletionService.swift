@@ -198,14 +198,18 @@ enum RecordDeletionService {
         let plans = try context.fetch(FetchDescriptor<Plan>())
         let accounts = try context.fetch(FetchDescriptor<TicketAccount>())
         let attempts = try context.fetch(FetchDescriptor<TicketAttempt>())
+        let collectibleItems = try context.fetch(FetchDescriptor<CollectibleItem>())
+        let collectibleTransactions = try context.fetch(FetchDescriptor<CollectibleTransaction>())
         let externalCalendarTargets = externalCalendarTargets(for: plans)
         let planNotificationIDs = plans.map(\.id)
         let attemptNotificationIDs = attempts.map(\.id)
         let accountNotificationIDs = accounts.map(\.id)
 
-        let deletedModelCount = categories.count + events.count + visits.count
-            + inboxItems.count + photos.count + socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoPins.count
-            + links.count + places.count + plans.count + accounts.count + attempts.count
+        let coreModelCount = categories.count + events.count + visits.count + inboxItems.count + photos.count
+        let masterModelCount = socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoPins.count
+        let planningModelCount = links.count + places.count + plans.count + accounts.count + attempts.count
+        let collectionModelCount = collectibleItems.count + collectibleTransactions.count
+        let deletedModelCount = coreModelCount + masterModelCount + planningModelCount + collectionModelCount
 
         // 親を先に削除し、親を持たない孤立モデルだけを個別削除する。
         for link in links { context.delete(link) }
@@ -213,6 +217,8 @@ enum RecordDeletionService {
         for plan in plans where plan.event == nil { context.delete(plan) }
         for visit in visits where visit.event == nil { context.delete(visit) }
         for attempt in attempts where attempt.plan == nil { context.delete(attempt) }
+        for item in collectibleItems where item.series == nil { context.delete(item) }
+        for transaction in collectibleTransactions where transaction.item == nil { context.delete(transaction) }
         for photo in photos where photo.visit == nil { context.delete(photo) }
         for item in inboxItems { context.delete(item) }
         for account in socialAccounts { context.delete(account) }

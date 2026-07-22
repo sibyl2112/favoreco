@@ -143,6 +143,18 @@ enum CategoryPresetSeeder {
             recordUnitName: "読書",
             dateLabel: "読了日"
         ),
+        CategoryPreset(
+            name: "ランダムグッズ",
+            templateKey: "random_goods",
+            templateTypeKey: "collection",
+            iconSymbol: "shippingbox.fill",
+            colorHex: "#A65A74",
+            sortOrder: 90,
+            enabledUnitsRaw: "basic,photos,money,officialInfo,memo",
+            targetNameLabel: "シリーズ",
+            recordUnitName: "入手・手放し",
+            dateLabel: "記録日"
+        ),
     ]
 
     @MainActor
@@ -185,7 +197,8 @@ enum CategoryPresetSeeder {
                         targetNameLabel: preset.targetNameLabel,
                         recordUnitName: preset.recordUnitName,
                         dateLabel: preset.dateLabel,
-                        isArchived: hasCompletedGenreOnboarding,
+                        // 新設ジャンルは更新直後から利用できるよう、既存利用者にも初回だけ表示する。
+                        isArchived: hasCompletedGenreOnboarding && preset.templateKey != "random_goods",
                         createdAt: now,
                         updatedAt: now
                     )

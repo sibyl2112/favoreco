@@ -196,6 +196,7 @@ struct PlaceMasterManagementView: View {
     @State private var selectedArea: JapanArea?
     @State private var prefectureFilter: PlacePrefectureFilter = .all
     @State private var categoryFilter: PlaceMasterCategoryFilter = .all
+    @State private var statusFilter: PlaceMasterStatusFilter = .all
 
     private var allActivePlaces: [PlaceMaster] {
         places.filter { !$0.isArchived }
@@ -233,7 +234,18 @@ struct PlaceMasterManagementView: View {
             case let .category(category):
                 matchesCategory = PlaceMasterCategories.contains(category, rawValue: place.placeTagsRaw)
             }
-            return matchesArea && matchesPrefecture && matchesCategory && matchesSearch
+            let matchesStatus: Bool
+            switch statusFilter {
+            case .all:
+                matchesStatus = true
+            case .open:
+                matchesStatus = place.operationalStatus == .open
+            case .closed:
+                matchesStatus = place.isClosed
+            case .unknown:
+                matchesStatus = place.operationalStatus == .unknown
+            }
+            return matchesArea && matchesPrefecture && matchesCategory && matchesStatus && matchesSearch
         }
     }
 
@@ -274,6 +286,13 @@ struct PlaceMasterManagementView: View {
                     Text("未分類").tag(PlaceMasterCategoryFilter.missing)
                 }
 
+                Picker("営業状態", selection: $statusFilter) {
+                    Text("すべて").tag(PlaceMasterStatusFilter.all)
+                    Text("営業中").tag(PlaceMasterStatusFilter.open)
+                    Text("閉館・閉園").tag(PlaceMasterStatusFilter.closed)
+                    Text("未設定").tag(PlaceMasterStatusFilter.unknown)
+                }
+
                 LabeledContent("表示件数", value: "\(activePlaces.count) / \(allActivePlaces.count)件")
             }
 
@@ -298,7 +317,8 @@ struct PlaceMasterManagementView: View {
                                 title: place.name,
                                 subtitle: placeMasterSubtitle(place),
                                 countLabel: "\((place.visits?.count ?? 0) + (place.plans?.count ?? 0))件の利用",
-                                systemImage: "mappin.circle"
+                                systemImage: "mappin.circle",
+                                badgeText: place.isClosed ? "閉館" : nil
                             )
                         }
                     }
@@ -332,6 +352,13 @@ private enum PlaceMasterCategoryFilter: Hashable {
     case all
     case category(PlaceMasterCategory)
     case missing
+}
+
+private enum PlaceMasterStatusFilter: Hashable {
+    case all
+    case open
+    case closed
+    case unknown
 }
 
 private func placeMasterSubtitle(_ place: PlaceMaster) -> String {
@@ -609,6 +636,11 @@ private struct PlaceMasterMergeView: View {
                 TextField("住所", text: $draft.address)
                     .textContentType(.fullStreetAddress)
                 TextField("別名（カンマ区切り）", text: $draft.aliasesRaw)
+                Picker("営業状態", selection: $draft.operationalStatus) {
+                    ForEach(PlaceOperationalStatus.allCases) { status in
+                        Text(status.displayName).tag(status)
+                    }
+                }
                 LabeledContent("利用", value: "\((place.visits?.count ?? 0) + (place.plans?.count ?? 0))件")
             }
 
@@ -746,6 +778,7 @@ private struct PlaceMasterMergeView: View {
         place.aliasesRaw = draft.trimmedAliasesRaw
         place.placeTagsRaw = draft.trimmedPlaceTagsRaw
         place.pilgrimageMembershipsRaw = PlacePilgrimageMembership.encode(draft.validPilgrimageMemberships)
+        place.operationalStatus = draft.operationalStatus
         place.officialURL = draft.trimmedOfficialURL
         place.memo = draft.trimmedMemo
         place.normalizedName = normalizedMasterText(draft.trimmedName)
@@ -1283,6 +1316,7 @@ private struct PlaceMasterDraft {
     var officialURL: String
     var memo: String
     var pilgrimageMemberships: [PlacePilgrimageMembership]
+    var operationalStatus: PlaceOperationalStatus
 
     init(place: PlaceMaster) {
         name = place.name
@@ -1294,6 +1328,7 @@ private struct PlaceMasterDraft {
         officialURL = place.officialURL
         memo = place.memo
         pilgrimageMemberships = PlacePilgrimageMembership.decode(place.pilgrimageMembershipsRaw)
+        operationalStatus = place.operationalStatus
     }
 
     var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -1322,12 +1357,23 @@ private struct MasterListRow: View {
     let subtitle: String
     let countLabel: String
     let systemImage: String
+    var badgeText: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage).foregroundStyle(.secondary).frame(width: 26)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(FavorecoTypography.bodyStrong)
+                HStack(spacing: 7) {
+                    Text(title).font(FavorecoTypography.bodyStrong)
+                    if let badgeText {
+                        Text(badgeText)
+                            .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption2))
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.red.opacity(0.1), in: Capsule())
+                    }
+                }
                 if !subtitle.isEmpty { Text(subtitle).font(FavorecoTypography.caption).foregroundStyle(.secondary) }
                 Text(countLabel).font(FavorecoTypography.caption).foregroundStyle(.secondary)
             }

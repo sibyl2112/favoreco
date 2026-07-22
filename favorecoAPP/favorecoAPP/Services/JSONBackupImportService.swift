@@ -38,6 +38,8 @@ enum JSONBackupImportService {
         var plans = Dictionary(grouping: try context.fetch(FetchDescriptor<Plan>()), by: \.id).compactMapValues(\.first)
         var attempts = Dictionary(grouping: try context.fetch(FetchDescriptor<TicketAttempt>()), by: \.id).compactMapValues(\.first)
         var personLinks = Dictionary(grouping: try context.fetch(FetchDescriptor<EventPersonLink>()), by: \.id).compactMapValues(\.first)
+        var collectibleItems = Dictionary(grouping: try context.fetch(FetchDescriptor<CollectibleItem>()), by: \.id).compactMapValues(\.first)
+        var collectibleTransactions = Dictionary(grouping: try context.fetch(FetchDescriptor<CollectibleTransaction>()), by: \.id).compactMapValues(\.first)
 
         for item in envelope.categories {
             let model: RecordCategory
@@ -171,6 +173,7 @@ enum JSONBackupImportService {
             model.externalIDsRaw = item.externalIDsRaw
             model.sourceSnapshotRaw = item.sourceSnapshotRaw
             model.pilgrimageMembershipsRaw = item.pilgrimageMembershipsRaw ?? "[]"
+            model.operationalStatusRaw = PlaceOperationalStatus(rawValue: item.operationalStatusRaw ?? "")?.rawValue ?? ""
             model.normalizedName = item.normalizedName
             model.normalizedAddress = item.normalizedAddress
             model.isArchived = item.isArchived
@@ -267,6 +270,56 @@ enum JSONBackupImportService {
             model.sakeAcidity = item.sakeAcidity
             model.alcoholPercentage = item.alcoholPercentage
             model.category = item.categoryID.flatMap { categories[$0] }
+        }
+
+        for eventBackup in envelope.events {
+            guard let series = events[eventBackup.id] else { continue }
+            for itemBackup in eventBackup.collectibleItems ?? [] {
+                let model: CollectibleItem
+                if let existing = collectibleItems[itemBackup.id] {
+                    model = existing
+                    updatedCount += 1
+                } else {
+                    model = CollectibleItem(id: itemBackup.id)
+                    context.insert(model)
+                    collectibleItems[itemBackup.id] = model
+                    insertedCount += 1
+                }
+                model.name = itemBackup.name
+                model.variantName = itemBackup.variantName
+                model.sortOrder = itemBackup.sortOrder
+                model.isCompletionTarget = itemBackup.isCompletionTarget
+                model.isArchived = itemBackup.isArchived
+                model.createdAt = itemBackup.createdAt
+                model.updatedAt = itemBackup.updatedAt
+                if let base64 = itemBackup.imageDataBase64, let data = Data(base64Encoded: base64) {
+                    model.imageData = data
+                }
+                model.series = series
+
+                for transactionBackup in itemBackup.transactions ?? [] {
+                    let transaction: CollectibleTransaction
+                    if let existing = collectibleTransactions[transactionBackup.id] {
+                        transaction = existing
+                        updatedCount += 1
+                    } else {
+                        transaction = CollectibleTransaction(id: transactionBackup.id)
+                        context.insert(transaction)
+                        collectibleTransactions[transactionBackup.id] = transaction
+                        insertedCount += 1
+                    }
+                    transaction.kindKey = CollectibleTransactionKind(rawValue: transactionBackup.kindKey)?.rawValue
+                        ?? CollectibleTransactionKind.purchase.rawValue
+                    transaction.quantity = max(1, transactionBackup.quantity)
+                    transaction.occurredAt = transactionBackup.occurredAt
+                    transaction.amount = transactionBackup.amount
+                    transaction.placeNameSnapshot = transactionBackup.placeNameSnapshot
+                    transaction.memo = transactionBackup.memo
+                    transaction.createdAt = transactionBackup.createdAt
+                    transaction.updatedAt = transactionBackup.updatedAt
+                    transaction.item = model
+                }
+            }
         }
 
         for item in envelope.visits {

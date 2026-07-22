@@ -118,7 +118,7 @@ struct AddExperienceView: View {
         case "basic":
             return draft.canSave ? .entered : .required
         case "officialInfo":
-            return draft.trimmedOfficialURL.isEmpty ? .optional : .entered
+            return draft.trimmedOfficialURL.isEmpty && draft.normalizedSocialLinks.isEmpty ? .optional : .entered
         case "people":
             return pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
@@ -174,6 +174,7 @@ struct AddExperienceView: View {
         case "officialInfo":
             ExperienceOfficialInfoUnitEditor(
                 officialURL: $draft.officialURL,
+                socialLinksText: $draft.socialLinksText,
                 title: $draft.title,
                 seriesName: $draft.seriesName,
                 visitedAt: $draft.visitedAt,
@@ -446,7 +447,7 @@ struct EditExperienceView: View {
         case "basic":
             return draft.canSave ? .entered : .required
         case "officialInfo":
-            return draft.trimmedOfficialURL.isEmpty ? .optional : .entered
+            return draft.trimmedOfficialURL.isEmpty && draft.normalizedSocialLinks.isEmpty ? .optional : .entered
         case "people":
             return visiblePersonLinks.isEmpty && pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
@@ -502,6 +503,7 @@ struct EditExperienceView: View {
         case "officialInfo":
             ExperienceOfficialInfoUnitEditor(
                 officialURL: $draft.officialURL,
+                socialLinksText: $draft.socialLinksText,
                 title: $draft.title,
                 seriesName: $draft.seriesName,
                 visitedAt: $draft.visitedAt,
@@ -609,11 +611,12 @@ struct EditExperienceView: View {
                 }
             }
             event.officialURL = draft.trimmedOfficialURL
+            var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+            eventFields.socialLinks = draft.normalizedSocialLinks
             if event.category?.templateKey == "book" {
-                var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
                 eventFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
-                event.unitFieldsRaw = eventFields.encodedRawValue
             }
+            event.unitFieldsRaw = eventFields.encodedRawValue
             event.updatedAt = now
         }
 
@@ -857,7 +860,9 @@ struct AddVisitView: View {
         case "ticketPlan":
             return draft.hasTicketPlan ? .entered : .optional
         case "officialInfo":
-            return event.officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .optional : .entered
+            let hasOfficialURL = !event.officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let hasSocialLinks = !VisitUnitFields(rawValue: event.unitFieldsRaw).socialLinks.isEmpty
+            return hasOfficialURL || hasSocialLinks ? .entered : .optional
         case "advanced":
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
@@ -1087,6 +1092,7 @@ struct AddExperienceDraft {
     var seriesName: String = ""
     var subTypeKey: String = ""
     var officialURL: String = ""
+    var socialLinksText: String = ""
     var visitedAt: Date = Date()
     var endedAt: Date = Date()
     var styleNamesText: String = ""
@@ -1111,6 +1117,7 @@ struct AddExperienceDraft {
         seriesName = visit.event?.seriesName ?? ""
         subTypeKey = visit.event?.subTypeKey ?? ""
         officialURL = visit.event?.officialURL ?? ""
+        socialLinksText = VisitUnitFields(rawValue: visit.event?.unitFieldsRaw ?? "").socialLinks.joined(separator: "\n")
         visitedAt = visit.visitedAt
         endedAt = visit.endedAt
         styleNamesText = VisitUnitFields(rawValue: visit.unitFieldsRaw).styleNames.joined(separator: "、")
@@ -1147,6 +1154,13 @@ struct AddExperienceDraft {
 
     var trimmedOfficialURL: String {
         officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedSocialLinks: [String] {
+        socialLinksText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     var trimmedVenueName: String {
@@ -1234,11 +1248,11 @@ struct AddExperienceDraft {
     }
 
     func eventUnitFieldsRaw(for category: RecordCategory?) -> String {
-        guard category?.templateKey == "book" else { return "" }
         return VisitUnitFields(
-            eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
-                ? EyecatchAspectRatio.hardcoverBook.key
-                : eyecatchAspectRatioKey
+            socialLinks: normalizedSocialLinks,
+            eyecatchAspectRatioKey: category?.templateKey == "book"
+                ? (eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.hardcoverBook.key : eyecatchAspectRatioKey)
+                : ""
         ).encodedRawValue
     }
 

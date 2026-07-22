@@ -10,6 +10,7 @@ import Foundation
 struct VisitUnitFields: Codable {
     var ocrText: String = ""
     var styleNames: [String] = []
+    var socialLinks: [String] = []
     var eyecatchAspectRatioKey: String = ""
     var goshuinBookSizeKey: String = ""
     var weatherSymbolName: String = ""
@@ -22,6 +23,7 @@ struct VisitUnitFields: Codable {
     init(
         ocrText: String = "",
         styleNames: [String] = [],
+        socialLinks: [String] = [],
         eyecatchAspectRatioKey: String = "",
         goshuinBookSizeKey: String = "",
         weatherSymbolName: String = "",
@@ -33,6 +35,7 @@ struct VisitUnitFields: Codable {
     ) {
         self.ocrText = ocrText
         self.styleNames = styleNames
+        self.socialLinks = socialLinks
         self.eyecatchAspectRatioKey = eyecatchAspectRatioKey
         self.goshuinBookSizeKey = goshuinBookSizeKey
         self.weatherSymbolName = weatherSymbolName
@@ -46,6 +49,7 @@ struct VisitUnitFields: Codable {
     private enum CodingKeys: String, CodingKey {
         case ocrText
         case styleNames
+        case socialLinks
         case eyecatchAspectRatioKey
         case goshuinBookSizeKey
         case weatherSymbolName
@@ -60,6 +64,7 @@ struct VisitUnitFields: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         ocrText = try container.decodeIfPresent(String.self, forKey: .ocrText) ?? ""
         styleNames = try container.decodeIfPresent([String].self, forKey: .styleNames) ?? []
+        socialLinks = try container.decodeIfPresent([String].self, forKey: .socialLinks) ?? []
         eyecatchAspectRatioKey = try container.decodeIfPresent(String.self, forKey: .eyecatchAspectRatioKey) ?? ""
         goshuinBookSizeKey = try container.decodeIfPresent(String.self, forKey: .goshuinBookSizeKey) ?? ""
         weatherSymbolName = try container.decodeIfPresent(String.self, forKey: .weatherSymbolName) ?? ""
@@ -82,6 +87,7 @@ struct VisitUnitFields: Codable {
     var encodedRawValue: String {
         guard !ocrText.isEmpty
                 || !styleNames.isEmpty
+                || !socialLinks.isEmpty
                 || !eyecatchAspectRatioKey.isEmpty
                 || !goshuinBookSizeKey.isEmpty
                 || !weatherSymbolName.isEmpty
