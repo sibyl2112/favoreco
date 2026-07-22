@@ -12,9 +12,12 @@ struct PendingPhotoThumbnail: View {
     let aspectRatio: Double
     let fillsFrame: Bool
     let isCover: Bool
+    let isHeroBackground: Bool
     let purpose: ExperiencePhotoPurpose
     let canSetCover: Bool
+    let canSetHeroBackground: Bool
     let onSetCover: () -> Void
+    let onSetHeroBackground: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
     @State private var image: UIImage?
@@ -26,9 +29,12 @@ struct PendingPhotoThumbnail: View {
             aspectRatio: aspectRatio,
             fillsFrame: fillsFrame,
             isCover: isCover,
+            isHeroBackground: isHeroBackground,
             purpose: purpose,
             canSetCover: canSetCover,
+            canSetHeroBackground: canSetHeroBackground,
             onSetCover: onSetCover,
+            onSetHeroBackground: onSetHeroBackground,
             onEdit: onEdit,
             onDelete: onDelete
         )
@@ -57,9 +63,12 @@ struct SavedPhotoThumbnail: View {
     let aspectRatio: Double
     let fillsFrame: Bool
     let isCover: Bool
+    let isHeroBackground: Bool
     let purpose: ExperiencePhotoPurpose
     let canSetCover: Bool
+    let canSetHeroBackground: Bool
     let onSetCover: () -> Void
+    let onSetHeroBackground: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
     @State private var image: UIImage?
@@ -71,9 +80,12 @@ struct SavedPhotoThumbnail: View {
             aspectRatio: aspectRatio,
             fillsFrame: fillsFrame,
             isCover: isCover,
+            isHeroBackground: isHeroBackground,
             purpose: purpose,
             canSetCover: canSetCover,
+            canSetHeroBackground: canSetHeroBackground,
             onSetCover: onSetCover,
+            onSetHeroBackground: onSetHeroBackground,
             onEdit: onEdit,
             onDelete: onDelete
         )
@@ -102,9 +114,12 @@ private struct PhotoThumbnail: View {
     let aspectRatio: Double
     let fillsFrame: Bool
     let isCover: Bool
+    let isHeroBackground: Bool
     let purpose: ExperiencePhotoPurpose
     let canSetCover: Bool
+    let canSetHeroBackground: Bool
     let onSetCover: () -> Void
+    let onSetHeroBackground: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
 
@@ -163,6 +178,17 @@ private struct PhotoThumbnail: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(isCover ? "カバー写真に設定済み" : "カバー写真に設定")
+                    }
+                    if canSetHeroBackground {
+                        Button(action: onSetHeroBackground) {
+                            Image(systemName: isHeroBackground ? "rectangle.landscape.fill" : "rectangle.landscape")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(isHeroBackground ? Color.yellow : Color.white)
+                                .padding(7)
+                                .background(.black.opacity(0.55), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(isHeroBackground ? "トップ背景に設定済み" : "トップ背景に設定")
                     }
                     Spacer()
                     Button(action: onEdit) {

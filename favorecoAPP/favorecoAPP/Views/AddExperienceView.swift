@@ -28,6 +28,8 @@ struct AddExperienceView: View {
     @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var coverPhotoPath = ""
+    @State private var heroBackgroundPath = ""
+    @State private var heroBackgroundPresetKey = ""
     @State private var pendingPeople: [PendingPersonLink] = []
     @State private var isShowingPlaceSearch = false
     @State private var savedVisit: Visit?
@@ -175,6 +177,7 @@ struct AddExperienceView: View {
             ExperienceOfficialInfoUnitEditor(
                 officialURL: $draft.officialURL,
                 socialLinksText: $draft.socialLinksText,
+                eventSubtitle: $draft.eventSubtitle,
                 title: $draft.title,
                 seriesName: $draft.seriesName,
                 visitedAt: $draft.visitedAt,
@@ -204,7 +207,9 @@ struct AddExperienceView: View {
                 selectedItems: $selectedPhotoItems,
                 category: category,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
-                coverPhotoPath: $coverPhotoPath
+                coverPhotoPath: $coverPhotoPath,
+                heroBackgroundPath: $heroBackgroundPath,
+                heroBackgroundPresetKey: $heroBackgroundPresetKey
             )
         case "goshuinBook":
             ExperienceGoshuinBookUnitEditor(
@@ -287,7 +292,12 @@ struct AddExperienceView: View {
             amount: parsedCurrencyAmount(from: draft.amountText),
             latitude: draft.latitude,
             longitude: draft.longitude,
-            unitFieldsRaw: draft.makeUnitFields(for: category).encodedRawValue,
+            unitFieldsRaw: {
+                var fields = draft.makeUnitFields(for: category)
+                fields.heroBackgroundPath = heroBackgroundPath
+                fields.heroBackgroundPresetKey = heroBackgroundPresetKey
+                return fields.encodedRawValue
+            }(),
             createdAt: now,
             updatedAt: now,
             event: event,
@@ -367,6 +377,8 @@ struct EditExperienceView: View {
     @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var coverPhotoPath: String
+    @State private var heroBackgroundPath: String
+    @State private var heroBackgroundPresetKey: String
     @State private var deletedPhotoIDs: Set<UUID> = []
     @State private var existingPhotoMetadata: [UUID: PhotoMetadataDraft] = [:]
     @State private var pendingPeople: [PendingPersonLink] = []
@@ -389,6 +401,9 @@ struct EditExperienceView: View {
         self.visit = visit
         _draft = State(initialValue: AddExperienceDraft(visit: visit))
         _coverPhotoPath = State(initialValue: visit.eyecatchPath)
+        let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+        _heroBackgroundPath = State(initialValue: unitFields.heroBackgroundPath)
+        _heroBackgroundPresetKey = State(initialValue: unitFields.heroBackgroundPresetKey)
     }
 
     var body: some View {
@@ -504,6 +519,7 @@ struct EditExperienceView: View {
             ExperienceOfficialInfoUnitEditor(
                 officialURL: $draft.officialURL,
                 socialLinksText: $draft.socialLinksText,
+                eventSubtitle: $draft.eventSubtitle,
                 title: $draft.title,
                 seriesName: $draft.seriesName,
                 visitedAt: $draft.visitedAt,
@@ -533,7 +549,9 @@ struct EditExperienceView: View {
                 selectedItems: $selectedPhotoItems,
                 category: event?.category,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
-                coverPhotoPath: $coverPhotoPath
+                coverPhotoPath: $coverPhotoPath,
+                heroBackgroundPath: $heroBackgroundPath,
+                heroBackgroundPresetKey: $heroBackgroundPresetKey
             )
         case "goshuinBook":
             ExperienceGoshuinBookUnitEditor(
@@ -613,6 +631,7 @@ struct EditExperienceView: View {
             event.officialURL = draft.trimmedOfficialURL
             var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
             eventFields.socialLinks = draft.normalizedSocialLinks
+            eventFields.eventSubtitle = draft.trimmedEventSubtitle
             if event.category?.templateKey == "book" {
                 eventFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
             }
@@ -633,6 +652,8 @@ struct EditExperienceView: View {
         visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
         var updatedUnitFields = draft.makeUnitFields(for: event?.category)
+        updatedUnitFields.heroBackgroundPath = heroBackgroundPath
+        updatedUnitFields.heroBackgroundPresetKey = heroBackgroundPresetKey
         if preservesWeather {
             updatedUnitFields.copyWeather(from: existingUnitFields)
         }
@@ -750,6 +771,8 @@ struct AddVisitView: View {
     @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
     @State private var coverPhotoPath = ""
+    @State private var heroBackgroundPath = ""
+    @State private var heroBackgroundPresetKey = ""
     @State private var pendingPeople: [PendingPersonLink] = []
     @State private var isShowingPlaceSearch = false
     @State private var savedVisit: Visit?
@@ -909,7 +932,9 @@ struct AddVisitView: View {
                 selectedItems: $selectedPhotoItems,
                 category: event.category,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
-                coverPhotoPath: $coverPhotoPath
+                coverPhotoPath: $coverPhotoPath,
+                heroBackgroundPath: $heroBackgroundPath,
+                heroBackgroundPresetKey: $heroBackgroundPresetKey
             )
         case "goshuinBook":
             ExperienceGoshuinBookUnitEditor(
@@ -987,7 +1012,12 @@ struct AddVisitView: View {
             amount: parsedCurrencyAmount(from: draft.amountText),
             latitude: draft.latitude,
             longitude: draft.longitude,
-            unitFieldsRaw: draft.makeUnitFields(for: event.category).encodedRawValue,
+            unitFieldsRaw: {
+                var fields = draft.makeUnitFields(for: event.category)
+                fields.heroBackgroundPath = heroBackgroundPath
+                fields.heroBackgroundPresetKey = heroBackgroundPresetKey
+                return fields.encodedRawValue
+            }(),
             createdAt: now,
             updatedAt: now,
             event: event,
@@ -1093,6 +1123,7 @@ struct AddExperienceDraft {
     var subTypeKey: String = ""
     var officialURL: String = ""
     var socialLinksText: String = ""
+    var eventSubtitle: String = ""
     var visitedAt: Date = Date()
     var endedAt: Date = Date()
     var styleNamesText: String = ""
@@ -1117,7 +1148,9 @@ struct AddExperienceDraft {
         seriesName = visit.event?.seriesName ?? ""
         subTypeKey = visit.event?.subTypeKey ?? ""
         officialURL = visit.event?.officialURL ?? ""
-        socialLinksText = VisitUnitFields(rawValue: visit.event?.unitFieldsRaw ?? "").socialLinks.joined(separator: "\n")
+        let eventFields = VisitUnitFields(rawValue: visit.event?.unitFieldsRaw ?? "")
+        socialLinksText = eventFields.socialLinks.joined(separator: "\n")
+        eventSubtitle = eventFields.eventSubtitle
         visitedAt = visit.visitedAt
         endedAt = visit.endedAt
         styleNamesText = VisitUnitFields(rawValue: visit.unitFieldsRaw).styleNames.joined(separator: "、")
@@ -1154,6 +1187,10 @@ struct AddExperienceDraft {
 
     var trimmedOfficialURL: String {
         officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedEventSubtitle: String {
+        eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var normalizedSocialLinks: [String] {
@@ -1250,6 +1287,7 @@ struct AddExperienceDraft {
     func eventUnitFieldsRaw(for category: RecordCategory?) -> String {
         return VisitUnitFields(
             socialLinks: normalizedSocialLinks,
+            eventSubtitle: trimmedEventSubtitle,
             eyecatchAspectRatioKey: category?.templateKey == "book"
                 ? (eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.hardcoverBook.key : eyecatchAspectRatioKey)
                 : ""

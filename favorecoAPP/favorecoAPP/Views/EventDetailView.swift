@@ -10,10 +10,88 @@ import SwiftData
 import PhotosUI
 import UIKit
 
+struct EventDetailBackSwipeExclusionPreferenceKey: PreferenceKey {
+    static var defaultValue: [CGRect] = []
+
+    static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+private struct TheaterPublicVenue: Identifiable {
+    let id = UUID()
+    let name: String
+    let address: String
+}
+
+private struct TheaterPublicLink: Identifiable {
+    let id = UUID()
+    let title: String
+    let systemImage: String
+    let url: URL
+}
+
+private struct EventHeroBackgroundPicker: View {
+    let categoryKey: String
+    @Binding var selection: String
+
+    private var presets: [HeroBackgroundPreset] {
+        HeroBackgroundPreset.presets(for: categoryKey)
+    }
+
+    private var resolvedSelection: String {
+        HeroBackgroundPreset.resolved(categoryKey: categoryKey, storedKey: selection)?.key ?? ""
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ページ背景")
+                .font(FavorecoTypography.bodyStrong)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(presets) { preset in
+                        presetButton(preset)
+                    }
+                }
+            }
+        }
+    }
+
+    private func presetButton(_ preset: HeroBackgroundPreset) -> some View {
+        let isSelected = resolvedSelection == preset.key
+        return Button {
+            selection = preset.key
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                Image(preset.resourceName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 82, height: 100)
+                    .clipped()
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(
+                                isSelected ? Color(red: 0.82, green: 0.62, blue: 0.30) : Color.secondary.opacity(0.3),
+                                lineWidth: isSelected ? 3 : 1
+                            )
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                Text(preset.title)
+                    .font(FavorecoTypography.caption)
+                    .lineLimit(2)
+                    .frame(width: 82, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct EventDetailView: View {
     let event: ExperienceEvent
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var systemColorScheme
+    @Environment(\.openURL) private var openURL
     @Environment(\.favorecoThemePalette) private var themePalette
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
@@ -24,6 +102,7 @@ struct EventDetailView: View {
     @State private var isShowingArchiveConfirmation = false
     @State private var isShowingDeleteConfirmation = false
     @State private var actionErrorMessage: String?
+    @State private var backSwipeExclusionFrames: [CGRect] = []
 
     private var category: RecordCategory? {
         event.category
@@ -41,48 +120,48 @@ struct EventDetailView: View {
         let snapshot = EventDetailSnapshot.make(event: event)
         let scheduleSnapshot = TheaterEventScheduleSnapshot.make(event: event)
         let expenseSnapshot = TheaterEventExpenseSnapshot.make(event: event)
+        let isTheater = category?.templateKey == "theater"
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                hero(snapshot: snapshot)
-                if category?.templateKey == "theater" {
-                    TheaterEventOverviewSection(
-                        snapshot: snapshot,
-                        ratingLabel: template.ratingLabel,
-                        accentColor: accentColor
+            VStack(alignment: .leading, spacing: isTheater ? 24 : 20) {
+                if isTheater {
+                    theaterHero(snapshot: snapshot)
+                        .padding(.horizontal, -20)
+                        .padding(.top, -24)
+                    TheaterEventInformationSection(event: event, accentColor: theaterGold)
+                    TheaterEventPeopleSection(
+                        castLinks: snapshot.castLinks,
+                        staffLinks: snapshot.staffLinks,
+                        accentColor: theaterGold
+                    )
+                    TheaterEventTicketProgressSection(
+                        references: scheduleSnapshot.ticketReferences,
+                        accentColor: theaterGold
+                    )
+                    TheaterEventParticipationHistorySection(
+                        visits: snapshot.visits,
+                        accentColor: theaterGold
                     )
                     TheaterEventUpcomingPlansSection(
                         event: event,
                         plans: scheduleSnapshot.upcomingPlans,
                         representativePhoto: snapshot.representativePhoto,
-                        accentColor: accentColor,
+                        accentColor: theaterGold,
                         onAddPlan: { isShowingAddPlan = true }
-                    )
-                    TheaterEventTicketProgressSection(
-                        references: scheduleSnapshot.ticketReferences,
-                        accentColor: accentColor
-                    )
-                    TheaterEventInformationSection(event: event, accentColor: accentColor)
-                    TheaterEventPeopleSection(
-                        castLinks: snapshot.castLinks,
-                        staffLinks: snapshot.staffLinks,
-                        accentColor: accentColor
-                    )
-                    TheaterEventParticipationHistorySection(
-                        visits: snapshot.visits,
-                        accentColor: accentColor
                     )
                     TheaterEventExpenseSection(
                         snapshot: expenseSnapshot,
-                        accentColor: accentColor
+                        accentColor: theaterGold
                     )
                     TheaterEventMemoryGallerySection(
                         items: snapshot.memoryPhotos,
-                        accentColor: accentColor
+                        accentColor: theaterGold
                     )
                 } else if category?.templateKey == "random_goods" {
+                    hero(snapshot: snapshot)
                     CollectibleSeriesDashboard(series: event, accentColor: accentColor)
                 } else {
+                    hero(snapshot: snapshot)
                     eventMemoSection
                     stats(snapshot: snapshot)
                     visitHistory(snapshot: snapshot)
@@ -91,39 +170,31 @@ struct EventDetailView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
-        .background(Color(.systemGroupedBackground))
+        .ignoresSafeArea(edges: isTheater ? .top : [])
+        .background {
+            if isTheater {
+                theaterPageBackground
+            } else {
+                Color(.systemGroupedBackground)
+            }
+        }
+        .environment(\.colorScheme, isTheater ? .dark : systemColorScheme)
         .navigationTitle(snapshot.eventTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(isTheater ? .hidden : .visible, for: .navigationBar)
+        .simultaneousGesture(theaterEdgeBackGesture)
+        .onPreferenceChange(EventDetailBackSwipeExclusionPreferenceKey.self) { frames in
+            backSwipeExclusionFrames = frames
+        }
+        .overlay(alignment: .top) {
+            if isTheater {
+                theaterNavigationControls
+            }
+        }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        isShowingEditEvent = true
-                    } label: {
-                        Label("対象情報・画像を編集", systemImage: "pencil")
-                    }
-
-                    if snapshot.hasPhotos {
-                        Button {
-                            isShowingRepresentativePhotoPicker = true
-                        } label: {
-                            Label("代表写真を選ぶ", systemImage: "photo.badge.checkmark")
-                        }
-                    }
-
-                    Button(role: .destructive) {
-                        isShowingArchiveConfirmation = true
-                    } label: {
-                        Label("対象を非表示", systemImage: "archivebox")
-                    }
-
-                    Button(role: .destructive) {
-                        isShowingDeleteConfirmation = true
-                    } label: {
-                        Label("この対象とすべての記録を削除", systemImage: "trash")
-                    }
-                } label: {
-                    Label("メニュー", systemImage: "ellipsis.circle")
+            if !isTheater {
+                ToolbarItem(placement: .topBarTrailing) {
+                    eventMenu
                 }
             }
         }
@@ -167,6 +238,339 @@ struct EventDetailView: View {
         } message: {
             Text(actionErrorMessage ?? "")
         }
+    }
+
+    @ViewBuilder
+    private var eventMenu: some View {
+        Menu {
+            eventMenuItems
+        } label: {
+            Label("メニュー", systemImage: "ellipsis.circle")
+        }
+    }
+
+    @ViewBuilder
+    private var eventMenuItems: some View {
+        Button {
+            isShowingEditEvent = true
+        } label: {
+            Label("対象情報・画像を編集", systemImage: "pencil")
+        }
+
+        if EventRepresentativePhotoResolver.resolve(
+            for: event,
+            sortedVisits: (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
+        ).photos.isEmpty == false {
+            Button {
+                isShowingRepresentativePhotoPicker = true
+            } label: {
+                Label("代表写真を選ぶ", systemImage: "photo.badge.checkmark")
+            }
+        }
+
+        Button(role: .destructive) {
+            isShowingArchiveConfirmation = true
+        } label: {
+            Label("対象を非表示", systemImage: "archivebox")
+        }
+
+        Button(role: .destructive) {
+            isShowingDeleteConfirmation = true
+        } label: {
+            Label("この対象とすべての記録を削除", systemImage: "trash")
+        }
+    }
+
+    private var theaterNavigationControls: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 23, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 50, height: 50)
+                    .background(.black.opacity(0.48), in: Circle())
+                    .overlay { Circle().stroke(.white.opacity(0.20), lineWidth: 0.7) }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("戻る")
+
+            Spacer()
+
+            Menu {
+                eventMenuItems
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(theaterGold)
+                    .frame(width: 50, height: 50)
+                    .background(theaterWine.opacity(0.88), in: Circle())
+                    .overlay { Circle().stroke(theaterGold.opacity(0.72), lineWidth: 1) }
+            }
+            .accessibilityLabel("メニュー")
+        }
+        .padding(.horizontal, 20)
+        .safeAreaPadding(.top, 8)
+    }
+
+    private var theaterPageBackground: some View {
+        LinearGradient(
+            colors: [theaterWine, Color(red: 0.18, green: 0.025, blue: 0.05), .black],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+
+    private var theaterWine: Color {
+        Color(red: 0.55, green: 0.18, blue: 0.27)
+    }
+
+    private var theaterGold: Color {
+        Color(red: 0.82, green: 0.62, blue: 0.30)
+    }
+
+    private func theaterHero(snapshot: EventDetailSnapshot) -> some View {
+        let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        let venues = resolvedTheaterVenues(fields: fields)
+        return ZStack(alignment: .top) {
+            theaterHeroBackground(fields: fields)
+
+            VStack(spacing: 12) {
+                Spacer().frame(height: 88)
+                theaterPoster(snapshot: snapshot)
+
+                if !event.seriesName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(event.seriesName)
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+
+                Text(snapshot.eventTitle)
+                    .font(FavorecoTypography.jpSerif(29, weight: .bold, relativeTo: .title2))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !fields.eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(fields.eventSubtitle)
+                        .font(FavorecoTypography.bodyStrong)
+                        .foregroundStyle(.white.opacity(0.78))
+                        .multilineTextAlignment(.center)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(resolvedTheaterPeriodText(fields: fields), systemImage: "calendar")
+                    ForEach(venues) { venue in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(venue.name, systemImage: "mappin.and.ellipse")
+                            if !venue.address.isEmpty {
+                                Text(venue.address)
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.white.opacity(0.62))
+                                    .padding(.leading, 27)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    }
+                    if !event.organizerNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Label(event.organizerNameSnapshot, systemImage: "building.2")
+                    }
+                }
+                .font(FavorecoTypography.bodyStrong)
+                .foregroundStyle(.white.opacity(0.88))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                theaterOfficialLinks(fields: fields)
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        theaterPlanButton
+                        theaterVisitButton
+                    }
+                    VStack(spacing: 10) {
+                        theaterPlanButton
+                        theaterVisitButton
+                    }
+                }
+                .tint(theaterGold)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 22)
+        }
+        .frame(minHeight: 720, alignment: .top)
+    }
+
+    private func theaterHeroBackground(fields: VisitUnitFields) -> some View {
+        GeometryReader { proxy in
+            let resourceName = HeroBackgroundPreset.resolved(
+                categoryKey: "theater",
+                storedKey: fields.heroBackgroundPresetKey
+            )?.resourceName ?? "theater-hero-venue-v2"
+            ZStack(alignment: .top) {
+                theaterWine
+                Image(resourceName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: proxy.size.width, height: 470)
+                    .clipped()
+                LinearGradient(
+                    colors: [.black.opacity(0.48), .clear, theaterWine.opacity(0.3), theaterWine],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 520)
+            }
+        }
+        .clipped()
+    }
+
+    @ViewBuilder
+    private func theaterPoster(snapshot: EventDetailSnapshot) -> some View {
+        Group {
+            if let data = event.eyecatchData, let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if let photo = snapshot.representativePhoto {
+                RepresentativePhotoImage(photo: photo, maxPixelSize: 900, contentMode: .fill)
+            } else {
+                Rectangle()
+                    .fill(.black.opacity(0.42))
+                    .overlay {
+                        Image(systemName: "theatermasks.fill")
+                            .font(.system(size: 54))
+                            .foregroundStyle(theaterGold.opacity(0.8))
+                    }
+            }
+        }
+        .frame(width: 190, height: 269)
+        .clipped()
+        .overlay {
+            Rectangle().stroke(theaterGold.opacity(0.95), lineWidth: 2).padding(3)
+        }
+        .overlay { Rectangle().stroke(theaterGold.opacity(0.46), lineWidth: 0.8) }
+        .shadow(color: .black.opacity(0.48), radius: 18, y: 9)
+    }
+
+    private var theaterPlanButton: some View {
+        Button { isShowingAddPlan = true } label: {
+            Label("予定を立てる", systemImage: "calendar.badge.plus")
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private var theaterVisitButton: some View {
+        Button { isShowingAddVisit = true } label: {
+            Label("記録を追加", systemImage: "plus.circle.fill")
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.borderedProminent)
+    }
+
+    private var theaterEdgeBackGesture: some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .global)
+            .onEnded { value in
+                guard category?.templateKey == "theater" else { return }
+                let startsAtLeadingEdge = value.startLocation.x <= 32
+                let startsInExcludedArea = backSwipeExclusionFrames.contains {
+                    $0.contains(value.startLocation)
+                }
+                let horizontalDistance = value.translation.width
+                let verticalDistance = abs(value.translation.height)
+                let isHorizontalSwipe = horizontalDistance >= 72
+                    && horizontalDistance > verticalDistance * 1.35
+                    && value.predictedEndTranslation.width >= 110
+
+                guard startsAtLeadingEdge, !startsInExcludedArea, isHorizontalSwipe else { return }
+                dismiss()
+            }
+    }
+
+    @ViewBuilder
+    private func theaterOfficialLinks(fields: VisitUnitFields) -> some View {
+        let links = resolvedTheaterLinks(fields: fields)
+        if !links.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(links) { link in
+                        Button { openURL(link.url) } label: {
+                            Label(link.title, systemImage: link.systemImage)
+                                .font(FavorecoTypography.captionStrong)
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 8)
+                                .background(.black.opacity(0.20), in: Capsule())
+                                .overlay { Capsule().stroke(theaterGold.opacity(0.24), lineWidth: 0.6) }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(theaterGold)
+                    }
+                }
+            }
+        }
+    }
+
+    private func resolvedTheaterPeriodText(fields: VisitUnitFields) -> String {
+        let plans = (event.plans ?? []).filter { !$0.isArchived }
+        let visits = event.visits ?? []
+        let fallbackDates = plans.flatMap { [$0.startsAt, $0.endsAt] }
+            + visits.flatMap { [$0.visitedAt, max($0.endedAt, $0.visitedAt)] }
+        let start = fields.eventPeriodStartsAt ?? fallbackDates.min()
+        let end = fields.eventPeriodEndsAt ?? fallbackDates.max()
+        guard let start else { return "公演期間 未登録" }
+        guard let end, !Calendar.current.isDate(start, inSameDayAs: end) else {
+            return FavorecoDateText.compactDateWithHalfWidthWeekday(start)
+        }
+        return "\(FavorecoDateText.compactDate(start))–\(FavorecoDateText.compactDateWithHalfWidthWeekday(end))"
+    }
+
+    private func resolvedTheaterVenues(fields: VisitUnitFields) -> [TheaterPublicVenue] {
+        let explicit = fields.eventVenues.compactMap { entry -> TheaterPublicVenue? in
+            guard !entry.trimmedName.isEmpty else { return nil }
+            return TheaterPublicVenue(name: entry.trimmedName, address: entry.trimmedAddress)
+        }
+        if !explicit.isEmpty { return deduplicatedTheaterVenues(explicit) }
+
+        let planVenues = (event.plans ?? []).filter { !$0.isArchived }.compactMap { plan -> TheaterPublicVenue? in
+            let name = plan.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            return TheaterPublicVenue(name: name, address: plan.placeMaster?.address ?? "")
+        }
+        let visitVenues = (event.visits ?? []).compactMap { visit -> TheaterPublicVenue? in
+            let name = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            return TheaterPublicVenue(name: name, address: visit.placeMaster?.address ?? "")
+        }
+        let venues = deduplicatedTheaterVenues(planVenues + visitVenues)
+        return venues.isEmpty ? [TheaterPublicVenue(name: "会場 未登録", address: "")] : venues
+    }
+
+    private func deduplicatedTheaterVenues(_ venues: [TheaterPublicVenue]) -> [TheaterPublicVenue] {
+        var seen = Set<String>()
+        return venues.filter { venue in
+            let key = venue.name.folding(options: [.caseInsensitive, .widthInsensitive], locale: .current)
+            return seen.insert(key).inserted
+        }
+    }
+
+    private func resolvedTheaterLinks(fields: VisitUnitFields) -> [TheaterPublicLink] {
+        var result: [TheaterPublicLink] = []
+        if let url = URL(string: event.officialURL), !event.officialURL.isEmpty {
+            result.append(TheaterPublicLink(title: "公式", systemImage: "link", url: url))
+        }
+        let ticketURLText = (event.plans ?? [])
+            .filter { !$0.isArchived }
+            .flatMap { $0.ticketAttempts ?? [] }
+            .map(\.purchaseURL)
+            .first { !$0.isEmpty }
+            ?? (event.plans ?? []).map(\.sourceURL).first { !$0.isEmpty }
+        if let ticketURLText, let url = URL(string: ticketURLText) {
+            result.append(TheaterPublicLink(title: "チケット", systemImage: "ticket", url: url))
+        }
+        for (index, value) in fields.socialLinks.enumerated() {
+            if let url = URL(string: value) {
+                result.append(TheaterPublicLink(title: "SNS \(index + 1)", systemImage: "bubble.left.and.bubble.right", url: url))
+            }
+        }
+        return result
     }
 
     private func archiveThisEvent() {
@@ -617,6 +1021,13 @@ struct EditEventView: View {
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                     }
+
+                    if event.category?.templateKey == "theater" {
+                        EventHeroBackgroundPicker(
+                            categoryKey: "theater",
+                            selection: $draft.heroBackgroundPresetKey
+                        )
+                    }
                 } header: {
                     Text("対象アイキャッチ")
                 } footer: {
@@ -626,6 +1037,7 @@ struct EditEventView: View {
                 Section(template.targetSectionTitle) {
                     TextField(template.titlePlaceholder, text: $draft.title)
                     TextField(template.seriesPlaceholder, text: $draft.seriesName)
+                    TextField("サブタイトル（任意）", text: $draft.eventSubtitle)
                     TextField("公式URL（任意）", text: $draft.officialURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
@@ -635,10 +1047,48 @@ struct EditEventView: View {
                         .lineLimit(2...5)
                 }
 
-                Section("対象メモ") {
+                if event.category?.templateKey == "theater" {
+                    Section("公演期間・会場") {
+                        Toggle("公式の公演期間を登録", isOn: $draft.hasPerformancePeriod)
+
+                        if draft.hasPerformancePeriod {
+                            DatePicker(
+                                "開始日",
+                                selection: $draft.performanceStartsAt,
+                                displayedComponents: .date
+                            )
+                            DatePicker(
+                                "終了日",
+                                selection: $draft.performanceEndsAt,
+                                in: draft.performanceStartsAt...,
+                                displayedComponents: .date
+                            )
+                        }
+
+                        ForEach($draft.venueEntries) { $venue in
+                            VStack(alignment: .leading, spacing: 8) {
+                                TextField("会場名", text: $venue.name)
+                                TextField("住所（任意）", text: $venue.address)
+                            }
+                        }
+                        .onDelete { offsets in
+                            draft.venueEntries.remove(atOffsets: offsets)
+                        }
+
+                        Button {
+                            draft.venueEntries.append(EventVenueEntry())
+                        } label: {
+                            Label("会場を追加", systemImage: "plus.circle")
+                        }
+                    } footer: {
+                        Text("未登録の場合は、予定と参加履歴の日付・会場から補完表示します。")
+                    }
+                }
+
+                Section(event.category?.templateKey == "theater" ? "あらすじ" : "対象メモ") {
                     ZStack(alignment: .topLeading) {
                         if draft.memo.isEmpty {
-                            Text("対象そのものについて残しておきたいこと")
+                            Text(event.category?.templateKey == "theater" ? "公演のあらすじ（任意）" : "対象そのものについて残しておきたいこと")
                                 .foregroundStyle(.tertiary)
                                 .padding(.top, 8)
                                 .padding(.leading, 5)
@@ -726,6 +1176,11 @@ struct EditEventView: View {
         event.officialURL = draft.trimmedOfficialURL
         var unitFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
         unitFields.socialLinks = draft.normalizedSocialLinks
+        unitFields.eventSubtitle = draft.trimmedEventSubtitle
+        unitFields.eventPeriodStartsAt = draft.hasPerformancePeriod ? draft.performanceStartsAt : nil
+        unitFields.eventPeriodEndsAt = draft.hasPerformancePeriod ? draft.performanceEndsAt : nil
+        unitFields.eventVenues = draft.normalizedVenueEntries
+        unitFields.heroBackgroundPresetKey = draft.heroBackgroundPresetKey
         event.memo = draft.trimmedMemo
         event.importMemo = draft.trimmedImportMemo
         event.eyecatchData = eyecatchData
@@ -762,18 +1217,32 @@ private struct EventDraft {
     var seriesName: String
     var officialURL: String
     var socialLinksText: String
+    var eventSubtitle: String
     var memo: String
     var importMemo: String
     var eyecatchAspectRatioKey: String
+    var hasPerformancePeriod: Bool
+    var performanceStartsAt: Date
+    var performanceEndsAt: Date
+    var venueEntries: [EventVenueEntry]
+    var heroBackgroundPresetKey: String
 
     init(event: ExperienceEvent) {
         title = event.title
         seriesName = event.seriesName
         officialURL = event.officialURL
-        socialLinksText = VisitUnitFields(rawValue: event.unitFieldsRaw).socialLinks.joined(separator: "\n")
+        let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        socialLinksText = fields.socialLinks.joined(separator: "\n")
+        eventSubtitle = fields.eventSubtitle
         memo = event.memo
         importMemo = event.importMemo
         eyecatchAspectRatioKey = EyecatchAspectRatio.resolved(for: event).key
+        hasPerformancePeriod = fields.eventPeriodStartsAt != nil || fields.eventPeriodEndsAt != nil
+        performanceStartsAt = fields.eventPeriodStartsAt ?? (event.plans ?? []).map(\.startsAt).min() ?? Date()
+        let fallbackEnd = (event.plans ?? []).map(\.endsAt).max() ?? performanceStartsAt
+        performanceEndsAt = max(fields.eventPeriodEndsAt ?? fallbackEnd, performanceStartsAt)
+        venueEntries = fields.eventVenues
+        heroBackgroundPresetKey = fields.heroBackgroundPresetKey
     }
 
     var trimmedTitle: String {
@@ -786,6 +1255,10 @@ private struct EventDraft {
 
     var trimmedOfficialURL: String {
         officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedEventSubtitle: String {
+        eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var normalizedSocialLinks: [String] {
@@ -801,6 +1274,17 @@ private struct EventDraft {
 
     var trimmedImportMemo: String {
         importMemo.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedVenueEntries: [EventVenueEntry] {
+        venueEntries.compactMap { entry in
+            let normalized = EventVenueEntry(
+                id: entry.id,
+                name: entry.trimmedName,
+                address: entry.trimmedAddress
+            )
+            return normalized.isEmpty ? nil : normalized
+        }
     }
 
     var canSave: Bool {

@@ -89,9 +89,17 @@ enum MasterMergeService {
         destinationProfile.colorHex = preferred(destinationProfile.colorHex, fallback: sourceProfile.colorHex)
         destinationProfile.nickname = preferred(destinationProfile.nickname, fallback: sourceProfile.nickname)
         destinationProfile.imagePath = preferred(destinationProfile.imagePath, fallback: sourceProfile.imagePath)
+        if destinationProfile.heroImageData == nil {
+            destinationProfile.heroImageData = sourceProfile.heroImageData
+        }
+        if destinationProfile.iconImageData == nil {
+            destinationProfile.iconImageData = sourceProfile.iconImageData
+        }
         destinationProfile.originText = preferred(destinationProfile.originText, fallback: sourceProfile.originText)
         destinationProfile.memo = preferred(destinationProfile.memo, fallback: sourceProfile.memo)
         destinationProfile.showOnHome = destinationProfile.showOnHome || sourceProfile.showOnHome
+        mergeGalleryPhotos(from: sourceProfile, into: destinationProfile, at: now)
+        mergeAnniversaries(from: sourceProfile, into: destinationProfile, at: now)
         destinationProfile.updatedAt = now
         context.delete(sourceProfile)
     }
@@ -135,12 +143,75 @@ enum MasterMergeService {
             fallback: source.operationalStatusRaw
         )
         destination.normalizedAddress = preferred(destination.normalizedAddress, fallback: source.normalizedAddress)
+        mergeFavoriteProfile(from: source, into: destination, at: now, in: context)
         mergeFavoPins(from: source, into: destination, at: now, in: context)
         destination.updatedAt = now
 
         source.isArchived = true
         source.updatedAt = now
         try context.save()
+    }
+
+    @MainActor
+    private static func mergeFavoriteProfile(
+        from source: PlaceMaster,
+        into destination: PlaceMaster,
+        at now: Date,
+        in context: ModelContext
+    ) {
+        guard let sourceProfile = source.favoriteProfile else { return }
+        guard let destinationProfile = destination.favoriteProfile else {
+            sourceProfile.place = destination
+            sourceProfile.updatedAt = now
+            return
+        }
+
+        destinationProfile.colorHex = preferred(destinationProfile.colorHex, fallback: sourceProfile.colorHex)
+        destinationProfile.nickname = preferred(destinationProfile.nickname, fallback: sourceProfile.nickname)
+        destinationProfile.originText = preferred(destinationProfile.originText, fallback: sourceProfile.originText)
+        destinationProfile.memo = preferred(destinationProfile.memo, fallback: sourceProfile.memo)
+        if destinationProfile.heroImageData == nil { destinationProfile.heroImageData = sourceProfile.heroImageData }
+        if destinationProfile.iconImageData == nil { destinationProfile.iconImageData = sourceProfile.iconImageData }
+        mergeGalleryPhotos(from: sourceProfile, into: destinationProfile, at: now)
+        mergeAnniversaries(from: sourceProfile, into: destinationProfile, at: now)
+        destinationProfile.updatedAt = now
+        context.delete(sourceProfile)
+    }
+
+    @MainActor
+    private static func mergeGalleryPhotos(
+        from source: FavoriteProfile,
+        into destination: FavoriteProfile,
+        at now: Date
+    ) {
+        var nextSortOrder = (destination.galleryPhotos ?? []).map(\.sortOrder).max().map { $0 + 1 } ?? 0
+        let destinationHasFavorite = (destination.galleryPhotos ?? []).contains(where: \.isFavorite)
+        var keepsSourceFavorite = !destinationHasFavorite
+        for photo in (source.galleryPhotos ?? []).sorted(by: { $0.sortOrder < $1.sortOrder }) {
+            photo.profile = destination
+            photo.sortOrder = nextSortOrder
+            if photo.isFavorite {
+                photo.isFavorite = keepsSourceFavorite
+                keepsSourceFavorite = false
+            }
+            photo.updatedAt = now
+            nextSortOrder += 1
+        }
+    }
+
+    @MainActor
+    private static func mergeAnniversaries(
+        from source: FavoriteProfile,
+        into destination: FavoriteProfile,
+        at now: Date
+    ) {
+        var nextSortOrder = (destination.anniversaries ?? []).map(\.sortOrder).max().map { $0 + 1 } ?? 0
+        for anniversary in (source.anniversaries ?? []).sorted(by: { $0.sortOrder < $1.sortOrder }) {
+            anniversary.profile = destination
+            anniversary.sortOrder = nextSortOrder
+            anniversary.updatedAt = now
+            nextSortOrder += 1
+        }
     }
 
     @MainActor

@@ -197,6 +197,7 @@ struct PlaceMasterManagementView: View {
     @State private var prefectureFilter: PlacePrefectureFilter = .all
     @State private var categoryFilter: PlaceMasterCategoryFilter = .all
     @State private var statusFilter: PlaceMasterStatusFilter = .all
+    @State private var isShowingPublicCatalog = false
 
     private var allActivePlaces: [PlaceMaster] {
         places.filter { !$0.isArchived }
@@ -327,6 +328,18 @@ struct PlaceMasterManagementView: View {
         }
         .navigationTitle("場所マスター")
         .searchable(text: $searchText, prompt: "名称・住所・別名を検索")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingPublicCatalog = true
+                } label: {
+                    Label("全国場所カタログ", systemImage: "building.2.crop.circle")
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingPublicCatalog) {
+            PublicPlaceCatalogView()
+        }
         .onChange(of: selectedArea) { _, area in
             switch prefectureFilter {
             case .all:

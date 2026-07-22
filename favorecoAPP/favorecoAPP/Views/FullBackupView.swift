@@ -14,6 +14,8 @@ struct FullBackupView: View {
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
     @Query(sort: \CompanionMaster.name) private var companions: [CompanionMaster]
     @Query(sort: \FavoriteProfile.sortOrder) private var favoriteProfiles: [FavoriteProfile]
+    @Query(sort: \FavoGalleryPhoto.sortOrder) private var favoGalleryPhotos: [FavoGalleryPhoto]
+    @Query(sort: \FavoAnniversary.sortOrder) private var favoAnniversaries: [FavoAnniversary]
     @Query(sort: \FavoPin.sortOrder) private var favoPins: [FavoPin]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Query(sort: \PlaceMaster.name) private var places: [PlaceMaster]
@@ -33,11 +35,12 @@ struct FullBackupView: View {
 
     private var totalModelCount: Int {
         categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count
-            + people.count + companions.count + favoriteProfiles.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
+            + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
     }
 
     private var totalPhotoBytes: Int64 {
         photos.reduce(0) { $0 + Int64($1.byteCount) }
+            + favoGalleryPhotos.reduce(0) { $0 + Int64($1.byteCount) }
     }
 
     var body: some View {
@@ -46,7 +49,7 @@ struct FullBackupView: View {
                 Text("記録、予定、チケット、マスター、写真本体を1つのFavorecoバックアップへ保存します。")
                     .font(FavorecoTypography.body)
                 LabeledContent("保存モデル", value: "\(totalModelCount)件")
-                LabeledContent("写真", value: "\(photos.count)枚")
+                LabeledContent("写真", value: "\(photos.count + favoGalleryPhotos.count)枚")
                 LabeledContent("写真容量", value: ByteCountFormatter.string(fromByteCount: totalPhotoBytes, countStyle: .file))
             }
 
@@ -134,6 +137,8 @@ struct FullBackupView: View {
                 people: people,
                 companions: companions,
                 favoriteProfiles: favoriteProfiles,
+                favoGalleryPhotos: favoGalleryPhotos,
+                favoAnniversaries: favoAnniversaries,
                 favoPins: favoPins,
                 personLinks: personLinks,
                 places: places,

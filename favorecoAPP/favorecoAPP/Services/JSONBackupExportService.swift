@@ -10,7 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    static let schemaVersion = 8
+    static let schemaVersion = 12
 
     static func makeBackupJSON(
         categories: [RecordCategory],
@@ -22,6 +22,8 @@ enum JSONBackupExportService {
         people: [PersonMaster],
         companions: [CompanionMaster],
         favoriteProfiles: [FavoriteProfile],
+        favoGalleryPhotos: [FavoGalleryPhoto],
+        favoAnniversaries: [FavoAnniversary],
         favoPins: [FavoPin],
         personLinks: [EventPersonLink],
         places: [PlaceMaster],
@@ -53,6 +55,14 @@ enum JSONBackupExportService {
             people: people.sorted { $0.displayName < $1.displayName }.map(BackupPerson.init),
             companions: companions.sorted { $0.name < $1.name }.map(BackupCompanion.init),
             favoriteProfiles: favoriteProfiles.sorted { $0.sortOrder < $1.sortOrder }.map(BackupFavoriteProfile.init),
+            favoGalleryPhotos: favoGalleryPhotos.sorted { lhs, rhs in
+                if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+                return lhs.createdAt < rhs.createdAt
+            }.map(BackupFavoGalleryPhoto.init),
+            favoAnniversaries: favoAnniversaries.sorted { lhs, rhs in
+                if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+                return lhs.createdAt < rhs.createdAt
+            }.map(BackupFavoAnniversary.init),
             favoPins: favoPins.sorted { $0.sortOrder < $1.sortOrder }.map(BackupFavoPin.init),
             personLinks: personLinks.sorted { $0.sortOrder < $1.sortOrder }.map(BackupPersonLink.init),
             places: places.sorted { $0.name < $1.name }.map(BackupPlace.init),
@@ -83,6 +93,8 @@ struct FavorecoBackupEnvelope: Codable {
     var people: [BackupPerson]
     var companions: [BackupCompanion]?
     var favoriteProfiles: [BackupFavoriteProfile]?
+    var favoGalleryPhotos: [BackupFavoGalleryPhoto]?
+    var favoAnniversaries: [BackupFavoAnniversary]?
     var favoPins: [BackupFavoPin]?
     var personLinks: [BackupPersonLink]
     var places: [BackupPlace]
@@ -452,6 +464,8 @@ struct BackupPersonLink: Codable {
 struct BackupFavoriteProfile: Codable {
     var id: UUID
     var personID: UUID?
+    var eventID: UUID?
+    var placeID: UUID?
     var isFavorite: Bool
     var isPrimary: Bool
     var isPinned: Bool
@@ -462,6 +476,8 @@ struct BackupFavoriteProfile: Codable {
     var colorHex: String
     var nickname: String
     var imagePath: String
+    var heroImageDataBase64: String?
+    var iconImageDataBase64: String?
     var originText: String
     var memo: String
     var showOnHome: Bool
@@ -471,6 +487,8 @@ struct BackupFavoriteProfile: Codable {
     nonisolated init(_ profile: FavoriteProfile) {
         id = profile.id
         personID = profile.person?.id
+        eventID = profile.event?.id
+        placeID = profile.place?.id
         isFavorite = profile.isFavorite
         isPrimary = profile.isPrimary
         isPinned = profile.isPinned
@@ -481,6 +499,8 @@ struct BackupFavoriteProfile: Codable {
         colorHex = profile.colorHex
         nickname = profile.nickname
         imagePath = profile.imagePath
+        heroImageDataBase64 = profile.heroImageData?.base64EncodedString()
+        iconImageDataBase64 = profile.iconImageData?.base64EncodedString()
         originText = profile.originText
         memo = profile.memo
         showOnHome = profile.showOnHome
@@ -510,6 +530,60 @@ struct BackupFavoPin: Codable {
         placeID = pin.place?.id
         createdAt = pin.createdAt
         updatedAt = pin.updatedAt
+    }
+}
+
+struct BackupFavoGalleryPhoto: Codable {
+    var id: UUID
+    var profileID: UUID?
+    var sourcePhotoID: UUID?
+    var sortOrder: Int
+    var capturedAt: Date
+    var hasCapturedAt: Bool
+    var memo: String
+    var isFavorite: Bool
+    var byteCount: Int
+    var width: Int
+    var height: Int
+    var dataBase64: String
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ photo: FavoGalleryPhoto) {
+        id = photo.id
+        profileID = photo.profile?.id
+        sourcePhotoID = photo.sourcePhoto?.id
+        sortOrder = photo.sortOrder
+        capturedAt = photo.capturedAt
+        hasCapturedAt = photo.hasCapturedAt
+        memo = photo.memo
+        isFavorite = photo.isFavorite
+        byteCount = photo.byteCount
+        width = photo.width
+        height = photo.height
+        dataBase64 = photo.resolvedData.base64EncodedString()
+        createdAt = photo.createdAt
+        updatedAt = photo.updatedAt
+    }
+}
+
+struct BackupFavoAnniversary: Codable {
+    var id: UUID
+    var profileID: UUID?
+    var title: String
+    var date: Date
+    var sortOrder: Int
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ anniversary: FavoAnniversary) {
+        id = anniversary.id
+        profileID = anniversary.profile?.id
+        title = anniversary.title
+        date = anniversary.date
+        sortOrder = anniversary.sortOrder
+        createdAt = anniversary.createdAt
+        updatedAt = anniversary.updatedAt
     }
 }
 

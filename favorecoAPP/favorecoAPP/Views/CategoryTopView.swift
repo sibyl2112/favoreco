@@ -4107,7 +4107,7 @@ private struct CategoryFeatureCarousel: View {
                 GeometryReader { geometry in
                     let cardWidth = max(0, geometry.size.width - 36)
                     ScrollView(.horizontal) {
-                        LazyHStack(alignment: .top, spacing: 10) {
+                        HStack(alignment: .top, spacing: 10) {
                             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                                 CategoryFeatureCardLink(item: item, tint: tint, fallbackIcon: fallbackIcon)
                                     .frame(width: cardWidth, alignment: .top)

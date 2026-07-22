@@ -84,11 +84,7 @@ struct TheaterEventExpenseSection: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(accentColor.opacity(0.16), lineWidth: 0.75)
-        }
+        .theaterEventCard(accentColor: accentColor)
     }
 
     private func expenseTile(title: String, amount: Decimal, systemImage: String) -> some View {

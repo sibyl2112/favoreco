@@ -1,0 +1,20 @@
+placeID,officialName,prefecture,surveyYear,annualVisitors,unit,scope,evidenceProvider,evidenceURL,verifiedAt,notes
+jp-chiba-naritasan-shinshoji,大本山成田山新勝寺,千葉県,2024,11220000,people_visits,年間観光地点,千葉県 令和6年観光入込調査,https://www.pref.chiba.lg.jp/kankou/press/2025/documents/r6-hou.pdf,2026-07-22,公表値1122万人地点
+jp-chiba-katori-jingu,香取神宮,千葉県,2024,2400000,people_visits,年間観光地点（初詣1月1日から3日を除く）,千葉県 令和6年観光入込調査,https://www.pref.chiba.lg.jp/kankou/press/2025/documents/r6-hou.pdf,2026-07-22,公表値240万人地点
+jp-chiba-iigaoka-hachimangu,飯香岡八幡宮,千葉県,2024,220000,people_visits,年間観光地点（初詣1月1日から3日を除く）,千葉県 令和6年観光入込調査,https://www.pref.chiba.lg.jp/kankou/press/2025/documents/r6-hou.pdf,2026-07-22,公表値22万人地点
+jp-chiba-nakayama-hokekyoji,日蓮宗大本山 中山法華経寺,千葉県,2024,440000,people_visits,年間観光地点（初詣1月1日から3日を除く）,千葉県 令和6年観光入込調査,https://www.pref.chiba.lg.jp/kankou/press/2025/documents/r6-hou.pdf,2026-07-22,公表値44万人地点
+jp-chiba-choshi-manganji,補陀洛山 満願寺,千葉県,2024,230000,people_visits,年間観光地点（初詣1月1日から3日を除く）,千葉県 令和6年観光入込調査,https://www.pref.chiba.lg.jp/kankou/press/2025/documents/r6-hou.pdf,2026-07-22,公表値23万人地点
+jp-chiba-nokogiriyama-nihonji,鋸山 日本寺,千葉県,2024,320000,people_visits,年間観光地点（初詣1月1日から3日を除く）,千葉県 令和6年観光入込調査,https://www.pref.chiba.lg.jp/kankou/press/2025/documents/r6-hou.pdf,2026-07-22,公表値32万人地点
+jp-tochigi-sano-yakuyoke-daishi-soshuji,春日岡山惣宗寺,栃木県,2019,1250000,people_visits,年間観光地点,栃木県 地域公共交通計画資料編,https://www.pref.tochigi.lg.jp/h03/documents/20240606120741.pdf,2026-07-22,資料掲載名は佐野厄よけ大師。公表値125万人地点
+jp-castle-015,鑁阿寺（足利氏館）,栃木県,2019,410000,people_visits,年間観光地点,栃木県 地域公共交通計画資料編,https://www.pref.tochigi.lg.jp/h03/documents/20240606120741.pdf,2026-07-22,公表値41万人地点。城郭と寺院の同一場所レコードへ紐付け
+jp-tochigi-torinokosan-shrine,鷲子山上神社,栃木県,2019,120000,people_visits,年間観光地点,栃木県 地域公共交通計画資料編,https://www.pref.tochigi.lg.jp/h03/documents/20240606120741.pdf,2026-07-22,公表値12万人地点
+jp-tochigi-gyodosan-joinji,行道山浄因寺,栃木県,2019,70000,people_visits,年間観光地点,栃木県 地域公共交通計画資料編,https://www.pref.tochigi.lg.jp/h03/documents/20240606120741.pdf,2026-07-22,公表値7万人地点
+jp-tochigi-ashikaga-orihime-jinja,足利織姫神社,栃木県,2019,490000,people_visits,年間観光地点,栃木県 地域公共交通計画資料編,https://www.pref.tochigi.lg.jp/h03/documents/20240606120741.pdf,2026-07-22,織姫公園93万人とは分離された神社単独の公表値49万人地点
+jp-mie-futami-okitama-jinja,二見興玉神社,三重県,2024,2604000,people_visits,年間観光地点,三重県 令和6年観光レクリエーション入込客数推計,https://www.pref.mie.lg.jp/TOPICS/m0361200055.htm,2026-07-22,公表値260万4千人地点
+jp-fukui-kehi-jingu,氣比神宮,福井県,2024,1176000,people_visits,年間観光地点（延べ人数）,福井県 令和6年観光客入込数,https://www.pref.fukui.lg.jp/doc/kankou/fukuiken-kankoukyakusu_d/fil/023.pdf,2026-07-22,公表値117万6千人地点
+jp-fukui-daihonzan-eiheiji,大本山永平寺,福井県,2024,544000,people_visits,年間観光地点（延べ人数）,福井県 令和6年観光客入込数,https://www.pref.fukui.lg.jp/doc/kankou/fukuiken-kankoukyakusu_d/fil/023.pdf,2026-07-22,公表値54万4千人地点
+jp-fukui-kanegasaki-gu,金崎宮,福井県,2024,155000,people_visits,年間観光地点（延べ人数）,福井県 令和6年観光客入込数,https://www.pref.fukui.lg.jp/doc/kankou/fukuiken-kankoukyakusu_d/fil/023.pdf,2026-07-22,公表値15万5千人地点
+jp-nagano-zenkoji,善光寺,長野県,2024,6287000,people_visits,年間観光地（延利用者数）,長野県 令和6年観光地利用者統計,https://www.pref.nagano.lg.jp/kankoki/sangyo/kanko/toukei/documents/r6kankouti.pdf,2026-07-22,公表値628万7千人地点。諏訪大社4社の合算値101万人は個別Placeへ配分しない
+jp-aomori-osorezan-bodaiji,恐山菩提寺,青森県,2024,176946,people_visits,年間観光地点（延べ人数）,青森県 令和6年青森県観光入込客統計,https://www.pref.aomori.lg.jp/soshiki/kanko/kanko/files/R6aomorikenkankouirikomikyakutoukei.pdf,2026-07-22,観光地点名「恐山」の公表値17万6946人を恐山菩提寺Placeへ紐付け
+jp-aomori-takayama-inari-jinja,高山稲荷神社,青森県,2024,422300,people_visits,年間観光地点（延べ人数）,青森県 令和6年青森県観光入込客統計,https://www.pref.aomori.lg.jp/soshiki/kanko/kanko/files/R6aomorikenkankouirikomikyakutoukei.pdf,2026-07-22,公表値42万2300人地点
+jp-aomori-saruka-jinja,猿賀神社,青森県,2024,103500,people_visits,年間観光地点（延べ人数）,青森県 令和6年青森県観光入込客統計,https://www.pref.aomori.lg.jp/soshiki/kanko/kanko/files/R6aomorikenkankouirikomikyakutoukei.pdf,2026-07-22,公表値10万3500人地点

@@ -11,6 +11,7 @@ enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sendable {
     case memory
     case ticket
     case goods
+    case benefit
 
     var id: String { rawValue }
 
@@ -19,6 +20,7 @@ enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sendable {
         case .memory: return "思い出"
         case .ticket: return "チケット"
         case .goods: return "グッズ"
+        case .benefit: return "ノベルティ・特典"
         }
     }
 
@@ -27,10 +29,11 @@ enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sendable {
         case .memory: return "photo.on.rectangle"
         case .ticket: return "ticket"
         case .goods: return "bag"
+        case .benefit: return "gift"
         }
     }
 
-    var supportsAmount: Bool { self != .memory }
+    var supportsAmount: Bool { self == .ticket || self == .goods }
 
     static func resolved(from rawValue: String) -> ExperiencePhotoPurpose {
         ExperiencePhotoPurpose(rawValue: rawValue) ?? .memory

@@ -28,6 +28,8 @@ enum JSONBackupImportService {
         var people = Dictionary(grouping: try context.fetch(FetchDescriptor<PersonMaster>()), by: \.id).compactMapValues(\.first)
         var companions = Dictionary(grouping: try context.fetch(FetchDescriptor<CompanionMaster>()), by: \.id).compactMapValues(\.first)
         var favoriteProfiles = Dictionary(grouping: try context.fetch(FetchDescriptor<FavoriteProfile>()), by: \.id).compactMapValues(\.first)
+        var favoGalleryPhotos = Dictionary(grouping: try context.fetch(FetchDescriptor<FavoGalleryPhoto>()), by: \.id).compactMapValues(\.first)
+        var favoAnniversaries = Dictionary(grouping: try context.fetch(FetchDescriptor<FavoAnniversary>()), by: \.id).compactMapValues(\.first)
         var favoPins = Dictionary(grouping: try context.fetch(FetchDescriptor<FavoPin>()), by: \.id).compactMapValues(\.first)
         var places = Dictionary(grouping: try context.fetch(FetchDescriptor<PlaceMaster>()), by: \.id).compactMapValues(\.first)
         var ticketAccounts = Dictionary(grouping: try context.fetch(FetchDescriptor<TicketAccount>()), by: \.id).compactMapValues(\.first)
@@ -38,6 +40,7 @@ enum JSONBackupImportService {
         var plans = Dictionary(grouping: try context.fetch(FetchDescriptor<Plan>()), by: \.id).compactMapValues(\.first)
         var attempts = Dictionary(grouping: try context.fetch(FetchDescriptor<TicketAttempt>()), by: \.id).compactMapValues(\.first)
         var personLinks = Dictionary(grouping: try context.fetch(FetchDescriptor<EventPersonLink>()), by: \.id).compactMapValues(\.first)
+        let sourcePhotos = Dictionary(grouping: try context.fetch(FetchDescriptor<PhotoBlob>()), by: \.id).compactMapValues(\.first)
         var collectibleItems = Dictionary(grouping: try context.fetch(FetchDescriptor<CollectibleItem>()), by: \.id).compactMapValues(\.first)
         var collectibleTransactions = Dictionary(grouping: try context.fetch(FetchDescriptor<CollectibleTransaction>()), by: \.id).compactMapValues(\.first)
 
@@ -138,6 +141,8 @@ enum JSONBackupImportService {
             model.colorHex = item.colorHex
             model.nickname = item.nickname
             model.imagePath = item.imagePath
+            model.heroImageData = item.heroImageDataBase64.flatMap { Data(base64Encoded: $0) }
+            model.iconImageData = item.iconImageDataBase64.flatMap { Data(base64Encoded: $0) }
             model.originText = item.originText
             model.memo = item.memo
             model.showOnHome = item.showOnHome
@@ -499,6 +504,63 @@ enum JSONBackupImportService {
             model.place = place
         }
 
+        for item in envelope.favoriteProfiles ?? [] {
+            guard let profile = favoriteProfiles[item.id] else { continue }
+            profile.person = item.personID.flatMap { people[$0] }
+            profile.event = item.eventID.flatMap { events[$0] }
+            profile.place = item.placeID.flatMap { places[$0] }
+        }
+
+        for item in envelope.favoGalleryPhotos ?? [] {
+            guard let profile = item.profileID.flatMap({ favoriteProfiles[$0] }) else { continue }
+            let sourcePhoto = item.sourcePhotoID.flatMap { sourcePhotos[$0] }
+            let backupData = Data(base64Encoded: item.dataBase64) ?? Data()
+            guard sourcePhoto != nil || !backupData.isEmpty else { continue }
+            let model: FavoGalleryPhoto
+            if let existing = favoGalleryPhotos[item.id] {
+                model = existing
+                updatedCount += 1
+            } else {
+                model = FavoGalleryPhoto(id: item.id)
+                context.insert(model)
+                favoGalleryPhotos[item.id] = model
+                insertedCount += 1
+            }
+            model.sortOrder = item.sortOrder
+            model.capturedAt = item.capturedAt
+            model.hasCapturedAt = item.hasCapturedAt
+            model.memo = item.memo
+            model.isFavorite = item.isFavorite
+            model.byteCount = sourcePhoto?.byteCount ?? (item.byteCount > 0 ? item.byteCount : backupData.count)
+            model.width = sourcePhoto?.width ?? item.width
+            model.height = sourcePhoto?.height ?? item.height
+            model.data = sourcePhoto == nil ? backupData : Data()
+            model.createdAt = item.createdAt
+            model.updatedAt = item.updatedAt
+            model.profile = profile
+            model.sourcePhoto = sourcePhoto
+        }
+
+        for item in envelope.favoAnniversaries ?? [] {
+            guard let profile = item.profileID.flatMap({ favoriteProfiles[$0] }) else { continue }
+            let model: FavoAnniversary
+            if let existing = favoAnniversaries[item.id] {
+                model = existing
+                updatedCount += 1
+            } else {
+                model = FavoAnniversary(id: item.id)
+                context.insert(model)
+                favoAnniversaries[item.id] = model
+                insertedCount += 1
+            }
+            model.title = item.title
+            model.date = item.date
+            model.sortOrder = item.sortOrder
+            model.createdAt = item.createdAt
+            model.updatedAt = item.updatedAt
+            model.profile = profile
+        }
+
         if envelope.favoPins == nil {
             UserDefaults.standard.set(false, forKey: AppStorageKeys.hasMigratedLegacyFavoritesToFavoPins)
         }
@@ -588,6 +650,8 @@ struct JSONBackupPreview {
     let personCount: Int
     let companionCount: Int
     let favoriteProfileCount: Int
+    let favoGalleryPhotoCount: Int
+    let favoAnniversaryCount: Int
     let favoPinCount: Int
     let personLinkCount: Int
     let placeCount: Int
@@ -608,6 +672,8 @@ struct JSONBackupPreview {
         personCount = envelope.people.count
         companionCount = envelope.companions?.count ?? 0
         favoriteProfileCount = envelope.favoriteProfiles?.count ?? 0
+        favoGalleryPhotoCount = envelope.favoGalleryPhotos?.count ?? 0
+        favoAnniversaryCount = envelope.favoAnniversaries?.count ?? 0
         favoPinCount = envelope.favoPins?.count ?? 0
         personLinkCount = envelope.personLinks.count
         placeCount = envelope.places.count
@@ -625,6 +691,8 @@ struct JSONBackupPreview {
             + personCount
             + companionCount
             + favoriteProfileCount
+            + favoGalleryPhotoCount
+            + favoAnniversaryCount
             + favoPinCount
             + personLinkCount
             + placeCount

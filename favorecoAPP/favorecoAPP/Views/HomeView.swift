@@ -315,7 +315,7 @@ struct HomeView: View {
                     let cardWidth = max(0, geometry.size.width)
 
                     ScrollView(.horizontal) {
-                        LazyHStack(alignment: .top, spacing: 0) {
+                        HStack(alignment: .top, spacing: 0) {
                             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                                 upcomingItemLink(item)
                                     .frame(width: cardWidth, alignment: .top)

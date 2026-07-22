@@ -42,7 +42,7 @@ struct TheaterEventUpcomingPlansSection: View {
                             .foregroundStyle(accentColor)
                     }
                     .padding(12)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(Color.white.opacity(0.032), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
             } else {
@@ -133,7 +133,7 @@ struct TheaterEventTicketProgressSection: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
-                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(Color.white.opacity(0.032), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else {
                 if references.count > 1 {
                     ScrollView(.horizontal, showsIndicators: false) {

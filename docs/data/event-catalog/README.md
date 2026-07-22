@@ -1,13 +1,13 @@
 # Favoreco 共通定期イベントカタログ
 
-Favoreco が将来 CloudKit Public Database から配信する、定期開催イベントの調査原稿です。場所を表す共通場所カタログとは分離し、トリエンナーレ、ビエンナーレ、芸術祭、舞台芸術祭等を `ExperienceEvent` の候補として扱います。
+Favoreco が将来 CloudKit Public Database から配信する、定期開催イベントの調査原稿です。場所を表す共通場所カタログとは分離し、トリエンナーレ、ビエンナーレ、芸術祭、舞台芸術祭、野外音楽祭等を `ExperienceEvent` の候補として扱います。
 
 ## データの分け方
 
 - `recurring-event-catalog.csv`: 横浜トリエンナーレ、瀬戸内国際芸術祭等の、年をまたいでも同じものとして扱うイベント・シリーズ
 - `recurring-event-editions.csv`: `2026`、`第9回`等の各開催回。確定した会期と開催状態をシリーズから分離する
 - 実際に行く予定は既存の `Plan`、鑑賞・参加した1回の記録は既存の `Visit` とし、共通カタログの行を利用者データへ直接混ぜない
-- 複数会場型の芸術祭を単一の `PlaceMaster` として登録しない。会場が共通場所カタログにある場合だけ、将来の関係データで個別に接続する
+- 複数会場型の芸術祭や音楽祭を単一の `PlaceMaster` として登録しない。会場が共通場所カタログにある場合だけ、将来の関係データで個別に接続する
 
 ## 登録方針
 
@@ -24,16 +24,18 @@ Favoreco が将来 CloudKit Public Database から配信する、定期開催イ
 
 - `templateKey=museum` は既存ミュージアムの「芸術祭・ビエンナーレ」形式へ対応する
 - `templateKey=theater` は舞台芸術祭として観劇・パフォーマンスの予定・記録へ対応する
+- `templateKey=live` は野外音楽祭としてLIVEの予定・記録へ対応する。固定会場は共通場所カタログ、特設会場は季節会場として分離する
 - `eventTypeKeys` は検索・候補表示用の複数分類であり、利用者が後から自分の対象を編集できる
 - シリーズ候補を選択した時点で `ExperienceEvent` へ名称・公式URL等をスナップショットし、各開催回の会期は `Plan` の日程候補として利用する
 - 同じ芸術祭へ複数回行った場合もシリーズを増殖させず、`Visit` を追加して年ごとの記録を横断できる形を目標とする
 
 ## 現在の収録件数
 
-- 定期イベント・シリーズ: 20件
-- 開催回: 20件
-- 開催周期: 年次7件、隔年3件、3年ごと10件
-- 分類: 現代美術・地域芸術祭、彫刻、写真、工芸、舞台芸術
+- 定期イベント・シリーズ: 39件
+- 開催回: 39件
+- 開催周期: 年次26件、隔年3件、3年ごと10件
+- 分類: 現代美術・地域芸術祭、彫刻、写真、工芸、舞台芸術、野外音楽祭
+- 主要野外音楽祭: FUJI ROCK、ROCK IN JAPAN、SUMMER SONIC、RISING SUN、ARABAKI、SWEET LOVE SHOWER、MONSTER baSH、WILD BUNCH、JAPAN JAM、LuckyFes、JOIN ALIVE、DEAD POP、RUSH BALL、Sky Jamboree、京都大作戦、METROCK、ジャイガ、OTODAMA、HAZIKETEMAZARE
 - 公式発表済みの次回開催: 横浜トリエンナーレ2027、大地の芸術祭2027、札幌国際芸術祭2027、中之条ビエンナーレ2027、神戸六甲ミーツ・アート2026、KYOTO EXPERIMENT 2026、豊岡演劇祭2026、房総国際芸術祭 アート×ミックス2027、亀山トリエンナーレ2027、飛生芸術祭2026、MEET YOUR ART FESTIVAL 2026
 
 ## CloudKit投入前の検証

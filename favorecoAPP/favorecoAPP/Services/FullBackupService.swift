@@ -134,6 +134,21 @@ enum FullBackupService {
             model.visit = item.visitID.flatMap { visits[$0] }
         }
 
+        let galleryPhotos = Dictionary(
+            grouping: try context.fetch(FetchDescriptor<FavoGalleryPhoto>()),
+            by: \.id
+        ).compactMapValues(\.first)
+        for item in envelope.favoGalleryPhotos ?? [] {
+            guard let galleryPhoto = galleryPhotos[item.id],
+                  let sourcePhotoID = item.sourcePhotoID,
+                  let sourcePhoto = photos[sourcePhotoID] else { continue }
+            galleryPhoto.sourcePhoto = sourcePhoto
+            galleryPhoto.data = Data()
+            galleryPhoto.byteCount = sourcePhoto.byteCount
+            galleryPhoto.width = sourcePhoto.width
+            galleryPhoto.height = sourcePhoto.height
+        }
+
         try context.save()
         return FullBackupRestoreResult(
             modelResult: modelResult,

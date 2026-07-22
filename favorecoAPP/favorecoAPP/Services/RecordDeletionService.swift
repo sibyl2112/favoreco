@@ -192,6 +192,8 @@ enum RecordDeletionService {
         let people = try context.fetch(FetchDescriptor<PersonMaster>())
         let companions = try context.fetch(FetchDescriptor<CompanionMaster>())
         let favoriteProfiles = try context.fetch(FetchDescriptor<FavoriteProfile>())
+        let favoGalleryPhotos = try context.fetch(FetchDescriptor<FavoGalleryPhoto>())
+        let favoAnniversaries = try context.fetch(FetchDescriptor<FavoAnniversary>())
         let favoPins = try context.fetch(FetchDescriptor<FavoPin>())
         let links = try context.fetch(FetchDescriptor<EventPersonLink>())
         let places = try context.fetch(FetchDescriptor<PlaceMaster>())
@@ -206,7 +208,7 @@ enum RecordDeletionService {
         let accountNotificationIDs = accounts.map(\.id)
 
         let coreModelCount = categories.count + events.count + visits.count + inboxItems.count + photos.count
-        let masterModelCount = socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoPins.count
+        let masterModelCount = socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count
         let planningModelCount = links.count + places.count + plans.count + accounts.count + attempts.count
         let collectionModelCount = collectibleItems.count + collectibleTransactions.count
         let deletedModelCount = coreModelCount + masterModelCount + planningModelCount + collectionModelCount
@@ -223,7 +225,11 @@ enum RecordDeletionService {
         for item in inboxItems { context.delete(item) }
         for account in socialAccounts { context.delete(account) }
         for pin in favoPins { context.delete(pin) }
-        for profile in favoriteProfiles where profile.person == nil { context.delete(profile) }
+        for photo in favoGalleryPhotos where photo.profile == nil { context.delete(photo) }
+        for anniversary in favoAnniversaries where anniversary.profile == nil { context.delete(anniversary) }
+        for profile in favoriteProfiles where profile.person == nil && profile.event == nil && profile.place == nil {
+            context.delete(profile)
+        }
         for person in people { context.delete(person) }
         for companion in companions { context.delete(companion) }
         for place in places { context.delete(place) }

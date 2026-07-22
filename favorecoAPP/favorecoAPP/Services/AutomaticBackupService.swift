@@ -74,6 +74,8 @@ enum AutomaticBackupService {
         let people = try snapshotContext.fetch(FetchDescriptor<PersonMaster>())
         let companions = try snapshotContext.fetch(FetchDescriptor<CompanionMaster>())
         let favoriteProfiles = try snapshotContext.fetch(FetchDescriptor<FavoriteProfile>())
+        let favoGalleryPhotos = try snapshotContext.fetch(FetchDescriptor<FavoGalleryPhoto>())
+        let favoAnniversaries = try snapshotContext.fetch(FetchDescriptor<FavoAnniversary>())
         let favoPins = try snapshotContext.fetch(FetchDescriptor<FavoPin>())
         let personLinks = try snapshotContext.fetch(FetchDescriptor<EventPersonLink>())
         let places = try snapshotContext.fetch(FetchDescriptor<PlaceMaster>())
@@ -83,12 +85,13 @@ enum AutomaticBackupService {
         let primaryContentCount = categories.filter { !$0.isBuiltIn }.count
             + events.count + visits.count + inboxItems.count + photos.count
         let masterContentCount = socialAccounts.count + people.count + companions.count
-            + favoriteProfiles.count + favoPins.count + personLinks.count + places.count
+            + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count
         let planningContentCount = plans.count + ticketAccounts.count + ticketAttempts.count
         let userContentCount = primaryContentCount + masterContentCount + planningContentCount
         guard userContentCount > 0 else { return nil }
 
         let totalPhotoBytes = photos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
+            + favoGalleryPhotos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
         try ensureAvailableCapacity(forPhotoBytes: totalPhotoBytes)
         let retentionLimit = retentionCount(forPhotoBytes: totalPhotoBytes)
 
@@ -102,6 +105,8 @@ enum AutomaticBackupService {
             people: people,
             companions: companions,
             favoriteProfiles: favoriteProfiles,
+            favoGalleryPhotos: favoGalleryPhotos,
+            favoAnniversaries: favoAnniversaries,
             favoPins: favoPins,
             personLinks: personLinks,
             places: places,

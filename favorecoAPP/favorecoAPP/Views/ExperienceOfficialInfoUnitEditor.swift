@@ -4,6 +4,7 @@ struct ExperienceOfficialInfoUnitEditor: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @Binding var officialURL: String
     @Binding var socialLinksText: String
+    @Binding var eventSubtitle: String
     @Binding var title: String
     @Binding var seriesName: String
     @Binding var visitedAt: Date
@@ -19,6 +20,8 @@ struct ExperienceOfficialInfoUnitEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            TextField("サブタイトル（任意）", text: $eventSubtitle)
+
             TextField("公式URL（任意）", text: $officialURL)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)

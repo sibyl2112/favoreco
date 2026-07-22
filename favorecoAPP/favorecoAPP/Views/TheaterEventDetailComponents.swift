@@ -49,70 +49,22 @@ struct TheaterEventInformationSection: View {
     let accentColor: Color
 
     private var hasInformation: Bool {
-        !event.seriesName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !event.organizerNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !event.memo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !event.importMemo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || URL(string: event.officialURL) != nil
+        !event.memo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    @ViewBuilder
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TheaterEventSectionHeader(title: "あらすじ・公演情報", count: nil)
-
-            if hasInformation {
-                if !event.seriesName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    TheaterEventInfoRow(
-                        systemImage: "rectangle.stack",
-                        title: "シリーズ",
-                        value: event.seriesName
-                    )
-                }
-
-                if !event.organizerNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    TheaterEventInfoRow(
-                        systemImage: "building.2",
-                        title: "主催・制作",
-                        value: event.organizerNameSnapshot
-                    )
-                }
-
-                if !event.memo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(event.memo)
-                        .font(FavorecoTypography.body)
-                        .foregroundStyle(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if !event.importMemo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Divider()
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label("登録メモ", systemImage: "text.viewfinder")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.secondary)
-                        Text(event.importMemo)
-                            .font(FavorecoTypography.body)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-
-                if let url = URL(string: event.officialURL), !event.officialURL.isEmpty {
-                    Link(destination: url) {
-                        Label("公式情報を見る", systemImage: "arrow.up.right.square")
-                            .font(FavorecoTypography.bodyStrong)
-                    }
-                    .tint(accentColor)
-                }
-            } else {
-                TheaterEventEmptyRow(
-                    systemImage: "text.book.closed",
-                    message: "あらすじや公演情報はまだ登録されていません。"
-                )
+        if hasInformation {
+            VStack(alignment: .leading, spacing: 12) {
+                TheaterEventSectionHeader(title: "あらすじ", count: nil)
+                Text(event.memo)
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(Color(red: 0.94, green: 0.91, blue: 0.86).opacity(0.88))
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(16)
+            .theaterEventCard(accentColor: accentColor)
         }
-        .padding(16)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -120,6 +72,7 @@ struct TheaterEventPeopleSection: View {
     let castLinks: [EventPersonLink]
     let staffLinks: [EventPersonLink]
     let accentColor: Color
+    @State private var showsAllCast = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -139,15 +92,51 @@ struct TheaterEventPeopleSection: View {
                         Text("キャスト")
                             .font(FavorecoTypography.bodyStrong)
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(alignment: .top, spacing: 14) {
+                        if showsAllCast {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 78), spacing: 12)],
+                                spacing: 14
+                            ) {
                                 ForEach(castLinks) { link in
                                     TheaterEventPersonCard(link: link, accentColor: accentColor)
                                 }
                             }
-                            .padding(.horizontal, 1)
+                        } else {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                LazyHStack(alignment: .top, spacing: 14) {
+                                    ForEach(castLinks.prefix(6)) { link in
+                                        TheaterEventPersonCard(link: link, accentColor: accentColor)
+                                    }
+                                }
+                                .padding(.horizontal, 1)
+                            }
+                            .scrollClipDisabled()
+                            .background {
+                                GeometryReader { proxy in
+                                    Color.clear.preference(
+                                        key: EventDetailBackSwipeExclusionPreferenceKey.self,
+                                        value: [proxy.frame(in: .global)]
+                                    )
+                                }
+                            }
                         }
-                        .scrollClipDisabled()
+
+                        if castLinks.count > 6 {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.18)) {
+                                    showsAllCast.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Text(showsAllCast ? "キャストを閉じる" : "さらに見る")
+                                    Image(systemName: showsAllCast ? "chevron.up" : "chevron.down")
+                                }
+                                .font(FavorecoTypography.captionStrong)
+                                .foregroundStyle(accentColor)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
 
@@ -160,10 +149,10 @@ struct TheaterEventPeopleSection: View {
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
                                 Text(roleName(for: link))
                                     .font(FavorecoTypography.caption)
-                                    .foregroundStyle(accentColor)
+                                    .foregroundStyle(accentColor.opacity(0.82))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(accentColor.opacity(0.12), in: Capsule())
+                                    .background(accentColor.opacity(0.07), in: Capsule())
 
                                 Text(personName(for: link, fallback: "スタッフ・関係者"))
                                     .font(FavorecoTypography.bodyStrong)
@@ -175,7 +164,7 @@ struct TheaterEventPeopleSection: View {
             }
         }
         .padding(16)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .theaterEventCard(accentColor: accentColor)
     }
 
     private func roleName(for link: EventPersonLink) -> String {
@@ -196,7 +185,7 @@ struct TheaterEventParticipationHistorySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TheaterEventSectionHeader(title: "参加履歴", count: visits.count)
+            TheaterEventSectionHeader(title: "参加した公演", count: visits.count)
 
             if visits.isEmpty {
                 TheaterEventEmptyRow(
@@ -231,6 +220,8 @@ struct TheaterEventParticipationHistorySection: View {
                 }
             }
         }
+        .padding(16)
+        .theaterEventCard(accentColor: accentColor)
     }
 }
 
@@ -363,7 +354,7 @@ private struct TheaterEventPersonCard: View {
                 size: 64
             )
             .overlay {
-                Circle().stroke(accentColor.opacity(0.42), lineWidth: 1)
+                Circle().stroke(accentColor.opacity(0.26), lineWidth: 0.7)
             }
 
             Text(personName(for: link, fallback: "出演者"))
@@ -394,6 +385,7 @@ private struct TheaterEventSectionHeader: View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .font(FavorecoTypography.sectionTitle)
+                .foregroundStyle(Color(red: 0.96, green: 0.93, blue: 0.88))
             Spacer(minLength: 8)
             if let count {
                 Text("\(count)")
@@ -428,4 +420,22 @@ private func personName(for link: EventPersonLink, fallback: String) -> String {
     if !snapshotName.isEmpty { return snapshotName }
     let masterName = link.person?.displayName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return masterName.isEmpty ? fallback : masterName
+}
+
+extension View {
+    func theaterEventCard(accentColor: Color) -> some View {
+        self
+            .background(
+                LinearGradient(
+                    colors: [Color.white.opacity(0.032), accentColor.opacity(0.022)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(accentColor.opacity(0.22), lineWidth: 0.6)
+            }
+    }
 }

@@ -167,6 +167,7 @@ struct FavoCollectionSummary: Identifiable {
 
 struct FavoPinnedTargetSnapshot: Identifiable {
     let pin: FavoPin
+    let profile: FavoriteProfile?
     let kind: FavoTargetKind
     let title: String
     let subtitle: String
@@ -280,6 +281,15 @@ struct FavoSnapshot {
         }
 
         let favoritesByPersonID = Dictionary(uniqueKeysWithValues: favorites.map { ($0.person.id, $0) })
+        let profilesByTargetKey = Dictionary(
+            profiles.compactMap { profile -> (String, FavoriteProfile)? in
+                guard let targetID = profile.targetID else { return nil }
+                return ("\(profile.targetKind.rawValue):\(targetID.uuidString)", profile)
+            },
+            uniquingKeysWith: { current, candidate in
+                current.updatedAt >= candidate.updatedAt ? current : candidate
+            }
+        )
         var usedTargets = Set<String>()
         let pinnedTargets = pins
             .filter(\.isValid)
@@ -292,6 +302,7 @@ struct FavoSnapshot {
                 guard let targetID = pin.targetID else { return nil }
                 let targetKey = "\(pin.targetKind.rawValue):\(targetID.uuidString)"
                 guard usedTargets.insert(targetKey).inserted else { return nil }
+                let targetProfile = profilesByTargetKey[targetKey]
 
                 switch pin.targetKind {
                 case .person:
@@ -314,11 +325,12 @@ struct FavoSnapshot {
                     let profileTitle = favorite?.displayName ?? person.displayName
                     return FavoPinnedTargetSnapshot(
                         pin: pin,
+                        profile: targetProfile,
                         kind: .person,
-                        title: Self.preferredTitle(pin.customTitle, fallback: profileTitle),
+                        title: Self.preferredTitle(targetProfile?.nickname ?? pin.customTitle, fallback: profileTitle),
                         subtitle: "人物・団体 · \(relatedVisits.count)件",
                         iconSymbol: "person.fill",
-                        colorHex: favorite?.profile.colorHex ?? "#8F5E73",
+                        colorHex: targetProfile?.colorHex ?? favorite?.profile.colorHex ?? "#8F5E73",
                         visits: relatedVisits,
                         upcomingPlans: relatedPlans,
                         spendingBreakdown: favorite?.spendingBreakdown ?? FavoSpendingBreakdown.make(visits: relatedVisits),
@@ -332,11 +344,12 @@ struct FavoSnapshot {
                         .sorted { $0.startsAt < $1.startsAt }
                     return FavoPinnedTargetSnapshot(
                         pin: pin,
+                        profile: targetProfile,
                         kind: .event,
-                        title: Self.preferredTitle(pin.customTitle, fallback: event.title.isEmpty ? "無題の作品" : event.title),
+                        title: Self.preferredTitle(targetProfile?.nickname ?? pin.customTitle, fallback: event.title.isEmpty ? "無題の作品" : event.title),
                         subtitle: "\(event.category?.name ?? "作品・体験") · \(relatedVisits.count)件",
                         iconSymbol: event.category?.iconSymbol ?? "sparkles.rectangle.stack",
-                        colorHex: event.category?.colorHex ?? "#147C88",
+                        colorHex: targetProfile?.colorHex ?? event.category?.colorHex ?? "#147C88",
                         visits: relatedVisits,
                         upcomingPlans: relatedPlans,
                         spendingBreakdown: FavoSpendingBreakdown.make(visits: relatedVisits),
@@ -352,11 +365,12 @@ struct FavoSnapshot {
                     let placeContext = place.isClosed ? "閉館 · \(location)" : location
                     return FavoPinnedTargetSnapshot(
                         pin: pin,
+                        profile: targetProfile,
                         kind: .place,
-                        title: Self.preferredTitle(pin.customTitle, fallback: place.name.isEmpty ? "名称未設定の場所" : place.name),
+                        title: Self.preferredTitle(targetProfile?.nickname ?? pin.customTitle, fallback: place.name.isEmpty ? "名称未設定の場所" : place.name),
                         subtitle: "\(placeContext) · \(relatedVisits.count)件",
                         iconSymbol: "mappin.and.ellipse",
-                        colorHex: "#2F7FB8",
+                        colorHex: targetProfile?.colorHex ?? "#2F7FB8",
                         visits: relatedVisits,
                         upcomingPlans: relatedPlans,
                         spendingBreakdown: FavoSpendingBreakdown.make(visits: relatedVisits),

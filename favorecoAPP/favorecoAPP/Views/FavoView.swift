@@ -84,7 +84,7 @@ struct FavoView: View {
                         LazyHStack(spacing: 14) {
                             ForEach(otherFavorites) { favorite in
                                 NavigationLink {
-                                    FavoPersonDetailView(snapshot: favorite)
+                                    FavoPersonDetailView(snapshot: favorite, pin: nil)
                                 } label: {
                                     VStack(spacing: 8) {
                                         FavoAvatar(person: favorite.person, profile: favorite.profile, size: 64)
@@ -127,7 +127,7 @@ struct FavoView: View {
     @ViewBuilder
     private func pinnedTargetDestination(_ target: FavoPinnedTargetSnapshot) -> some View {
         if let personSnapshot = target.personSnapshot {
-            FavoPersonDetailView(snapshot: personSnapshot)
+            FavoPersonDetailView(snapshot: personSnapshot, pin: target.pin)
         } else {
             FavoPinnedTargetDetailView(snapshot: target)
         }
@@ -135,7 +135,7 @@ struct FavoView: View {
 
     private func featuredFavoriteCard(_ favorite: FavoPersonSnapshot) -> some View {
         NavigationLink {
-            FavoPersonDetailView(snapshot: favorite)
+            FavoPersonDetailView(snapshot: favorite, pin: nil)
         } label: {
             HStack(spacing: 16) {
                 FavoAvatar(person: favorite.person, profile: favorite.profile, size: 82)
@@ -282,11 +282,13 @@ private struct FavoPinManagementView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FavoPin.sortOrder) private var pins: [FavoPin]
     @Query(sort: \FavoriteProfile.sortOrder) private var profiles: [FavoriteProfile]
+    @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
     @Query(sort: \ExperienceEvent.title) private var events: [ExperienceEvent]
     @Query(sort: \PlaceMaster.name) private var places: [PlaceMaster]
     @AppStorage(AppStorageKeys.hasMigratedLegacyFavoritesToFavoPins) private var didMigrateLegacyFavorites = false
     @State private var searchText = ""
     @State private var message = ""
+    @State private var showsNewPerson = false
 
     private var visiblePins: [FavoPin] {
         pins.filter(isAvailable).sorted { lhs, rhs in
@@ -295,10 +297,8 @@ private struct FavoPinManagementView: View {
         }
     }
 
-    private var favoriteProfiles: [FavoriteProfile] {
-        profiles.filter {
-            $0.isFavorite && $0.person?.isArchived != true && matches($0.person?.displayName ?? "")
-        }
+    private var visiblePeople: [PersonMaster] {
+        people.filter { !$0.isArchived && matches($0.displayName) }
     }
 
     private var visibleEvents: [ExperienceEvent] {
@@ -317,7 +317,11 @@ private struct FavoPinManagementView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(visiblePins) { pin in
-                        FavoPinRow(pin: pin)
+                        NavigationLink {
+                            FavoProfileEditorView(pin: pin)
+                        } label: {
+                            FavoPinRow(pin: pin)
+                        }
                     }
                     .onMove(perform: movePins)
                     .onDelete(perform: deletePins)
@@ -328,22 +332,36 @@ private struct FavoPinManagementView: View {
                 Text("並び順はFAVOトップにそのまま反映されます。外しても元の人物・作品・場所・記録は削除しません。")
             }
 
-            if !favoriteProfiles.isEmpty {
-                Section("人物・団体") {
-                    ForEach(favoriteProfiles) { profile in
-                        if let person = profile.person {
-                            candidateButton(
-                                title: profile.nickname.isEmpty ? person.displayName : profile.nickname,
-                                subtitle: "推しプロフィール",
-                                icon: "person.fill",
-                                colorHex: profile.colorHex,
-                                kind: .person,
-                                targetID: person.id,
-                                person: person
-                            )
-                        }
+            Section {
+                Button {
+                    showsNewPerson = true
+                } label: {
+                    Label("新しい人物・団体を登録", systemImage: "person.badge.plus")
+                }
+                .disabled(visiblePins.count >= 4)
+
+                if visiblePeople.isEmpty {
+                    Text("該当する人物・団体はありません。")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(visiblePeople) { person in
+                        candidateButton(
+                            title: person.favoriteProfile?.nickname.isEmpty == false
+                                ? person.favoriteProfile?.nickname ?? person.displayName
+                                : person.displayName,
+                            subtitle: person.eventLinks?.isEmpty == false ? "登録済みキャスト" : "人物・団体マスター",
+                            icon: "person.fill",
+                            colorHex: person.favoriteProfile?.colorHex ?? "#8F5E73",
+                            kind: .person,
+                            targetID: person.id,
+                            person: person
+                        )
                     }
                 }
+            } header: {
+                Text("人物・団体・キャスト")
+            } footer: {
+                Text("登録済みマスターと作品のキャストを検索できます。新規登録した人物はマスター管理にも追加されます。")
             }
 
             Section("作品・体験") {
@@ -399,6 +417,9 @@ private struct FavoPinManagementView: View {
         .searchable(text: $searchText, prompt: "人物・作品・場所を検索")
         .toolbar { EditButton() }
         .task { migrateLegacyFavoritesIfNeeded() }
+        .sheet(isPresented: $showsNewPerson) {
+            FavoNewPersonView(nextSortOrder: visiblePins.count)
+        }
     }
 
     @ViewBuilder
@@ -413,28 +434,43 @@ private struct FavoPinManagementView: View {
         event: ExperienceEvent? = nil,
         place: PlaceMaster? = nil
     ) -> some View {
-        let selected = pin(kind: kind, targetID: targetID) != nil
+        let existingPin = pin(kind: kind, targetID: targetID)
+        let selected = existingPin != nil
         let unavailable = !selected && visiblePins.count >= 4
-        Button {
-            togglePin(
-                kind: kind,
-                targetID: targetID,
-                person: person,
-                event: event,
-                place: place
-            )
-        } label: {
-            FavoPinCandidateRow(
-                title: title,
-                subtitle: subtitle,
-                icon: icon,
-                colorHex: colorHex,
-                isSelected: selected,
-                isDisabled: unavailable
-            )
+        HStack(spacing: 8) {
+            Button {
+                togglePin(
+                    kind: kind,
+                    targetID: targetID,
+                    person: person,
+                    event: event,
+                    place: place
+                )
+            } label: {
+                FavoPinCandidateRow(
+                    title: title,
+                    subtitle: subtitle,
+                    icon: icon,
+                    colorHex: colorHex,
+                    isSelected: selected,
+                    isDisabled: unavailable
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(unavailable)
+
+            if let existingPin {
+                NavigationLink {
+                    FavoProfileEditorView(pin: existingPin)
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 38, height: 38)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("\(title)のFAVOプロフィールを編集")
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(unavailable)
     }
 
     private func togglePin(
@@ -466,9 +502,35 @@ private struct FavoPinManagementView: View {
                     place: kind == .place ? place : nil
                 )
             )
+            ensureProfile(kind: kind, person: person, event: event, place: place, now: now)
             message = "MY FAVOに追加しました。"
             saveContext()
         }
+    }
+
+    private func ensureProfile(
+        kind: FavoTargetKind,
+        person: PersonMaster?,
+        event: ExperienceEvent?,
+        place: PlaceMaster?,
+        now: Date
+    ) {
+        let existing = person?.favoriteProfile ?? event?.favoriteProfile ?? place?.favoriteProfile
+        guard existing == nil else {
+            existing?.isFavorite = true
+            existing?.updatedAt = now
+            return
+        }
+        let profile = FavoriteProfile(
+            isFavorite: true,
+            colorHex: event?.category?.colorHex ?? (kind == .place ? "#2F7FB8" : "#8F5E73"),
+            createdAt: now,
+            updatedAt: now,
+            person: kind == .person ? person : nil,
+            event: kind == .event ? event : nil,
+            place: kind == .place ? place : nil
+        )
+        modelContext.insert(profile)
     }
 
     private func movePins(from source: IndexSet, to destination: Int) {
@@ -580,25 +642,15 @@ private struct FavoPinnedTargetDetailView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Image(systemName: snapshot.iconSymbol)
-                        .font(.system(size: 25, weight: .semibold))
-                        .foregroundStyle(Color(hex: snapshot.colorHex))
-                        .frame(width: 50, height: 50)
-                        .background(Color(hex: snapshot.colorHex).opacity(0.12), in: Circle())
-                    Text(snapshot.kind.displayName.uppercased())
-                        .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption2))
-                        .tracking(1.2)
-                        .foregroundStyle(Color(hex: snapshot.colorHex))
-                    Text(snapshot.title)
-                        .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title))
-                    Text(snapshot.subtitle)
-                        .font(FavorecoTypography.body)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+                FavoProfileHero(
+                    title: snapshot.title,
+                    subtitle: snapshot.subtitle,
+                    kindLabel: snapshot.kind.displayName,
+                    colorHex: snapshot.colorHex,
+                    profile: snapshot.profile,
+                    fallbackImage: fallbackImage,
+                    fallbackSymbol: snapshot.iconSymbol
+                )
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     FavoInsightMetric(
@@ -648,6 +700,18 @@ private struct FavoPinnedTargetDetailView: View {
                     }
                 }
 
+                if let profile = snapshot.profile {
+                    FavoAnniversarySection(profile: profile, colorHex: snapshot.colorHex)
+                }
+
+                if let profile = snapshot.profile {
+                    FavoGallerySection(
+                        profile: profile,
+                        colorHex: snapshot.colorHex,
+                        candidateVisits: snapshot.visits
+                    )
+                }
+
                 VStack(alignment: .leading, spacing: 10) {
                     FavoSectionTitle(title: "思い出", subtitle: "\(snapshot.visits.count)件")
                     if snapshot.visits.isEmpty {
@@ -674,6 +738,25 @@ private struct FavoPinnedTargetDetailView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle(snapshot.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink { FavoProfileEditorView(pin: snapshot.pin) } label: {
+                    Label("推しを編集", systemImage: "pencil")
+                }
+            }
+        }
+    }
+
+    private var fallbackImage: UIImage? {
+        switch snapshot.kind {
+        case .person:
+            if let data = snapshot.pin.person?.imageData { return UIImage(data: data) }
+            return snapshot.pin.person.flatMap { PersonImageStore.image(at: $0.imagePath) }
+        case .event:
+            return snapshot.pin.event?.eyecatchData.flatMap(UIImage.init(data:))
+        case .place:
+            return nil
+        }
     }
 
     private func formattedAmount(_ amount: Decimal) -> String {
@@ -766,27 +849,21 @@ private struct FavoCollectionDetailView: View {
 
 private struct FavoPersonDetailView: View {
     let snapshot: FavoPersonSnapshot
+    let pin: FavoPin?
     @State private var revealsRecordedSpending = false
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
-                VStack(spacing: 12) {
-                    FavoAvatar(person: snapshot.person, profile: snapshot.profile, size: 104)
-                    Text(snapshot.displayName)
-                        .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title))
-                    if snapshot.displayName != snapshot.person.displayName {
-                        Text(snapshot.person.displayName)
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if let days = snapshot.supportDayCount {
-                        Text("推して \(days)日")
-                            .font(FavorecoTypography.jpSans(16, weight: .semibold, relativeTo: .headline))
-                            .foregroundStyle(Color(hex: snapshot.profile.colorHex))
-                    }
-                }
-                .frame(maxWidth: .infinity)
+                FavoProfileHero(
+                    title: snapshot.displayName,
+                    subtitle: personHeroSubtitle,
+                    kindLabel: "人物・団体",
+                    colorHex: snapshot.profile.colorHex,
+                    profile: snapshot.profile,
+                    fallbackImage: personImage,
+                    fallbackSymbol: "person.fill"
+                )
 
                 HStack(spacing: 10) {
                     FavoMiniMetric(value: snapshot.visits.count, label: "思い出")
@@ -803,6 +880,14 @@ private struct FavoPersonDetailView: View {
                         .buttonStyle(.plain)
                     }
                 }
+
+                FavoAnniversarySection(profile: snapshot.profile, colorHex: snapshot.profile.colorHex)
+
+                FavoGallerySection(
+                    profile: snapshot.profile,
+                    colorHex: snapshot.profile.colorHex,
+                    candidateVisits: snapshot.visits
+                )
 
                 if snapshot.visits.isEmpty {
                     Text("この人物・団体に紐づく記録はまだありません。")
@@ -839,6 +924,28 @@ private struct FavoPersonDetailView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle(snapshot.person.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let pin {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { FavoProfileEditorView(pin: pin) } label: {
+                        Label("推しを編集", systemImage: "pencil")
+                    }
+                }
+            }
+        }
+    }
+
+    private var personImage: UIImage? {
+        if let data = snapshot.person.imageData { return UIImage(data: data) }
+        return PersonImageStore.image(at: snapshot.person.imagePath)
+    }
+
+    private var personHeroSubtitle: String {
+        var values: [String] = []
+        if snapshot.displayName != snapshot.person.displayName { values.append(snapshot.person.displayName) }
+        if let days = snapshot.supportDayCount { values.append("推して \(days)日") }
+        if values.isEmpty { values.append("\(snapshot.visits.count)件の思い出") }
+        return values.joined(separator: " · ")
     }
 
     private var milestoneSection: some View {
@@ -1022,11 +1129,19 @@ private struct FavoPinnedTargetCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Image(systemName: target.iconSymbol)
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(Color(hex: target.colorHex))
-                    .frame(width: 38, height: 38)
-                    .background(Color(hex: target.colorHex).opacity(0.12), in: Circle())
+                if let data = target.profile?.iconImageData, let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 38, height: 38)
+                        .clipShape(Circle())
+                } else {
+                    Image(systemName: target.iconSymbol)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(Color(hex: target.colorHex))
+                        .frame(width: 38, height: 38)
+                        .background(Color(hex: target.colorHex).opacity(0.12), in: Circle())
+                }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
@@ -1485,10 +1600,102 @@ private struct FavoAvatar: View {
     }
 
     private var personImage: UIImage? {
+        if let iconData = profile.iconImageData, let image = UIImage(data: iconData) {
+            return image
+        }
         if let imageData = person.imageData, let image = UIImage(data: imageData) {
             return image
         }
         return PersonImageStore.image(at: person.imagePath)
+    }
+}
+
+private struct FavoProfileHero: View {
+    let title: String
+    let subtitle: String
+    let kindLabel: String
+    let colorHex: String
+    let profile: FavoriteProfile?
+    let fallbackImage: UIImage?
+    let fallbackSymbol: String
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            heroBackground
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.78)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+
+            HStack(alignment: .bottom, spacing: 14) {
+                icon
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(kindLabel.uppercased())
+                        .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption2))
+                        .tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.8))
+                    Text(title)
+                        .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title))
+                        .foregroundStyle(.white)
+                        .lineLimit(3)
+                    Text(subtitle)
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.white.opacity(0.82))
+                        .lineLimit(2)
+                }
+            }
+            .padding(18)
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(16 / 10, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color(hex: colorHex).opacity(0.35), lineWidth: 0.75)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var heroBackground: some View {
+        if let data = profile?.heroImageData, let image = UIImage(data: data) {
+            Image(uiImage: image).resizable().scaledToFill()
+        } else if let fallbackImage {
+            Image(uiImage: fallbackImage).resizable().scaledToFill()
+        } else {
+            LinearGradient(
+                colors: [Color(hex: colorHex), Color(hex: colorHex).opacity(0.42)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .overlay {
+                Image(systemName: fallbackSymbol)
+                    .font(.system(size: 76, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.2))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        Group {
+            if let data = profile?.iconImageData, let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if let fallbackImage {
+                Image(uiImage: fallbackImage).resizable().scaledToFill()
+            } else {
+                ZStack {
+                    Color(hex: colorHex)
+                    Image(systemName: fallbackSymbol)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .frame(width: 66, height: 66)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 2))
     }
 }
 
@@ -1510,7 +1717,7 @@ private struct FavoMiniMetric: View {
     }
 }
 
-private struct FavoSectionTitle: View {
+struct FavoSectionTitle: View {
     let title: String
     let subtitle: String?
 

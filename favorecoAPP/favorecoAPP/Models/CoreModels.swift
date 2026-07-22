@@ -222,6 +222,8 @@ final class FavoriteProfile {
     var colorHex: String = "#8F5E73"
     var nickname: String = ""
     var imagePath: String = ""
+    @Attribute(.externalStorage) var heroImageData: Data?
+    @Attribute(.externalStorage) var iconImageData: Data?
     var originText: String = ""
     var memo: String = ""
     var showOnHome: Bool = true
@@ -229,6 +231,24 @@ final class FavoriteProfile {
     var updatedAt: Date = Date()
 
     var person: PersonMaster?
+    var event: ExperienceEvent?
+    var place: PlaceMaster?
+
+    @Relationship(deleteRule: .cascade, inverse: \FavoGalleryPhoto.profile)
+    var galleryPhotos: [FavoGalleryPhoto]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \FavoAnniversary.profile)
+    var anniversaries: [FavoAnniversary]? = []
+
+    var targetKind: FavoTargetKind {
+        if person != nil { return .person }
+        if place != nil { return .place }
+        return .event
+    }
+
+    var targetID: UUID? {
+        person?.id ?? event?.id ?? place?.id
+    }
 
     init(
         id: UUID = UUID(),
@@ -242,12 +262,16 @@ final class FavoriteProfile {
         colorHex: String = "#8F5E73",
         nickname: String = "",
         imagePath: String = "",
+        heroImageData: Data? = nil,
+        iconImageData: Data? = nil,
         originText: String = "",
         memo: String = "",
         showOnHome: Bool = true,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        person: PersonMaster? = nil
+        person: PersonMaster? = nil,
+        event: ExperienceEvent? = nil,
+        place: PlaceMaster? = nil
     ) {
         self.id = id
         self.isFavorite = isFavorite
@@ -260,12 +284,106 @@ final class FavoriteProfile {
         self.colorHex = colorHex
         self.nickname = nickname
         self.imagePath = imagePath
+        self.heroImageData = heroImageData
+        self.iconImageData = iconImageData
         self.originText = originText
         self.memo = memo
         self.showOnHome = showOnHome
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.person = person
+        self.event = event
+        self.place = place
+    }
+}
+
+@Model
+final class FavoGalleryPhoto {
+    var id: UUID = UUID()
+    var sortOrder: Int = 0
+    var capturedAt: Date = Date()
+    var hasCapturedAt: Bool = false
+    var memo: String = ""
+    var isFavorite: Bool = false
+    var byteCount: Int = 0
+    var width: Int = 0
+    var height: Int = 0
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    @Attribute(.externalStorage)
+    var data: Data = Data()
+
+    var profile: FavoriteProfile?
+    var sourcePhoto: PhotoBlob?
+
+    var resolvedData: Data {
+        if !data.isEmpty { return data }
+        return sourcePhoto?.data ?? Data()
+    }
+
+    var hasStoredData: Bool { byteCount > 0 && !resolvedData.isEmpty }
+
+    init(
+        id: UUID = UUID(),
+        sortOrder: Int = 0,
+        capturedAt: Date = Date(),
+        hasCapturedAt: Bool = false,
+        memo: String = "",
+        isFavorite: Bool = false,
+        byteCount: Int = 0,
+        width: Int = 0,
+        height: Int = 0,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        data: Data = Data(),
+        profile: FavoriteProfile? = nil,
+        sourcePhoto: PhotoBlob? = nil
+    ) {
+        self.id = id
+        self.sortOrder = sortOrder
+        self.capturedAt = capturedAt
+        self.hasCapturedAt = hasCapturedAt
+        self.memo = memo
+        self.isFavorite = isFavorite
+        self.byteCount = byteCount
+        self.width = width
+        self.height = height
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.data = data
+        self.profile = profile
+        self.sourcePhoto = sourcePhoto
+    }
+}
+
+@Model
+final class FavoAnniversary {
+    var id: UUID = UUID()
+    var title: String = ""
+    var date: Date = Date()
+    var sortOrder: Int = 0
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var profile: FavoriteProfile?
+
+    init(
+        id: UUID = UUID(),
+        title: String = "",
+        date: Date = Date(),
+        sortOrder: Int = 0,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        profile: FavoriteProfile? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.date = date
+        self.sortOrder = sortOrder
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.profile = profile
     }
 }
 
@@ -482,6 +600,9 @@ final class PlaceMaster {
     @Relationship(deleteRule: .cascade, inverse: \FavoPin.place)
     var favoPins: [FavoPin]? = []
 
+    @Relationship(deleteRule: .cascade, inverse: \FavoriteProfile.place)
+    var favoriteProfile: FavoriteProfile?
+
     init(
         id: UUID = UUID(),
         name: String = "",
@@ -588,6 +709,9 @@ final class ExperienceEvent {
 
     @Relationship(deleteRule: .cascade, inverse: \FavoPin.event)
     var favoPins: [FavoPin]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \FavoriteProfile.event)
+    var favoriteProfile: FavoriteProfile?
 
     @Relationship(deleteRule: .cascade, inverse: \CollectibleItem.series)
     var collectibleItems: [CollectibleItem]? = []
@@ -997,6 +1121,9 @@ final class PhotoBlob {
     var data: Data = Data()
 
     var visit: Visit?
+
+    @Relationship(deleteRule: .cascade, inverse: \FavoGalleryPhoto.sourcePhoto)
+    var favoGallerySelections: [FavoGalleryPhoto]? = []
 
     var hasStoredData: Bool {
         byteCount > 0

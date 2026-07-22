@@ -2628,6 +2628,8 @@ struct JSONExportView: View {
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
     @Query(sort: \CompanionMaster.name) private var companions: [CompanionMaster]
     @Query(sort: \FavoriteProfile.sortOrder) private var favoriteProfiles: [FavoriteProfile]
+    @Query(sort: \FavoGalleryPhoto.sortOrder) private var favoGalleryPhotos: [FavoGalleryPhoto]
+    @Query(sort: \FavoAnniversary.sortOrder) private var favoAnniversaries: [FavoAnniversary]
     @Query(sort: \FavoPin.sortOrder) private var favoPins: [FavoPin]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Query(sort: \PlaceMaster.name) private var places: [PlaceMaster]
@@ -2644,7 +2646,7 @@ struct JSONExportView: View {
     }
 
     private var totalRecordCount: Int {
-        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
+        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
     }
 
     var body: some View {
@@ -2653,7 +2655,7 @@ struct JSONExportView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("JSONバックアップ")
                         .font(FavorecoTypography.sectionTitle)
-                    Text("アプリに戻せる形式の手動バックアップです。人物プロフィール写真は含みますが、記録へ添付した写真・動画本体は含めず、記録本体と紐付け情報を書き出します。")
+                    Text("アプリに戻せる形式の手動バックアップです。人物プロフィール写真とFAVO専用ギャラリーは含みますが、記録へ添付した写真・動画本体は含めず、記録本体と紐付け情報を書き出します。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -2667,6 +2669,7 @@ struct JSONExportView: View {
                 LabeledContent("人物・団体", value: "\(people.count)")
                 LabeledContent("同行者", value: "\(companions.count)")
                 LabeledContent("FAVO", value: "\(favoriteProfiles.filter(\.isFavorite).count)")
+                LabeledContent("FAVO記念日", value: "\(favoAnniversaries.count)")
                 LabeledContent("MY FAVO固定", value: "\(favoPins.count)")
                 LabeledContent("人物リンク", value: "\(personLinks.count)")
                 LabeledContent("場所", value: "\(places.count)")
@@ -2694,6 +2697,8 @@ struct JSONExportView: View {
                             people: people,
                             companions: companions,
                             favoriteProfiles: favoriteProfiles,
+                            favoGalleryPhotos: favoGalleryPhotos,
+                            favoAnniversaries: favoAnniversaries,
                             favoPins: favoPins,
                             personLinks: personLinks,
                             places: places,

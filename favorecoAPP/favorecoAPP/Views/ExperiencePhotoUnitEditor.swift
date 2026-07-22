@@ -19,6 +19,8 @@ struct PhotoUnitEditor: View {
     let category: RecordCategory?
     @Binding var aspectRatioKey: String
     @Binding var coverPhotoPath: String
+    @Binding var heroBackgroundPath: String
+    @Binding var heroBackgroundPresetKey: String
     @State private var isShowingCamera = false
     @State private var isShowingCameraUnavailableAlert = false
     @State private var importCompletedCount = 0
@@ -37,6 +39,10 @@ struct PhotoUnitEditor: View {
 
     private var selectedAspectRatio: EyecatchAspectRatio {
         EyecatchAspectRatio.option(for: aspectRatioKey, category: category)
+    }
+
+    private var heroBackgroundPresets: [HeroBackgroundPreset] {
+        HeroBackgroundPreset.presets(for: category?.templateKey)
     }
 
     private var activeExistingPhotos: [PhotoBlob] {
@@ -82,6 +88,17 @@ struct PhotoUnitEditor: View {
 
             if category?.templateKey == "book" {
                 bookFormatPicker
+            }
+
+            if !heroBackgroundPresets.isEmpty {
+                heroBackgroundPicker
+            } else if !heroBackgroundPath.isEmpty {
+                Button {
+                    heroBackgroundPath = ""
+                } label: {
+                    Label("トップ背景をジャンル既定に戻す", systemImage: "rectangle.landscape")
+                }
+                .buttonStyle(.bordered)
             }
 
             if currentPhotoCount == 0 {
@@ -206,6 +223,70 @@ struct PhotoUnitEditor: View {
         }
     }
 
+    private var heroBackgroundPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("トップ背景")
+                    .font(FavorecoTypography.bodyStrong)
+                Spacer()
+                if !heroBackgroundPath.isEmpty {
+                    Label("自分の写真", systemImage: "photo.fill")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(heroBackgroundPresets) { preset in
+                        Button {
+                            heroBackgroundPresetKey = preset.key
+                            heroBackgroundPath = ""
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Image(preset.resourceName)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 92, height: 112)
+                                    .clipped()
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(
+                                                isSelected(preset) ? Color.accentColor : Color.secondary.opacity(0.28),
+                                                lineWidth: isSelected(preset) ? 3 : 1
+                                            )
+                                    }
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                                Text(preset.title)
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(2)
+                                    .frame(width: 92, height: 34, alignment: .topLeading)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("トップ背景、\(preset.title)")
+                        .accessibilityAddTraits(isSelected(preset) ? .isSelected : [])
+                    }
+                }
+            }
+
+            Text("自分の写真を使う場合は、下の写真にある背景ボタンから選べます。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func isSelected(_ preset: HeroBackgroundPreset) -> Bool {
+        heroBackgroundPath.isEmpty
+            && HeroBackgroundPreset.resolved(
+                categoryKey: category?.templateKey,
+                storedKey: heroBackgroundPresetKey
+            ) == preset
+    }
+
     @ViewBuilder
     private var photoAddControls: some View {
         if photoAddStartMode == "library" {
@@ -268,10 +349,15 @@ struct PhotoUnitEditor: View {
                     aspectRatio: selectedAspectRatio.value,
                     fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
                     isCover: coverPhotoPath == photo.relativePath,
+                    isHeroBackground: heroBackgroundPath == photo.relativePath,
                     purpose: existingMetadata(for: photo).purpose,
                     canSetCover: existingMetadata(for: photo).purpose == .memory,
+                    canSetHeroBackground: existingMetadata(for: photo).purpose == .memory,
                     onSetCover: {
                         coverPhotoPath = photo.relativePath
+                    },
+                    onSetHeroBackground: {
+                        heroBackgroundPath = photo.relativePath
                     },
                     onEdit: {
                         editingTarget = PhotoEditorTarget(id: photo.id, kind: .existing)
@@ -279,6 +365,7 @@ struct PhotoUnitEditor: View {
                     onDelete: {
                         deletedPhotoIDs.insert(photo.id)
                         selectFallbackCover(excluding: photo.relativePath)
+                        clearHeroBackground(excluding: photo.relativePath)
                     }
                 )
             }
@@ -290,10 +377,15 @@ struct PhotoUnitEditor: View {
                     aspectRatio: selectedAspectRatio.value,
                     fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
                     isCover: coverPhotoPath == photo.relativePath,
+                    isHeroBackground: heroBackgroundPath == photo.relativePath,
                     purpose: photo.metadata.purpose,
                     canSetCover: photo.metadata.purpose == .memory,
+                    canSetHeroBackground: photo.metadata.purpose == .memory,
                     onSetCover: {
                         coverPhotoPath = photo.relativePath
+                    },
+                    onSetHeroBackground: {
+                        heroBackgroundPath = photo.relativePath
                     },
                     onEdit: {
                         editingTarget = PhotoEditorTarget(id: photo.id, kind: .pending)
@@ -301,6 +393,7 @@ struct PhotoUnitEditor: View {
                     onDelete: {
                         pendingPhotos.removeAll { $0.id == photo.id }
                         selectFallbackCover(excluding: photo.relativePath)
+                        clearHeroBackground(excluding: photo.relativePath)
                     }
                 )
             }
@@ -314,7 +407,8 @@ struct PhotoUnitEditor: View {
             if let photo = activeExistingPhotos.first(where: { $0.id == target.id }) {
                 PhotoMetadataEditor(
                     metadata: existingMetadataBinding(for: photo),
-                    imageData: photo.data
+                    imageData: photo.data,
+                    allowsBenefits: category?.templateKey == "theater"
                 )
             } else {
                 ContentUnavailableView("写真が見つかりません", systemImage: "photo")
@@ -329,9 +423,13 @@ struct PhotoUnitEditor: View {
                             if metadata.purpose != .memory, coverPhotoPath == pendingPhotos[index].relativePath {
                                 selectFallbackCover(excluding: pendingPhotos[index].relativePath)
                             }
+                            if metadata.purpose != .memory {
+                                clearHeroBackground(excluding: pendingPhotos[index].relativePath)
+                            }
                         }
                     ),
-                    imageData: pendingPhotos[index].data
+                    imageData: pendingPhotos[index].data,
+                    allowsBenefits: category?.templateKey == "theater"
                 )
             } else {
                 ContentUnavailableView("写真が見つかりません", systemImage: "photo")
@@ -356,6 +454,9 @@ struct PhotoUnitEditor: View {
                 existingPhotoMetadata[photo.id] = metadata
                 if metadata.purpose != .memory, coverPhotoPath == photo.relativePath {
                     selectFallbackCover(excluding: photo.relativePath)
+                }
+                if metadata.purpose != .memory {
+                    clearHeroBackground(excluding: photo.relativePath)
                 }
             }
         )
@@ -411,6 +512,11 @@ struct PhotoUnitEditor: View {
             ?? ""
     }
 
+    private func clearHeroBackground(excluding path: String) {
+        guard heroBackgroundPath == path else { return }
+        heroBackgroundPath = ""
+    }
+
     private func appendCapturedPhoto(_ image: UIImage) {
         guard canAddPhotos, let data = image.jpegData(compressionQuality: 1) else { return }
         let filename = "camera-\(UUID().uuidString).jpg"
@@ -441,6 +547,7 @@ private struct PhotoMetadataEditor: View {
     @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
     @Binding var metadata: PhotoMetadataDraft
     let imageData: Data
+    let allowsBenefits: Bool
     @State private var isRecognizing = false
     @State private var statusText = ""
     @State private var suggestions: [OCRImportSuggestion] = []
@@ -448,13 +555,23 @@ private struct PhotoMetadataEditor: View {
     var body: some View {
         Form {
             Section("分類") {
-                Picker("写真の種類", selection: $metadata.purpose) {
-                    ForEach(ExperiencePhotoPurpose.allCases) { purpose in
-                        Label(purpose.title, systemImage: purpose.systemImage)
-                            .tag(purpose)
+                if allowsBenefits {
+                    Picker("写真の種類", selection: $metadata.purpose) {
+                        ForEach(ExperiencePhotoPurpose.allCases) { purpose in
+                            Label(purpose.title, systemImage: purpose.systemImage)
+                                .tag(purpose)
+                        }
                     }
+                    .pickerStyle(.menu)
+                } else {
+                    Picker("写真の種類", selection: $metadata.purpose) {
+                        ForEach(ExperiencePhotoPurpose.allCases.filter { $0 != .benefit }) { purpose in
+                            Label(purpose.title, systemImage: purpose.systemImage)
+                                .tag(purpose)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
             }
 
             if metadata.purpose != .memory {

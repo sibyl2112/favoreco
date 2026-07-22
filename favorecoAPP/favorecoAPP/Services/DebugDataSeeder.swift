@@ -100,6 +100,18 @@ enum SampleDataSeeder {
 
         for (categoryIndex, category) in categories.enumerated() {
             for sampleIndex in 0..<samplesPerCategory {
+                if category.templateKey == "random_goods" {
+                    insertCollectibleSample(
+                        category: category,
+                        categoryIndex: categoryIndex,
+                        sampleIndex: sampleIndex,
+                        now: now,
+                        context: context
+                    )
+                    eventCount += 1
+                    continue
+                }
+
                 let definition = sampleDefinition(for: category, index: sampleIndex)
                 let image = sampleImage(for: category, index: sampleIndex)
                 let imagePath = "\(samplePhotoPrefix)\(category.templateKey)-\(sampleIndex + 1).jpg"
@@ -344,6 +356,124 @@ enum SampleDataSeeder {
         let displayRole: String
     }
 
+    private struct CollectibleSampleDefinition {
+        let title: String
+        let releaseText: String
+        let kind: CollectibleKind
+        let maker: String
+        let itemNames: [String]
+        let acquiredQuantities: [Int]
+        let unitPrice: Decimal
+        let outgoingItemIndex: Int?
+    }
+
+    @MainActor
+    private static func insertCollectibleSample(
+        category: RecordCategory,
+        categoryIndex: Int,
+        sampleIndex: Int,
+        now: Date,
+        context: ModelContext
+    ) {
+        let definition = collectibleSampleDefinition(index: sampleIndex)
+        let image = sampleImage(for: category, index: sampleIndex)
+        let itemDate = samplePastDate(
+            now: now,
+            categoryIndex: categoryIndex,
+            sampleIndex: sampleIndex
+        )
+        let event = ExperienceEvent(
+            title: definition.title,
+            seriesName: definition.releaseText,
+            subTypeKey: definition.kind.rawValue,
+            organizerNameSnapshot: definition.maker,
+            officialURL: "\(sampleURLPrefix)random_goods/\(sampleIndex + 1)",
+            memo: "種類別の所持数、未入手、ダブり、コンプリート表示を確認するサンプルです。",
+            createdAt: itemDate,
+            updatedAt: now,
+            eyecatchData: image.data,
+            category: category
+        )
+        context.insert(event)
+
+        for (itemIndex, itemName) in definition.itemNames.enumerated() {
+            let item = CollectibleItem(
+                name: itemName,
+                sortOrder: itemIndex,
+                createdAt: itemDate,
+                updatedAt: now,
+                series: event
+            )
+            context.insert(item)
+
+            let acquiredQuantity = definition.acquiredQuantities[itemIndex]
+            if acquiredQuantity > 0 {
+                context.insert(CollectibleTransaction(
+                    kindKey: definition.kind == .capsuleToy
+                        ? CollectibleTransactionKind.capsule.rawValue
+                        : CollectibleTransactionKind.purchase.rawValue,
+                    quantity: acquiredQuantity,
+                    occurredAt: itemDate.addingTimeInterval(TimeInterval(itemIndex * 60)),
+                    amount: definition.unitPrice * Decimal(acquiredQuantity),
+                    placeNameSnapshot: "サンプルショップ",
+                    memo: acquiredQuantity > 1 ? "同じ種類を複数入手したサンプルです。" : "入手履歴のサンプルです。",
+                    createdAt: itemDate,
+                    updatedAt: now,
+                    item: item
+                ))
+            }
+
+            if definition.outgoingItemIndex == itemIndex {
+                context.insert(CollectibleTransaction(
+                    kindKey: CollectibleTransactionKind.tradeOut.rawValue,
+                    quantity: 1,
+                    occurredAt: itemDate.addingTimeInterval(24 * 60 * 60),
+                    placeNameSnapshot: "交換会",
+                    memo: "交換で1個手放したサンプルです。",
+                    createdAt: itemDate,
+                    updatedAt: now,
+                    item: item
+                ))
+            }
+        }
+    }
+
+    private static func collectibleSampleDefinition(index: Int) -> CollectibleSampleDefinition {
+        let definitions = [
+            CollectibleSampleDefinition(
+                title: "星空どうぶつカプセル",
+                releaseText: "2026年7月",
+                kind: .capsuleToy,
+                maker: "北極星トイ",
+                itemNames: ["しろくま", "ペンギン", "あざらし", "きつね", "ふくろう"],
+                acquiredQuantities: [2, 1, 0, 1, 0],
+                unitPrice: 400,
+                outgoingItemIndex: nil
+            ),
+            CollectibleSampleDefinition(
+                title: "月影アクリルチャーム",
+                releaseText: "第1弾",
+                kind: .acrylicKeychain,
+                maker: "灯台雑貨店",
+                itemNames: ["ルナ", "アオ", "ミナト", "レン", "トワ", "シークレット"],
+                acquiredQuantities: [3, 0, 1, 0, 1, 0],
+                unitPrice: 700,
+                outgoingItemIndex: 0
+            ),
+            CollectibleSampleDefinition(
+                title: "花色缶バッジコレクション",
+                releaseText: "春色シリーズ",
+                kind: .canBadge,
+                maker: "架空アート企画",
+                itemNames: ["桜", "菜の花", "藤", "青葉"],
+                acquiredQuantities: [1, 1, 1, 1],
+                unitPrice: 500,
+                outgoingItemIndex: nil
+            )
+        ]
+        return definitions[index % definitions.count]
+    }
+
     private static func sampleDefinition(for category: RecordCategory, index: Int) -> SampleDefinition {
         let titles: [String]
         let seriesName: String
@@ -389,6 +519,11 @@ enum SampleDataSeeder {
             titles = ["夜明けの標本室", "雨粒の図書館", "北へ帰る鳥"]
             seriesName = "灯台文庫"
             organizer = "架空書房"
+        case "random_goods":
+            let definition = collectibleSampleDefinition(index: index)
+            titles = [definition.title]
+            seriesName = definition.releaseText
+            organizer = definition.maker
         default:
             titles = ["はじめての\(category.name)", "思い出の\(category.name)", "次の\(category.name)"]
             seriesName = ""

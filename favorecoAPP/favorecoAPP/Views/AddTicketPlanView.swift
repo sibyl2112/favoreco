@@ -39,6 +39,7 @@ struct AddTicketPlanView: View {
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
     @Query(sort: \Plan.startsAt) private var plans: [Plan]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
+    @StateObject private var publicPlaceStore = PublicPlaceCatalogStore.shared
     @State private var draft = TicketPlanDraft()
     @State private var validationError = ""
     @State private var targetSelectionMode: TargetSelectionMode = .new
@@ -47,6 +48,7 @@ struct AddTicketPlanView: View {
     @State private var isShowingInterestedEventPicker = false
     @State private var isShowingRegisteredEventPicker = false
     @State private var isShowingPlaceSearch = false
+    @State private var placeImportError = ""
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     private let editingPlan: Plan?
     private let targetEvent: ExperienceEvent?
@@ -506,6 +508,7 @@ struct AddTicketPlanView: View {
                     isShowingPlaceSearch = false
                 }
             }
+            .task { await publicPlaceStore.prepare() }
         }
     }
 
@@ -530,36 +533,94 @@ struct AddTicketPlanView: View {
     @ViewBuilder
     private var placeSuggestionList: some View {
         let suggestions = draft.placeSuggestions(from: placeMasters)
-        if !suggestions.isEmpty {
+        let publicSuggestions = publicCatalogSuggestions
+        if !suggestions.isEmpty || !publicSuggestions.isEmpty || !placeImportError.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("登録済みの場所")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                ForEach(suggestions) { place in
-                    Button {
-                        draft.apply(placeMaster: place)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "mappin.and.ellipse")
-                                .foregroundStyle(.secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(place.name)
-                                    .foregroundStyle(.primary)
-                                if !place.address.isEmpty {
-                                    Text(place.address)
+                if !suggestions.isEmpty {
+                    Text("登録済みの場所")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(suggestions) { place in
+                        Button {
+                            draft.apply(placeMaster: place)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "mappin.and.ellipse")
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(place.name)
+                                        .foregroundStyle(.primary)
+                                    if !place.address.isEmpty {
+                                        Text(place.address)
+                                            .font(FavorecoTypography.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.up.left")
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if !publicSuggestions.isEmpty {
+                    Text("全国場所カタログ")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(publicSuggestions) { entry in
+                        Button {
+                            importPublicPlace(entry)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "building.2.crop.circle")
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.officialName).foregroundStyle(.primary)
+                                    Text(entry.address.isEmpty ? entry.prefecture : entry.address)
                                         .font(FavorecoTypography.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
+                                Spacer()
+                                Image(systemName: "plus.circle")
+                                    .foregroundStyle(.tertiary)
                             }
-                            Spacer()
-                            Image(systemName: "arrow.up.left")
-                                .foregroundStyle(.tertiary)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                }
+                if !placeImportError.isEmpty {
+                    Text(placeImportError)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.red)
                 }
             }
+        }
+    }
+
+    private var publicCatalogSuggestions: [PublicPlaceCatalogEntry] {
+        let importedMarkers = Set(placeMasters.map(\.sourceSnapshotRaw))
+        return PublicPlaceCatalogSearch.suggestions(
+            for: draft.trimmedVenueName,
+            in: publicPlaceStore.entries,
+            excludingSourceMarkers: importedMarkers,
+            includesClosed: false
+        )
+    }
+
+    private func importPublicPlace(_ entry: PublicPlaceCatalogEntry) {
+        do {
+            let place = try PublicPlaceCatalogImporter.importEntry(
+                entry,
+                existingPlaces: placeMasters,
+                in: modelContext
+            )
+            placeImportError = ""
+            draft.apply(placeMaster: place)
+        } catch {
+            placeImportError = "場所マスターへ追加できませんでした。"
         }
     }
 
@@ -1235,7 +1296,12 @@ private struct TicketPlanDraft {
         let query = normalizedPlaceText(trimmedVenueName)
         guard !query.isEmpty else { return [] }
         return placeMasters
-            .filter { !$0.isArchived && !$0.isClosed && normalizedPlaceText($0.name).contains(query) }
+            .filter { !$0.isArchived && !$0.isClosed }
+            .filter {
+                normalizedPlaceText($0.name).contains(query)
+                    || normalizedPlaceText($0.reading).contains(query)
+                    || normalizedPlaceText($0.aliasesRaw).contains(query)
+            }
             .prefix(4)
             .map { $0 }
     }

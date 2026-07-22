@@ -1,7 +1,11 @@
 import MapKit
+import SwiftData
 import SwiftUI
 
 struct ExperienceBasicUnitEditor: View {
+    @Environment(\.modelContext) private var modelContext
+    @StateObject private var publicPlaceStore = PublicPlaceCatalogStore.shared
+    @State private var placeImportError = ""
     let template: CategoryRecordTemplate
     private let editableTitle: Binding<String>?
     private let editableSeriesName: Binding<String>?
@@ -113,9 +117,12 @@ struct ExperienceBasicUnitEditor: View {
     }
 
     var body: some View {
-        targetFields
-        Divider()
-        visitFields
+        Group {
+            targetFields
+            Divider()
+            visitFields
+        }
+        .task { await publicPlaceStore.prepare() }
     }
 
     @ViewBuilder
@@ -214,46 +221,87 @@ struct ExperienceBasicUnitEditor: View {
     @ViewBuilder
     private var placeSuggestionList: some View {
         let suggestions = usesPlaceSuggestions ? placeSuggestions : []
-        if !suggestions.isEmpty {
+        let publicSuggestions = usesPlaceSuggestions ? publicCatalogSuggestions : []
+        if !suggestions.isEmpty || !publicSuggestions.isEmpty || !placeImportError.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text("登録済みの場所")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                ForEach(suggestions) { place in
-                    Button {
-                        onSelectPlace(place)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "mappin.and.ellipse")
-                                .foregroundStyle(.secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 7) {
-                                    Text(place.name)
-                                        .foregroundStyle(.primary)
-                                    if place.isClosed {
-                                        Text("閉館")
-                                            .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption2))
-                                            .foregroundStyle(.red)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Color.red.opacity(0.1), in: Capsule())
+                if !suggestions.isEmpty {
+                    Text("登録済みの場所")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(suggestions) { place in
+                        Button {
+                            onSelectPlace(place)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "mappin.and.ellipse")
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 7) {
+                                        Text(place.name)
+                                            .foregroundStyle(.primary)
+                                        if place.isClosed {
+                                            closedBadge
+                                        }
+                                    }
+                                    if !place.address.isEmpty {
+                                        Text(place.address)
+                                            .font(FavorecoTypography.caption)
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
-                                if !place.address.isEmpty {
-                                    Text(place.address)
+                                Spacer()
+                                Image(systemName: "arrow.up.left")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if !publicSuggestions.isEmpty {
+                    Text("全国場所カタログ")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(publicSuggestions) { entry in
+                        Button {
+                            importPublicPlace(entry)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "building.2.crop.circle")
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 7) {
+                                        Text(entry.officialName).foregroundStyle(.primary)
+                                        if entry.isClosed { closedBadge }
+                                    }
+                                    Text(entry.address.isEmpty ? entry.prefecture : entry.address)
                                         .font(FavorecoTypography.caption)
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 }
+                                Spacer()
+                                Image(systemName: "plus.circle")
+                                    .foregroundStyle(.secondary)
                             }
-                            Spacer()
-                            Image(systemName: "arrow.up.left")
-                                .foregroundStyle(.secondary)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                }
+                if !placeImportError.isEmpty {
+                    Text(placeImportError)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.red)
                 }
             }
         }
+    }
+
+    private var closedBadge: some View {
+        Text("閉館")
+            .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption2))
+            .foregroundStyle(.red)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.red.opacity(0.1), in: Capsule())
     }
 
     private var placeSuggestions: [PlaceMaster] {
@@ -269,6 +317,30 @@ struct ExperienceBasicUnitEditor: View {
             }
             .prefix(4)
             .map { $0 }
+    }
+
+    private var publicCatalogSuggestions: [PublicPlaceCatalogEntry] {
+        let importedMarkers = Set(placeMasters.map(\.sourceSnapshotRaw))
+        return PublicPlaceCatalogSearch.suggestions(
+            for: venueName,
+            in: publicPlaceStore.entries,
+            excludingSourceMarkers: importedMarkers,
+            includesClosed: true
+        )
+    }
+
+    private func importPublicPlace(_ entry: PublicPlaceCatalogEntry) {
+        do {
+            let place = try PublicPlaceCatalogImporter.importEntry(
+                entry,
+                existingPlaces: placeMasters,
+                in: modelContext
+            )
+            placeImportError = ""
+            onSelectPlace(place)
+        } catch {
+            placeImportError = "場所マスターへ追加できませんでした。"
+        }
     }
 
     private var ratingSlider: some View {
