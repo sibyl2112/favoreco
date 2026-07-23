@@ -1,7 +1,7 @@
 import Foundation
 
 struct HomeSnapshot {
-    let visibleCategories: [RecordCategory]
+    let visibleCategoryCount: Int
     let visibleVisitCount: Int
     let recentVisits: [HomeVisitSnapshot]
     let interestedEvents: [HomeInterestedEventSnapshot]
@@ -9,8 +9,6 @@ struct HomeSnapshot {
     let heroItems: [HomeUpcomingItem]
     let upcomingItems: [HomeUpcomingItem]
     let upcomingItemCount: Int
-    let activeTicketAttempts: [TicketAttempt]
-    let expiringTicketAccounts: [TicketAccount]
     let currentYearVisitCount: Int
 
     @MainActor
@@ -20,8 +18,6 @@ struct HomeSnapshot {
         visits: [Visit],
         inboxItems: [InboxItem],
         plans: [Plan],
-        ticketAttempts: [TicketAttempt],
-        ticketAccounts: [TicketAccount],
         personLinks: [EventPersonLink],
         now: Date = Date(),
         calendar: Calendar = .current
@@ -53,11 +49,10 @@ struct HomeSnapshot {
             .prefix(5)
             .map(HomeUpcomingItem.visit)
         let heroItems = Array(upcomingItems.prefix(5)) + recentHeroVisits
-        let warningLimit = calendar.date(byAdding: .day, value: 45, to: now) ?? now
         let currentYear = calendar.component(.year, from: now)
 
         return HomeSnapshot(
-            visibleCategories: visibleCategories,
+            visibleCategoryCount: visibleCategories.count,
             visibleVisitCount: visibleVisits.count,
             recentVisits: visitSnapshots,
             interestedEvents: events
@@ -69,18 +64,6 @@ struct HomeSnapshot {
             heroItems: heroItems,
             upcomingItems: upcomingItems,
             upcomingItemCount: upcomingItems.count,
-            activeTicketAttempts: ticketAttempts.filter { attempt in
-                !attempt.isArchived
-                    && attempt.plan?.isArchived != true
-                    && !["lost", "attended", "skipped"].contains(attempt.statusKey)
-            },
-            expiringTicketAccounts: ticketAccounts.filter { account in
-                !account.isArchived
-                    && account.renewalNotify
-                    && account.expiryDate != Date.distantPast
-                    && account.expiryDate >= now
-                    && account.expiryDate <= warningLimit
-            },
             currentYearVisitCount: visibleVisits.filter {
                 calendar.component(.year, from: $0.visitedAt) == currentYear
             }.count
@@ -120,12 +103,12 @@ struct HomeVisitSnapshot: Identifiable {
     let eyecatchAspectRatio: Double
     let fillsEyecatchFrame: Bool
     let peopleSummary: String
-    let photo: HomePhotoSnapshot?
+    let thumbnailReference: ThumbnailReference?
 
     init(visit: Visit, peopleSummary: String) {
         let category = visit.event?.category
         let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
-        let photos = (visit.photos ?? []).filter { $0.mediaKind == "photo" && $0.hasStoredData }
+        let photos = (visit.photos ?? []).filter { $0.mediaKind == "photo" }
         let selectedPhoto: PhotoBlob?
         if !visit.eyecatchPath.isEmpty,
            let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
@@ -153,17 +136,7 @@ struct HomeVisitSnapshot: Identifiable {
         ).value
         fillsEyecatchFrame = EyecatchAspectRatio.usesEyecatchFill(for: category)
         self.peopleSummary = peopleSummary
-        photo = selectedPhoto.map { HomePhotoSnapshot(photo: $0) }
-    }
-}
-
-struct HomePhotoSnapshot {
-    let id: UUID
-    let data: Data
-
-    init(photo: PhotoBlob) {
-        id = photo.id
-        data = photo.data
+        thumbnailReference = selectedPhoto.map { .photo($0.id) }
     }
 }
 
@@ -177,7 +150,7 @@ struct HomePlanSnapshot: Identifiable {
     let startsAt: Date
     let venueName: String
     let organizerName: String
-    let posterData: Data?
+    let thumbnailReference: ThumbnailReference?
     let posterAspectRatio: Double
     let fillsPosterFrame: Bool
 
@@ -194,7 +167,7 @@ struct HomePlanSnapshot: Identifiable {
         organizerName = plan.organizerNameSnapshot.isEmpty
             ? plan.event?.organizerNameSnapshot ?? ""
             : plan.organizerNameSnapshot
-        posterData = plan.event?.eyecatchData
+        thumbnailReference = plan.event.map { .event($0.id) }
         posterAspectRatio = plan.event.map { EyecatchAspectRatio.resolved(for: $0).value }
             ?? EyecatchAspectRatio.recommended(for: category).value
         fillsPosterFrame = EyecatchAspectRatio.usesEyecatchFill(for: category)
@@ -209,7 +182,7 @@ struct HomeInterestedEventSnapshot: Identifiable {
     let categoryColorHex: String
     let hasOfficialURL: Bool
     let memo: String
-    let eyecatchData: Data?
+    let thumbnailReference: ThumbnailReference
     let eyecatchAspectRatio: Double
     let fillsEyecatchFrame: Bool
 
@@ -221,7 +194,7 @@ struct HomeInterestedEventSnapshot: Identifiable {
         categoryColorHex = event.category?.colorHex ?? "#147C88"
         hasOfficialURL = !event.officialURL.isEmpty
         memo = event.memo
-        eyecatchData = event.eyecatchData
+        thumbnailReference = .event(event.id)
         eyecatchAspectRatio = EyecatchAspectRatio.resolved(for: event).value
         fillsEyecatchFrame = EyecatchAspectRatio.usesEyecatchFill(for: event.category)
     }
@@ -236,7 +209,7 @@ struct HomeInboxItemSnapshot: Identifiable {
     let categoryIcon: String?
     let categoryColorHex: String
     let createdAt: Date
-    let eyecatchData: Data?
+    let thumbnailReference: ThumbnailReference
 
     init(item: InboxItem, categories: [RecordCategory]) {
         id = item.id
@@ -248,7 +221,7 @@ struct HomeInboxItemSnapshot: Identifiable {
         categoryIcon = category?.iconSymbol
         categoryColorHex = category?.colorHex ?? "#147C88"
         createdAt = item.createdAt
-        eyecatchData = item.eyecatchData
+        thumbnailReference = .inbox(item.id)
     }
 }
 

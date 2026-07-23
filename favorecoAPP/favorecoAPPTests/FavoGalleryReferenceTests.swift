@@ -61,7 +61,7 @@ final class FavoGalleryReferenceTests: XCTestCase {
         let envelope = try decoder.decode(FavorecoBackupEnvelope.self, from: data)
         let backupPhoto = try XCTUnwrap(envelope.favoGalleryPhotos?.first)
 
-        XCTAssertEqual(envelope.schemaVersion, 12)
+        XCTAssertEqual(envelope.schemaVersion, 13)
         XCTAssertEqual(backupPhoto.sourcePhotoID, models.sourcePhoto.id)
         let fallbackData = try XCTUnwrap(Data(base64Encoded: backupPhoto.dataBase64))
         XCTAssertEqual(fallbackData, models.sourcePhoto.data)

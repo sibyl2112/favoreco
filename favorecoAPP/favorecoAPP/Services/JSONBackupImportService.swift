@@ -83,6 +83,8 @@ enum JSONBackupImportService {
                 insertedCount += 1
             }
             model.displayName = item.displayName
+            model.entityKindKey = item.entityKindKey ?? model.entityKindKey
+            model.parentOrganizationIDRaw = item.parentOrganizationIDRaw ?? model.parentOrganizationIDRaw
             model.reading = item.reading
             model.aliasesRaw = item.aliasesRaw
             model.roleTagsRaw = item.roleTagsRaw

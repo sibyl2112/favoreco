@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-enum CollectibleKind: String, CaseIterable, Identifiable {
+nonisolated enum CollectibleKind: String, CaseIterable, Identifiable {
     case capsuleToy = "capsule_toy"
     case acrylicKeychain = "acrylic_keychain"
     case canBadge = "can_badge"
@@ -23,7 +23,7 @@ enum CollectibleKind: String, CaseIterable, Identifiable {
     }
 }
 
-enum CollectibleTransactionKind: String, CaseIterable, Identifiable {
+nonisolated enum CollectibleTransactionKind: String, CaseIterable, Identifiable {
     case capsule = "capsule"
     case purchase = "purchase"
     case tradeReceived = "trade_received"

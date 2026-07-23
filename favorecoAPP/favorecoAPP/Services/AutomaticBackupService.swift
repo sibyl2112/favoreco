@@ -38,63 +38,204 @@ enum AutomaticBackupError: LocalizedError {
     }
 }
 
-enum AutomaticBackupService {
-    nonisolated static let retentionCount = 5
-    nonisolated static let interval: TimeInterval = 24 * 60 * 60
+enum AutomaticBackupRunMode: Sendable {
+    case automatic
+    case manual
+}
 
-    nonisolated static func retentionCount(forPhotoBytes byteCount: Int64) -> Int {
-        if byteCount >= 1_000_000_000 { return 2 }
-        if byteCount >= 500_000_000 { return 3 }
-        return retentionCount
-    }
+struct AutomaticBackupRequest: Sendable {
+    let mode: AutomaticBackupRunMode
+    let now: Date
+    let isEnabled: Bool
+    let canUseSyncFeatures: Bool
+    let usesICloudDrive: Bool
+    let lastCreatedAt: Date?
 
     @MainActor
-    static func createIfDue(in context: ModelContext, now: Date = Date()) throws -> URL? {
+    static func automatic(canUseSyncFeatures: Bool, now: Date = Date()) -> Self {
         let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: AppStorageKeys.automaticBackupEnabled),
-              EntitlementAccess.canUseSyncFeatures else { return nil }
-        if let lastCreatedAt = defaults.object(forKey: AppStorageKeys.automaticBackupLastCreatedAt) as? Date,
-           now.timeIntervalSince(lastCreatedAt) < interval {
-            return nil
-        }
-        return try create(in: context, now: now)
+        return Self(
+            mode: .automatic,
+            now: now,
+            isEnabled: defaults.bool(forKey: AppStorageKeys.automaticBackupEnabled),
+            canUseSyncFeatures: canUseSyncFeatures,
+            usesICloudDrive: defaults.bool(forKey: AppStorageKeys.automaticBackupUsesICloudDrive),
+            lastCreatedAt: defaults.object(forKey: AppStorageKeys.automaticBackupLastCreatedAt) as? Date
+        )
     }
 
     @MainActor
-    @discardableResult
-    static func create(in context: ModelContext, now: Date = Date()) throws -> URL? {
-        let snapshotContext = ModelContext(context.container)
-        snapshotContext.autosaveEnabled = false
-        let categories = try snapshotContext.fetch(FetchDescriptor<RecordCategory>())
-        let events = try snapshotContext.fetch(FetchDescriptor<ExperienceEvent>())
-        let visits = try snapshotContext.fetch(FetchDescriptor<Visit>())
-        let inboxItems = try snapshotContext.fetch(FetchDescriptor<InboxItem>())
-        let photos = try snapshotContext.fetch(FetchDescriptor<PhotoBlob>())
-        let socialAccounts = try snapshotContext.fetch(FetchDescriptor<SocialAccount>())
-        let people = try snapshotContext.fetch(FetchDescriptor<PersonMaster>())
-        let companions = try snapshotContext.fetch(FetchDescriptor<CompanionMaster>())
-        let favoriteProfiles = try snapshotContext.fetch(FetchDescriptor<FavoriteProfile>())
-        let favoGalleryPhotos = try snapshotContext.fetch(FetchDescriptor<FavoGalleryPhoto>())
-        let favoAnniversaries = try snapshotContext.fetch(FetchDescriptor<FavoAnniversary>())
-        let favoPins = try snapshotContext.fetch(FetchDescriptor<FavoPin>())
-        let personLinks = try snapshotContext.fetch(FetchDescriptor<EventPersonLink>())
-        let places = try snapshotContext.fetch(FetchDescriptor<PlaceMaster>())
-        let plans = try snapshotContext.fetch(FetchDescriptor<Plan>())
-        let ticketAccounts = try snapshotContext.fetch(FetchDescriptor<TicketAccount>())
-        let ticketAttempts = try snapshotContext.fetch(FetchDescriptor<TicketAttempt>())
+    static func manual(usesICloudDrive: Bool, now: Date = Date()) -> Self {
+        Self(
+            mode: .manual,
+            now: now,
+            isEnabled: true,
+            canUseSyncFeatures: true,
+            usesICloudDrive: usesICloudDrive,
+            lastCreatedAt: nil
+        )
+    }
+}
+
+enum AutomaticBackupRunStatus: String, Sendable, Equatable {
+    case succeeded
+    case succeededWithWarning
+    case failed
+    case noData
+    case skippedDisabled
+    case skippedNotDue
+    case alreadyRunning
+
+    nonisolated var displayName: String {
+        switch self {
+        case .succeeded: return "成功"
+        case .succeededWithWarning: return "一部失敗"
+        case .failed: return "失敗"
+        case .noData: return "対象データなし"
+        case .skippedDisabled: return "無効"
+        case .skippedNotDue: return "作成時刻前"
+        case .alreadyRunning: return "処理中"
+        }
+    }
+}
+
+struct AutomaticBackupRunResult: Sendable {
+    let status: AutomaticBackupRunStatus
+    let attemptedAt: Date
+    let message: String
+    let localURL: URL?
+    let iCloudCreatedAt: Date?
+    let iCloudError: String?
+}
+
+enum AutomaticBackupPolicy {
+    nonisolated static func skipStatus(
+        for request: AutomaticBackupRequest,
+        interval: TimeInterval = AutomaticBackupService.interval
+    ) -> AutomaticBackupRunStatus? {
+        guard case .automatic = request.mode else { return nil }
+        guard request.isEnabled, request.canUseSyncFeatures else { return .skippedDisabled }
+        if let lastCreatedAt = request.lastCreatedAt,
+           request.now.timeIntervalSince(lastCreatedAt) < interval {
+            return .skippedNotDue
+        }
+        return nil
+    }
+}
+
+actor AutomaticBackupCoordinator {
+    static let shared = AutomaticBackupCoordinator()
+
+    private var isRunning = false
+
+    func run(
+        request: AutomaticBackupRequest,
+        modelContainer: ModelContainer
+    ) async -> AutomaticBackupRunResult {
+        if let status = AutomaticBackupPolicy.skipStatus(for: request) {
+            return AutomaticBackupRunResult(
+                status: status,
+                attemptedAt: request.now,
+                message: status.displayName,
+                localURL: nil,
+                iCloudCreatedAt: nil,
+                iCloudError: nil
+            )
+        }
+        guard !isRunning else {
+            return AutomaticBackupRunResult(
+                status: .alreadyRunning,
+                attemptedAt: request.now,
+                message: "別のバックアップ処理が進行中です。",
+                localURL: nil,
+                iCloudCreatedAt: nil,
+                iCloudError: nil
+            )
+        }
+
+        isRunning = true
+        defer { isRunning = false }
+
+        let result: AutomaticBackupRunResult
+        do {
+            let worker = AutomaticBackupModelActor(modelContainer: modelContainer)
+            result = try await worker.create(request: request)
+        } catch {
+            result = AutomaticBackupRunResult(
+                status: .failed,
+                attemptedAt: request.now,
+                message: error.localizedDescription,
+                localURL: nil,
+                iCloudCreatedAt: nil,
+                iCloudError: nil
+            )
+        }
+        persist(result)
+        return result
+    }
+
+    private func persist(_ result: AutomaticBackupRunResult) {
+        let defaults = UserDefaults.standard
+        defaults.set(result.attemptedAt, forKey: AppStorageKeys.automaticBackupLastAttemptAt)
+        defaults.set(result.status.rawValue, forKey: AppStorageKeys.automaticBackupLastResultStatus)
+        defaults.set(result.message, forKey: AppStorageKeys.automaticBackupLastResultMessage)
+        defaults.set(result.localURL?.path ?? "", forKey: AppStorageKeys.automaticBackupLastResultPath)
+        if result.localURL != nil {
+            defaults.set(result.attemptedAt, forKey: AppStorageKeys.automaticBackupLastCreatedAt)
+        }
+        if let iCloudCreatedAt = result.iCloudCreatedAt {
+            defaults.set(iCloudCreatedAt, forKey: AppStorageKeys.automaticBackupLastICloudCreatedAt)
+        }
+        defaults.set(result.iCloudError ?? "", forKey: AppStorageKeys.automaticBackupICloudError)
+    }
+}
+
+@ModelActor
+actor AutomaticBackupModelActor {
+    func create(request: AutomaticBackupRequest) throws -> AutomaticBackupRunResult {
+        modelContext.autosaveEnabled = false
+        let categories = try modelContext.fetch(FetchDescriptor<RecordCategory>())
+        let events = try modelContext.fetch(FetchDescriptor<ExperienceEvent>())
+        let visits = try modelContext.fetch(FetchDescriptor<Visit>())
+        let inboxItems = try modelContext.fetch(FetchDescriptor<InboxItem>())
+        let photos = try modelContext.fetch(FetchDescriptor<PhotoBlob>())
+        let socialAccounts = try modelContext.fetch(FetchDescriptor<SocialAccount>())
+        let people = try modelContext.fetch(FetchDescriptor<PersonMaster>())
+        let companions = try modelContext.fetch(FetchDescriptor<CompanionMaster>())
+        let favoriteProfiles = try modelContext.fetch(FetchDescriptor<FavoriteProfile>())
+        let favoGalleryPhotos = try modelContext.fetch(FetchDescriptor<FavoGalleryPhoto>())
+        let favoAnniversaries = try modelContext.fetch(FetchDescriptor<FavoAnniversary>())
+        let favoPins = try modelContext.fetch(FetchDescriptor<FavoPin>())
+        let personLinks = try modelContext.fetch(FetchDescriptor<EventPersonLink>())
+        let places = try modelContext.fetch(FetchDescriptor<PlaceMaster>())
+        let plans = try modelContext.fetch(FetchDescriptor<Plan>())
+        let ticketAccounts = try modelContext.fetch(FetchDescriptor<TicketAccount>())
+        let ticketAttempts = try modelContext.fetch(FetchDescriptor<TicketAttempt>())
         let primaryContentCount = categories.filter { !$0.isBuiltIn }.count
             + events.count + visits.count + inboxItems.count + photos.count
-        let masterContentCount = socialAccounts.count + people.count + companions.count
-            + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count
+        let profileContentCount = socialAccounts.count + people.count + companions.count
+            + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count
+        let linkedContentCount = favoPins.count + personLinks.count + places.count
         let planningContentCount = plans.count + ticketAccounts.count + ticketAttempts.count
-        let userContentCount = primaryContentCount + masterContentCount + planningContentCount
-        guard userContentCount > 0 else { return nil }
+        let userContentCount = primaryContentCount
+            + profileContentCount
+            + linkedContentCount
+            + planningContentCount
+        guard userContentCount > 0 else {
+            return AutomaticBackupRunResult(
+                status: .noData,
+                attemptedAt: request.now,
+                message: "保存できるデータがまだありません。",
+                localURL: nil,
+                iCloudCreatedAt: nil,
+                iCloudError: nil
+            )
+        }
 
         let totalPhotoBytes = photos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
             + favoGalleryPhotos.reduce(Int64(0)) { $0 + Int64(max($1.byteCount, 0)) }
-        try ensureAvailableCapacity(forPhotoBytes: totalPhotoBytes)
-        let retentionLimit = retentionCount(forPhotoBytes: totalPhotoBytes)
-
+        try AutomaticBackupService.ensureAvailableCapacity(forPhotoBytes: totalPhotoBytes)
+        let retentionLimit = AutomaticBackupService.retentionCount(forPhotoBytes: totalPhotoBytes)
         let json = try JSONBackupExportService.makeBackupJSON(
             categories: categories,
             events: events,
@@ -117,19 +258,41 @@ enum AutomaticBackupService {
             isFullBackupManifest: true
         )
         let temporaryURL = try FullBackupService.makePackage(json: json, photos: photos)
-        defer { try? FileManager.default.removeItem(at: temporaryURL) }
-        let directory = try backupDirectory(for: .local)
+        defer { AutomaticBackupService.removeTemporaryPackageIfPresent(at: temporaryURL) }
+        let directory = try AutomaticBackupService.backupDirectory(for: .local)
         let destination = directory
-            .appendingPathComponent(filename(for: now))
+            .appendingPathComponent(AutomaticBackupService.filename(for: request.now))
             .appendingPathExtension("favorecobackup")
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
         }
         try FileManager.default.moveItem(at: temporaryURL, to: destination)
-        UserDefaults.standard.set(now, forKey: AppStorageKeys.automaticBackupLastCreatedAt)
-        try pruneOldSnapshots(in: .local, keeping: retentionLimit)
-        copyToICloudDriveIfEnabled(localURL: destination, createdAt: now, retentionLimit: retentionLimit)
-        return destination
+        try AutomaticBackupService.pruneOldSnapshots(in: .local, keeping: retentionLimit)
+
+        let iCloudError = AutomaticBackupService.copyToICloudDrive(
+            localURL: destination,
+            retentionLimit: retentionLimit,
+            isEnabled: request.usesICloudDrive
+        )
+        return AutomaticBackupRunResult(
+            status: iCloudError == nil ? .succeeded : .succeededWithWarning,
+            attemptedAt: request.now,
+            message: iCloudError ?? "バックアップを作成しました。",
+            localURL: destination,
+            iCloudCreatedAt: request.usesICloudDrive && iCloudError == nil ? request.now : nil,
+            iCloudError: iCloudError
+        )
+    }
+}
+
+enum AutomaticBackupService {
+    nonisolated static let retentionCount = 5
+    nonisolated static let interval: TimeInterval = 24 * 60 * 60
+
+    nonisolated static func retentionCount(forPhotoBytes byteCount: Int64) -> Int {
+        if byteCount >= 1_000_000_000 { return 2 }
+        if byteCount >= 500_000_000 { return 3 }
+        return retentionCount
     }
 
     nonisolated static func snapshots(in storage: AutomaticBackupStorage) throws -> [AutomaticBackupSnapshot] {
@@ -160,7 +323,7 @@ enum AutomaticBackupService {
         FileManager.default.url(forUbiquityContainerIdentifier: nil) != nil
     }
 
-    nonisolated private static func backupDirectory(for storage: AutomaticBackupStorage) throws -> URL {
+    nonisolated static func backupDirectory(for storage: AutomaticBackupStorage) throws -> URL {
         let directory: URL
         switch storage {
         case .local:
@@ -184,18 +347,18 @@ enum AutomaticBackupService {
         return directory
     }
 
-    nonisolated private static func pruneOldSnapshots(in storage: AutomaticBackupStorage, keeping retentionLimit: Int) throws {
+    nonisolated static func pruneOldSnapshots(in storage: AutomaticBackupStorage, keeping retentionLimit: Int) throws {
         for snapshot in try snapshots(in: storage).dropFirst(retentionLimit) {
-            try? FileManager.default.removeItem(at: snapshot.url)
+            try FileManager.default.removeItem(at: snapshot.url)
         }
     }
 
-    private static func copyToICloudDriveIfEnabled(localURL: URL, createdAt: Date, retentionLimit: Int) {
-        let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: AppStorageKeys.automaticBackupUsesICloudDrive) else {
-            defaults.set("", forKey: AppStorageKeys.automaticBackupICloudError)
-            return
-        }
+    nonisolated static func copyToICloudDrive(
+        localURL: URL,
+        retentionLimit: Int,
+        isEnabled: Bool
+    ) -> String? {
+        guard isEnabled else { return nil }
         do {
             let directory = try backupDirectory(for: .iCloudDrive)
             let destination = directory.appendingPathComponent(localURL.lastPathComponent)
@@ -203,22 +366,21 @@ enum AutomaticBackupService {
                 try FileManager.default.removeItem(at: destination)
             }
             try FileManager.default.copyItem(at: localURL, to: destination)
-            defaults.set(createdAt, forKey: AppStorageKeys.automaticBackupLastICloudCreatedAt)
-            defaults.set("", forKey: AppStorageKeys.automaticBackupICloudError)
             try pruneOldSnapshots(in: .iCloudDrive, keeping: retentionLimit)
+            return nil
         } catch {
-            defaults.set(error.localizedDescription, forKey: AppStorageKeys.automaticBackupICloudError)
+            return error.localizedDescription
         }
     }
 
-    nonisolated private static func filename(for date: Date) -> String {
+    nonisolated static func filename(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return "favoreco-auto-\(formatter.string(from: date))"
     }
 
-    nonisolated private static func ensureAvailableCapacity(forPhotoBytes photoBytes: Int64) throws {
+    nonisolated static func ensureAvailableCapacity(forPhotoBytes photoBytes: Int64) throws {
         guard photoBytes > 0 else { return }
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory,
@@ -247,5 +409,14 @@ enum AutomaticBackupService {
             total += Int64(values.fileSize ?? 0)
         }
         return total
+    }
+
+    nonisolated static func removeTemporaryPackageIfPresent(at url: URL) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            assertionFailure("Failed to remove temporary backup package: \(error)")
+        }
     }
 }

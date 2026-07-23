@@ -113,6 +113,8 @@ final class SocialAccount {
 final class PersonMaster {
     var id: UUID = UUID()
     var displayName: String = ""
+    var entityKindKey: String = ""
+    var parentOrganizationIDRaw: String = ""
     var reading: String = ""
     var aliasesRaw: String = ""
     var roleTagsRaw: String = ""
@@ -142,6 +144,8 @@ final class PersonMaster {
     init(
         id: UUID = UUID(),
         displayName: String = "",
+        entityKindKey: String = "",
+        parentOrganizationIDRaw: String = "",
         reading: String = "",
         aliasesRaw: String = "",
         roleTagsRaw: String = "",
@@ -161,6 +165,8 @@ final class PersonMaster {
     ) {
         self.id = id
         self.displayName = displayName
+        self.entityKindKey = entityKindKey
+        self.parentOrganizationIDRaw = parentOrganizationIDRaw
         self.reading = reading
         self.aliasesRaw = aliasesRaw
         self.roleTagsRaw = roleTagsRaw
@@ -508,7 +514,7 @@ final class EventPersonLink {
     }
 }
 
-struct PlacePilgrimageMembership: Codable, Hashable, Identifiable {
+nonisolated struct PlacePilgrimageMembership: Codable, Hashable, Identifiable {
     var id: UUID = UUID()
     var pilgrimageKey: String = ""
     var pilgrimageName: String = ""

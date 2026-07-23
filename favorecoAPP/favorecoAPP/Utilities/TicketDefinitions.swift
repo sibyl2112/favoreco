@@ -73,7 +73,7 @@ struct TicketFlowDefinition: Identifiable, Hashable {
     }
 }
 
-struct TicketStatusDefinition: Identifiable, Hashable {
+nonisolated struct TicketStatusDefinition: Identifiable, Hashable {
     let key: String
     let name: String
     let attentionLevel: String

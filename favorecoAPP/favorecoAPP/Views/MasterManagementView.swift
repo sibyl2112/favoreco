@@ -16,10 +16,7 @@ struct PersonMasterManagementView: View {
         let query = normalizedMasterText(searchText)
         return active.filter { person in
             let matchesSearch = query.isEmpty
-                || normalizedMasterText(person.displayName).contains(query)
-                || normalizedMasterText(person.reading).contains(query)
-                || person.aliasesRaw.components(separatedBy: CharacterSet(charactersIn: ",、\n"))
-                    .contains { normalizedMasterText($0).contains(query) }
+                || PersonMasterSuggestion.matches(person, query: searchText)
                 || PersonActivityTags.displayTitles(from: person.roleTagsRaw)
                     .contains { normalizedMasterText($0).contains(query) }
             let matchesFavorite = !favoritesOnly || person.favoriteProfile?.isFavorite == true
@@ -81,7 +78,10 @@ struct PersonMasterManagementView: View {
 private struct PersonMasterCreateView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
     @State private var displayName = ""
+    @State private var entityKind = PersonEntityKind.person
+    @State private var parentOrganizationID: UUID?
     @State private var reading = ""
     @State private var roleTagsRaw = ""
     @State private var aliasesRaw = ""
@@ -98,6 +98,14 @@ private struct PersonMasterCreateView: View {
         displayName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var suggestions: [PersonMaster] {
+        PersonMasterSuggestion.matching(people, query: trimmedName)
+    }
+
+    private var hasExactMatch: Bool {
+        PersonMasterSuggestion.exactMatch(in: people, query: trimmedName) != nil
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -111,6 +119,40 @@ private struct PersonMasterCreateView: View {
                     )
                     TextField("表示名", text: $displayName)
                     TextField("よみ（任意）", text: $reading)
+                    Picker("区分", selection: $entityKind) {
+                        ForEach(PersonEntityKind.allCases) { kind in
+                            Text(kind.displayName).tag(kind)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    if entityKind == .organization {
+                        Picker("所属する上位団体", selection: $parentOrganizationID) {
+                            Text("なし").tag(UUID?.none)
+                            ForEach(people.filter { !$0.isArchived && $0.isOrganization }) { organization in
+                                Text(organization.displayName).tag(Optional(organization.id))
+                            }
+                        }
+                    }
+                }
+
+                if !suggestions.isEmpty {
+                    Section {
+                        ForEach(suggestions) { person in
+                            NavigationLink {
+                                PersonMasterMergeView(person: person)
+                            } label: {
+                                MasterCandidateRow(
+                                    title: person.displayName,
+                                    subtitle: PersonMasterSuggestion.subtitle(for: person),
+                                    countLabel: "\(person.eventLinks?.count ?? 0)件の紐付け"
+                                )
+                            }
+                        }
+                    } header: {
+                        Text("登録済み候補")
+                    } footer: {
+                        Text("名前・よみ・別名が一致する人物は、新規作成せず登録済み候補を確認してください。")
+                    }
                 }
 
                 PersonActivityTagEditor(rawValue: $roleTagsRaw)
@@ -143,7 +185,7 @@ private struct PersonMasterCreateView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { save() }
-                        .disabled(trimmedName.isEmpty)
+                        .disabled(trimmedName.isEmpty || hasExactMatch)
                 }
             }
             .task(id: selectedPhoto) {
@@ -153,9 +195,15 @@ private struct PersonMasterCreateView: View {
     }
 
     private func save() {
+        if let existing = PersonMasterSuggestion.exactMatch(in: people, query: trimmedName) {
+            errorMessage = "「\(existing.displayName)」が登録済みです。候補から開いてください。"
+            return
+        }
         let now = Date()
         let person = PersonMaster(
             displayName: trimmedName,
+            entityKindKey: entityKind.rawValue,
+            parentOrganizationIDRaw: entityKind == .organization ? parentOrganizationID?.uuidString ?? "" : "",
             reading: reading.trimmingCharacters(in: .whitespacesAndNewlines),
             aliasesRaw: aliasesRaw.trimmingCharacters(in: .whitespacesAndNewlines),
             roleTagsRaw: roleTagsRaw.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -380,8 +428,33 @@ private func placeMasterSubtitle(_ place: PlaceMaster) -> String {
     return categories.isEmpty ? location : "\(categories)｜\(location)"
 }
 
+struct PersonMasterEditDestination: View {
+    @Query private var people: [PersonMaster]
+    let showsCancelButton: Bool
+
+    init(personID: UUID, showsCancelButton: Bool = false) {
+        _people = Query(filter: #Predicate<PersonMaster> { person in
+            person.id == personID
+        })
+        self.showsCancelButton = showsCancelButton
+    }
+
+    var body: some View {
+        if let person = people.first {
+            PersonMasterMergeView(person: person, showsCancelButton: showsCancelButton)
+        } else {
+            ContentUnavailableView(
+                "人物が見つかりません",
+                systemImage: "person.crop.circle.badge.questionmark",
+                description: Text("人物マスターが削除または統合された可能性があります。")
+            )
+        }
+    }
+}
+
 private struct PersonMasterMergeView: View {
     let person: PersonMaster
+    let showsCancelButton: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
@@ -395,8 +468,9 @@ private struct PersonMasterMergeView: View {
     @State private var removesStoredPhoto = false
     @State private var photoErrorMessage = ""
 
-    init(person: PersonMaster) {
+    init(person: PersonMaster, showsCancelButton: Bool = false) {
         self.person = person
+        self.showsCancelButton = showsCancelButton
         _draft = State(initialValue: PersonMasterDraft(person: person))
         _favoriteDraft = State(initialValue: FavoriteProfileDraft(profile: person.favoriteProfile))
     }
@@ -418,6 +492,20 @@ private struct PersonMasterMergeView: View {
                 TextField("表示名", text: $draft.displayName)
                 TextField("よみ（任意）", text: $draft.reading)
                 TextField("別名・愛称（カンマ区切り）", text: $draft.aliasesRaw)
+                Picker("区分", selection: $draft.entityKind) {
+                    ForEach(PersonEntityKind.allCases) { kind in
+                        Text(kind.displayName).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+                if draft.entityKind == .organization {
+                    Picker("所属する上位団体", selection: $draft.parentOrganizationID) {
+                        Text("なし").tag(UUID?.none)
+                        ForEach(eligibleParentOrganizations(for: person.id, among: people)) { organization in
+                            Text(organization.displayName).tag(Optional(organization.id))
+                        }
+                    }
+                }
                 LabeledContent("紐付け", value: "\(person.eventLinks?.count ?? 0)件")
             }
 
@@ -495,6 +583,11 @@ private struct PersonMasterMergeView: View {
             await loadSelectedPersonPhoto()
         }
         .toolbar {
+            if showsCancelButton {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存") { save() }
                     .disabled(!draft.canSave)
@@ -529,6 +622,8 @@ private struct PersonMasterMergeView: View {
     private func save() {
         let previousImagePath = person.imagePath
         person.displayName = draft.trimmedDisplayName
+        person.entityKind = draft.entityKind
+        person.parentOrganizationID = draft.entityKind == .organization ? draft.parentOrganizationID : nil
         person.reading = draft.trimmedReading
         person.aliasesRaw = draft.trimmedAliasesRaw
         person.roleTagsRaw = draft.trimmedRoleTagsRaw
@@ -997,6 +1092,7 @@ private struct PersonPhotoEditor: View {
     }
 
     var body: some View {
+        let photoActionTitle = hasPhoto ? "写真を変更" : "写真を選ぶ"
         HStack(spacing: 16) {
             Group {
                 if let selectedData, let image = UIImage(data: selectedData) {
@@ -1015,7 +1111,7 @@ private struct PersonPhotoEditor: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                    Label(hasPhoto ? "写真を変更" : "写真を選ぶ", systemImage: "photo")
+                    Label(photoActionTitle, systemImage: "photo")
                 }
                 if hasPhoto {
                     Button("写真を削除", role: .destructive) {
@@ -1109,6 +1205,8 @@ enum PersonImageStore {
 
 private struct PersonMasterDraft {
     var displayName: String
+    var entityKind: PersonEntityKind
+    var parentOrganizationID: UUID?
     var reading: String
     var aliasesRaw: String
     var roleTagsRaw: String
@@ -1118,6 +1216,8 @@ private struct PersonMasterDraft {
 
     init(person: PersonMaster) {
         displayName = person.displayName
+        entityKind = person.entityKind
+        parentOrganizationID = person.parentOrganizationID
         reading = person.reading
         aliasesRaw = person.aliasesRaw
         roleTagsRaw = person.roleTagsRaw

@@ -7,6 +7,7 @@ enum MasterMergeService {
         guard source.id != destination.id else { return }
         let now = Date()
         let destinationLinks = Array(destination.eventLinks ?? [])
+        let allPeople = try context.fetch(FetchDescriptor<PersonMaster>())
 
         for link in Array(source.eventLinks ?? []) {
             let isDuplicate = destinationLinks.contains { existing in
@@ -23,6 +24,18 @@ enum MasterMergeService {
         }
 
         destination.reading = preferred(destination.reading, fallback: source.reading)
+        if destination.entityKindKey.isEmpty || source.isOrganization {
+            destination.entityKind = source.entityKind
+        }
+        if destination.parentOrganizationID == nil,
+           let sourceParentID = source.parentOrganizationID,
+           sourceParentID != destination.id {
+            destination.parentOrganizationID = sourceParentID
+        }
+        for person in allPeople where person.id != destination.id && person.parentOrganizationID == source.id {
+            person.parentOrganizationID = destination.id
+            person.updatedAt = now
+        }
         destination.aliasesRaw = mergedTerms(destination.aliasesRaw, source.aliasesRaw, source.displayName)
         destination.roleTagsRaw = mergedTerms(destination.roleTagsRaw, source.roleTagsRaw)
         destination.memo = preferred(destination.memo, fallback: source.memo)

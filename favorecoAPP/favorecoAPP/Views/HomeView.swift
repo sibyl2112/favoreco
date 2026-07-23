@@ -41,8 +41,21 @@ struct HomeView: View {
         HomeCategoryLayoutMode(rawValue: categoryLayoutModeRaw) ?? .horizontal
     }
 
-    private func nextActionItems(for snapshot: HomeSnapshot, now: Date = Date()) -> [HomeAttentionItem] {
-        let ticketItems = snapshot.activeTicketAttempts.compactMap { attempt in
+    private func nextActionItems(now: Date = Date()) -> [HomeAttentionItem] {
+        let activeAttempts = ticketAttempts.filter { attempt in
+            !attempt.isArchived
+                && attempt.plan?.isArchived != true
+                && !["lost", "attended", "skipped"].contains(attempt.statusKey)
+        }
+        let warningLimit = Calendar.current.date(byAdding: .day, value: 45, to: now) ?? now
+        let expiringAccounts = ticketAccounts.filter { account in
+            !account.isArchived
+                && account.renewalNotify
+                && account.expiryDate != Date.distantPast
+                && account.expiryDate >= now
+                && account.expiryDate <= warningLimit
+        }
+        let ticketItems = activeAttempts.compactMap { attempt in
             nextActionItem(for: attempt, now: now)
         }
         let preparationItems = plans
@@ -52,7 +65,7 @@ struct HomeView: View {
             }
         let items = ticketItems
             + preparationItems
-            + membershipAttentionItems(for: snapshot.expiringTicketAccounts)
+            + membershipAttentionItems(for: expiringAccounts)
 
         return items.sorted { lhs, rhs in
             if lhs.isOverdue != rhs.isOverdue {
@@ -136,12 +149,11 @@ struct HomeView: View {
             visits: visits,
             inboxItems: inboxItems,
             plans: plans,
-            ticketAttempts: ticketAttempts,
-            ticketAccounts: ticketAccounts,
             personLinks: personLinks
         )
+        let visibleCategories = categories.filter { !$0.isArchived }
         let ticketProgressItems = CategoryTicketProgressItem.activeItems(in: plans)
-        let homeNextActionItems = nextActionItems(for: snapshot)
+        let homeNextActionItems = nextActionItems()
         let hasSampleData = events.contains { event in
             event.officialURL.starts(with: SampleDataSeeder.sampleURLPrefix)
                 || event.officialURL.starts(with: "https://example.com/favoreco/")
@@ -154,8 +166,8 @@ struct HomeView: View {
                     .padding(.top, -4)
                     .padding(.bottom, 6)
 
-                if showsCategories, !snapshot.visibleCategories.isEmpty {
-                    GenreNavigationStrip(categories: snapshot.visibleCategories)
+                if showsCategories, !visibleCategories.isEmpty {
+                    GenreNavigationStrip(categories: visibleCategories)
                         .padding(.horizontal, 18)
                 }
 
@@ -163,7 +175,7 @@ struct HomeView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        homeHeroSection(items: snapshot.heroItems)
+                        HomeHeroSection(items: snapshot.heroItems, selectedIndex: $selectedUpcomingPlanIndex)
 
                         if hasSampleData {
                             HomeSampleDataNotice {
@@ -172,29 +184,36 @@ struct HomeView: View {
                         }
 
                         GenreSwipeContainer(
-                            canMoveBackward: !snapshot.visibleCategories.isEmpty,
-                            canMoveForward: !snapshot.visibleCategories.isEmpty,
+                            canMoveBackward: !visibleCategories.isEmpty,
+                            canMoveForward: !visibleCategories.isEmpty,
                             onMove: { direction in
                                 let destination = direction > 0
-                                    ? snapshot.visibleCategories.first
-                                    : snapshot.visibleCategories.last
+                                    ? visibleCategories.first
+                                    : visibleCategories.last
                                 swipeDestinationCategoryID = destination?.id
                             }
                         ) {
                             VStack(alignment: .leading, spacing: 24) {
                                 if showsAttention {
-                                    nextActionSection(items: homeNextActionItems)
+                                    HomeAttentionSection(items: homeNextActionItems) {
+                                        isShowingNextActionList = true
+                                    }
                                     ticketScheduleSection(items: ticketProgressItems)
                                 }
 
                                 if showsInbox {
-                                    inboxSection(
+                                    HomeInterestingSection(
                                         interestedEvents: snapshot.interestedEvents,
-                                        unresolvedInboxItems: snapshot.unresolvedInboxItems
+                                        unresolvedInboxItems: snapshot.unresolvedInboxItems,
+                                        isExpanded: $isInterestingExpanded,
+                                        layoutMode: $interestLayoutMode
                                     )
                                 }
 
-                                homeComingUpSection(items: snapshot.upcomingItems)
+                                HomeComingUpSection(
+                                    items: snapshot.upcomingItems,
+                                    isShowingAll: $isShowingAllHomeUpcoming
+                                )
 
                                 if showsExperienceGallery && !snapshot.recentVisits.isEmpty {
                                     experienceGallerySection(visits: snapshot.recentVisits)
@@ -257,9 +276,8 @@ struct HomeView: View {
                     }
                 )
             ) {
-                if let categoryID = swipeDestinationCategoryID,
-                   let category = snapshot.visibleCategories.first(where: { $0.id == categoryID }) {
-                    CategoryTopView(category: category)
+                if let categoryID = swipeDestinationCategoryID {
+                    HomeCategoryDestination(categoryID: categoryID)
                 }
             }
             .task {
@@ -290,90 +308,6 @@ struct HomeView: View {
             )
         }
         .accessibilityElement(children: .contain)
-    }
-
-    private func homeHeroSection(items: [HomeUpcomingItem]) -> some View {
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("PICK UP")
-                .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
-                .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
-
-            switch items.count {
-            case 0:
-                Button {
-                    NotificationCenter.default.post(name: .openFavorecoPlanCreation, object: nil)
-                } label: {
-                    HomeUpcomingEmptyCard()
-                }
-                .buttonStyle(.plain)
-
-            case 1:
-                upcomingItemLink(items[0])
-
-            default:
-                GeometryReader { geometry in
-                    let cardWidth = max(0, geometry.size.width)
-
-                    ScrollView(.horizontal) {
-                        HStack(alignment: .top, spacing: 0) {
-                            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                                upcomingItemLink(item)
-                                    .frame(width: cardWidth, alignment: .top)
-                                    .id(index)
-                            }
-                        }
-                        .scrollTargetLayout()
-                    }
-                    .scrollIndicators(.hidden)
-                    .scrollTargetBehavior(.paging)
-                    .scrollPosition(id: selectedUpcomingPlanPosition)
-                }
-                .frame(height: HomeUpcomingHeroMetrics.cardHeight)
-
-                HStack(spacing: 7) {
-                    ForEach(items.indices, id: \.self) { index in
-                        Circle()
-                            .fill(
-                                index == selectedUpcomingPlanIndex
-                                    ? themePalette.globalTint
-                                    : Color.secondary.opacity(0.28)
-                            )
-                            .frame(width: 7, height: 7)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("ピックアップ \(min(selectedUpcomingPlanIndex + 1, items.count))件目、全\(items.count)件")
-            }
-        }
-        .onChange(of: items.count) { _, count in
-            if count == 0 {
-                selectedUpcomingPlanIndex = 0
-            } else if selectedUpcomingPlanIndex >= count {
-                selectedUpcomingPlanIndex = count - 1
-            }
-        }
-    }
-
-    private var selectedUpcomingPlanPosition: Binding<Int?> {
-        Binding(
-            get: { selectedUpcomingPlanIndex },
-            set: { newValue in
-                if let newValue {
-                    selectedUpcomingPlanIndex = newValue
-                }
-            }
-        )
-    }
-
-    @ViewBuilder
-    private func upcomingItemLink(_ item: HomeUpcomingItem) -> some View {
-        switch item {
-        case .plan(let plan):
-            HomeUpcomingPlanCard(plan: plan)
-        case .visit(let visit):
-            HomeUpcomingVisitCard(visit: visit)
-        }
     }
 
     private func categorySection(categories: [RecordCategory]) -> some View {
@@ -446,69 +380,6 @@ struct HomeView: View {
             HomePaperGrainOverlay(isDark: colorScheme == .dark)
         }
         .ignoresSafeArea()
-    }
-
-    private func nextActionSection(items: [HomeAttentionItem]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("次にやること")
-                    .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
-                    .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
-
-                if !items.isEmpty {
-                    Text("\(items.count)")
-                        .font(FavorecoTypography.captionStrong)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 0)
-            }
-
-            if items.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.green)
-                    Text("今すぐ対応することはありません")
-                        .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .caption))
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
-                .background(.background, in: Capsule())
-            } else {
-                ForEach(items.prefix(3)) { item in
-                    if let plan = item.plan {
-                        NavigationLink {
-                            PlanDetailView(plan: plan)
-                        } label: {
-                            HomeNextActionCapsuleRow(item: item)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        HomeNextActionCapsuleRow(item: item)
-                    }
-                }
-
-                if items.count > 3 {
-                    Button {
-                        isShowingNextActionList = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Text("ほか\(items.count - 3)件を見る")
-                            Image(systemName: "chevron.right")
-                        }
-                        .font(FavorecoTypography.captionStrong)
-                        .foregroundStyle(themePalette.globalTint)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("次にやることをすべて見る、ほか\(items.count - 3)件")
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -596,134 +467,13 @@ struct HomeView: View {
         }
     }
 
-    private func inboxSection(
-        interestedEvents: [HomeInterestedEventSnapshot],
-        unresolvedInboxItems: [HomeInboxItemSnapshot]
-    ) -> some View {
-        let items = interestedEvents.map(HomeInterestingItem.event)
-            + unresolvedInboxItems.map(HomeInterestingItem.inbox)
-
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Text("Interesting")
-                    .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
-                    .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
-
-                Text("\(items.count)")
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 4)
-
-                if isInterestingExpanded, !items.isEmpty {
-                    CategoryLibraryLayoutPicker(
-                        selection: $interestLayoutMode,
-                        tint: themePalette.globalTint,
-                        onSelect: { _ in }
-                    )
-                }
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        isInterestingExpanded.toggle()
-                    }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
-                        .rotationEffect(.degrees(isInterestingExpanded ? 0 : -90))
-                        .frame(width: 32, height: 32)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isInterestingExpanded ? "Interestingを閉じる" : "Interestingを開く")
-            }
-
-            if isInterestingExpanded {
-                if items.isEmpty {
-                    EmptyStateRow(
-                        icon: "tray",
-                        title: "気になる対象はありません",
-                        message: "クイック登録した作品や場所がここに表示されます。"
-                    )
-                } else {
-                    HomeInterestingCollection(
-                        items: items,
-                        layout: interestLayoutMode,
-                        tint: themePalette.globalTint
-                    )
-                    .id("home-interesting-\(interestLayoutMode.rawValue)")
-                }
-            }
-        }
-    }
-
-    private func homeComingUpSection(items: [HomeUpcomingItem]) -> some View {
-        let visibleItems = isShowingAllHomeUpcoming ? items : Array(items.prefix(1))
-
-        return VStack(alignment: .leading, spacing: 10) {
-            Text("Coming Up")
-                .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
-                .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
-
-            if items.isEmpty {
-                Button {
-                    NotificationCenter.default.post(name: .openFavorecoPlanCreation, object: nil)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "calendar.badge.plus")
-                            .foregroundStyle(themePalette.globalTint)
-                            .frame(width: 34, height: 34)
-                            .background(themePalette.globalTint.opacity(0.10), in: Circle())
-                        Text("次の予定はまだありません")
-                            .font(FavorecoTypography.bodyStrong)
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 8)
-                        Text("予定を追加")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(themePalette.globalTint)
-                    }
-                    .padding(12)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            } else {
-                ForEach(visibleItems) { item in
-                    HomeComingUpLink(item: item)
-                }
-
-                if items.count > 1 {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            isShowingAllHomeUpcoming.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            Rectangle()
-                                .fill(themePalette.globalTint.opacity(0.24))
-                                .frame(height: 0.6)
-                            Text(isShowingAllHomeUpcoming ? "閉じる" : "さらに\(items.count - 1)件")
-                                .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
-                                .foregroundStyle(themePalette.globalTint)
-                            Rectangle()
-                                .fill(themePalette.globalTint.opacity(0.24))
-                                .frame(height: 0.6)
-                        }
-                        .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
     private func statsSummarySection(snapshot: HomeSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("統計サマリ", count: snapshot.visibleVisitCount)
 
             HStack(spacing: 12) {
                 SummaryMetricCard(title: "記録", value: "\(snapshot.visibleVisitCount)", icon: "sparkles.rectangle.stack")
-                SummaryMetricCard(title: "ジャンル", value: "\(snapshot.visibleCategories.count)", icon: "square.grid.2x2")
+                SummaryMetricCard(title: "ジャンル", value: "\(snapshot.visibleCategoryCount)", icon: "square.grid.2x2")
             }
         }
     }
@@ -740,20 +490,21 @@ struct HomeView: View {
         }
     }
 }
-
 private struct InterestedEventRow: View {
     let event: HomeInterestedEventSnapshot
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            if let data = event.eyecatchData, let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: event.fillsEyecatchFrame ? .fill : .fit)
-                    .frame(width: 64, height: interestedEyecatchHeight)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            ThumbnailImage(
+                reference: event.thumbnailReference,
+                displaySize: CGSize(width: 64, height: interestedEyecatchHeight),
+                contentMode: event.fillsEyecatchFrame ? .fill : .fit
+            ) {
+                Color(.secondarySystemFill)
             }
+            .frame(width: 64, height: interestedEyecatchHeight)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(event.title)
@@ -790,7 +541,7 @@ private struct InterestedEventRow: View {
     }
 }
 
-private enum HomeInterestingItem: Identifiable {
+enum HomeInterestingItem: Identifiable {
     case event(HomeInterestedEventSnapshot)
     case inbox(HomeInboxItemSnapshot)
 
@@ -829,10 +580,10 @@ private enum HomeInterestingItem: Identifiable {
         }
     }
 
-    var imageData: Data? {
+    var thumbnailReference: ThumbnailReference {
         switch self {
-        case .event(let event): event.eyecatchData
-        case .inbox(let item): item.eyecatchData
+        case .event(let event): event.thumbnailReference
+        case .inbox(let item): item.thumbnailReference
         }
     }
 
@@ -851,7 +602,7 @@ private enum HomeInterestingItem: Identifiable {
     }
 }
 
-private struct HomeInterestingCollection: View {
+struct HomeInterestingCollection: View {
     let items: [HomeInterestingItem]
     let layout: CategoryLibraryLayoutMode
     let tint: Color
@@ -962,20 +713,20 @@ private struct HomeInterestingArtwork: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                Color(.secondarySystemFill)
-                if let data = item.imageData, let image = UIImage(data: data) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .clipped()
-                } else {
+            ThumbnailImage(
+                reference: item.thumbnailReference,
+                displaySize: geometry.size,
+                contentMode: .fill
+            ) {
+                ZStack {
+                    Color(.secondarySystemFill)
                     Image(systemName: item.categoryIcon)
                         .font(.title2)
                         .foregroundStyle(Color(hex: item.colorHex))
                 }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
         }
         .clipped()
     }
@@ -1080,7 +831,7 @@ private struct HomeInterestingBannerCard: View {
     }
 }
 
-private struct HomeComingUpLink: View {
+struct HomeComingUpLink: View {
     let item: HomeUpcomingItem
 
     var body: some View {
@@ -1096,7 +847,7 @@ private struct HomeComingUpLink: View {
                     colorHex: plan.categoryColorHex,
                     date: plan.startsAt,
                     place: plan.venueName,
-                    imageData: plan.posterData
+                    thumbnailReference: plan.thumbnailReference
                 )
             }
             .buttonStyle(.plain)
@@ -1111,7 +862,7 @@ private struct HomeComingUpLink: View {
                     colorHex: visit.categoryColorHex,
                     date: visit.visitedAt,
                     place: visit.venueName,
-                    imageData: visit.photo?.data
+                    thumbnailReference: visit.thumbnailReference
                 )
             }
             .buttonStyle(.plain)
@@ -1126,7 +877,7 @@ private struct HomeComingUpRow: View {
     let colorHex: String
     let date: Date
     let place: String
-    let imageData: Data?
+    let thumbnailReference: ThumbnailReference?
 
     var body: some View {
         let tint = Color(hex: colorHex)
@@ -1138,13 +889,13 @@ private struct HomeComingUpRow: View {
             tint: tint,
             isTheater: false
         ) {
-            ZStack {
-                Color(.secondarySystemFill)
-                if let imageData, let image = UIImage(data: imageData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
+            ThumbnailImage(
+                reference: thumbnailReference,
+                displaySize: CGSize(width: 72, height: 88),
+                contentMode: .fill
+            ) {
+                ZStack {
+                    Color(.secondarySystemFill)
                     Image(systemName: categoryIcon)
                         .font(.title2)
                         .foregroundStyle(tint)
@@ -1155,7 +906,7 @@ private struct HomeComingUpRow: View {
     }
 }
 
-private struct HomeUpcomingPlanCard: View {
+struct HomeUpcomingPlanCard: View {
     let plan: HomePlanSnapshot
     @Query private var currentPlans: [Plan]
     @State private var isShowingPlanDetail = false
@@ -1187,7 +938,7 @@ private struct HomeUpcomingPlanCard: View {
     var body: some View {
         HomeUpcomingHeroLayout(posterAspectRatio: CGFloat(plan.posterAspectRatio)) {
             HomeUpcomingPoster(
-                imageData: plan.posterData,
+                thumbnailReference: plan.thumbnailReference,
                 fallbackIcon: plan.categoryIcon,
                 tint: tint,
                 fillsFrame: plan.fillsPosterFrame
@@ -1259,7 +1010,7 @@ private struct HomeUpcomingPlanCard: View {
 
 }
 
-private struct HomeUpcomingVisitCard: View {
+struct HomeUpcomingVisitCard: View {
     let visit: HomeVisitSnapshot
     @Query private var currentVisits: [Visit]
     @State private var isShowingVisitDetail = false
@@ -1291,7 +1042,7 @@ private struct HomeUpcomingVisitCard: View {
     var body: some View {
         HomeUpcomingHeroLayout(posterAspectRatio: CGFloat(visit.eyecatchAspectRatio)) {
             HomeUpcomingPoster(
-                imageData: visit.photo?.data,
+                thumbnailReference: visit.thumbnailReference,
                 fallbackIcon: visit.categoryIcon,
                 tint: tint,
                 fillsFrame: visit.fillsEyecatchFrame
@@ -1363,7 +1114,7 @@ private struct HomeUpcomingVisitCard: View {
 
 }
 
-private enum HomeUpcomingHeroMetrics {
+enum HomeUpcomingHeroMetrics {
     static let contentHeight: CGFloat = 224
     static let cardHeight: CGFloat = contentHeight + 24
 }
@@ -1419,25 +1170,23 @@ private struct HomeUpcomingHeroLayout: Layout {
 }
 
 private struct HomeUpcomingPoster: View {
-    let imageData: Data?
+    let thumbnailReference: ThumbnailReference?
     let fallbackIcon: String
     let tint: Color
     let fillsFrame: Bool
 
     var body: some View {
         GeometryReader { geometry in
-            Group {
-                if let imageData, let image = UIImage(data: imageData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: fillsFrame ? .fill : .fit)
-                } else {
-                    ZStack {
-                        tint.opacity(0.14)
-                        Image(systemName: fallbackIcon)
-                            .font(.system(size: 34, weight: .medium))
-                            .foregroundStyle(tint)
-                    }
+            ThumbnailImage(
+                reference: thumbnailReference,
+                displaySize: geometry.size,
+                contentMode: fillsFrame ? .fill : .fit
+            ) {
+                ZStack {
+                    tint.opacity(0.14)
+                    Image(systemName: fallbackIcon)
+                        .font(.system(size: 34, weight: .medium))
+                        .foregroundStyle(tint)
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -1547,7 +1296,7 @@ private struct HomeUpcomingActionLabel: View {
     }
 }
 
-private struct HomeUpcomingEmptyCard: View {
+struct HomeUpcomingEmptyCard: View {
     @Environment(\.favorecoThemePalette) private var themePalette
 
     var body: some View {
@@ -1588,7 +1337,7 @@ private struct HomeUpcomingEmptyCard: View {
     }
 }
 
-private struct HomeAttentionItem: Identifiable {
+struct HomeAttentionItem: Identifiable {
     let id: String
     let icon: String
     let title: String
@@ -1601,7 +1350,7 @@ private struct HomeAttentionItem: Identifiable {
     var isOverdue = false
 }
 
-private struct HomeNextActionCapsuleRow: View {
+struct HomeNextActionCapsuleRow: View {
     let item: HomeAttentionItem
 
     var body: some View {
@@ -1708,7 +1457,7 @@ private struct AttentionRow: View {
     }
 }
 
-private struct HomeAttentionListView: View {
+struct HomeAttentionListView: View {
     @Environment(\.dismiss) private var dismiss
     let items: [HomeAttentionItem]
 
@@ -1717,7 +1466,7 @@ private struct HomeAttentionListView: View {
             List(items) { item in
                 if let plan = item.plan {
                     NavigationLink {
-                        PlanDetailView(plan: plan)
+                        HomePlanDestination(planID: plan.id)
                     } label: {
                         AttentionRow(item: item)
                     }
@@ -1793,7 +1542,7 @@ struct AppNotificationCenterView: View {
                     List(items) { item in
                         if let plan = item.plan {
                             NavigationLink {
-                                PlanDetailView(plan: plan)
+                                HomePlanDestination(planID: plan.id)
                             } label: {
                                 AttentionRow(item: item)
                             }
@@ -1873,48 +1622,10 @@ struct AppNotificationCenterView: View {
 private struct ExperienceGalleryCard: View {
     let visit: HomeVisitSnapshot
 
-    @Environment(\.displayScale) private var displayScale
     @Environment(\.favorecoThemePalette) private var themePalette
-    @State private var thumbnailImage: UIImage?
 
     private var categoryColor: Color {
         themePalette.categoryColor(hex: visit.categoryColorHex)
-    }
-
-    // 2列カード。scale過剰を避けるため上限クランプ。
-    private var thumbnailMaxPixel: CGFloat {
-        min(200 * displayScale, 1200)
-    }
-
-    // 写真ID＋表示サイズをキーに含める（サイズ違いは別キャッシュ・task再実行の判定にも使う）
-    private func cacheKey(for photo: HomePhotoSnapshot) -> String {
-        "\(photo.id.uuidString)@\(Int(thumbnailMaxPixel.rounded()))"
-    }
-
-    private var thumbnailTaskID: String? {
-        visit.photo.map { cacheKey(for: $0) }
-    }
-
-    @MainActor
-    private func loadThumbnail() async {
-        guard let photo = visit.photo else {
-            thumbnailImage = nil
-            return
-        }
-        let targetID = photo.id
-        let key = cacheKey(for: photo)
-        if let cached = ThumbnailLoader.cached(forKey: key) {
-            thumbnailImage = cached
-            return
-        }
-        let data = photo.data // SwiftData プロパティはメインで読み、値型で渡す
-        let maxPixel = thumbnailMaxPixel
-        let image = await Task.detached(priority: .userInitiated) {
-            ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
-        }.value
-        // セル再利用や写真変更後に遅れて届いた結果で、別の写真の画像を上書きしない
-        guard !Task.isCancelled, visit.photo?.id == targetID else { return }
-        thumbnailImage = image
     }
 
     private var statusText: String? {
@@ -1928,19 +1639,21 @@ private struct ExperienceGalleryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .topLeading) {
-                if let thumbnailImage {
-                    Image(uiImage: thumbnailImage)
-                        .resizable()
-                        .aspectRatio(contentMode: visit.fillsEyecatchFrame ? .fill : .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                } else {
-                    Rectangle()
-                        .fill(categoryColor.opacity(0.18))
-                    Image(systemName: visit.eyecatchPath.isEmpty ? "sparkles" : "photo.fill")
-                        .font(.largeTitle)
-                        .foregroundStyle(categoryColor)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                GeometryReader { geometry in
+                    ThumbnailImage(
+                        reference: visit.thumbnailReference,
+                        displaySize: geometry.size,
+                        contentMode: visit.fillsEyecatchFrame ? .fill : .fit
+                    ) {
+                        ZStack {
+                            Rectangle().fill(categoryColor.opacity(0.18))
+                            Image(systemName: visit.eyecatchPath.isEmpty ? "sparkles" : "photo.fill")
+                                .font(.largeTitle)
+                                .foregroundStyle(categoryColor)
+                        }
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -2008,18 +1721,13 @@ private struct ExperienceGalleryCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .task(id: thumbnailTaskID) {
-            await loadThumbnail()
-        }
     }
 }
 
 private struct HomeVisitSummaryRow: View {
     let visit: HomeVisitSnapshot
 
-    @Environment(\.displayScale) private var displayScale
     @Environment(\.favorecoThemePalette) private var themePalette
-    @State private var thumbnailImage: UIImage?
 
     private var categoryColor: Color {
         themePalette.categoryColor(hex: visit.categoryColorHex)
@@ -2027,14 +1735,6 @@ private struct HomeVisitSummaryRow: View {
 
     private var unitFields: VisitUnitFields {
         VisitUnitFields(rawValue: visit.unitFieldsRaw)
-    }
-
-    private var thumbnailMaxPixel: CGFloat {
-        min(80 * displayScale, 480)
-    }
-
-    private var thumbnailTaskID: String? {
-        visit.photo.map { "\($0.id.uuidString)@\(Int(thumbnailMaxPixel.rounded()))" }
     }
 
     var body: some View {
@@ -2104,28 +1804,25 @@ private struct HomeVisitSummaryRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .task(id: thumbnailTaskID) {
-            await loadThumbnail()
-        }
     }
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let thumbnailImage {
-            Image(uiImage: thumbnailImage)
-                .resizable()
-                .aspectRatio(contentMode: visit.fillsEyecatchFrame ? .fill : .fit)
-                .frame(width: 64, height: thumbnailHeight)
-                .clipped()
-                .background(categoryColor.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        } else {
+        ThumbnailImage(
+            reference: visit.thumbnailReference,
+            displaySize: CGSize(width: 64, height: thumbnailHeight),
+            contentMode: visit.fillsEyecatchFrame ? .fill : .fit
+        ) {
             Image(systemName: visit.categoryIcon)
                 .font(.title3)
                 .foregroundStyle(categoryColor)
-                .frame(width: 64, height: thumbnailHeight)
-                .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(categoryColor.opacity(0.12))
         }
+        .frame(width: 64, height: thumbnailHeight)
+        .clipped()
+        .background(categoryColor.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var thumbnailHeight: CGFloat {
@@ -2133,28 +1830,9 @@ private struct HomeVisitSummaryRow: View {
         return min(96, max(56, rawHeight))
     }
 
-    @MainActor
-    private func loadThumbnail() async {
-        guard let photo = visit.photo else {
-            thumbnailImage = nil
-            return
-        }
-        let key = "\(photo.id.uuidString)@\(Int(thumbnailMaxPixel.rounded()))"
-        if let cached = ThumbnailLoader.cached(forKey: key) {
-            thumbnailImage = cached
-            return
-        }
-        let data = photo.data
-        let maxPixel = thumbnailMaxPixel
-        let image = await Task.detached(priority: .userInitiated) {
-            ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
-        }.value
-        guard !Task.isCancelled, visit.photo?.id == photo.id else { return }
-        thumbnailImage = image
-    }
 }
 
-private struct HomePlanDestination: View {
+struct HomePlanDestination: View {
     @Query private var plans: [Plan]
 
     init(planID: UUID) {
@@ -2166,6 +1844,22 @@ private struct HomePlanDestination: View {
             PlanDetailView(plan: plan)
         } else {
             ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+        }
+    }
+}
+
+private struct HomeCategoryDestination: View {
+    @Query private var categories: [RecordCategory]
+
+    init(categoryID: UUID) {
+        _categories = Query(filter: #Predicate<RecordCategory> { $0.id == categoryID })
+    }
+
+    var body: some View {
+        if let category = categories.first {
+            CategoryTopView(category: category)
+        } else {
+            ContentUnavailableView("ジャンルが見つかりません", systemImage: "trash")
         }
     }
 }
@@ -2246,13 +1940,16 @@ private struct InboxItemRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            if let data = item.eyecatchData, let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 64, height: 78)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            ThumbnailImage(
+                reference: item.thumbnailReference,
+                displaySize: CGSize(width: 64, height: 78),
+                contentMode: .fill
+            ) {
+                Color(.secondarySystemFill)
             }
+            .frame(width: 64, height: 78)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.title)
@@ -2351,7 +2048,7 @@ private func formattedVisitAmount(_ amount: Decimal) -> String {
     return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "¥\(NSDecimalNumber(decimal: amount).stringValue)"
 }
 
-private struct EmptyStateRow: View {
+struct EmptyStateRow: View {
     let icon: String
     let title: String
     let message: String

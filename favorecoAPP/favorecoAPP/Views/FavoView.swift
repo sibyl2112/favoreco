@@ -68,7 +68,7 @@ struct FavoView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(snapshot.pinnedTargets) { target in
                         NavigationLink {
-                            pinnedTargetDestination(target)
+                            FavoPinnedTargetDestination(snapshot: target)
                         } label: {
                             FavoPinnedTargetCard(target: target)
                         }
@@ -84,10 +84,20 @@ struct FavoView: View {
                         LazyHStack(spacing: 14) {
                             ForEach(otherFavorites) { favorite in
                                 NavigationLink {
-                                    FavoPersonDetailView(snapshot: favorite, pin: nil)
+                                    FavoPersonDestination(snapshot: favorite, pinID: nil)
                                 } label: {
                                     VStack(spacing: 8) {
-                                        FavoAvatar(person: favorite.person, profile: favorite.profile, size: 64)
+                                        ThumbnailImage(
+                                            reference: favorite.thumbnailReference,
+                                            displaySize: CGSize(width: 64, height: 64),
+                                            contentMode: .fill
+                                        ) {
+                                            Image(systemName: "person.fill")
+                                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                                .background(Color(hex: favorite.colorHex).opacity(0.12))
+                                        }
+                                        .frame(width: 64, height: 64)
+                                        .clipShape(Circle())
                                         Text(favorite.displayName)
                                             .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .caption))
                                             .foregroundStyle(.primary)
@@ -124,26 +134,27 @@ struct FavoView: View {
         }
     }
 
-    @ViewBuilder
-    private func pinnedTargetDestination(_ target: FavoPinnedTargetSnapshot) -> some View {
-        if let personSnapshot = target.personSnapshot {
-            FavoPersonDetailView(snapshot: personSnapshot, pin: target.pin)
-        } else {
-            FavoPinnedTargetDetailView(snapshot: target)
-        }
-    }
-
     private func featuredFavoriteCard(_ favorite: FavoPersonSnapshot) -> some View {
         NavigationLink {
-            FavoPersonDetailView(snapshot: favorite, pin: nil)
+            FavoPersonDestination(snapshot: favorite, pinID: nil)
         } label: {
             HStack(spacing: 16) {
-                FavoAvatar(person: favorite.person, profile: favorite.profile, size: 82)
+                ThumbnailImage(
+                    reference: favorite.thumbnailReference,
+                    displaySize: CGSize(width: 82, height: 82),
+                    contentMode: .fill
+                ) {
+                    Image(systemName: "person.fill")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(hex: favorite.colorHex).opacity(0.12))
+                }
+                .frame(width: 82, height: 82)
+                .clipShape(Circle())
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(favorite.profile.isPrimary ? "PRIMARY" : "FAVO")
+                    Text(favorite.isPrimary ? "PRIMARY" : "FAVO")
                         .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption2))
                         .tracking(1.4)
-                        .foregroundStyle(Color(hex: favorite.profile.colorHex))
+                        .foregroundStyle(Color(hex: favorite.colorHex))
                     Text(favorite.displayName)
                         .font(FavorecoTypography.jpSerif(22, weight: .bold, relativeTo: .title2))
                         .foregroundStyle(.primary)
@@ -153,7 +164,7 @@ struct FavoView: View {
                             .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .subheadline))
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("\(favorite.visits.count)件の思い出")
+                        Text("\(favorite.visitIDs.count)件の思い出")
                             .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .subheadline))
                             .foregroundStyle(.secondary)
                     }
@@ -168,7 +179,7 @@ struct FavoView: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: favorite.profile.colorHex).opacity(0.18), Color(.secondarySystemGroupedBackground)],
+                            colors: [Color(hex: favorite.colorHex).opacity(0.18), Color(.secondarySystemGroupedBackground)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -176,7 +187,7 @@ struct FavoView: View {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color(hex: favorite.profile.colorHex).opacity(0.25), lineWidth: 0.75)
+                    .stroke(Color(hex: favorite.colorHex).opacity(0.25), lineWidth: 0.75)
             }
         }
         .buttonStyle(.plain)
@@ -197,7 +208,7 @@ struct FavoView: View {
                     LazyHStack(spacing: 12) {
                         ForEach(stories) { story in
                             NavigationLink {
-                                ExperienceDetailView(visit: story.visit)
+                                FavoVisitDestination(visitID: story.visitID)
                             } label: {
                                 FavoStoryCard(story: story)
                             }
@@ -225,7 +236,7 @@ struct FavoView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(collections) { collection in
                         NavigationLink {
-                            FavoCollectionDetailView(collection: collection)
+                            FavoCollectionDestination(collection: collection)
                         } label: {
                             FavoCollectionCard(collection: collection)
                         }
@@ -276,6 +287,143 @@ struct FavoView: View {
         }
         .buttonStyle(.plain)
     }
+
+}
+
+private struct FavoVisitDestination: View {
+    @Query private var visits: [Visit]
+
+    init(visitID: UUID) {
+        _visits = Query(filter: #Predicate<Visit> { $0.id == visitID })
+    }
+
+    var body: some View {
+        if let visit = visits.first {
+            ExperienceDetailView(visit: visit)
+        } else {
+            ContentUnavailableView("記録が見つかりません", systemImage: "trash")
+        }
+    }
+}
+
+private struct FavoPlanDestination: View {
+    @Query private var plans: [Plan]
+
+    init(planID: UUID) {
+        _plans = Query(filter: #Predicate<Plan> { $0.id == planID })
+    }
+
+    var body: some View {
+        if let plan = plans.first {
+            PlanDetailView(plan: plan)
+        } else {
+            ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+        }
+    }
+}
+
+private struct FavoPersonDestination: View {
+    let snapshot: FavoPersonSnapshot
+    @Query private var profiles: [FavoriteProfile]
+    @Query private var people: [PersonMaster]
+    @Query private var pins: [FavoPin]
+    @Query private var allVisits: [Visit]
+    @Query private var allPlans: [Plan]
+
+    init(snapshot: FavoPersonSnapshot, pinID: UUID?) {
+        self.snapshot = snapshot
+        let profileID = snapshot.profileID
+        let personID = snapshot.personID
+        let resolvedPinID = pinID ?? UUID()
+        _profiles = Query(filter: #Predicate<FavoriteProfile> { $0.id == profileID })
+        _people = Query(filter: #Predicate<PersonMaster> { $0.id == personID })
+        _pins = Query(filter: #Predicate<FavoPin> { $0.id == resolvedPinID })
+    }
+
+    var body: some View {
+        if let profile = profiles.first, let person = people.first {
+            FavoPersonDetailView(
+                snapshot: snapshot,
+                profile: profile,
+                person: person,
+                visits: resolvedVisits,
+                upcomingPlans: resolvedPlans,
+                pin: pins.first
+            )
+        } else {
+            ContentUnavailableView("FAVOが見つかりません", systemImage: "trash")
+        }
+    }
+
+    private var resolvedVisits: [Visit] {
+        let ids = Set(snapshot.visitIDs)
+        return allVisits.filter { ids.contains($0.id) }
+            .sorted { $0.visitedAt > $1.visitedAt }
+    }
+
+    private var resolvedPlans: [Plan] {
+        let ids = Set(snapshot.upcomingPlanIDs)
+        return allPlans.filter { ids.contains($0.id) }
+            .sorted { $0.startsAt < $1.startsAt }
+    }
+}
+
+private struct FavoPinnedTargetDestination: View {
+    let snapshot: FavoPinnedTargetSnapshot
+    @Query private var pins: [FavoPin]
+    @Query private var profiles: [FavoriteProfile]
+    @Query private var allVisits: [Visit]
+    @Query private var allPlans: [Plan]
+
+    init(snapshot: FavoPinnedTargetSnapshot) {
+        self.snapshot = snapshot
+        let pinID = snapshot.pinID
+        let profileID = snapshot.profileID ?? UUID()
+        _pins = Query(filter: #Predicate<FavoPin> { $0.id == pinID })
+        _profiles = Query(filter: #Predicate<FavoriteProfile> { $0.id == profileID })
+    }
+
+    var body: some View {
+        if let personSnapshot = snapshot.personSnapshot {
+            FavoPersonDestination(snapshot: personSnapshot, pinID: snapshot.pinID)
+        } else if let pin = pins.first {
+            FavoPinnedTargetDetailView(
+                snapshot: snapshot,
+                pin: pin,
+                profile: profiles.first,
+                visits: resolvedVisits,
+                upcomingPlans: resolvedPlans
+            )
+        } else {
+            ContentUnavailableView("FAVOが見つかりません", systemImage: "trash")
+        }
+    }
+
+    private var resolvedVisits: [Visit] {
+        let ids = Set(snapshot.visitIDs)
+        return allVisits.filter { ids.contains($0.id) }
+            .sorted { $0.visitedAt > $1.visitedAt }
+    }
+
+    private var resolvedPlans: [Plan] {
+        let ids = Set(snapshot.upcomingPlanIDs)
+        return allPlans.filter { ids.contains($0.id) }
+            .sorted { $0.startsAt < $1.startsAt }
+    }
+}
+
+private struct FavoCollectionDestination: View {
+    let collection: FavoCollectionSummary
+    @Query private var allVisits: [Visit]
+
+    var body: some View {
+        let ids = Set(collection.visitIDs)
+        FavoCollectionDetailView(
+            collection: collection,
+            visits: allVisits.filter { ids.contains($0.id) }
+                .sorted { $0.visitedAt > $1.visitedAt }
+        )
+    }
 }
 
 private struct FavoPinManagementView: View {
@@ -298,7 +446,11 @@ private struct FavoPinManagementView: View {
     }
 
     private var visiblePeople: [PersonMaster] {
-        people.filter { !$0.isArchived && matches($0.displayName) }
+        people.filter { person in
+            guard !person.isArchived else { return false }
+            return PersonMasterSuggestion.matches(person, query: searchText)
+                || matches(person.favoriteProfile?.nickname ?? "")
+        }
     }
 
     private var visibleEvents: [ExperienceEvent] {
@@ -349,7 +501,9 @@ private struct FavoPinManagementView: View {
                             title: person.favoriteProfile?.nickname.isEmpty == false
                                 ? person.favoriteProfile?.nickname ?? person.displayName
                                 : person.displayName,
-                            subtitle: person.eventLinks?.isEmpty == false ? "登録済みキャスト" : "人物・団体マスター",
+                            subtitle: person.reading.isEmpty
+                                ? (person.eventLinks?.isEmpty == false ? "登録済みキャスト" : "人物・団体マスター")
+                                : person.reading,
                             icon: "person.fill",
                             colorHex: person.favoriteProfile?.colorHex ?? "#8F5E73",
                             kind: .person,
@@ -637,6 +791,10 @@ private struct FavoPinManagementView: View {
 
 private struct FavoPinnedTargetDetailView: View {
     let snapshot: FavoPinnedTargetSnapshot
+    let pin: FavoPin
+    let profile: FavoriteProfile?
+    let visits: [Visit]
+    let upcomingPlans: [Plan]
     @State private var revealsRecordedSpending = false
 
     var body: some View {
@@ -647,7 +805,7 @@ private struct FavoPinnedTargetDetailView: View {
                     subtitle: snapshot.subtitle,
                     kindLabel: snapshot.kind.displayName,
                     colorHex: snapshot.colorHex,
-                    profile: snapshot.profile,
+                    profile: profile,
                     fallbackImage: fallbackImage,
                     fallbackSymbol: snapshot.iconSymbol
                 )
@@ -655,7 +813,7 @@ private struct FavoPinnedTargetDetailView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     FavoInsightMetric(
                         title: "思い出",
-                        value: "\(snapshot.visits.count)件",
+                        value: "\(visits.count)件",
                         icon: "sparkles",
                         colorHex: snapshot.colorHex
                     )
@@ -688,11 +846,11 @@ private struct FavoPinnedTargetDetailView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
-                if let plan = snapshot.upcomingPlans.first {
+                if let plan = upcomingPlans.first {
                     VStack(alignment: .leading, spacing: 10) {
                         FavoSectionTitle(title: "次の予定", subtitle: "1件だけ表示")
                         NavigationLink {
-                            PlanDetailView(plan: plan)
+                            FavoPlanDestination(planID: plan.id)
                         } label: {
                             FavoTargetPlanRow(plan: plan, colorHex: snapshot.colorHex)
                         }
@@ -700,21 +858,21 @@ private struct FavoPinnedTargetDetailView: View {
                     }
                 }
 
-                if let profile = snapshot.profile {
+                if let profile {
                     FavoAnniversarySection(profile: profile, colorHex: snapshot.colorHex)
                 }
 
-                if let profile = snapshot.profile {
+                if let profile {
                     FavoGallerySection(
                         profile: profile,
                         colorHex: snapshot.colorHex,
-                        candidateVisits: snapshot.visits
+                        candidateVisits: visits
                     )
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    FavoSectionTitle(title: "思い出", subtitle: "\(snapshot.visits.count)件")
-                    if snapshot.visits.isEmpty {
+                    FavoSectionTitle(title: "思い出", subtitle: "\(visits.count)件")
+                    if visits.isEmpty {
                         Text("このFAVOに紐づく記録はまだありません。")
                             .font(FavorecoTypography.body)
                             .foregroundStyle(.secondary)
@@ -722,9 +880,9 @@ private struct FavoPinnedTargetDetailView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                     } else {
-                        ForEach(snapshot.visits) { visit in
+                        ForEach(visits) { visit in
                             NavigationLink {
-                                ExperienceDetailView(visit: visit)
+                                FavoVisitDestination(visitID: visit.id)
                             } label: {
                                 FavoVisitRow(visit: visit)
                             }
@@ -740,7 +898,7 @@ private struct FavoPinnedTargetDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink { FavoProfileEditorView(pin: snapshot.pin) } label: {
+                NavigationLink { FavoProfileEditorView(pin: pin) } label: {
                     Label("推しを編集", systemImage: "pencil")
                 }
             }
@@ -750,10 +908,10 @@ private struct FavoPinnedTargetDetailView: View {
     private var fallbackImage: UIImage? {
         switch snapshot.kind {
         case .person:
-            if let data = snapshot.pin.person?.imageData { return UIImage(data: data) }
-            return snapshot.pin.person.flatMap { PersonImageStore.image(at: $0.imagePath) }
+            if let data = pin.person?.imageData { return UIImage(data: data) }
+            return pin.person.flatMap { PersonImageStore.image(at: $0.imagePath) }
         case .event:
-            return snapshot.pin.event?.eyecatchData.flatMap(UIImage.init(data:))
+            return pin.event?.eyecatchData.flatMap(UIImage.init(data:))
         case .place:
             return nil
         }
@@ -781,6 +939,7 @@ private struct FavoPinnedTargetDetailView: View {
 
 private struct FavoCollectionDetailView: View {
     let collection: FavoCollectionSummary
+    let visits: [Visit]
 
     var body: some View {
         ScrollView {
@@ -819,9 +978,9 @@ private struct FavoCollectionDetailView: View {
                         .stroke(Color(hex: collection.colorHex).opacity(0.22), lineWidth: 0.75)
                 }
 
-                FavoSectionTitle(title: "思い出", subtitle: "\(collection.visits.count)件")
+                FavoSectionTitle(title: "思い出", subtitle: "\(visits.count)件")
 
-                if collection.visits.isEmpty {
+                if visits.isEmpty {
                     Text("該当する記録はありません。")
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
@@ -829,9 +988,9 @@ private struct FavoCollectionDetailView: View {
                         .padding(16)
                         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                 } else {
-                    ForEach(collection.visits) { visit in
+                    ForEach(visits) { visit in
                         NavigationLink {
-                            ExperienceDetailView(visit: visit)
+                            FavoVisitDestination(visitID: visit.id)
                         } label: {
                             FavoVisitRow(visit: visit)
                         }
@@ -849,6 +1008,10 @@ private struct FavoCollectionDetailView: View {
 
 private struct FavoPersonDetailView: View {
     let snapshot: FavoPersonSnapshot
+    let profile: FavoriteProfile
+    let person: PersonMaster
+    let visits: [Visit]
+    let upcomingPlans: [Plan]
     let pin: FavoPin?
     @State private var revealsRecordedSpending = false
 
@@ -859,37 +1022,37 @@ private struct FavoPersonDetailView: View {
                     title: snapshot.displayName,
                     subtitle: personHeroSubtitle,
                     kindLabel: "人物・団体",
-                    colorHex: snapshot.profile.colorHex,
-                    profile: snapshot.profile,
+                    colorHex: snapshot.colorHex,
+                    profile: profile,
                     fallbackImage: personImage,
                     fallbackSymbol: "person.fill"
                 )
 
                 HStack(spacing: 10) {
-                    FavoMiniMetric(value: snapshot.visits.count, label: "思い出")
-                    FavoMiniMetric(value: Set(snapshot.visits.compactMap { $0.event?.id }).count, label: "作品・公演")
-                    FavoMiniMetric(value: snapshot.upcomingPlans.count, label: "予定")
+                    FavoMiniMetric(value: visits.count, label: "思い出")
+                    FavoMiniMetric(value: Set(visits.compactMap { $0.event?.id }).count, label: "作品・公演")
+                    FavoMiniMetric(value: upcomingPlans.count, label: "予定")
                 }
 
-                if let plan = snapshot.upcomingPlans.first {
+                if let plan = upcomingPlans.first {
                     VStack(alignment: .leading, spacing: 10) {
                         FavoSectionTitle(title: "次に会える", subtitle: nil)
-                        NavigationLink { PlanDetailView(plan: plan) } label: {
+                        NavigationLink { FavoPlanDestination(planID: plan.id) } label: {
                             FavoPlanRow(favorite: snapshot, plan: plan)
                         }
                         .buttonStyle(.plain)
                     }
                 }
 
-                FavoAnniversarySection(profile: snapshot.profile, colorHex: snapshot.profile.colorHex)
+                FavoAnniversarySection(profile: profile, colorHex: snapshot.colorHex)
 
                 FavoGallerySection(
-                    profile: snapshot.profile,
-                    colorHex: snapshot.profile.colorHex,
-                    candidateVisits: snapshot.visits
+                    profile: profile,
+                    colorHex: snapshot.colorHex,
+                    candidateVisits: visits
                 )
 
-                if snapshot.visits.isEmpty {
+                if visits.isEmpty {
                     Text("この人物・団体に紐づく記録はまだありません。")
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
@@ -904,14 +1067,14 @@ private struct FavoPersonDetailView: View {
                     timelineSection
                 }
 
-                if !snapshot.profile.originText.isEmpty || !snapshot.profile.memo.isEmpty {
+                if !snapshot.originText.isEmpty || !snapshot.memo.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         FavoSectionTitle(title: "わたしのFAVO", subtitle: nil)
-                        if !snapshot.profile.originText.isEmpty {
-                            LabeledContent("きっかけ", value: snapshot.profile.originText)
+                        if !snapshot.originText.isEmpty {
+                            LabeledContent("きっかけ", value: snapshot.originText)
                         }
-                        if !snapshot.profile.memo.isEmpty {
-                            Text(snapshot.profile.memo)
+                        if !snapshot.memo.isEmpty {
+                            Text(snapshot.memo)
                                 .font(FavorecoTypography.body)
                         }
                     }
@@ -922,7 +1085,7 @@ private struct FavoPersonDetailView: View {
             .padding(20)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle(snapshot.person.displayName)
+        .navigationTitle(snapshot.personDisplayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let pin {
@@ -936,15 +1099,15 @@ private struct FavoPersonDetailView: View {
     }
 
     private var personImage: UIImage? {
-        if let data = snapshot.person.imageData { return UIImage(data: data) }
-        return PersonImageStore.image(at: snapshot.person.imagePath)
+        if let data = person.imageData { return UIImage(data: data) }
+        return PersonImageStore.image(at: person.imagePath)
     }
 
     private var personHeroSubtitle: String {
         var values: [String] = []
-        if snapshot.displayName != snapshot.person.displayName { values.append(snapshot.person.displayName) }
+        if snapshot.displayName != snapshot.personDisplayName { values.append(snapshot.personDisplayName) }
         if let days = snapshot.supportDayCount { values.append("推して \(days)日") }
-        if values.isEmpty { values.append("\(snapshot.visits.count)件の思い出") }
+        if values.isEmpty { values.append("\(visits.count)件の思い出") }
         return values.joined(separator: " · ")
     }
 
@@ -952,15 +1115,15 @@ private struct FavoPersonDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             FavoSectionTitle(title: "記憶のはじまりと今", subtitle: nil)
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                if let firstVisit = snapshot.firstVisit {
-                    NavigationLink { ExperienceDetailView(visit: firstVisit) } label: {
-                        FavoMilestoneCard(title: "初回", visit: firstVisit, colorHex: snapshot.profile.colorHex)
+                if let firstVisit = visits.last {
+                    NavigationLink { FavoVisitDestination(visitID: firstVisit.id) } label: {
+                        FavoMilestoneCard(title: "初回", visit: firstVisit, colorHex: snapshot.colorHex)
                     }
                     .buttonStyle(.plain)
                 }
-                if let latestVisit = snapshot.latestVisit {
-                    NavigationLink { ExperienceDetailView(visit: latestVisit) } label: {
-                        FavoMilestoneCard(title: "最新", visit: latestVisit, colorHex: snapshot.profile.colorHex)
+                if let latestVisit = visits.first {
+                    NavigationLink { FavoVisitDestination(visitID: latestVisit.id) } label: {
+                        FavoMilestoneCard(title: "最新", visit: latestVisit, colorHex: snapshot.colorHex)
                     }
                     .buttonStyle(.plain)
                 }
@@ -976,7 +1139,7 @@ private struct FavoPersonDetailView: View {
                     title: "写真",
                     value: "\(snapshot.photoCount)枚",
                     icon: "photo.on.rectangle.angled",
-                    colorHex: snapshot.profile.colorHex
+                    colorHex: snapshot.colorHex
                 )
                 Button {
                     withAnimation(.snappy) {
@@ -987,7 +1150,7 @@ private struct FavoPersonDetailView: View {
                         title: "記録済み支出",
                         value: spendingMetricValue,
                         icon: revealsRecordedSpending ? "eye.slash" : "eye",
-                        colorHex: snapshot.profile.colorHex
+                        colorHex: snapshot.colorHex
                     )
                 }
                 .buttonStyle(.plain)
@@ -997,7 +1160,7 @@ private struct FavoPersonDetailView: View {
             if revealsRecordedSpending, snapshot.spendingBreakdown.hasRecordedSpending {
                 FavoSpendingBreakdownSection(
                     breakdown: snapshot.spendingBreakdown,
-                    accentColorHex: snapshot.profile.colorHex
+                    accentColorHex: snapshot.colorHex
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -1009,10 +1172,10 @@ private struct FavoPersonDetailView: View {
 
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            FavoSectionTitle(title: "ジャンル別", subtitle: "全\(snapshot.visits.count)件")
+            FavoSectionTitle(title: "ジャンル別", subtitle: "全\(visits.count)件")
             VStack(spacing: 8) {
                 ForEach(snapshot.categorySummaries) { summary in
-                    FavoCategorySummaryRow(summary: summary, totalCount: snapshot.visits.count)
+                    FavoCategorySummaryRow(summary: summary, totalCount: visits.count)
                 }
             }
         }
@@ -1025,7 +1188,7 @@ private struct FavoPersonDetailView: View {
                 FavoSectionTitle(title: "よく行く場所", subtitle: nil)
                 VStack(spacing: 8) {
                     ForEach(Array(snapshot.frequentPlaces.prefix(5).enumerated()), id: \.element.id) { index, place in
-                        FavoFrequentPlaceRow(rank: index + 1, place: place, colorHex: snapshot.profile.colorHex)
+                        FavoFrequentPlaceRow(rank: index + 1, place: place, colorHex: snapshot.colorHex)
                     }
                 }
             }
@@ -1035,8 +1198,8 @@ private struct FavoPersonDetailView: View {
     private var timelineSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             FavoSectionTitle(title: "ジャンル横断タイムライン", subtitle: "全件")
-            ForEach(snapshot.visits) { visit in
-                NavigationLink { ExperienceDetailView(visit: visit) } label: {
+            ForEach(visits) { visit in
+                NavigationLink { FavoVisitDestination(visitID: visit.id) } label: {
                     FavoVisitRow(visit: visit)
                 }
                 .buttonStyle(.plain)
@@ -1068,12 +1231,7 @@ private struct FavoStoryCard: View {
     let story: FavoStorySnapshot
 
     private var colorHex: String {
-        story.visit.event?.category?.colorHex ?? "#147C88"
-    }
-
-    private var placeText: String {
-        let placeName = story.visit.placeMaster?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return placeName.isEmpty ? story.visit.venueNameSnapshot : placeName
+        story.categoryColorHex
     }
 
     var body: some View {
@@ -1085,19 +1243,19 @@ private struct FavoStoryCard: View {
             Text(story.title)
                 .font(FavorecoTypography.jpSerif(16, weight: .bold, relativeTo: .headline))
                 .foregroundStyle(.primary)
-            Text(story.visit.event?.title ?? "無題の記録")
+            Text(story.visitTitle)
                 .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
                 .foregroundStyle(.primary)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
             HStack(spacing: 5) {
-                Image(systemName: story.visit.event?.category?.iconSymbol ?? "sparkles")
-                Text(FavorecoDateText.compactDate(story.visit.visitedAt))
+                Image(systemName: story.categoryIcon)
+                Text(FavorecoDateText.compactDate(story.visitedAt))
             }
             .font(FavorecoTypography.caption)
             .foregroundStyle(.secondary)
-            if !placeText.isEmpty {
-                Text(placeText)
+            if !story.placeName.isEmpty {
+                Text(story.placeName)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1129,19 +1287,19 @@ private struct FavoPinnedTargetCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                if let data = target.profile?.iconImageData, let image = UIImage(data: data) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 38, height: 38)
-                        .clipShape(Circle())
-                } else {
+                ThumbnailImage(
+                    reference: target.thumbnailReference,
+                    displaySize: CGSize(width: 38, height: 38),
+                    contentMode: .fill
+                ) {
                     Image(systemName: target.iconSymbol)
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(Color(hex: target.colorHex))
-                        .frame(width: 38, height: 38)
-                        .background(Color(hex: target.colorHex).opacity(0.12), in: Circle())
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(hex: target.colorHex).opacity(0.12))
                 }
+                .frame(width: 38, height: 38)
+                .clipShape(Circle())
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
@@ -1773,7 +1931,7 @@ private struct FavoPlanRow: View {
             Text(FavorecoDateText.compactDate(plan.startsAt))
                 .font(FavorecoTypography.jpSans(11, weight: .bold, relativeTo: .caption))
                 .multilineTextAlignment(.center)
-            .foregroundStyle(Color(hex: favorite.profile.colorHex))
+            .foregroundStyle(Color(hex: favorite.colorHex))
             .frame(width: 70)
 
             VStack(alignment: .leading, spacing: 4) {

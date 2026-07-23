@@ -10,9 +10,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    static let schemaVersion = 12
+    nonisolated static let schemaVersion = 13
 
-    static func makeBackupJSON(
+    nonisolated static func makeBackupJSON(
         categories: [RecordCategory],
         events: [ExperienceEvent],
         visits: [Visit],
@@ -79,7 +79,7 @@ enum JSONBackupExportService {
     }
 }
 
-struct FavorecoBackupEnvelope: Codable {
+nonisolated struct FavorecoBackupEnvelope: Codable {
     var appName: String
     var schemaVersion: Int
     var exportedAt: Date
@@ -103,7 +103,7 @@ struct FavorecoBackupEnvelope: Codable {
     var ticketAttempts: [BackupTicketAttempt]
 }
 
-struct BackupCategory: Codable {
+nonisolated struct BackupCategory: Codable {
     var id: UUID
     var name: String
     var iconSymbol: String
@@ -139,7 +139,7 @@ struct BackupCategory: Codable {
     }
 }
 
-struct BackupEvent: Codable {
+nonisolated struct BackupEvent: Codable {
     var id: UUID
     var categoryID: UUID?
     var title: String
@@ -189,7 +189,7 @@ struct BackupEvent: Codable {
     }
 }
 
-struct BackupCollectibleItem: Codable {
+nonisolated struct BackupCollectibleItem: Codable {
     var id: UUID
     var name: String
     var variantName: String
@@ -217,7 +217,7 @@ struct BackupCollectibleItem: Codable {
     }
 }
 
-struct BackupCollectibleTransaction: Codable {
+nonisolated struct BackupCollectibleTransaction: Codable {
     var id: UUID
     var kindKey: String
     var quantity: Int
@@ -241,7 +241,7 @@ struct BackupCollectibleTransaction: Codable {
     }
 }
 
-struct BackupVisit: Codable {
+nonisolated struct BackupVisit: Codable {
     var id: UUID
     var eventID: UUID?
     var placeID: UUID?
@@ -285,7 +285,7 @@ struct BackupVisit: Codable {
     }
 }
 
-struct BackupInboxItem: Codable {
+nonisolated struct BackupInboxItem: Codable {
     var id: UUID
     var title: String
     var body: String
@@ -311,7 +311,7 @@ struct BackupInboxItem: Codable {
     }
 }
 
-struct BackupPhoto: Codable {
+nonisolated struct BackupPhoto: Codable {
     var id: UUID
     var visitID: UUID?
     var relativePath: String
@@ -343,7 +343,7 @@ struct BackupPhoto: Codable {
     }
 }
 
-struct BackupSocialAccount: Codable {
+nonisolated struct BackupSocialAccount: Codable {
     var id: UUID
     var categoryID: UUID?
     var platformKey: String
@@ -369,9 +369,11 @@ struct BackupSocialAccount: Codable {
     }
 }
 
-struct BackupPerson: Codable {
+nonisolated struct BackupPerson: Codable {
     var id: UUID
     var displayName: String
+    var entityKindKey: String?
+    var parentOrganizationIDRaw: String?
     var reading: String
     var aliasesRaw: String
     var roleTagsRaw: String
@@ -392,6 +394,8 @@ struct BackupPerson: Codable {
     nonisolated init(_ person: PersonMaster) {
         id = person.id
         displayName = person.displayName
+        entityKindKey = person.entityKindKey
+        parentOrganizationIDRaw = person.parentOrganizationIDRaw
         reading = person.reading
         aliasesRaw = person.aliasesRaw
         roleTagsRaw = person.roleTagsRaw
@@ -411,7 +415,7 @@ struct BackupPerson: Codable {
     }
 }
 
-struct BackupCompanion: Codable {
+nonisolated struct BackupCompanion: Codable {
     var id: UUID
     var name: String
     var normalizedName: String
@@ -431,7 +435,7 @@ struct BackupCompanion: Codable {
     }
 }
 
-struct BackupPersonLink: Codable {
+nonisolated struct BackupPersonLink: Codable {
     var id: UUID
     var personID: UUID?
     var eventID: UUID?
@@ -461,7 +465,7 @@ struct BackupPersonLink: Codable {
     }
 }
 
-struct BackupFavoriteProfile: Codable {
+nonisolated struct BackupFavoriteProfile: Codable {
     var id: UUID
     var personID: UUID?
     var eventID: UUID?
@@ -509,7 +513,7 @@ struct BackupFavoriteProfile: Codable {
     }
 }
 
-struct BackupFavoPin: Codable {
+nonisolated struct BackupFavoPin: Codable {
     var id: UUID
     var targetKindKey: String
     var sortOrder: Int
@@ -533,7 +537,7 @@ struct BackupFavoPin: Codable {
     }
 }
 
-struct BackupFavoGalleryPhoto: Codable {
+nonisolated struct BackupFavoGalleryPhoto: Codable {
     var id: UUID
     var profileID: UUID?
     var sourcePhotoID: UUID?
@@ -567,7 +571,7 @@ struct BackupFavoGalleryPhoto: Codable {
     }
 }
 
-struct BackupFavoAnniversary: Codable {
+nonisolated struct BackupFavoAnniversary: Codable {
     var id: UUID
     var profileID: UUID?
     var title: String
@@ -587,7 +591,7 @@ struct BackupFavoAnniversary: Codable {
     }
 }
 
-struct BackupPlace: Codable {
+nonisolated struct BackupPlace: Codable {
     var id: UUID
     var name: String
     var reading: String
@@ -633,7 +637,7 @@ struct BackupPlace: Codable {
     }
 }
 
-struct BackupPlan: Codable {
+nonisolated struct BackupPlan: Codable {
     var id: UUID
     var categoryID: UUID?
     var eventID: UUID?
@@ -685,7 +689,7 @@ struct BackupPlan: Codable {
     }
 }
 
-struct BackupTicketAccount: Codable {
+nonisolated struct BackupTicketAccount: Codable {
     var id: UUID
     var serviceName: String
     var accountTypeKey: String
@@ -731,7 +735,7 @@ struct BackupTicketAccount: Codable {
     }
 }
 
-struct BackupTicketAttempt: Codable {
+nonisolated struct BackupTicketAttempt: Codable {
     var id: UUID
     var planID: UUID?
     var accountID: UUID?

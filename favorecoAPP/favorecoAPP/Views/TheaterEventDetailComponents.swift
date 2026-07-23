@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct TheaterEventOverviewSection: View {
     let snapshot: EventDetailSnapshot
@@ -47,6 +48,7 @@ struct TheaterEventOverviewSection: View {
 struct TheaterEventInformationSection: View {
     let event: ExperienceEvent
     let accentColor: Color
+    @State private var isExpanded = true
 
     private var hasInformation: Bool {
         !event.memo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -56,11 +58,23 @@ struct TheaterEventInformationSection: View {
     var body: some View {
         if hasInformation {
             VStack(alignment: .leading, spacing: 12) {
-                TheaterEventSectionHeader(title: "あらすじ", count: nil)
-                Text(event.memo)
-                    .font(FavorecoTypography.body)
-                    .foregroundStyle(Color(red: 0.94, green: 0.91, blue: 0.86).opacity(0.88))
-                    .fixedSize(horizontal: false, vertical: true)
+                TheaterEventCollapsibleHeader(
+                    title: "あらすじ",
+                    count: nil,
+                    isExpanded: isExpanded
+                ) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded.toggle()
+                    }
+                }
+
+                if isExpanded {
+                    Text(event.memo)
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(Color(red: 0.94, green: 0.91, blue: 0.86).opacity(0.88))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
             .padding(16)
             .theaterEventCard(accentColor: accentColor)
@@ -69,98 +83,121 @@ struct TheaterEventInformationSection: View {
 }
 
 struct TheaterEventPeopleSection: View {
+    let creditsText: String
     let castLinks: [EventPersonLink]
     let staffLinks: [EventPersonLink]
     let accentColor: Color
+    @State private var isExpanded = true
     @State private var showsAllCast = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            TheaterEventSectionHeader(
+            TheaterEventCollapsibleHeader(
                 title: "キャスト・スタッフ",
-                count: castLinks.count + staffLinks.count
-            )
+                count: creditsLineCount + castLinks.count + staffLinks.count,
+                isExpanded: isExpanded
+            ) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            }
 
-            if castLinks.isEmpty && staffLinks.isEmpty {
-                TheaterEventEmptyRow(
-                    systemImage: "person.3",
-                    message: "キャスト・スタッフはまだ登録されていません。"
-                )
-            } else {
-                if !castLinks.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("キャスト")
-                            .font(FavorecoTypography.bodyStrong)
-
-                        if showsAllCast {
-                            LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: 78), spacing: 12)],
-                                spacing: 14
-                            ) {
-                                ForEach(castLinks) { link in
-                                    TheaterEventPersonCard(link: link, accentColor: accentColor)
-                                }
+            if isExpanded {
+                Group {
+                    if creditsText.isEmpty && castLinks.isEmpty && staffLinks.isEmpty {
+                        TheaterEventEmptyRow(
+                            systemImage: "person.3",
+                            message: "キャスト・スタッフはまだ登録されていません。"
+                        )
+                    } else {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if !creditsText.isEmpty {
+                                Text(creditsText)
+                                    .font(FavorecoTypography.body)
+                                    .foregroundStyle(Color(red: 0.94, green: 0.91, blue: 0.86).opacity(0.9))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .textSelection(.enabled)
                             }
-                        } else {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(alignment: .top, spacing: 14) {
-                                    ForEach(castLinks.prefix(6)) { link in
-                                        TheaterEventPersonCard(link: link, accentColor: accentColor)
+
+                            if !castLinks.isEmpty {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(creditsText.isEmpty ? "キャスト" : "以前の形式で登録したキャスト")
+                                        .font(FavorecoTypography.bodyStrong)
+
+                                    if showsAllCast {
+                                        LazyVGrid(
+                                            columns: [GridItem(.adaptive(minimum: 78), spacing: 12)],
+                                            spacing: 14
+                                        ) {
+                                            ForEach(castLinks) { link in
+                                                TheaterEventPersonCard(link: link, accentColor: accentColor)
+                                            }
+                                        }
+                                    } else {
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            LazyHStack(alignment: .top, spacing: 14) {
+                                                ForEach(castLinks.prefix(6)) { link in
+                                                    TheaterEventPersonCard(link: link, accentColor: accentColor)
+                                                }
+                                            }
+                                            .padding(.horizontal, 1)
+                                        }
+                                        .scrollClipDisabled()
+                                        .background {
+                                            GeometryReader { proxy in
+                                                Color.clear.preference(
+                                                    key: EventDetailBackSwipeExclusionPreferenceKey.self,
+                                                    value: [proxy.frame(in: .global)]
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if castLinks.count > 6 {
+                                        Button {
+                                            withAnimation(.easeInOut(duration: 0.18)) {
+                                                showsAllCast.toggle()
+                                            }
+                                        } label: {
+                                            HStack(spacing: 5) {
+                                                Text(showsAllCast ? "キャストを閉じる" : "さらに見る")
+                                                Image(systemName: showsAllCast ? "chevron.up" : "chevron.down")
+                                            }
+                                            .font(FavorecoTypography.captionStrong)
+                                            .foregroundStyle(accentColor)
+                                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
-                                .padding(.horizontal, 1)
                             }
-                            .scrollClipDisabled()
-                            .background {
-                                GeometryReader { proxy in
-                                    Color.clear.preference(
-                                        key: EventDetailBackSwipeExclusionPreferenceKey.self,
-                                        value: [proxy.frame(in: .global)]
-                                    )
+
+                            if !staffLinks.isEmpty {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(creditsText.isEmpty ? "スタッフ・関係者" : "登録済みの団体・関係者")
+                                        .font(FavorecoTypography.bodyStrong)
+
+                                    ForEach(staffLinks) { link in
+                                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                            Text(roleName(for: link))
+                                                .font(FavorecoTypography.caption)
+                                                .foregroundStyle(accentColor.opacity(0.82))
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(accentColor.opacity(0.07), in: Capsule())
+
+                                            Text(personName(for: link, fallback: "スタッフ・関係者"))
+                                                .font(FavorecoTypography.bodyStrong)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                    }
                                 }
-                            }
-                        }
-
-                        if castLinks.count > 6 {
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.18)) {
-                                    showsAllCast.toggle()
-                                }
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Text(showsAllCast ? "キャストを閉じる" : "さらに見る")
-                                    Image(systemName: showsAllCast ? "chevron.up" : "chevron.down")
-                                }
-                                .font(FavorecoTypography.captionStrong)
-                                .foregroundStyle(accentColor)
-                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                if !staffLinks.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("スタッフ・関係者")
-                            .font(FavorecoTypography.bodyStrong)
-
-                        ForEach(staffLinks) { link in
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Text(roleName(for: link))
-                                    .font(FavorecoTypography.caption)
-                                    .foregroundStyle(accentColor.opacity(0.82))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(accentColor.opacity(0.07), in: Capsule())
-
-                                Text(personName(for: link, fallback: "スタッフ・関係者"))
-                                    .font(FavorecoTypography.bodyStrong)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                     }
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(16)
@@ -171,6 +208,13 @@ struct TheaterEventPeopleSection: View {
         let customRole = link.displayRole.trimmingCharacters(in: .whitespacesAndNewlines)
         if !customRole.isEmpty { return customRole }
         return PersonRoleOption.option(for: link.roleKey).name
+    }
+
+    private var creditsLineCount: Int {
+        creditsText
+            .components(separatedBy: .newlines)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .count
     }
 }
 
@@ -197,7 +241,7 @@ struct TheaterEventParticipationHistorySection: View {
                     NavigationLink {
                         ExperienceDetailView(visit: visit)
                     } label: {
-                        VisitSummaryRow(visit: visit, showsCategory: false)
+                        TheaterEventParticipationRow(visit: visit, accentColor: accentColor)
                     }
                     .buttonStyle(.plain)
                 }
@@ -239,37 +283,30 @@ struct TheaterEventMemoryGallerySection: View {
             VStack(alignment: .leading, spacing: 12) {
                 TheaterEventSectionHeader(title: "思い出ギャラリー", count: items.count)
 
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 96), spacing: 10)],
-                    spacing: 10
-                ) {
-                    ForEach(displayedItems) { item in
-                        NavigationLink {
-                            ExperienceDetailView(visit: item.visit)
-                        } label: {
-                            ZStack(alignment: .bottomLeading) {
-                                RepresentativePhotoImage(
-                                    photo: item.photo,
-                                    maxPixelSize: 420,
-                                    contentMode: .fill
-                                )
-                                .aspectRatio(1, contentMode: .fill)
-                                .frame(maxWidth: .infinity)
-                                .clipped()
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 10) {
+                        ForEach(displayedItems) { item in
+                            NavigationLink {
+                                ExperienceDetailView(visit: item.visit)
+                            } label: {
+                                ZStack(alignment: .bottomLeading) {
+                                    TheaterEventGalleryPhoto(photo: item.photo, height: 132)
 
-                                Text(FavorecoDateText.compactDate(item.visit.visitedAt))
-                                    .font(FavorecoTypography.caption)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 5)
-                                    .background(.black.opacity(0.58), in: Capsule())
-                                    .padding(6)
+                                    Text(FavorecoDateText.compactDate(item.visit.visitedAt))
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 7)
+                                        .padding(.vertical, 5)
+                                        .background(.black.opacity(0.58), in: Capsule())
+                                        .padding(6)
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(FavorecoDateText.compactDate(item.visit.visitedAt))の観劇記録を開く")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(FavorecoDateText.compactDate(item.visit.visitedAt))の観劇記録を開く")
                     }
+                    .padding(.horizontal, 1)
                 }
 
                 if items.count > 6 {
@@ -289,6 +326,168 @@ struct TheaterEventMemoryGallerySection: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+}
+
+private struct TheaterEventParticipationRow: View {
+    let visit: Visit
+    let accentColor: Color
+
+    private var firstPhoto: PhotoBlob? {
+        let photos = (visit.photos ?? [])
+            .filter {
+                $0.mediaKind == "photo"
+                    && $0.hasStoredData
+                    && ExperiencePhotoPurpose.resolved(from: $0.purpose) == .memory
+            }
+            .sorted { $0.createdAt < $1.createdAt }
+        if !visit.eyecatchPath.isEmpty,
+           let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
+            return cover
+        }
+        return photos.first
+    }
+
+    private var venueText: String {
+        let snapshot = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !snapshot.isEmpty { return snapshot }
+        return visit.placeMaster?.name ?? "場所未登録"
+    }
+
+    private var focusPeopleText: String {
+        let visitLinks = (visit.personLinks ?? []).filter { !$0.isArchived }
+        let focusLinks = visitLinks.filter { $0.roleKey == PersonRoleOption.theaterFocus.key }
+        let legacyVisitLinks = visitLinks.filter { !TheaterVisitCastResolver.isInheritedSnapshotLink($0) }
+        let legacyEventLinks = (visit.event?.personLinks ?? []).filter {
+            !$0.isArchived && TheaterVisitCastResolver.isCastLink($0)
+        }
+        var seen = Set<String>()
+        let names = (focusLinks + legacyVisitLinks + legacyEventLinks)
+            .compactMap { link -> String? in
+                let name = TheaterVisitCastResolver.personName(for: link)
+                guard !name.isEmpty else { return nil }
+                let key = normalizedPersonName(name)
+                return seen.insert(key).inserted ? name : nil
+            }
+        return names.isEmpty ? "未登録" : names.prefix(2).joined(separator: " / ")
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                if let firstPhoto {
+                    RepresentativePhotoImage(
+                        photo: firstPhoto,
+                        maxPixelSize: 280,
+                        contentMode: .fill
+                    )
+                } else {
+                    Image(systemName: "theatermasks.fill")
+                        .font(.title2)
+                        .foregroundStyle(accentColor)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(accentColor.opacity(0.10))
+                }
+            }
+            .frame(width: 72, height: 102)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 7) {
+                TheaterEventParticipationMetaRow(
+                    systemImage: "calendar",
+                    text: FavorecoDateText.compactDateWithHalfWidthWeekday(visit.visitedAt)
+                )
+                TheaterEventParticipationMetaRow(
+                    systemImage: "clock",
+                    text: ExperienceDetailPresentation.performanceTime(for: visit)
+                )
+                TheaterEventParticipationMetaRow(
+                    systemImage: "mappin.and.ellipse",
+                    text: venueText
+                )
+                TheaterEventParticipationMetaRow(
+                    systemImage: "heart.fill",
+                    text: focusPeopleText
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .background(Color.black.opacity(0.24), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(FavorecoDateText.compactDateWithHalfWidthWeekday(visit.visitedAt))、\(ExperienceDetailPresentation.performanceTime(for: visit))、\(venueText)、お目当て・注目した人 \(focusPeopleText)"
+        )
+    }
+}
+
+private struct TheaterEventParticipationMetaRow: View {
+    let systemImage: String
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: systemImage)
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(Color(red: 0.94, green: 0.91, blue: 0.86).opacity(0.86))
+            .lineLimit(1)
+    }
+}
+
+private struct TheaterEventGalleryPhoto: View {
+    let photo: PhotoBlob
+    let height: CGFloat
+    @State private var image: UIImage?
+    @State private var loadedCacheKey: String?
+
+    private var cacheKey: String {
+        "theater-gallery-\(photo.id.uuidString)-\(photo.byteCount)-520"
+    }
+
+    private var displayedImage: UIImage? {
+        if loadedCacheKey == cacheKey { return image }
+        return ThumbnailLoader.cached(forKey: cacheKey)
+    }
+
+    private var displayedWidth: CGFloat {
+        guard let displayedImage, displayedImage.size.height > 0 else { return height }
+        return height * displayedImage.size.width / displayedImage.size.height
+    }
+
+    var body: some View {
+        Group {
+            if let displayedImage {
+                Image(uiImage: displayedImage)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Rectangle()
+                    .fill(Color.white.opacity(0.05))
+                    .overlay { ProgressView() }
+            }
+        }
+        .frame(width: displayedWidth, height: height)
+        .task(id: cacheKey) {
+            if let cached = ThumbnailLoader.cached(forKey: cacheKey) {
+                image = cached
+                loadedCacheKey = cacheKey
+                return
+            }
+            image = nil
+            loadedCacheKey = nil
+            let data = photo.data
+            let key = cacheKey
+            let loadedImage = await Task.detached(priority: .userInitiated) {
+                ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: 520, cacheKey: key)
+            }.value
+            guard !Task.isCancelled else { return }
+            image = loadedImage
+            loadedCacheKey = key
         }
     }
 }
@@ -393,6 +592,37 @@ private struct TheaterEventSectionHeader: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct TheaterEventCollapsibleHeader: View {
+    let title: String
+    let count: Int?
+    let isExpanded: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(FavorecoTypography.sectionTitle)
+                    .foregroundStyle(Color(red: 0.96, green: 0.93, blue: 0.88))
+                Spacer(minLength: 8)
+                if let count {
+                    Text("\(count)")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(isExpanded ? "展開中" : "折りたたみ中")
+        .accessibilityHint(isExpanded ? "ダブルタップで閉じます" : "ダブルタップで開きます")
     }
 }
 

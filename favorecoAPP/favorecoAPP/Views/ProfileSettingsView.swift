@@ -30,6 +30,7 @@ struct ProfileSettingsView: View {
     }
 
     var body: some View {
+        let photoActionTitle = profileImageData.isEmpty ? "写真を選ぶ" : "写真を変更"
         List {
             Section("プロフィール") {
                 HStack(spacing: 16) {
@@ -37,7 +38,7 @@ struct ProfileSettingsView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         PhotosPicker(selection: $selectedProfilePhoto, matching: .images) {
-                            Label(profileImageData.isEmpty ? "写真を選ぶ" : "写真を変更", systemImage: "photo")
+                            Label(photoActionTitle, systemImage: "photo")
                         }
 
                         if !profileImageData.isEmpty {

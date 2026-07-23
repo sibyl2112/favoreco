@@ -50,6 +50,7 @@ struct QuickRegistrationView: View {
                 }
 
                 Section("アイキャッチ（任意）") {
+                    let photoActionTitle = eyecatchData == nil ? "写真を選ぶ" : "写真を変更"
                     if let eyecatchData, let image = UIImage(data: eyecatchData) {
                         Image(uiImage: image)
                             .resizable()
@@ -65,7 +66,7 @@ struct QuickRegistrationView: View {
                     }
 
                     PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
-                        Label(eyecatchData == nil ? "写真を選ぶ" : "写真を変更", systemImage: "photo")
+                        Label(photoActionTitle, systemImage: "photo")
                     }
                     .disabled(isProcessingImage)
                     .onChange(of: selectedEyecatchItem) { _, item in

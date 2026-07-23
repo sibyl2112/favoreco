@@ -1,14 +1,14 @@
 import Foundation
 
 struct CategoryTopSnapshot {
-    let visibleCategories: [RecordCategory]
+    let visibleCategoryIDs: [UUID]
     let events: [CategoryEventSnapshot]
-    let visits: [Visit]
+    let visitIDs: [UUID]
 
     var eventCount: Int { events.count }
-    var visitCount: Int { visits.count }
+    var visitCount: Int { visitIDs.count }
     var interestedEventCount: Int {
-        events.lazy.filter { $0.event.stateKey == "interested" }.count
+        events.lazy.filter { $0.stateKey == "interested" }.count
     }
 
     static func make(
@@ -35,17 +35,25 @@ struct CategoryTopSnapshot {
         }
 
         return CategoryTopSnapshot(
-            visibleCategories: visibleCategories,
+            visibleCategoryIDs: visibleCategories.map(\.id),
             events: eventSnapshots,
-            visits: visits
+            visitIDs: visits.map(\.id)
         )
     }
 }
 
 struct CategoryEventSnapshot: Identifiable {
-    let event: ExperienceEvent
+    let id: UUID
+    let title: String
+    let stateKey: String
     let visitCount: Int
     let latestVisitDate: Date?
 
-    var id: UUID { event.id }
+    init(event: ExperienceEvent, visitCount: Int, latestVisitDate: Date?) {
+        id = event.id
+        title = event.title
+        stateKey = event.stateKey
+        self.visitCount = visitCount
+        self.latestVisitDate = latestVisitDate
+    }
 }

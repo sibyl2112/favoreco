@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct PlanPreparationFields: Codable, Equatable {
+nonisolated struct PlanPreparationFields: Codable, Equatable {
     enum ChecklistMode: String, Codable {
         case automatic
         case enabled
@@ -88,7 +88,7 @@ struct PlanPreparationFields: Codable, Equatable {
     }
 }
 
-struct PlanPreparationTask: Codable, Identifiable, Equatable {
+nonisolated struct PlanPreparationTask: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var title: String = ""
     var kindKey: String = PlanPreparationKind.other.rawValue
@@ -179,7 +179,7 @@ struct PlanPreparationTask: Codable, Identifiable, Equatable {
     }
 }
 
-enum PlanPreparationKind: String, Codable, CaseIterable, Identifiable, Hashable {
+nonisolated enum PlanPreparationKind: String, Codable, CaseIterable, Identifiable, Hashable {
     case other
     case hotel
     case shinkansen

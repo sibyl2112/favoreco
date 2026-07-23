@@ -6,6 +6,7 @@ struct ExperienceDetailSnapshot {
     let photos: [PhotoBlob]
     let linkedPeople: [EventPersonLink]
     let unitFields: VisitUnitFields
+    let eventCreditsText: String
     let eyecatchAspectRatio: Double
     let eventTitle: String
     let ratingText: String
@@ -32,11 +33,19 @@ struct ExperienceDetailSnapshot {
                 if lhsIsCover != rhsIsCover { return lhsIsCover }
                 return lhs.createdAt < rhs.createdAt
             }
-        let linkedPeople = personLinks
-            .filter { link in
-                !link.isArchived && (link.event?.id == event?.id || link.visit?.id == visit.id)
-            }
-            .sorted { $0.sortOrder < $1.sortOrder }
+        let eventLinks = personLinks.filter { !$0.isArchived && $0.event?.id == event?.id }
+        let visitLinks = personLinks.filter { !$0.isArchived && $0.visit?.id == visit.id }
+        let linkedPeople: [EventPersonLink]
+        if category?.templateKey == "theater" {
+            linkedPeople = TheaterVisitCastResolver.resolvedLinks(
+                eventLinks: eventLinks,
+                visitLinks: visitLinks,
+                excludedEventLinkIDs: Set(unitFields.excludedEventCastLinkIDs),
+                usesVisitSnapshot: unitFields.hasVisitCastSnapshot
+            )
+        } else {
+            linkedPeople = (eventLinks + visitLinks).sorted { $0.sortOrder < $1.sortOrder }
+        }
         let weatherTemperatureText: String
         if let high = unitFields.weatherHighCelsius,
            let low = unitFields.weatherLowCelsius {
@@ -57,6 +66,7 @@ struct ExperienceDetailSnapshot {
             photos: photos,
             linkedPeople: linkedPeople,
             unitFields: unitFields,
+            eventCreditsText: VisitUnitFields(rawValue: event?.unitFieldsRaw ?? "").eventCreditsText,
             eyecatchAspectRatio: EyecatchAspectRatio.option(
                 for: unitFields.eyecatchAspectRatioKey,
                 category: category

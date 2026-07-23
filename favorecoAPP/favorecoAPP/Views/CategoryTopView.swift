@@ -25,7 +25,6 @@ struct CategoryTopView: View {
     @State private var isShowingAddExperience = false
     @State private var selectedEventForNewVisit: ExperienceEvent?
     @State private var selectedCategoryID: UUID
-    @State private var transitionMovesForward = true
     @State private var goshuinFilter: GoshuinVisitFilter = .all
     @State private var goshuinMapFilter: GoshuinVisitFilter = .all
     @State private var goshuinListLimit = 10
@@ -72,7 +71,7 @@ struct CategoryTopView: View {
             .padding(.bottom, 6)
 
             GenreNavigationStrip(
-                categories: snapshot.visibleCategories,
+                categories: visibleCategories,
                 selectedCategoryID: activeCategory.id,
                 onSelectAll: { dismiss() },
                 onSelectCategory: { selectedCategory in
@@ -103,11 +102,10 @@ struct CategoryTopView: View {
                                 }
                             }
                             .id("category-hero-\(activeCategory.id.uuidString)")
-                            .transition(categoryPageTransition)
 
                             GenreSwipeContainer(
-                                canMoveBackward: !snapshot.visibleCategories.isEmpty,
-                                canMoveForward: !snapshot.visibleCategories.isEmpty,
+                                canMoveBackward: !visibleCategories.isEmpty,
+                                canMoveForward: !visibleCategories.isEmpty,
                                 onMove: { direction in
                                     if let destination = neighboringCategory(from: activeCategory, offset: direction) {
                                         switchCategory(to: destination)
@@ -132,7 +130,7 @@ struct CategoryTopView: View {
                                             .id(CategoryScrollAnchor.events)
                                     } else if activeCategory.templateKey == "random_goods" {
                                         CollectibleCategorySeriesGrid(
-                                            events: snapshot.events.map(\.event),
+                                            events: resolvedEvents(in: snapshot),
                                             tint: categoryAccent(activeCategory),
                                             onAdd: { isShowingAddExperience = true }
                                         )
@@ -148,7 +146,7 @@ struct CategoryTopView: View {
                                             .id(CategoryScrollAnchor.events)
                                         if supportsVisitedPlacesMap(activeCategory) {
                                             VisitedPlacesHeatMapSection(
-                                                visits: snapshot.visits,
+                                                visits: resolvedVisits(in: snapshot),
                                                 category: activeCategory,
                                                 tint: categoryAccent(activeCategory)
                                             )
@@ -156,7 +154,7 @@ struct CategoryTopView: View {
                                         }
                                     }
                                     chapterFooter(
-                                        categories: snapshot.visibleCategories,
+                                        categories: visibleCategories,
                                         currentCategory: activeCategory,
                                         onSelect: { selectedCategory in
                                             switchCategory(to: selectedCategory)
@@ -169,7 +167,6 @@ struct CategoryTopView: View {
                                     )
                                 }
                                 .id("category-content-\(activeCategory.id.uuidString)")
-                                .transition(categoryPageTransition)
                             }
                         }
                     }
@@ -181,7 +178,6 @@ struct CategoryTopView: View {
         }
         .background(categoryBackground(category: activeCategory))
         .environment(\.colorScheme, usesAtmosphericDarkStyle(activeCategory) ? .dark : colorScheme)
-        .animation(categorySwitchAnimation, value: activeCategory.id)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingAddExperience) {
             if activeCategory.templateKey == "random_goods" {
@@ -199,7 +195,7 @@ struct CategoryTopView: View {
         .sheet(isPresented: $isShowingGoshuinSearch) {
             GoshuinPrefectureSearchView(
                 selectedPrefecture: $selectedGoshuinPrefecture,
-                availablePrefectures: goshuinAvailablePrefectures(in: snapshot.visits)
+                availablePrefectures: goshuinAvailablePrefectures(in: resolvedVisits(in: snapshot))
             )
         }
         .sheet(isPresented: $isShowingGoshuinShare) {
@@ -221,7 +217,7 @@ struct CategoryTopView: View {
     }
 
     private func collectibleHero(category: RecordCategory, snapshot: CategoryTopSnapshot) -> some View {
-        let summaries = snapshot.events.map { CollectibleSeriesSummary.make(series: $0.event) }
+        let summaries = resolvedEvents(in: snapshot).map { CollectibleSeriesSummary.make(series: $0) }
         let collected = summaries.reduce(0) { $0 + $1.collectedCount }
         let target = summaries.reduce(0) { $0 + $1.targetCount }
         let duplicates = summaries.reduce(0) { $0 + $1.duplicateQuantity }
@@ -288,7 +284,7 @@ struct CategoryTopView: View {
     }
 
     private func theaterHero(category: RecordCategory, snapshot: CategoryTopSnapshot) -> some View {
-        let featuredEvent = snapshot.events.first?.event
+        let featuredEvent = snapshot.events.first.flatMap { resolvedEvent(for: $0) }
 
         return HStack(alignment: .top, spacing: 16) {
             TheaterPosterView(event: featuredEvent, width: 118)
@@ -360,8 +356,9 @@ struct CategoryTopView: View {
                 ("観たい", "\(snapshot.interestedEventCount)", "本", "鑑賞候補"),
             ]
         case "museum":
-            let visitedVenueCount = museumVisitedVenueCount(in: snapshot.visits)
-            let viewedEventCount = Set(snapshot.visits.compactMap { $0.event?.id }).count
+            let visits = resolvedVisits(in: snapshot)
+            let visitedVenueCount = museumVisitedVenueCount(in: visits)
+            let viewedEventCount = Set(visits.compactMap { $0.event?.id }).count
             values = [
                 ("訪れた館", "\(visitedVenueCount)", "館", "訪問館数"),
                 ("鑑賞イベント", "\(viewedEventCount)", "件", "鑑賞済み"),
@@ -404,7 +401,7 @@ struct CategoryTopView: View {
                 ("気になる", "\(snapshot.interestedEventCount)", "件", "訪問候補"),
             ]
         case "goshuin":
-            let visitedPlaceCount = Set(snapshot.visits.compactMap { $0.event?.id }).count
+            let visitedPlaceCount = Set(resolvedVisits(in: snapshot).compactMap { $0.event?.id }).count
             values = [
                 ("参拝先", "\(visitedPlaceCount)", "寺社", "総参拝先数"),
                 ("ご記帳済み", "\(snapshot.visitCount)", "印", "総御朱印数"),
@@ -452,8 +449,10 @@ struct CategoryTopView: View {
                 )
             } else {
                 ForEach(snapshot.events.prefix(10)) { eventSnapshot in
-                    TheaterEventRow(snapshot: eventSnapshot) {
-                        selectedEventForNewVisit = eventSnapshot.event
+                    if let event = resolvedEvent(for: eventSnapshot) {
+                        TheaterEventRow(snapshot: eventSnapshot, event: event) {
+                            selectedEventForNewVisit = event
+                        }
                     }
                 }
             }
@@ -464,16 +463,16 @@ struct CategoryTopView: View {
         VStack(alignment: .leading, spacing: 12) {
             TheaterSectionHeader(title: "最近の観劇", count: snapshot.visitCount)
 
-            if snapshot.visits.isEmpty {
+            if snapshot.visitIDs.isEmpty {
                 TheaterEmptyState(
                     icon: "ticket",
                     title: "観劇記録はまだありません",
                     message: "作品、観劇日、劇場、感想を入れるとここに並びます。"
                 )
             } else {
-                ForEach(snapshot.visits.prefix(10)) { visit in
+                ForEach(resolvedVisits(in: snapshot).prefix(10)) { visit in
                     NavigationLink {
-                        ExperienceDetailView(visit: visit)
+                        CategoryVisitDestination(visitID: visit.id)
                     } label: {
                         TheaterVisitRow(visit: visit)
                     }
@@ -518,13 +517,16 @@ struct CategoryTopView: View {
         let isLive = category.templateKey == "live"
 
         return VStack(alignment: .leading, spacing: 10) {
-            Text("Coming Up")
-                .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
-                .foregroundStyle(
-                    isTheater
-                        ? TheaterCategoryStyle.ivory
-                        : isLive ? LiveCategoryStyle.mist : FavorecoTypography.brandColor(for: colorScheme)
-                )
+            LayeredCategorySectionTitle(
+                englishTitle: "Coming Up",
+                japaneseTitle: categorySectionJapaneseTitle(
+                    for: "Coming Up",
+                    category: category
+                ) ?? "これからの予定",
+                foregroundColor: isTheater
+                    ? TheaterCategoryStyle.ivory
+                    : isLive ? LiveCategoryStyle.mist : FavorecoTypography.brandColor(for: colorScheme)
+            )
 
             if plans.isEmpty {
                 Button {
@@ -543,7 +545,7 @@ struct CategoryTopView: View {
             } else {
                 ForEach(visiblePlans) { plan in
                     NavigationLink {
-                        PlanDetailView(plan: plan)
+                        CategoryPlanDestination(planID: plan.id)
                     } label: {
                         CategoryComingUpRow(
                             plan: plan,
@@ -600,8 +602,7 @@ struct CategoryTopView: View {
             }
             .sorted { $0.startsAt < $1.startsAt }
         let plannedEventIDs = Set(upcomingPlans.compactMap { $0.event?.id })
-        let interestedEvents = snapshot.events
-            .map(\.event)
+        let interestedEvents = resolvedEvents(in: snapshot, category: category)
             .filter { $0.stateKey == "interested" && !plannedEventIDs.contains($0.id) }
             .sorted { $0.updatedAt > $1.updatedAt }
 
@@ -613,14 +614,15 @@ struct CategoryTopView: View {
     private func featureMetrics(category: RecordCategory, snapshot: CategoryTopSnapshot) -> [MiniStatisticsItem] {
         let calendar = Calendar.current
         let currentYear = calendar.component(.year, from: Date())
-        let yearVisits = snapshot.visits.filter { calendar.component(.year, from: $0.visitedAt) == currentYear }
+        let visits = resolvedVisits(in: snapshot)
+        let yearVisits = visits.filter { calendar.component(.year, from: $0.visitedAt) == currentYear }
         let ratedYearVisits = yearVisits.filter { $0.overallRating > 0 }
         let averageText: String = {
             guard !ratedYearVisits.isEmpty else { return "-" }
             let average = ratedYearVisits.reduce(0) { $0 + $1.overallRating } / Double(ratedYearVisits.count)
             return String(format: "%.1f", average)
         }()
-        let ratedVisits = snapshot.visits.filter { $0.overallRating > 0 }
+        let ratedVisits = visits.filter { $0.overallRating > 0 }
         let movieReviewText: String = {
             guard !ratedVisits.isEmpty else { return "-" }
             let average = ratedVisits.reduce(0) { $0 + $1.overallRating } / Double(ratedVisits.count)
@@ -636,7 +638,7 @@ struct CategoryTopView: View {
                 MiniStatisticsItem(title: "レビュー", value: movieReviewText, unit: movieReviewText == "-" ? "" : "点", icon: "text.bubble"),
             ]
         case "book":
-            let favoriteCount = snapshot.visits.filter { $0.overallRating >= 4.5 }.count
+            let favoriteCount = visits.filter { $0.overallRating >= 4.5 }.count
             return [
                 MiniStatisticsItem(title: "総冊数", value: "\(snapshot.eventCount)", unit: "冊", icon: "books.vertical"),
                 MiniStatisticsItem(title: "年間冊数", value: "\(yearVisits.count)", unit: "冊", icon: "calendar"),
@@ -644,7 +646,7 @@ struct CategoryTopView: View {
                 MiniStatisticsItem(title: "お気に入り", value: "\(favoriteCount)", unit: "冊", icon: "bookmark"),
             ]
         case "theme_park":
-            let repeatCount = repeatVisitCount(in: snapshot.visits)
+            let repeatCount = repeatVisitCount(in: visits)
             return [
                 MiniStatisticsItem(title: "総来園数", value: "\(snapshot.visitCount)", unit: "回", icon: "ticket"),
                 MiniStatisticsItem(title: "年間来園", value: "\(yearVisits.count)", unit: "回", icon: "calendar"),
@@ -652,8 +654,8 @@ struct CategoryTopView: View {
                 MiniStatisticsItem(title: "気になる", value: "\(snapshot.interestedEventCount)", unit: "件", icon: "bookmark"),
             ]
         case "nature_living":
-            let repeatCount = repeatVisitCount(in: snapshot.visits)
-            let encounteredCount = encounteredItemCount(in: snapshot.visits)
+            let repeatCount = repeatVisitCount(in: visits)
+            let encounteredCount = encounteredItemCount(in: visits)
             return [
                 MiniStatisticsItem(title: "総訪問数", value: "\(snapshot.visitCount)", unit: "回", icon: "pawprint"),
                 MiniStatisticsItem(title: "年間訪問", value: "\(yearVisits.count)", unit: "回", icon: "calendar"),
@@ -715,10 +717,11 @@ struct CategoryTopView: View {
     }
 
     private func goshuinContent(category: RecordCategory, snapshot: CategoryTopSnapshot) -> some View {
-        let filteredVisits = goshuinFilteredVisits(in: snapshot.visits, filter: goshuinFilter)
-        let mapVisits = goshuinMapVisits(in: snapshot.visits)
+        let visits = resolvedVisits(in: snapshot)
+        let filteredVisits = goshuinFilteredVisits(in: visits, filter: goshuinFilter)
+        let mapVisits = goshuinMapVisits(in: visits)
         let displayedVisits = Array(mapVisits.prefix(goshuinListLimit))
-        let books = goshuinBookSelections(from: snapshot.visits)
+        let books = goshuinBookSelections(from: visits)
 
         return VStack(alignment: .leading, spacing: 18) {
             GoshuinFilterBar(selection: $goshuinFilter, options: [.all, .shrine, .temple, .limited, .special])
@@ -744,7 +747,7 @@ struct CategoryTopView: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 12) {
                         ForEach(filteredVisits.prefix(6)) { visit in
                             NavigationLink {
-                                ExperienceDetailView(visit: visit)
+                                CategoryVisitDestination(visitID: visit.id)
                             } label: {
                                 GoshuinStampTile(visit: visit, photo: firstPhoto(in: visit))
                             }
@@ -819,7 +822,7 @@ struct CategoryTopView: View {
                 } else {
                     ForEach(displayedVisits) { visit in
                         NavigationLink {
-                            ExperienceDetailView(visit: visit)
+                            CategoryVisitDestination(visitID: visit.id)
                         } label: {
                             GoshuinVisitedPlaceRow(visit: visit)
                         }
@@ -859,7 +862,7 @@ struct CategoryTopView: View {
     }
 
     private func goshuinHero(category: RecordCategory, snapshot: CategoryTopSnapshot) -> some View {
-        let recentVisits = Array(snapshot.visits.sorted { $0.visitedAt > $1.visitedAt }.prefix(5))
+        let recentVisits = Array(resolvedVisits(in: snapshot).sorted { $0.visitedAt > $1.visitedAt }.prefix(5))
 
         return GoshuinTopHero(
             category: category,
@@ -978,8 +981,10 @@ struct CategoryTopView: View {
                 )
             } else {
                 ForEach(snapshot.events.prefix(10)) { eventSnapshot in
-                    EventRow(snapshot: eventSnapshot) {
-                        selectedEventForNewVisit = eventSnapshot.event
+                    if let event = resolvedEvent(for: eventSnapshot) {
+                        EventRow(snapshot: eventSnapshot, event: event) {
+                            selectedEventForNewVisit = event
+                        }
                     }
                 }
             }
@@ -1070,13 +1075,22 @@ struct CategoryTopView: View {
             }
 
             HStack(spacing: 12) {
-                Text(librarySectionTitle(category: category, fallback: recordTemplate.targetSectionTitle))
-                    .font(
-                        usesLatinLibraryStyle
-                            ? FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3)
-                            : FavorecoTypography.sectionTitle
+                let title = librarySectionTitle(
+                    category: category,
+                    fallback: recordTemplate.targetSectionTitle
+                )
+                if usesLatinLibraryStyle,
+                   let japaneseTitle = categorySectionJapaneseTitle(for: title, category: category) {
+                    LayeredCategorySectionTitle(
+                        englishTitle: title,
+                        japaneseTitle: japaneseTitle,
+                        foregroundColor: libraryPrimaryTextColor(category)
                     )
-                    .foregroundStyle(libraryPrimaryTextColor(category))
+                } else {
+                    Text(title)
+                        .font(FavorecoTypography.sectionTitle)
+                        .foregroundStyle(libraryPrimaryTextColor(category))
+                }
 
                 Text("\(productionItems.count)")
                     .font(FavorecoTypography.captionStrong)
@@ -1127,13 +1141,17 @@ struct CategoryTopView: View {
         tint: Color
     ) -> some View {
         HStack(spacing: 10) {
-            Text(title)
-                .font(
-                    ["theater", "live", "museum", "movie"].contains(category.templateKey)
-                        ? FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3)
-                        : FavorecoTypography.sectionTitle
+            if let japaneseTitle = categorySectionJapaneseTitle(for: title, category: category) {
+                LayeredCategorySectionTitle(
+                    englishTitle: title,
+                    japaneseTitle: japaneseTitle,
+                    foregroundColor: libraryPrimaryTextColor(category)
                 )
-                .foregroundStyle(libraryPrimaryTextColor(category))
+            } else {
+                Text(title)
+                    .font(FavorecoTypography.sectionTitle)
+                    .foregroundStyle(libraryPrimaryTextColor(category))
+            }
 
             Text("\(items.count)")
                 .font(FavorecoTypography.captionStrong)
@@ -1217,6 +1235,28 @@ struct CategoryTopView: View {
         }
     }
 
+    private func categorySectionJapaneseTitle(
+        for englishTitle: String,
+        category: RecordCategory
+    ) -> String? {
+        switch (category.templateKey, englishTitle) {
+        case ("theater", "Coming Up"): "これからの観劇"
+        case ("theater", "Interests"): "気になる公演"
+        case ("theater", "Performance Log"): "観劇記録"
+        case ("theater", "Productions"): "公演情報"
+        case ("theater", "Ticket Progress"): "チケット進捗"
+        case ("live", "Coming Up"): "これからのライブ"
+        case ("live", "Interests"): "気になるライブ"
+        case ("live", "Live History"): "ライブ記録"
+        case ("live", "Ticket Progress"): "チケット進捗"
+        case ("museum", "Coming Up"): "これからの鑑賞"
+        case ("museum", "Interests"): "気になる展示"
+        case ("movie", "Coming Up"): "これからの鑑賞"
+        case ("movie", "Interests"): "気になる映画"
+        default: nil
+        }
+    }
+
     private func libraryPrimaryTextColor(_ category: RecordCategory) -> Color {
         switch category.templateKey {
         case "theater": TheaterCategoryStyle.ivory
@@ -1248,6 +1288,7 @@ struct CategoryTopView: View {
             CategoryTicketProgressSection(
                 items: items,
                 title: ["theater", "live"].contains(category.templateKey) ? "Ticket Progress" : "チケット進捗",
+                japaneseTitle: ["theater", "live"].contains(category.templateKey) ? "チケット進捗" : nil,
                 usesLatinTitle: ["theater", "live"].contains(category.templateKey),
                 usesTheaterStyle: category.templateKey == "theater",
                 usesLiveStyle: category.templateKey == "live",
@@ -1267,15 +1308,16 @@ struct CategoryTopView: View {
         snapshot: CategoryTopSnapshot
     ) -> [CategoryLibraryItem] {
         let now = Date()
-        let visitsByEventID = Dictionary(grouping: snapshot.visits) { $0.event?.id }
+        let visitsByEventID = Dictionary(grouping: resolvedVisits(in: snapshot)) { $0.event?.id }
         let plansByEventID = Dictionary(grouping: allPlans.filter { plan in
             !plan.isArchived
                 && (plan.category ?? plan.event?.category)?.id == category.id
                 && plan.event != nil
         }) { $0.event?.id }
 
-        return snapshot.events.map { eventSnapshot in
-            let eventID = eventSnapshot.event.id
+        return snapshot.events.compactMap { eventSnapshot in
+            guard let event = resolvedEvent(for: eventSnapshot) else { return nil }
+            let eventID = eventSnapshot.id
             let latestVisit = visitsByEventID[eventID]?.max(by: { $0.visitedAt < $1.visitedAt })
             let eventPlans = plansByEventID[eventID] ?? []
             let nextPlan = eventPlans
@@ -1286,7 +1328,7 @@ struct CategoryTopView: View {
                 now: now
             )
             return CategoryLibraryItem(
-                event: eventSnapshot.event,
+                event: event,
                 latestVisit: latestVisit,
                 nextPlan: nextPlan,
                 ticketAttempts: attempts
@@ -1339,7 +1381,7 @@ struct CategoryTopView: View {
                 ) {
                     ForEach(items.prefix(12)) { item in
                         NavigationLink {
-                            EventDetailView(event: item.event)
+                            CategoryEventDestination(eventID: item.event.id)
                         } label: {
                             MovieWatchedPosterTile(item: item)
                         }
@@ -1351,12 +1393,13 @@ struct CategoryTopView: View {
     }
 
     private func movieWatchedItems(in snapshot: CategoryTopSnapshot) -> [MovieWatchedItem] {
-        let visitsByEventID = Dictionary(grouping: snapshot.visits) { $0.event?.id }
+        let visitsByEventID = Dictionary(grouping: resolvedVisits(in: snapshot)) { $0.event?.id }
 
         return snapshot.events.compactMap { eventSnapshot in
-            guard let latestVisit = visitsByEventID[eventSnapshot.event.id]?
+            guard let event = resolvedEvent(for: eventSnapshot),
+                  let latestVisit = visitsByEventID[eventSnapshot.id]?
                 .max(by: { $0.visitedAt < $1.visitedAt }) else { return nil }
-            return MovieWatchedItem(event: eventSnapshot.event, latestVisit: latestVisit)
+            return MovieWatchedItem(event: event, latestVisit: latestVisit)
         }
         .sorted { $0.latestVisit.visitedAt > $1.latestVisit.visitedAt }
     }
@@ -1372,7 +1415,7 @@ struct CategoryTopView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if snapshot.visits.isEmpty {
+            if snapshot.visitIDs.isEmpty {
                 EmptyStateMessage(
                     icon: category.iconSymbol,
                     title: "まだ記録がありません",
@@ -1380,9 +1423,9 @@ struct CategoryTopView: View {
                     tint: themePalette.categoryColor(hex: category.colorHex)
                 )
             } else {
-                ForEach(snapshot.visits.prefix(10)) { visit in
+                ForEach(resolvedVisits(in: snapshot).prefix(10)) { visit in
                     NavigationLink {
-                        ExperienceDetailView(visit: visit)
+                        CategoryVisitDestination(visitID: visit.id)
                     } label: {
                         VisitSummaryRow(visit: visit, showsCategory: false)
                     }
@@ -1487,38 +1530,40 @@ struct CategoryTopView: View {
         allCategories.filter { !$0.isArchived }
     }
 
-    private var categoryPageTransition: AnyTransition {
-        if transitionMovesForward {
-            return .asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            )
-        }
-        return .asymmetric(
-            insertion: .move(edge: .leading).combined(with: .opacity),
-            removal: .move(edge: .trailing).combined(with: .opacity)
-        )
+    private func resolvedVisits(in snapshot: CategoryTopSnapshot) -> [Visit] {
+        let visitIDs = Set(snapshot.visitIDs)
+        return allVisits.filter { visitIDs.contains($0.id) }
     }
 
-    private var categorySwitchAnimation: Animation {
-        .timingCurve(0.16, 0.82, 0.24, 1, duration: 0.22)
+    private func resolvedEvents(
+        in snapshot: CategoryTopSnapshot,
+        category: RecordCategory? = nil
+    ) -> [ExperienceEvent] {
+        let categoryEvents = (category ?? currentCategory).events ?? []
+        let eventsByID = Dictionary(
+            categoryEvents.map { ($0.id, $0) },
+            uniquingKeysWith: { current, _ in current }
+        )
+        return snapshot.events.compactMap { eventsByID[$0.id] }
+    }
+
+    private func resolvedEvent(
+        for snapshot: CategoryEventSnapshot,
+        category: RecordCategory? = nil
+    ) -> ExperienceEvent? {
+        ((category ?? currentCategory).events ?? []).first { $0.id == snapshot.id }
     }
 
     private func switchCategory(to destination: RecordCategory) {
         guard destination.id != currentCategory.id else { return }
-        let currentIndex = visibleCategories.firstIndex(where: { $0.id == currentCategory.id }) ?? 0
-        let destinationIndex = visibleCategories.firstIndex(where: { $0.id == destination.id }) ?? currentIndex
-        transitionMovesForward = destinationIndex > currentIndex
         homeSelectedCategoryTemplateKey = destination.templateKey
         if destination.templateKey == "goshuin" {
             selectedGoshuinHeroIndex = 0
         }
 
-        withAnimation(categorySwitchAnimation) {
-            selectedCategoryID = destination.id
-            if libraryLayoutModes[destination.templateKey] == nil {
-                libraryLayoutModes[destination.templateKey] = CategoryLibraryLayoutMode.stored(for: destination.templateKey)
-            }
+        selectedCategoryID = destination.id
+        if libraryLayoutModes[destination.templateKey] == nil {
+            libraryLayoutModes[destination.templateKey] = CategoryLibraryLayoutMode.stored(for: destination.templateKey)
         }
     }
 
@@ -1578,7 +1623,8 @@ struct CategoryTopView: View {
         }
 
         for eventSnapshot in snapshot.events.prefix(4) {
-            guard let photo = EventRepresentativePhotoResolver.photo(for: eventSnapshot.event) else { continue }
+            guard let event = resolvedEvent(for: eventSnapshot, category: category),
+                  let photo = EventRepresentativePhotoResolver.photo(for: event) else { continue }
             let maxPixelSize: CGFloat = 220
             append(
                 photo,
@@ -1588,7 +1634,7 @@ struct CategoryTopView: View {
         }
 
         let listMaxPixelSize = min(80 * displayScale, 480)
-        for visit in snapshot.visits.prefix(4) {
+        for visit in resolvedVisits(in: snapshot).prefix(4) {
             guard let photo = firstPhoto(in: visit) else { continue }
             append(
                 photo,
@@ -1609,7 +1655,7 @@ struct CategoryTopView: View {
                 )
             }
         } else {
-            for visit in snapshot.visits.prefix(4) {
+            for visit in resolvedVisits(in: snapshot).prefix(4) {
                 guard let photo = firstPhoto(in: visit) else { continue }
                 let maxPixelSize: CGFloat = 360
                 append(
@@ -1678,7 +1724,7 @@ struct CategoryTopView: View {
     }
 
     private func chapterPreviewPhoto(in snapshot: CategoryTopSnapshot) -> PhotoBlob? {
-        for visit in snapshot.visits.prefix(6) {
+        for visit in resolvedVisits(in: snapshot).prefix(6) {
             if let photo = (visit.photos ?? [])
                 .filter({ $0.mediaKind == "photo" && $0.hasStoredData })
                 .min(by: { $0.createdAt < $1.createdAt }) {
@@ -1686,6 +1732,54 @@ struct CategoryTopView: View {
             }
         }
         return nil
+    }
+}
+
+struct CategoryEventDestination: View {
+    @Query private var events: [ExperienceEvent]
+
+    init(eventID: UUID) {
+        _events = Query(filter: #Predicate<ExperienceEvent> { $0.id == eventID })
+    }
+
+    var body: some View {
+        if let event = events.first {
+            EventDetailView(event: event)
+        } else {
+            ContentUnavailableView("対象が見つかりません", systemImage: "trash")
+        }
+    }
+}
+
+struct CategoryVisitDestination: View {
+    @Query private var visits: [Visit]
+
+    init(visitID: UUID) {
+        _visits = Query(filter: #Predicate<Visit> { $0.id == visitID })
+    }
+
+    var body: some View {
+        if let visit = visits.first {
+            ExperienceDetailView(visit: visit)
+        } else {
+            ContentUnavailableView("記録が見つかりません", systemImage: "trash")
+        }
+    }
+}
+
+private struct CategoryPlanDestination: View {
+    @Query private var plans: [Plan]
+
+    init(planID: UUID) {
+        _plans = Query(filter: #Predicate<Plan> { $0.id == planID })
+    }
+
+    var body: some View {
+        if let plan = plans.first {
+            PlanDetailView(plan: plan)
+        } else {
+            ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+        }
     }
 }
 
@@ -1697,6 +1791,7 @@ struct GenreSwipeContainer<Content: View>: View {
 
     @State private var dragOffset: CGFloat = 0
     @State private var suppressesContentTap = false
+    @State private var isMoveLocked = false
 
     var body: some View {
         content
@@ -1708,6 +1803,7 @@ struct GenreSwipeContainer<Content: View>: View {
                     DirectionalHorizontalPanInstaller(
                         onBegan: {},
                         onChanged: { translation in
+                            guard !isMoveLocked else { return }
                             if abs(translation) >= 16 {
                                 suppressesContentTap = true
                             }
@@ -1729,14 +1825,24 @@ struct GenreSwipeContainer<Content: View>: View {
     }
 
     private func finishGesture(translation: CGFloat, velocity: CGFloat) {
+        guard !isMoveLocked else {
+            settleBack()
+            restoreContentTap()
+            return
+        }
+
         let projectedTranslation = translation + velocity * 0.16
         let direction = translation < 0 ? 1 : -1
         let hasDestination = direction > 0 ? canMoveForward : canMoveBackward
         let shouldMove = abs(translation) >= 72 || abs(projectedTranslation) >= 140
 
         if shouldMove && hasDestination {
+            isMoveLocked = true
             dragOffset = 0
             onMove(direction)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                isMoveLocked = false
+            }
         } else {
             settleBack()
         }
@@ -2044,9 +2150,34 @@ struct CategoryTicketProgressItem: Identifiable {
     }
 }
 
+private struct LayeredCategorySectionTitle: View {
+    let englishTitle: String
+    let japaneseTitle: String
+    let foregroundColor: Color
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Text(japaneseTitle)
+                .font(FavorecoTypography.jpSerif(25, weight: .semibold, relativeTo: .title3))
+                .foregroundStyle(foregroundColor.opacity(0.11))
+                .offset(x: 7, y: -4)
+
+            Text(englishTitle)
+                .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
+                .foregroundStyle(foregroundColor)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.78)
+        .padding(.top, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(japaneseTitle)
+    }
+}
+
 struct CategoryTicketProgressSection: View {
     let items: [CategoryTicketProgressItem]
     let title: String
+    let japaneseTitle: String?
     let usesLatinTitle: Bool
     let usesTheaterStyle: Bool
     let usesLiveStyle: Bool
@@ -2059,6 +2190,7 @@ struct CategoryTicketProgressSection: View {
     init(
         items: [CategoryTicketProgressItem],
         title: String,
+        japaneseTitle: String? = nil,
         usesLatinTitle: Bool,
         usesTheaterStyle: Bool,
         usesLiveStyle: Bool = false,
@@ -2067,6 +2199,7 @@ struct CategoryTicketProgressSection: View {
     ) {
         self.items = items
         self.title = title
+        self.japaneseTitle = japaneseTitle
         self.usesLatinTitle = usesLatinTitle
         self.usesTheaterStyle = usesTheaterStyle
         self.usesLiveStyle = usesLiveStyle
@@ -2087,9 +2220,17 @@ struct CategoryTicketProgressSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(title)
-                    .font(sectionTitleFont)
-                    .foregroundStyle(primaryTextColor)
+                if usesLatinTitle, let japaneseTitle {
+                    LayeredCategorySectionTitle(
+                        englishTitle: title,
+                        japaneseTitle: japaneseTitle,
+                        foregroundColor: primaryTextColor
+                    )
+                } else {
+                    Text(title)
+                        .font(sectionTitleFont)
+                        .foregroundStyle(primaryTextColor)
+                }
 
                 Spacer()
 
@@ -2142,7 +2283,7 @@ struct CategoryTicketProgressSection: View {
 
             if let selectedItem {
                 NavigationLink {
-                    PlanDetailView(plan: selectedItem.plan)
+                    CategoryPlanDestination(planID: selectedItem.plan.id)
                 } label: {
                     CategoryTicketProgressCard(
                         item: selectedItem,
@@ -2889,7 +3030,7 @@ private struct CategoryLibraryGallery: View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
             ForEach(items) { item in
                 NavigationLink {
-                    EventDetailView(event: item.event)
+                    CategoryEventDestination(eventID: item.event.id)
                 } label: {
                     VStack(alignment: .leading, spacing: 0) {
                         CategoryLibraryArtwork(item: item, category: category)
@@ -2935,7 +3076,7 @@ private struct CategoryLibraryCompactGrid: View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
             ForEach(items) { item in
                 NavigationLink {
-                    EventDetailView(event: item.event)
+                    CategoryEventDestination(eventID: item.event.id)
                 } label: {
                     if category.templateKey == "movie" {
                         MovieCompactLibraryCard(item: item, category: category, tint: tint)
@@ -3016,7 +3157,7 @@ private struct CategoryLibraryBannerList: View {
         LazyVStack(spacing: 10) {
             ForEach(items) { item in
                 NavigationLink {
-                    EventDetailView(event: item.event)
+                    CategoryEventDestination(eventID: item.event.id)
                 } label: {
                     HStack(alignment: .top, spacing: 12) {
                         CategoryLibraryArtwork(item: item, category: category)
@@ -3218,7 +3359,7 @@ private struct ChapterPreviewCard: View {
 
     private var previewMessage: String {
         if let eventSnapshot = snapshot.events.first {
-            return eventSnapshot.event.title.isEmpty ? "記録があります" : eventSnapshot.event.title
+            return eventSnapshot.title.isEmpty ? "記録があります" : eventSnapshot.title
         }
         if snapshot.visitCount > 0 {
             return "\(snapshot.visitCount)件の記録"
@@ -3229,108 +3370,6 @@ private struct ChapterPreviewCard: View {
     private var categoryTint: Color {
         themePalette.categoryColor(hex: category.colorHex)
     }
-}
-
-private struct MovieWatchedItem: Identifiable {
-    let event: ExperienceEvent
-    let latestVisit: Visit
-
-    var id: UUID { event.id }
-}
-
-private struct MovieWatchedPosterTile: View {
-    let item: MovieWatchedItem
-
-    private let posterAspectRatio = CGFloat(EyecatchAspectRatio.cinemaPoster.value)
-
-    private var representativePhoto: PhotoBlob? {
-        EventRepresentativePhotoResolver.photo(for: item.event)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            GeometryReader { geometry in
-                ZStack {
-                    Color(.secondarySystemFill)
-
-                    if let representativePhoto {
-                        RepresentativePhotoImage(
-                            photo: representativePhoto,
-                            maxPixelSize: 420,
-                            contentMode: .fill
-                        )
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .clipped()
-                    } else if let data = item.event.eyecatchData, let image = UIImage(data: data) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipped()
-                    } else {
-                        Image(systemName: "movieclapper")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(width: geometry.size.width, height: geometry.size.height)
-            }
-            .aspectRatio(posterAspectRatio, contentMode: .fit)
-
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text(FavorecoDateText.compactDate(item.latestVisit.visitedAt))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                Spacer(minLength: 2)
-
-                Image(systemName: item.latestVisit.overallRating > 0 ? "star.fill" : "star")
-                    .foregroundStyle(item.latestVisit.overallRating > 0 ? Color.yellow : Color.secondary)
-                if item.latestVisit.overallRating > 0 {
-                    Text(String(format: "%.1f", item.latestVisit.overallRating))
-                        .monospacedDigit()
-                }
-            }
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 6)
-            .padding(.bottom, 7)
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemBackground))
-        .overlay {
-            Rectangle()
-                .stroke(Color.secondary.opacity(0.18), lineWidth: 0.5)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint("映画の作品詳細を開きます")
-    }
-
-    private var accessibilityLabel: String {
-        let title = item.event.title.isEmpty ? "映画" : item.event.title
-        let date = FavorecoDateText.compactDate(item.latestVisit.visitedAt)
-        guard item.latestVisit.overallRating > 0 else {
-            return "\(title)、\(date)、評価なし"
-        }
-        return "\(title)、\(date)、評価\(String(format: "%.1f", item.latestVisit.overallRating))"
-    }
-}
-
-private enum TheaterCategoryStyle {
-    static let wine = Color(red: 0.28, green: 0.035, blue: 0.08)
-    static let deepWine = Color(red: 0.11, green: 0.025, blue: 0.04)
-    static let black = Color(red: 0.025, green: 0.02, blue: 0.022)
-    static let tileBackground = Color(red: 0.075, green: 0.045, blue: 0.05).opacity(0.94)
-    static let gold = Color(red: 0.82, green: 0.62, blue: 0.30)
-    static let lightGold = Color(red: 0.96, green: 0.82, blue: 0.52)
-    static let ivory = Color(red: 0.96, green: 0.92, blue: 0.84)
-
-    static let brandGradient = LinearGradient(
-        colors: [lightGold, Color(red: 0.70, green: 0.38, blue: 0.18), lightGold],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
 }
 
 enum LiveCategoryStyle {
@@ -3526,194 +3565,10 @@ private struct CategoryStatisticsPanel: View {
     }
 }
 
-private struct TheaterPosterView: View {
-    let event: ExperienceEvent?
-    let width: CGFloat
-
-    private var representativePhoto: PhotoBlob? {
-        event.flatMap { EventRepresentativePhotoResolver.photo(for: $0) }
-    }
-
-    var body: some View {
-        Group {
-            if let representativePhoto {
-                RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 420, contentMode: .fill)
-            } else if let data = event?.eyecatchData, let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                ZStack {
-                    TheaterCategoryStyle.wine.opacity(0.72)
-                    Image(systemName: "theatermasks.fill")
-                        .font(.system(size: 34, weight: .light))
-                        .foregroundStyle(TheaterCategoryStyle.gold)
-                }
-            }
-        }
-        .frame(width: width, height: width * 1.414)
-        .background(TheaterCategoryStyle.black)
-        .clipped()
-        .overlay {
-            Rectangle()
-                .stroke(TheaterCategoryStyle.gold.opacity(0.62), lineWidth: 0.7)
-        }
-    }
-}
-
-private struct TheaterSectionHeader: View {
-    let title: String
-    let count: Int
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(FavorecoTypography.jpSerif(20, weight: .bold, relativeTo: .title3))
-                .foregroundStyle(TheaterCategoryStyle.ivory)
-            Spacer()
-            Text("\(count)")
-                .font(FavorecoTypography.captionStrong)
-                .foregroundStyle(TheaterCategoryStyle.gold)
-        }
-    }
-}
-
-private struct TheaterEventRow: View {
-    let snapshot: CategoryEventSnapshot
-    let onAddVisit: () -> Void
-
-    private var event: ExperienceEvent { snapshot.event }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 13) {
-            NavigationLink {
-                EventDetailView(event: event)
-            } label: {
-                HStack(spacing: 13) {
-                    TheaterPosterView(event: event, width: 72)
-
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(event.title.isEmpty ? "記録" : event.title)
-                            .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .headline))
-                            .foregroundStyle(TheaterCategoryStyle.ivory)
-                            .lineLimit(2)
-
-                        if !event.seriesName.isEmpty {
-                            Text(event.seriesName)
-                                .lineLimit(1)
-                        }
-
-                        HStack(spacing: 9) {
-                            Label("\(snapshot.visitCount)件", systemImage: "number")
-                            if let latestVisitDate = snapshot.latestVisitDate {
-                                Label(FavorecoDateText.compactDate(latestVisitDate), systemImage: "calendar")
-                            }
-                        }
-                    }
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(TheaterCategoryStyle.ivory.opacity(0.62))
-                }
-            }
-            .buttonStyle(.plain)
-
-            Spacer(minLength: 4)
-
-            Button(action: onAddVisit) {
-                Image(systemName: "plus")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(TheaterCategoryStyle.gold)
-                    .frame(width: 32, height: 32)
-                    .overlay {
-                        Circle().stroke(TheaterCategoryStyle.gold.opacity(0.65), lineWidth: 1)
-                    }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("この対象に回を追加")
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(TheaterCategoryStyle.tileBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(TheaterCategoryStyle.gold.opacity(0.42), lineWidth: 0.7)
-        }
-    }
-}
-
-private struct TheaterVisitRow: View {
-    let visit: Visit
-
-    private var event: ExperienceEvent? { visit.event }
-
-    var body: some View {
-        HStack(spacing: 13) {
-            TheaterPosterView(event: event, width: 58)
-
-            VStack(alignment: .leading, spacing: 7) {
-                Text(event?.title.isEmpty == false ? event?.title ?? "観劇記録" : "観劇記録")
-                    .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
-                    .foregroundStyle(TheaterCategoryStyle.ivory)
-                    .lineLimit(2)
-
-                Label(FavorecoDateText.compactDate(visit.visitedAt), systemImage: "calendar")
-                if !visit.venueNameSnapshot.isEmpty {
-                    Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
-                        .lineLimit(1)
-                }
-            }
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(TheaterCategoryStyle.ivory.opacity(0.62))
-
-            Spacer(minLength: 4)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(TheaterCategoryStyle.gold.opacity(0.76))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(TheaterCategoryStyle.tileBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(TheaterCategoryStyle.gold.opacity(0.42), lineWidth: 0.7)
-        }
-    }
-}
-
-private struct TheaterEmptyState: View {
-    let icon: String
-    let title: String
-    let message: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(TheaterCategoryStyle.gold)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(FavorecoTypography.bodyStrong)
-                    .foregroundStyle(TheaterCategoryStyle.ivory)
-                Text(message)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(TheaterCategoryStyle.ivory.opacity(0.62))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(TheaterCategoryStyle.tileBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(TheaterCategoryStyle.gold.opacity(0.42), lineWidth: 0.7)
-        }
-    }
-}
-
 private struct EventRow: View {
     let snapshot: CategoryEventSnapshot
+    let event: ExperienceEvent
     let onAddVisit: () -> Void
-
-    private var event: ExperienceEvent { snapshot.event }
 
     private var representativePhoto: PhotoBlob? {
         EventRepresentativePhotoResolver.photo(for: event)
@@ -3722,7 +3577,7 @@ private struct EventRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             NavigationLink {
-                EventDetailView(event: event)
+                CategoryEventDestination(eventID: event.id)
             } label: {
                 HStack(spacing: 12) {
                     if let representativePhoto {
@@ -4163,7 +4018,7 @@ private struct CategoryFeatureCardLink: View {
             )
         case .visit(let visit):
             NavigationLink {
-                ExperienceDetailView(visit: visit)
+                CategoryVisitDestination(visitID: visit.id)
             } label: {
                 CategoryFeatureCard(item: item, tint: tint, fallbackIcon: fallbackIcon) {
                     CategoryFeatureSingleActionLabel(
@@ -4176,7 +4031,7 @@ private struct CategoryFeatureCardLink: View {
             .buttonStyle(.plain)
         case .interest(let event):
             NavigationLink {
-                EventDetailView(event: event)
+                CategoryEventDestination(eventID: event.id)
             } label: {
                 CategoryFeatureCard(item: item, tint: tint, fallbackIcon: fallbackIcon) {
                     CategoryFeatureSingleActionLabel(
@@ -4614,649 +4469,6 @@ private struct CategoryFeatureMetricsGrid: View {
                 .stroke(borderColor ?? tint.opacity(0.16), lineWidth: 0.75)
         }
     }
-}
-
-private enum GoshuinVisitFilter: String, CaseIterable, Identifiable {
-    case all
-    case shrine
-    case temple
-    case limited
-    case special
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .all: return "全て"
-        case .shrine: return "神社"
-        case .temple: return "お寺"
-        case .limited: return "限定"
-        case .special: return "特別"
-        }
-    }
-
-    func matches(_ visit: Visit) -> Bool {
-        switch self {
-        case .all:
-            return true
-        case .shrine:
-            return placeKind(for: visit) == .shrine
-        case .temple:
-            return placeKind(for: visit) == .temple
-        case .limited:
-            return searchableText(for: visit).contains("限定")
-        case .special:
-            let text = searchableText(for: visit)
-            return text.contains("特別") || text.contains("特製") || text.contains("記念")
-        }
-    }
-
-    private func placeKind(for visit: Visit) -> GoshuinPlaceKind {
-        let text = searchableText(for: visit)
-        if text.contains("寺") || text.contains("院") || text.contains("観音") || text.contains("薬師") {
-            return .temple
-        }
-        if text.contains("神社") || text.contains("大社") || text.contains("宮") || text.contains("稲荷") {
-            return .shrine
-        }
-        return .unknown
-    }
-
-    private func searchableText(for visit: Visit) -> String {
-        [
-            visit.event?.title ?? "",
-            visit.venueNameSnapshot,
-            visit.placeMaster?.name ?? "",
-            visit.placeMaster?.placeTagsRaw ?? "",
-            visit.placeMaster?.address ?? "",
-            visit.note,
-            VisitUnitFields(rawValue: visit.unitFieldsRaw).ocrText,
-        ].joined(separator: " ")
-    }
-}
-
-private enum GoshuinPlaceKind {
-    case shrine
-    case temple
-    case unknown
-}
-
-private struct GoshuinFilterBar: View {
-    @Binding var selection: GoshuinVisitFilter
-    let options: [GoshuinVisitFilter]
-
-    @Environment(\.favorecoThemePalette) private var themePalette
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(options) { option in
-                    Button {
-                        selection = option
-                    } label: {
-                        Text(option.title)
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(selection == option ? .white : .primary)
-                            .padding(.horizontal, 14)
-                            .frame(height: 34)
-                            .background(
-                                selection == option
-                                ? themePalette.globalTint
-                                : Color(.secondarySystemGroupedBackground),
-                                in: Capsule()
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-}
-
-private struct GoshuinTopHero: View {
-    let category: RecordCategory
-    let visits: [Visit]
-    @Binding var selectedIndex: Int
-    let onAdd: () -> Void
-
-    @Environment(\.favorecoThemePalette) private var themePalette
-
-    private var accent: Color {
-        themePalette.categoryColor(hex: category.colorHex)
-    }
-
-    var body: some View {
-        VStack(spacing: 10) {
-            if visits.isEmpty {
-                heroCard(visit: nil)
-            } else if visits.count == 1 {
-                heroCard(visit: visits[0])
-            } else {
-                TabView(selection: $selectedIndex) {
-                    ForEach(Array(visits.enumerated()), id: \.element.id) { index, visit in
-                        heroCard(visit: visit)
-                            .tag(index)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 196)
-
-                HStack(spacing: 7) {
-                    ForEach(visits.indices, id: \.self) { index in
-                        Circle()
-                            .fill(index == selectedIndex ? accent : Color.secondary.opacity(0.28))
-                            .frame(width: 7, height: 7)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(selectedIndex + 1)件目／全\(visits.count)件")
-            }
-        }
-    }
-
-    private func heroCard(visit: Visit?) -> some View {
-        HStack(alignment: .center, spacing: 16) {
-            goshuinImage(visit: visit)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("最近いただいた御朱印")
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(accent)
-
-                Text(visit?.event?.title.isEmpty == false ? visit?.event?.title ?? "参拝先" : "御朱印を残す")
-                    .font(FavorecoTypography.jpSerif(22, weight: .bold, relativeTo: .title3))
-                    .lineLimit(2, reservesSpace: true)
-
-                if let visit {
-                    Text("\(FavorecoDateText.compactDate(visit.visitedAt)) ・ \(visit.venueNameSnapshot.isEmpty ? "場所未設定" : visit.venueNameSnapshot)")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                } else {
-                    Text("御朱印帳のサイズに合わせて、参拝の証を美しく残せます。")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Button(action: onAdd) {
-                    Label(visit == nil ? "最初の御朱印を追加" : "御朱印を追加", systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(accent)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 168, alignment: .leading)
-        .padding(14)
-        .background {
-            GoshuinWashiBackground(accent: accent)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(accent.opacity(0.18), lineWidth: 0.75)
-        }
-    }
-
-    @ViewBuilder
-    private func goshuinImage(visit: Visit?) -> some View {
-        let sizeKey = visit.map { VisitUnitFields(rawValue: $0.unitFieldsRaw).goshuinBookSizeKey } ?? ""
-        let size = GoshuinBookSize.option(for: sizeKey)
-        let isWide = size.key == GoshuinBookSize.wide.key
-        let imageWidth: CGFloat = isWide ? 132 : 104
-        let imageHeight = imageWidth / CGFloat(size.aspectRatio)
-        let photo = visit.flatMap { firstPhoto(in: $0) }
-
-        ZStack(alignment: .bottomLeading) {
-            if let photo {
-                RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
-                    .frame(width: imageWidth, height: imageHeight)
-                    .clipped()
-                    .background(Color.white.opacity(0.72))
-            } else {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.white.opacity(0.72))
-                    .frame(width: imageWidth, height: imageHeight)
-                    .overlay {
-                        Image(systemName: "seal")
-                            .font(.system(size: 34, weight: .semibold))
-                            .foregroundStyle(accent.opacity(0.8))
-                    }
-            }
-
-            if isWide {
-                Text("見開き")
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.black.opacity(0.42), in: Capsule())
-                    .padding(8)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
-    }
-
-    private func firstPhoto(in visit: Visit) -> PhotoBlob? {
-        (visit.photos ?? [])
-            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
-            .min { $0.createdAt < $1.createdAt }
-    }
-}
-
-private struct GoshuinWashiBackground: View {
-    let accent: Color
-
-    var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.99, green: 0.96, blue: 0.90),
-                    accent.opacity(0.26),
-                    Color(red: 0.93, green: 0.84, blue: 0.76),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            Canvas { context, size in
-                for index in 0..<90 {
-                    let x = CGFloat((index * 37) % 100) / 100 * size.width
-                    let y = CGFloat((index * 61) % 100) / 100 * size.height
-                    let radius = CGFloat((index % 3) + 1) * 0.42
-                    context.fill(
-                        Path(ellipseIn: CGRect(x: x, y: y, width: radius, height: radius)),
-                        with: .color(.white.opacity(index.isMultiple(of: 2) ? 0.26 : 0.14))
-                    )
-                }
-            }
-        }
-    }
-}
-
-private struct GoshuinStampTile: View {
-    let visit: Visit
-    let photo: PhotoBlob?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            stampImage
-            Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? "参拝先" : "参拝先")
-                .font(FavorecoTypography.captionStrong)
-                .lineLimit(1)
-            Text(FavorecoDateText.compactDate(visit.visitedAt))
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    @ViewBuilder
-    private var stampImage: some View {
-        let fields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
-        let size = GoshuinBookSize.option(for: fields.goshuinBookSizeKey)
-        if let photo {
-            RepresentativePhotoImage(photo: photo, maxPixelSize: 360, contentMode: .fill)
-                .frame(maxWidth: .infinity)
-                .aspectRatio(CGFloat(size.aspectRatio), contentMode: .fit)
-                .frame(minHeight: 120)
-                .clipped()
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        } else {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
-                .aspectRatio(CGFloat(size.aspectRatio), contentMode: .fit)
-                .overlay {
-                    Image(systemName: "seal")
-                        .foregroundStyle(.secondary)
-                }
-        }
-    }
-}
-
-private struct GoshuinBookSelection: Identifiable {
-    let size: GoshuinBookSize
-    let visits: [Visit]
-    let coverPhoto: PhotoBlob?
-
-    var id: String { size.key }
-}
-
-private struct GoshuinBookRow: View {
-    let selection: GoshuinBookSelection
-
-    var body: some View {
-        HStack(spacing: 12) {
-            if let coverPhoto = selection.coverPhoto {
-                RepresentativePhotoImage(photo: coverPhoto, maxPixelSize: 240, contentMode: .fill)
-                    .frame(width: 56, height: 56 / CGFloat(selection.size.aspectRatio))
-                    .clipped()
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            } else {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
-                    .frame(width: 56, height: 56 / CGFloat(selection.size.aspectRatio))
-                    .overlay { Image(systemName: "book.closed") }
-            }
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(selection.size.name)
-                    .font(FavorecoTypography.bodyStrong)
-                Text("\(selection.visits.count)件 ・ \(selection.size.displaySize)")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
-private struct GoshuinBookGalleryView: View {
-    let selection: GoshuinBookSelection
-    @Environment(\.dismiss) private var dismiss
-
-    private let columns = [GridItem(.adaptive(minimum: 140), spacing: 12)]
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(selection.visits) { visit in
-                        NavigationLink {
-                            ExperienceDetailView(visit: visit)
-                        } label: {
-                            GoshuinStampTile(visit: visit, photo: firstPhoto(in: visit))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(20)
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle(selection.size.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
-        }
-    }
-
-    private func firstPhoto(in visit: Visit) -> PhotoBlob? {
-        (visit.photos ?? [])
-            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
-            .min { $0.createdAt < $1.createdAt }
-    }
-}
-
-private struct GoshuinMapItem: Identifiable {
-    let id: UUID
-    let title: String
-    let coordinate: CLLocationCoordinate2D
-}
-
-private struct GoshuinMapPreview: View {
-    let visits: [Visit]
-
-    private var items: [GoshuinMapItem] {
-        visits.compactMap { visit in
-            let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
-            let latitude = hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0)
-            let longitude = hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
-            guard latitude != 0 || longitude != 0 else { return nil }
-            return GoshuinMapItem(
-                id: visit.id,
-                title: visit.event?.title.isEmpty == false ? visit.event?.title ?? "参拝先" : "参拝先",
-                coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-            )
-        }
-    }
-
-    var body: some View {
-        Map(initialPosition: .region(Self.region(for: items))) {
-            ForEach(items) { item in
-                Marker(item.title, coordinate: item.coordinate)
-            }
-        }
-        .frame(height: 210)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            if items.isEmpty {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
-                    .overlay {
-                        VStack(spacing: 8) {
-                            Image(systemName: "map")
-                                .font(.title2)
-                            Text("場所を登録するとMAPにピンが立ちます")
-                                .font(FavorecoTypography.caption)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-            }
-        }
-    }
-
-    private static func region(for items: [GoshuinMapItem]) -> MKCoordinateRegion {
-        guard !items.isEmpty else {
-            return MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-                span: MKCoordinateSpan(latitudeDelta: 18, longitudeDelta: 18)
-            )
-        }
-
-        let latitudes = items.map { $0.coordinate.latitude }
-        let longitudes = items.map { $0.coordinate.longitude }
-        let minLatitude = latitudes.min() ?? 36.2048
-        let maxLatitude = latitudes.max() ?? 36.2048
-        let minLongitude = longitudes.min() ?? 138.2529
-        let maxLongitude = longitudes.max() ?? 138.2529
-        return MKCoordinateRegion(
-            center: CLLocationCoordinate2D(
-                latitude: (minLatitude + maxLatitude) / 2,
-                longitude: (minLongitude + maxLongitude) / 2
-            ),
-            span: MKCoordinateSpan(
-                latitudeDelta: max(0.5, (maxLatitude - minLatitude) * 1.8),
-                longitudeDelta: max(0.5, (maxLongitude - minLongitude) * 1.8)
-            )
-        )
-    }
-}
-
-private struct GoshuinVisitedPlaceRow: View {
-    let visit: Visit
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "mappin.and.ellipse")
-                .font(.title3)
-                .foregroundStyle(.red)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? "参拝先" : "参拝先")
-                    .font(FavorecoTypography.bodyStrong)
-                    .lineLimit(1)
-                Text(placeText)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                Text(FavorecoDateText.compactDate(visit.visitedAt))
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private var placeText: String {
-        let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !address.isEmpty { return address }
-        if !visit.venueNameSnapshot.isEmpty { return visit.venueNameSnapshot }
-        return "場所未設定"
-    }
-}
-
-private enum CategoryTopJapanPrefecture: String, CaseIterable {
-    case hokkaido = "北海道"
-    case aomori = "青森県"
-    case iwate = "岩手県"
-    case miyagi = "宮城県"
-    case akita = "秋田県"
-    case yamagata = "山形県"
-    case fukushima = "福島県"
-    case ibaraki = "茨城県"
-    case tochigi = "栃木県"
-    case gunma = "群馬県"
-    case saitama = "埼玉県"
-    case chiba = "千葉県"
-    case tokyo = "東京都"
-    case kanagawa = "神奈川県"
-    case niigata = "新潟県"
-    case toyama = "富山県"
-    case ishikawa = "石川県"
-    case fukui = "福井県"
-    case yamanashi = "山梨県"
-    case nagano = "長野県"
-    case gifu = "岐阜県"
-    case shizuoka = "静岡県"
-    case aichi = "愛知県"
-    case mie = "三重県"
-    case shiga = "滋賀県"
-    case kyoto = "京都府"
-    case osaka = "大阪府"
-    case hyogo = "兵庫県"
-    case nara = "奈良県"
-    case wakayama = "和歌山県"
-    case tottori = "鳥取県"
-    case shimane = "島根県"
-    case okayama = "岡山県"
-    case hiroshima = "広島県"
-    case yamaguchi = "山口県"
-    case tokushima = "徳島県"
-    case kagawa = "香川県"
-    case ehime = "愛媛県"
-    case kochi = "高知県"
-    case fukuoka = "福岡県"
-    case saga = "佐賀県"
-    case nagasaki = "長崎県"
-    case kumamoto = "熊本県"
-    case oita = "大分県"
-    case miyazaki = "宮崎県"
-    case kagoshima = "鹿児島県"
-    case okinawa = "沖縄県"
-}
-
-private struct GoshuinPrefectureSearchView: View {
-    @Binding var selectedPrefecture: String
-    let availablePrefectures: [String]
-    @Environment(\.dismiss) private var dismiss
-
-    private var prefectures: [String] {
-        let base = availablePrefectures.isEmpty ? CategoryTopJapanPrefecture.allCases.map(\.rawValue) : availablePrefectures
-        return base.sorted()
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Button("すべての都道府県") {
-                    selectedPrefecture = ""
-                    dismiss()
-                }
-                ForEach(prefectures, id: \.self) { prefecture in
-                    Button {
-                        selectedPrefecture = prefecture
-                        dismiss()
-                    } label: {
-                        HStack {
-                            Text(prefecture)
-                            Spacer()
-                            if selectedPrefecture == prefecture {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("県で絞り込み")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
-private struct GoshuinVisitedShareCard: View {
-    let visits: [Visit]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Favoreco")
-                .font(FavorecoTypography.latinDisplay(34, weight: .bold, relativeTo: .title))
-            Text("行った神社・お寺リスト")
-                .font(FavorecoTypography.jpSerif(28, weight: .bold, relativeTo: .title2))
-            Text("\(visits.count)件の参拝記録")
-                .font(FavorecoTypography.bodyStrong)
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(Array(visits.prefix(12).enumerated()), id: \.element.id) { index, visit in
-                    HStack(alignment: .top, spacing: 10) {
-                        Text("\(index + 1)")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.white)
-                            .frame(width: 26, height: 26)
-                            .background(Color(red: 0.58, green: 0.18, blue: 0.22), in: Circle())
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? "参拝先" : "参拝先")
-                                .font(FavorecoTypography.bodyStrong)
-                                .lineLimit(1)
-                            Text("\(FavorecoDateText.compactDate(visit.visitedAt)) ・ \(visit.venueNameSnapshot.isEmpty ? "場所未設定" : visit.venueNameSnapshot)")
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                }
-            }
-            Spacer()
-            Text("#Favoreco")
-                .font(FavorecoTypography.bodyStrong)
-                .foregroundStyle(Color(red: 0.58, green: 0.18, blue: 0.22))
-        }
-        .padding(28)
-        .frame(width: 390, height: 760, alignment: .topLeading)
-        .background(GoshuinWashiBackground(accent: Color(red: 0.58, green: 0.18, blue: 0.22)))
-    }
-}
-
-private struct GoshuinActivityView: UIViewControllerRepresentable {
-    let activityItems: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 private struct CategoryVisitRow: View {

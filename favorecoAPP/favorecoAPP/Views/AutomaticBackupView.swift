@@ -8,6 +8,10 @@ struct AutomaticBackupView: View {
     @AppStorage(AppStorageKeys.automaticBackupLastICloudCreatedAt) private var lastICloudCreatedAt = Date.distantPast
     @AppStorage(AppStorageKeys.automaticBackupUsesICloudDrive) private var usesICloudDrive = false
     @AppStorage(AppStorageKeys.automaticBackupICloudError) private var iCloudError = ""
+    @AppStorage(AppStorageKeys.automaticBackupLastAttemptAt) private var lastAttemptAt = Date.distantPast
+    @AppStorage(AppStorageKeys.automaticBackupLastResultStatus) private var lastResultStatusRaw = ""
+    @AppStorage(AppStorageKeys.automaticBackupLastResultMessage) private var lastResultMessage = ""
+    @AppStorage(AppStorageKeys.automaticBackupLastResultPath) private var lastResultPath = ""
     @State private var localSnapshots: [AutomaticBackupSnapshot] = []
     @State private var iCloudSnapshots: [AutomaticBackupSnapshot] = []
     @State private var selectedSnapshot: AutomaticBackupSnapshot?
@@ -54,6 +58,21 @@ struct AutomaticBackupView: View {
                         Label(iCloudError, systemImage: "exclamationmark.icloud")
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.orange)
+                    }
+                }
+            }
+
+            if lastAttemptAt != .distantPast {
+                Section("最終実行結果") {
+                    LabeledContent("日時", value: createdText(lastAttemptAt))
+                    LabeledContent("結果", value: lastResultStatus?.displayName ?? "不明")
+                    if !lastResultMessage.isEmpty {
+                        Text(lastResultMessage)
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(lastResultStatus == .failed ? .red : .secondary)
+                    }
+                    if !lastResultPath.isEmpty {
+                        LabeledContent("保存ファイル", value: URL(fileURLWithPath: lastResultPath).lastPathComponent)
                     }
                 }
             }
@@ -127,20 +146,27 @@ struct AutomaticBackupView: View {
         return FavorecoDateText.compactDateTime(date)
     }
 
+    private var lastResultStatus: AutomaticBackupRunStatus? {
+        AutomaticBackupRunStatus(rawValue: lastResultStatusRaw)
+    }
+
     private func createSnapshot() {
+        guard !isWorking else { return }
         isWorking = true
         message = ""
-        do {
-            if try AutomaticBackupService.create(in: modelContext) != nil {
-                message = "バックアップを作成しました。"
-            } else {
-                message = "保存できるデータがまだありません。"
-            }
+        let modelContainer = modelContext.container
+        let request = AutomaticBackupRequest.manual(usesICloudDrive: usesICloudDrive)
+        Task {
+            let result = await AutomaticBackupCoordinator.shared.run(
+                request: request,
+                modelContainer: modelContainer
+            )
+            message = result.status == .failed
+                ? "失敗: \(result.message)"
+                : result.message
             reload()
-        } catch {
-            message = "失敗: \(error.localizedDescription)"
+            isWorking = false
         }
-        isWorking = false
     }
 
     private func restoreSelectedSnapshot() {

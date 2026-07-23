@@ -35,8 +35,9 @@ struct AddCollectibleSeriesView: View {
                 }
 
                 Section("画像") {
+                    let photoActionTitle = imageData == nil ? "シリーズ画像を選ぶ" : "シリーズ画像を変更"
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Label(imageData == nil ? "シリーズ画像を選ぶ" : "シリーズ画像を変更", systemImage: "photo")
+                        Label(photoActionTitle, systemImage: "photo")
                     }
                     if let imageData, let image = UIImage(data: imageData) {
                         Image(uiImage: image)
@@ -362,8 +363,9 @@ struct CollectibleItemEditorView: View {
                     Toggle("コンプリート対象に含める", isOn: $isCompletionTarget)
                 }
                 Section("画像") {
+                    let photoActionTitle = imageData == nil ? "画像を選ぶ" : "画像を変更"
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Label(imageData == nil ? "画像を選ぶ" : "画像を変更", systemImage: "photo")
+                        Label(photoActionTitle, systemImage: "photo")
                     }
                     if let imageData, let image = UIImage(data: imageData) {
                         Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 240)

@@ -23,8 +23,7 @@ enum FullBackupService {
     nonisolated static let manifestFilename = "manifest.json"
     nonisolated static let mediaDirectoryName = "media"
 
-    @MainActor
-    static func makePackage(
+    nonisolated static func makePackage(
         json: String,
         photos: [PhotoBlob]
     ) throws -> URL {

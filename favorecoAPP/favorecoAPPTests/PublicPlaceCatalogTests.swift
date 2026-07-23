@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import favoreco
 
 @MainActor
@@ -92,6 +93,57 @@ final class PublicPlaceCatalogTests: XCTestCase {
         XCTAssertEqual(PublicPlaceCatalogSearch.suggestions(for: "テストシアター", in: entries, includesClosed: true).map(\.id), [open.id])
         XCTAssertEqual(PublicPlaceCatalogSearch.suggestions(for: "丸の内", in: entries, includesClosed: true).map(\.id), [open.id])
         XCTAssertEqual(PublicPlaceCatalogSearch.suggestions(for: "試験劇場", in: entries, includesClosed: false).map(\.id), [open.id])
+    }
+
+    func testSelectionDraftKeepsCatalogValueWithoutCreatingModel() {
+        let entry = makeEntry(id: "draft-place", name: "下書き劇場", updatedAt: date(1))
+
+        let selection = PublicPlaceSelectionDraft(entry: entry)
+
+        XCTAssertEqual(selection.entry, entry)
+    }
+
+    func testResolveSelectionReusesExistingPlace() throws {
+        let entry = makeEntry(id: "existing-place", name: "既存劇場", updatedAt: date(1))
+        let existing = PublicPlaceCatalogImporter.makePlaceMaster(from: entry, now: date(1))
+        let container = try ModelContainer(
+            for: PlaceMaster.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        context.insert(existing)
+        try context.save()
+
+        let resolved = PublicPlaceCatalogImporter.resolveSelection(
+            PublicPlaceSelectionDraft(entry: entry),
+            existingPlaces: [existing],
+            in: context,
+            now: date(2)
+        )
+
+        XCTAssertTrue(resolved === existing)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<PlaceMaster>()), 1)
+    }
+
+    func testResolveSelectionRollsBackWithCancelledParentSave() throws {
+        let entry = makeEntry(id: "cancelled-place", name: "キャンセル劇場", updatedAt: date(1))
+        let container = try ModelContainer(
+            for: PlaceMaster.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+
+        _ = PublicPlaceCatalogImporter.resolveSelection(
+            PublicPlaceSelectionDraft(entry: entry),
+            existingPlaces: [],
+            in: context,
+            now: date(2)
+        )
+        XCTAssertTrue(context.hasChanges)
+
+        context.rollback()
+
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<PlaceMaster>()), 0)
     }
 
     private func makeEntry(

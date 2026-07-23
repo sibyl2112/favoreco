@@ -26,7 +26,7 @@ struct PersonActivityTag: Identifiable, Hashable {
 }
 
 enum PersonActivityTags {
-    static let presets: [PersonActivityTag] = [
+    nonisolated static let presets: [PersonActivityTag] = [
         PersonActivityTag(id: "actor", title: "俳優", systemImage: "theatermasks", aliases: ["役者", "出演者", "cast", "lead"]),
         PersonActivityTag(id: "stage_actor", title: "舞台俳優・ミュージカル俳優", systemImage: "theatermasks.fill", aliases: ["舞台俳優", "舞台役者", "ミュージカル俳優"]),
         PersonActivityTag(id: "voice_actor", title: "声優", systemImage: "waveform", aliases: ["voiceactor"]),
@@ -69,7 +69,7 @@ enum PersonActivityTags {
         PersonActivityTag(id: "brewery", title: "酒蔵・醸造所", systemImage: "building.2", aliases: ["酒蔵", "醸造所", "ブルワリー", "蒸溜所", "ワイナリー"]),
     ]
 
-    static func values(from rawValue: String) -> [String] {
+    nonisolated static func values(from rawValue: String) -> [String] {
         rawValue.components(separatedBy: CharacterSet(charactersIn: ",、\n"))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -86,11 +86,11 @@ enum PersonActivityTags {
         }.joined(separator: ", ")
     }
 
-    static func preset(matching value: String) -> PersonActivityTag? {
+    nonisolated static func preset(matching value: String) -> PersonActivityTag? {
         presets.first { $0.matches(value) }
     }
 
-    static func selectedPresetIDs(from rawValue: String) -> Set<String> {
+    nonisolated static func selectedPresetIDs(from rawValue: String) -> Set<String> {
         Set(values(from: rawValue).compactMap { preset(matching: $0)?.id })
     }
 

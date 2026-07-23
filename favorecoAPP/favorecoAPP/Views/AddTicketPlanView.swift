@@ -48,7 +48,6 @@ struct AddTicketPlanView: View {
     @State private var isShowingInterestedEventPicker = false
     @State private var isShowingRegisteredEventPicker = false
     @State private var isShowingPlaceSearch = false
-    @State private var placeImportError = ""
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     private let editingPlan: Plan?
     private let targetEvent: ExperienceEvent?
@@ -534,7 +533,7 @@ struct AddTicketPlanView: View {
     private var placeSuggestionList: some View {
         let suggestions = draft.placeSuggestions(from: placeMasters)
         let publicSuggestions = publicCatalogSuggestions
-        if !suggestions.isEmpty || !publicSuggestions.isEmpty || !placeImportError.isEmpty {
+        if !suggestions.isEmpty || !publicSuggestions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 if !suggestions.isEmpty {
                     Text("登録済みの場所")
@@ -571,7 +570,7 @@ struct AddTicketPlanView: View {
                         .foregroundStyle(.secondary)
                     ForEach(publicSuggestions) { entry in
                         Button {
-                            importPublicPlace(entry)
+                            draft.apply(publicPlace: PublicPlaceSelectionDraft(entry: entry))
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "building.2.crop.circle")
@@ -591,11 +590,6 @@ struct AddTicketPlanView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                if !placeImportError.isEmpty {
-                    Text(placeImportError)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.red)
-                }
             }
         }
     }
@@ -608,20 +602,6 @@ struct AddTicketPlanView: View {
             excludingSourceMarkers: importedMarkers,
             includesClosed: false
         )
-    }
-
-    private func importPublicPlace(_ entry: PublicPlaceCatalogEntry) {
-        do {
-            let place = try PublicPlaceCatalogImporter.importEntry(
-                entry,
-                existingPlaces: placeMasters,
-                in: modelContext
-            )
-            placeImportError = ""
-            draft.apply(placeMaster: place)
-        } catch {
-            placeImportError = "場所マスターへ追加できませんでした。"
-        }
     }
 
     private var navigationTitle: String {
@@ -727,7 +707,12 @@ struct AddTicketPlanView: View {
             updatedAt: now,
             category: event.category ?? selectedCategory,
             event: event,
-            placeMaster: resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
+            placeMaster: resolvePlaceMaster(
+                for: draft.placeSnapshot,
+                publicSelection: draft.publicPlaceSelection,
+                from: placeMasters,
+                in: modelContext
+            )
         )
         modelContext.insert(plan)
         event.stateKey = "active"
@@ -820,7 +805,12 @@ struct AddTicketPlanView: View {
         plan.endsAt = draft.endsAt
         plan.opensAt = usesOpeningTime ? draft.opensAt : Date.distantPast
         plan.venueNameSnapshot = draft.trimmedVenueName
-        plan.placeMaster = resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
+        plan.placeMaster = resolvePlaceMaster(
+            for: draft.placeSnapshot,
+            publicSelection: draft.publicPlaceSelection,
+            from: placeMasters,
+            in: modelContext
+        )
         plan.officialURL = draft.trimmedOfficialURL
         plan.sourceURL = draft.trimmedOfficialURL
         plan.memo = draft.trimmedMemo
@@ -1127,6 +1117,7 @@ private struct TicketPlanDraft {
     var venueAddress = ""
     var latitude: Double = 0
     var longitude: Double = 0
+    var publicPlaceSelection: PublicPlaceSelectionDraft?
     var officialURL = ""
     var createsTicketAttempt = true
     var flowKey = "lotteryPlanned"
@@ -1264,6 +1255,7 @@ private struct TicketPlanDraft {
     }
 
     mutating func apply(place: PlaceSearchCandidate, preservingVenueName: Bool) {
+        publicPlaceSelection = nil
         if !preservingVenueName {
             venueName = place.name
         }
@@ -1275,19 +1267,30 @@ private struct TicketPlanDraft {
     }
 
     mutating func apply(placeMaster: PlaceMaster) {
+        publicPlaceSelection = nil
         venueName = placeMaster.name
         venueAddress = placeMaster.address
         latitude = placeMaster.latitude
         longitude = placeMaster.longitude
     }
 
+    mutating func apply(publicPlace selection: PublicPlaceSelectionDraft) {
+        publicPlaceSelection = selection
+        venueName = selection.entry.officialName
+        venueAddress = selection.entry.address
+        latitude = selection.entry.latitude
+        longitude = selection.entry.longitude
+    }
+
     mutating func clearPlaceSelection() {
+        publicPlaceSelection = nil
         venueAddress = ""
         latitude = 0
         longitude = 0
     }
 
     mutating func clearPlaceCoordinates() {
+        publicPlaceSelection = nil
         latitude = 0
         longitude = 0
     }

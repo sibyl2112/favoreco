@@ -18,6 +18,10 @@ private struct DetailBackSwipeExclusionPreferenceKey: PreferenceKey {
     }
 }
 
+private struct PersonMasterEditTarget: Identifiable {
+    let id: UUID
+}
+
 struct ExperienceDetailView: View {
     let visit: Visit
     let onBack: (() -> Void)?
@@ -45,6 +49,7 @@ struct ExperienceDetailView: View {
     @State private var benefitPhotoItems: [PhotosPickerItem] = []
     @State private var photoAddErrorMessage: String?
     @State private var backSwipeExclusionFrames: [CGRect] = []
+    @State private var personMasterEditTarget: PersonMasterEditTarget?
 
     init(visit: Visit, onBack: (() -> Void)? = nil) {
         self.visit = visit
@@ -84,7 +89,8 @@ struct ExperienceDetailView: View {
                         accentColor: accentColor
                     )
                     memoSection(template: template, accentColor: accentColor, isTheater: true)
-                    theaterCastSection(snapshot: snapshot, accentColor: accentColor)
+                    theaterCreditsSection(snapshot: snapshot, accentColor: accentColor)
+                    theaterFocusSection(snapshot: snapshot, accentColor: accentColor)
                     expenseAndTicketSection(
                         snapshot: snapshot,
                         plan: activePlan,
@@ -140,6 +146,11 @@ struct ExperienceDetailView: View {
         }
         .sheet(item: $ticketPlanForEditor) { plan in
             EditTicketAttemptView(plan: plan)
+        }
+        .sheet(item: $personMasterEditTarget) { target in
+            NavigationStack {
+                PersonMasterEditDestination(personID: target.id, showsCancelButton: true)
+            }
         }
         .navigationDestination(item: $navigatingPlan) { plan in
             PlanDetailView(plan: plan)
@@ -223,14 +234,14 @@ struct ExperienceDetailView: View {
                             .lineLimit(1)
                         if snapshot.category?.templateKey == "theater" {
                             Text("•")
-                            Text(theaterVisitOrdinalText)
+                            Text(ExperienceDetailPresentation.theaterVisitOrdinal(for: visit))
                         }
                     }
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.white.opacity(0.76))
                     .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
                 } else if snapshot.category?.templateKey == "theater" {
-                    Text(theaterVisitOrdinalText)
+                    Text(ExperienceDetailPresentation.theaterVisitOrdinal(for: visit))
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.white.opacity(0.76))
                 }
@@ -286,7 +297,7 @@ struct ExperienceDetailView: View {
 
                         recordMetadataRow(
                             icon: "clock",
-                            text: performanceTimeText,
+                            text: ExperienceDetailPresentation.performanceTime(for: visit),
                             accentColor: .white.opacity(0.86)
                         )
 
@@ -453,17 +464,12 @@ struct ExperienceDetailView: View {
     private var edgeBackGesture: some Gesture {
         DragGesture(minimumDistance: 18, coordinateSpace: .global)
             .onEnded { value in
-                let startsAtLeadingEdge = value.startLocation.x <= 32
-                let startsInExcludedArea = backSwipeExclusionFrames.contains {
-                    $0.contains(value.startLocation)
-                }
-                let horizontalDistance = value.translation.width
-                let verticalDistance = abs(value.translation.height)
-                let isHorizontalSwipe = horizontalDistance >= 72
-                    && horizontalDistance > verticalDistance * 1.35
-                    && value.predictedEndTranslation.width >= 110
-
-                guard startsAtLeadingEdge, !startsInExcludedArea, isHorizontalSwipe else { return }
+                guard DetailBackSwipePolicy.shouldClose(
+                    startLocation: value.startLocation,
+                    translation: value.translation,
+                    predictedEndTranslation: value.predictedEndTranslation,
+                    exclusionFrames: backSwipeExclusionFrames
+                ) else { return }
                 closeDetail()
             }
     }
@@ -476,25 +482,6 @@ struct ExperienceDetailView: View {
         }
     }
 
-    private var performanceTimeText: String {
-        let start = FavorecoDateText.time(visit.visitedAt)
-        guard visit.endedAt > visit.visitedAt else {
-            return start
-        }
-        return "\(start)–\(FavorecoDateText.time(visit.endedAt))"
-    }
-
-    private var theaterVisitOrdinalText: String {
-        guard let visits = visit.event?.visits else { return "観劇1回目" }
-        let ordered = visits.sorted {
-            if $0.visitedAt != $1.visitedAt { return $0.visitedAt < $1.visitedAt }
-            if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
-            return $0.id.uuidString < $1.id.uuidString
-        }
-        let ordinal = (ordered.firstIndex(where: { $0.id == visit.id }) ?? 0) + 1
-        return "観劇\(ordinal)回目"
-    }
-
     private func heroDateRow(snapshot: ExperienceDetailSnapshot) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: "calendar")
@@ -505,20 +492,12 @@ struct ExperienceDetailView: View {
             if !snapshot.unitFields.weatherSymbolName.isEmpty {
                 Image(systemName: snapshot.unitFields.weatherSymbolName)
                     .foregroundStyle(.white.opacity(0.90))
-                Text(compactWeatherText(snapshot))
+                Text(ExperienceDetailPresentation.compactWeatherText(fields: snapshot.unitFields))
                     .lineLimit(1)
             }
         }
         .font(FavorecoTypography.caption)
         .foregroundStyle(.white.opacity(0.84))
-    }
-
-    private func compactWeatherText(_ snapshot: ExperienceDetailSnapshot) -> String {
-        if let high = snapshot.unitFields.weatherHighCelsius,
-           let low = snapshot.unitFields.weatherLowCelsius {
-            return "\(Int(high.rounded()))°/\(Int(low.rounded()))°"
-        }
-        return ""
     }
 
     private func recordMetadataRow(icon: String, text: String, accentColor: Color) -> some View {
@@ -537,7 +516,7 @@ struct ExperienceDetailView: View {
     private func recordRating(accentColor: Color) -> some View {
         HStack(spacing: 3) {
             ForEach(1...5, id: \.self) { index in
-                Image(systemName: theaterRatingSymbol(at: index))
+                Image(systemName: ExperienceDetailPresentation.ratingSymbol(rating: visit.overallRating, index: index))
                     .foregroundStyle(visit.overallRating > 0 ? accentColor : Color.secondary.opacity(0.34))
             }
             Text(visit.overallRating > 0 ? String(format: "%.1f", visit.overallRating) : "未評価")
@@ -547,13 +526,6 @@ struct ExperienceDetailView: View {
         .font(FavorecoTypography.caption)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(visit.overallRating > 0 ? "評価 \(String(format: "%.1f", visit.overallRating))" : "未評価")
-    }
-
-    private func theaterRatingSymbol(at index: Int) -> String {
-        let threshold = Double(index)
-        if visit.overallRating >= threshold { return "star.fill" }
-        if visit.overallRating >= threshold - 0.5 { return "star.leadinghalf.filled" }
-        return "star"
     }
 
     private func detailEyecatchPhoto(in snapshot: ExperienceDetailSnapshot) -> PhotoBlob? {
@@ -596,7 +568,7 @@ struct ExperienceDetailView: View {
     ) -> some View {
         let officialURLText = snapshot.event?.officialURL.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let socialLinks = VisitUnitFields(rawValue: snapshot.event?.unitFieldsRaw ?? "").socialLinks
-        let ticketLinks = securedTicketAttempts(in: activePlan).compactMap { attempt -> String? in
+        let ticketLinks = ExperienceDetailPresentation.securedTicketAttempts(in: activePlan).compactMap { attempt -> String? in
             let value = attempt.purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
             return value.isEmpty ? nil : value
         }
@@ -700,7 +672,7 @@ struct ExperienceDetailView: View {
         if !organizer.isEmpty { rows.append(("主催", organizer)) }
 
         for link in snapshot.linkedPeople where !link.isArchived {
-            let role = link.displayRole.isEmpty ? roleName(for: link.roleKey) : link.displayRole
+            let role = link.displayRole.isEmpty ? ExperienceDetailPresentation.roleName(for: link.roleKey) : link.displayRole
             let normalizedRole: String?
             if role.contains("主催") { normalizedRole = "主催" }
             else if role.contains("企画") || role.contains("制作") { normalizedRole = "企画・制作" }
@@ -708,7 +680,7 @@ struct ExperienceDetailView: View {
             else if role.contains("協賛") { normalizedRole = "協賛" }
             else { normalizedRole = nil }
             guard let normalizedRole else { continue }
-            let name = personName(for: link)
+            let name = ExperienceDetailPresentation.personName(for: link)
             guard !rows.contains(where: { $0.0 == normalizedRole && $0.1 == name }) else { continue }
             rows.append((normalizedRole, name))
         }
@@ -946,27 +918,41 @@ struct ExperienceDetailView: View {
         accentColor: Color,
         title: String = "追加"
     ) -> some View {
-        let label = Label(title, systemImage: "plus")
-            .font(FavorecoTypography.captionStrong)
-            .foregroundStyle(accentColor)
+        let labelFont = FavorecoTypography.captionStrong
         switch purpose {
         case .memory:
-            PhotosPicker(selection: $memoryPhotoItems, maxSelectionCount: 20, matching: .images) { label }
+            PhotosPicker(selection: $memoryPhotoItems, maxSelectionCount: 20, matching: .images) {
+                Label(title, systemImage: "plus")
+                    .font(labelFont)
+                    .foregroundStyle(accentColor)
+            }
                 .onChange(of: memoryPhotoItems) { _, items in
                     Task { await addDetailPhotos(items, purpose: .memory); memoryPhotoItems = [] }
                 }
         case .goods:
-            PhotosPicker(selection: $goodsPhotoItems, maxSelectionCount: 20, matching: .images) { label }
+            PhotosPicker(selection: $goodsPhotoItems, maxSelectionCount: 20, matching: .images) {
+                Label(title, systemImage: "plus")
+                    .font(labelFont)
+                    .foregroundStyle(accentColor)
+            }
                 .onChange(of: goodsPhotoItems) { _, items in
                     Task { await addDetailPhotos(items, purpose: .goods); goodsPhotoItems = [] }
                 }
         case .benefit:
-            PhotosPicker(selection: $benefitPhotoItems, maxSelectionCount: 20, matching: .images) { label }
+            PhotosPicker(selection: $benefitPhotoItems, maxSelectionCount: 20, matching: .images) {
+                Label(title, systemImage: "plus")
+                    .font(labelFont)
+                    .foregroundStyle(accentColor)
+            }
                 .onChange(of: benefitPhotoItems) { _, items in
                     Task { await addDetailPhotos(items, purpose: .benefit); benefitPhotoItems = [] }
                 }
         case .ticket:
-            Button { isShowingEdit = true } label: { label }
+            Button { isShowingEdit = true } label: {
+                Label(title, systemImage: "plus")
+                    .font(labelFont)
+                    .foregroundStyle(accentColor)
+            }
         }
     }
 
@@ -1136,7 +1122,7 @@ struct ExperienceDetailView: View {
         plan: Plan?,
         accentColor: Color
     ) -> some View {
-        let attempts = securedTicketAttempts(in: plan)
+        let attempts = ExperienceDetailPresentation.securedTicketAttempts(in: plan)
         let hasVisitDetails = !visit.seatText.isEmpty || !visit.outcomeKey.isEmpty
 
         if hasVisitDetails || !attempts.isEmpty || snapshot.category?.templateKey == "theater" {
@@ -1245,20 +1231,9 @@ struct ExperienceDetailView: View {
         .buttonStyle(.bordered)
     }
 
-    private func securedTicketAttempts(in plan: Plan?) -> [TicketAttempt] {
-        let securedStatusKeys: Set<String> = [
-            "won", "waitingPayment", "waitingIssue", "issued", "attended",
-        ]
-        return TicketAttemptPresentationOrder.sorted(
-            (plan?.ticketAttempts ?? []).filter {
-                !$0.isArchived && securedStatusKeys.contains($0.statusKey)
-            }
-        )
-    }
-
     private var resolvedHeroSeatText: String {
         if !visit.seatText.isEmpty { return visit.seatText }
-        return securedTicketAttempts(in: activePlan)
+        return ExperienceDetailPresentation.securedTicketAttempts(in: activePlan)
             .first(where: { !$0.seatText.isEmpty })?
             .seatText ?? ""
     }
@@ -1301,44 +1276,92 @@ struct ExperienceDetailView: View {
     }
 
     @ViewBuilder
-    private func theaterCastSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
-        let castLinks = snapshot.linkedPeople.filter(isTheaterCastLink)
-        VStack(alignment: .leading, spacing: 12) {
-            Text("キャスト・スタッフ（\(castLinks.count)人）")
+    private func theaterCreditsSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
+        let legacyCastLinks = snapshot.linkedPeople.filter { ExperienceDetailPresentation.isTheaterCastLink($0) }
+        if !snapshot.eventCreditsText.isEmpty || !legacyCastLinks.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("キャスト・スタッフ")
+
+                if !snapshot.eventCreditsText.isEmpty {
+                    Text(snapshot.eventCreditsText)
+                        .font(FavorecoTypography.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+
+                if !legacyCastLinks.isEmpty {
+                    Text(snapshot.eventCreditsText.isEmpty ? "登録済みの出演者" : "以前の形式で登録した出演者")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                    Text(legacyCastLinks.map { link in
+                        let role = link.displayRole.isEmpty
+                            ? ExperienceDetailPresentation.roleName(for: link.roleKey)
+                            : link.displayRole
+                        return "\(role)：\(ExperienceDetailPresentation.personName(for: link))"
+                    }.joined(separator: "\n"))
+                    .font(FavorecoTypography.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                }
+            }
+            .sectionCard(tint: accentColor, emphasized: true)
+        }
+    }
+
+    @ViewBuilder
+    private func theaterFocusSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
+        let focusLinks = snapshot.linkedPeople.filter { $0.roleKey == PersonRoleOption.theaterFocus.key }
+        if !focusLinks.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("お目当て・注目した人")
                     .font(FavorecoTypography.sectionTitle)
                     .foregroundStyle(.primary)
 
-            if !castLinks.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 14) {
-                        ForEach(castLinks) { link in
-                            TheaterCastItem(
-                                name: personName(for: link),
-                                role: link.displayRole.isEmpty ? roleName(for: link.roleKey) : link.displayRole,
-                                imageData: link.person?.imageData,
-                                imagePath: link.person?.imagePath ?? "",
-                                roleTagsRaw: link.person?.roleTagsRaw ?? "",
-                                tint: accentColor
-                            )
+                        ForEach(focusLinks) { link in
+                            let reactionTitles = TheaterFocusLinkMetadata(memo: link.memo)
+                                .reactionKeys
+                                .map { TheaterFocusReaction.title(for: $0) }
+                            if let personID = link.person?.id {
+                                Button {
+                                    personMasterEditTarget = PersonMasterEditTarget(id: personID)
+                                } label: {
+                                    TheaterCastItem(
+                                        name: ExperienceDetailPresentation.personName(for: link),
+                                        role: reactionTitles.isEmpty ? "注目" : reactionTitles.joined(separator: "・"),
+                                        imageData: link.person?.imageData,
+                                        imagePath: link.person?.imagePath ?? "",
+                                        roleTagsRaw: link.person?.roleTagsRaw ?? "",
+                                        tint: accentColor
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityHint("人物マスターを編集")
+                            } else {
+                                TheaterCastItem(
+                                    name: ExperienceDetailPresentation.personName(for: link),
+                                    role: reactionTitles.isEmpty ? "注目" : reactionTitles.joined(separator: "・"),
+                                    imageData: nil,
+                                    imagePath: "",
+                                    roleTagsRaw: "",
+                                    tint: accentColor
+                                )
+                            }
                         }
                     }
                 }
                 .scrollClipDisabled()
             }
-
-            HStack(spacing: 8) {
-                compactImportButton("画像・OCR", icon: "doc.viewfinder")
-                compactImportButton("公式URL", icon: "link.badge.plus")
-                compactImportButton("手入力", icon: "person.badge.plus")
-            }
-        }
-        .sectionCard(tint: accentColor, emphasized: true)
-        .background {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: DetailBackSwipeExclusionPreferenceKey.self,
-                    value: [proxy.frame(in: .global)]
-                )
+            .sectionCard(tint: accentColor, emphasized: true)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: DetailBackSwipeExclusionPreferenceKey.self,
+                        value: [proxy.frame(in: .global)]
+                    )
+                }
             }
         }
     }
@@ -1524,7 +1547,10 @@ struct ExperienceDetailView: View {
     @ViewBuilder
     private func peopleSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
         let links = snapshot.category?.templateKey == "theater"
-            ? snapshot.linkedPeople.filter { !isTheaterCastLink($0) }
+            ? snapshot.linkedPeople.filter {
+                !ExperienceDetailPresentation.isTheaterCastLink($0)
+                    && $0.roleKey != PersonRoleOption.theaterFocus.key
+            }
             : snapshot.linkedPeople
         if !links.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
@@ -1533,7 +1559,7 @@ struct ExperienceDetailView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(links) { link in
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text(link.displayRole.isEmpty ? roleName(for: link.roleKey) : link.displayRole)
+                            Text(link.displayRole.isEmpty ? ExperienceDetailPresentation.roleName(for: link.roleKey) : link.displayRole)
                                 .font(FavorecoTypography.caption)
                                 .foregroundStyle(accentColor)
                                 .padding(.horizontal, 8)
@@ -1634,7 +1660,8 @@ struct ExperienceDetailView: View {
         accentColor: Color,
         isTheater: Bool
     ) -> some View {
-        if !visit.note.isEmpty || isTheater {
+        let tagNames = TheaterEmotionTags.names(from: visit.tagNamesRaw)
+        if !visit.note.isEmpty || !tagNames.isEmpty || isTheater {
             VStack(alignment: .leading, spacing: 12) {
                 Button {
                     guard isTheater else { return }
@@ -1653,6 +1680,19 @@ struct ExperienceDetailView: View {
                 .buttonStyle(.plain)
 
                 if !isTheater || isReviewSectionExpanded {
+                    if !tagNames.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 7) {
+                                ForEach(tagNames, id: \.self) { tag in
+                                    Label(tag, systemImage: "heart.text.square")
+                                        .font(FavorecoTypography.caption)
+                                        .padding(.horizontal, 9)
+                                        .padding(.vertical, 6)
+                                        .background(accentColor.opacity(0.12), in: Capsule())
+                                }
+                            }
+                        }
+                    }
                     if visit.note.isEmpty {
                         Text("感想はまだありません")
                             .font(FavorecoTypography.body)
@@ -1715,45 +1755,6 @@ struct ExperienceDetailView: View {
         )
     }
 
-    private func roleName(for roleKey: String) -> String {
-        switch roleKey {
-        case "artist": return "アーティスト"
-        case "cast": return "出演"
-        case "lead": return "主演"
-        case "writer": return "作家"
-        case "author": return "作者"
-        case "director": return "監督"
-        case "screenplay": return "脚本"
-        case "stage_director": return "演出"
-        case "original_work": return "原作"
-        case "music": return "音楽"
-        case "performer": return "演奏"
-        case "translator": return "翻訳"
-        case "curator": return "キュレーター"
-        case "organizer": return "主催"
-        case "production": return "制作"
-        case "publisher": return "出版社"
-        case "guest": return "ゲスト"
-        default: return "その他"
-        }
-    }
-
-    private func isTheaterCastRole(_ roleKey: String) -> Bool {
-        ["cast", "lead", "artist", "performer", "guest"].contains(roleKey)
-    }
-
-    private func isTheaterCastLink(_ link: EventPersonLink) -> Bool {
-        if isTheaterCastRole(link.roleKey) { return true }
-        let displayRole = link.displayRole
-        return displayRole.contains("出演") || displayRole.contains("主演") || displayRole.contains("キャスト")
-    }
-
-    private func personName(for link: EventPersonLink) -> String {
-        let snapshotName = link.nameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !snapshotName.isEmpty { return snapshotName }
-        let masterName = link.person?.displayName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return masterName.isEmpty ? "出演者" : masterName
-    }
 }
 
 private struct RecordDetailEyecatch: View {

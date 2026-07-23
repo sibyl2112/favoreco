@@ -138,10 +138,11 @@ struct OCRUnitEditor: View {
     @State private var suggestions: [OCRImportSuggestion] = []
 
     var body: some View {
+        let recognitionActionTitle = isRecognizing ? "読み取り中" : "画像から読み取る"
         VStack(alignment: .leading, spacing: 12) {
             if usesOCRImportAssist {
                 PhotosPicker(selection: $selectedItems, maxSelectionCount: 1, matching: .images) {
-                    Label(isRecognizing ? "読み取り中" : "画像から読み取る", systemImage: "text.viewfinder")
+                    Label(recognitionActionTitle, systemImage: "text.viewfinder")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)

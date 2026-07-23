@@ -11,6 +11,9 @@ struct EventVenueEntry: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
     var address: String = ""
+    var performanceLabel: String?
+    var startsAt: Date?
+    var endsAt: Date?
 
     var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -18,6 +21,10 @@ struct EventVenueEntry: Codable, Identifiable, Equatable {
 
     var trimmedAddress: String {
         address.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedPerformanceLabel: String {
+        (performanceLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var isEmpty: Bool {
@@ -30,9 +37,13 @@ struct VisitUnitFields: Codable {
     var styleNames: [String] = []
     var socialLinks: [String] = []
     var eventSubtitle: String = ""
+    var eventCreditsText: String = ""
+    var eventPerformanceTypeCustomName: String = ""
     var eventPeriodStartsAt: Date?
     var eventPeriodEndsAt: Date?
     var eventVenues: [EventVenueEntry] = []
+    var excludedEventCastLinkIDs: [UUID] = []
+    var hasVisitCastSnapshot: Bool = false
     var eyecatchAspectRatioKey: String = ""
     var heroBackgroundPath: String = ""
     var heroBackgroundPresetKey: String = ""
@@ -49,9 +60,13 @@ struct VisitUnitFields: Codable {
         styleNames: [String] = [],
         socialLinks: [String] = [],
         eventSubtitle: String = "",
+        eventCreditsText: String = "",
+        eventPerformanceTypeCustomName: String = "",
         eventPeriodStartsAt: Date? = nil,
         eventPeriodEndsAt: Date? = nil,
         eventVenues: [EventVenueEntry] = [],
+        excludedEventCastLinkIDs: [UUID] = [],
+        hasVisitCastSnapshot: Bool = false,
         eyecatchAspectRatioKey: String = "",
         heroBackgroundPath: String = "",
         heroBackgroundPresetKey: String = "",
@@ -67,9 +82,13 @@ struct VisitUnitFields: Codable {
         self.styleNames = styleNames
         self.socialLinks = socialLinks
         self.eventSubtitle = eventSubtitle
+        self.eventCreditsText = eventCreditsText
+        self.eventPerformanceTypeCustomName = eventPerformanceTypeCustomName
         self.eventPeriodStartsAt = eventPeriodStartsAt
         self.eventPeriodEndsAt = eventPeriodEndsAt
         self.eventVenues = eventVenues
+        self.excludedEventCastLinkIDs = excludedEventCastLinkIDs
+        self.hasVisitCastSnapshot = hasVisitCastSnapshot
         self.eyecatchAspectRatioKey = eyecatchAspectRatioKey
         self.heroBackgroundPath = heroBackgroundPath
         self.heroBackgroundPresetKey = heroBackgroundPresetKey
@@ -87,9 +106,13 @@ struct VisitUnitFields: Codable {
         case styleNames
         case socialLinks
         case eventSubtitle
+        case eventCreditsText
+        case eventPerformanceTypeCustomName
         case eventPeriodStartsAt
         case eventPeriodEndsAt
         case eventVenues
+        case excludedEventCastLinkIDs
+        case hasVisitCastSnapshot
         case eyecatchAspectRatioKey
         case heroBackgroundPath
         case heroBackgroundPresetKey
@@ -108,9 +131,13 @@ struct VisitUnitFields: Codable {
         styleNames = try container.decodeIfPresent([String].self, forKey: .styleNames) ?? []
         socialLinks = try container.decodeIfPresent([String].self, forKey: .socialLinks) ?? []
         eventSubtitle = try container.decodeIfPresent(String.self, forKey: .eventSubtitle) ?? ""
+        eventCreditsText = try container.decodeIfPresent(String.self, forKey: .eventCreditsText) ?? ""
+        eventPerformanceTypeCustomName = try container.decodeIfPresent(String.self, forKey: .eventPerformanceTypeCustomName) ?? ""
         eventPeriodStartsAt = try container.decodeIfPresent(Date.self, forKey: .eventPeriodStartsAt)
         eventPeriodEndsAt = try container.decodeIfPresent(Date.self, forKey: .eventPeriodEndsAt)
         eventVenues = try container.decodeIfPresent([EventVenueEntry].self, forKey: .eventVenues) ?? []
+        excludedEventCastLinkIDs = try container.decodeIfPresent([UUID].self, forKey: .excludedEventCastLinkIDs) ?? []
+        hasVisitCastSnapshot = try container.decodeIfPresent(Bool.self, forKey: .hasVisitCastSnapshot) ?? false
         eyecatchAspectRatioKey = try container.decodeIfPresent(String.self, forKey: .eyecatchAspectRatioKey) ?? ""
         heroBackgroundPath = try container.decodeIfPresent(String.self, forKey: .heroBackgroundPath) ?? ""
         heroBackgroundPresetKey = try container.decodeIfPresent(String.self, forKey: .heroBackgroundPresetKey) ?? ""
@@ -137,9 +164,13 @@ struct VisitUnitFields: Codable {
                 || !styleNames.isEmpty
                 || !socialLinks.isEmpty
                 || !eventSubtitle.isEmpty
+                || !eventCreditsText.isEmpty
+                || !eventPerformanceTypeCustomName.isEmpty
                 || eventPeriodStartsAt != nil
                 || eventPeriodEndsAt != nil
                 || !eventVenues.isEmpty
+                || !excludedEventCastLinkIDs.isEmpty
+                || hasVisitCastSnapshot
                 || !eyecatchAspectRatioKey.isEmpty
                 || !heroBackgroundPath.isEmpty
                 || !heroBackgroundPresetKey.isEmpty
@@ -178,79 +209,50 @@ struct HeroBackgroundPreset: Identifiable, Equatable {
         case "theater":
             [
                 .init(key: "theaterVenue", title: "劇場", resourceName: "theater-hero-venue-v2"),
-                .init(key: "theaterMoonlitAtelier", title: "月夜のアトリエ", resourceName: "theater-hero-fictional-atelier"),
                 .init(key: "theaterNightTrain", title: "夜行列車", resourceName: "theater-hero-fictional-night-train"),
                 .init(key: "theaterWinterGarden", title: "冬の庭園", resourceName: "theater-hero-fictional-winter-garden"),
             ]
         case "movie":
             [
-                .init(key: "movieCinema", title: "映画館", resourceName: "movie-hero-cinema-v2"),
-                .init(key: "movieBrightLobby", title: "明るいロビー", resourceName: "movie-hero-bright-lobby"),
-                .init(key: "movieNoir", title: "ノワール", resourceName: "movie-hero-fictional-noir"),
-                .init(key: "movieSciFi", title: "SF", resourceName: "movie-hero-fictional-scifi"),
+                .init(key: "movieDefault", title: "映画", resourceName: "movie-hero-default"),
             ]
         case "book":
             [
-                .init(key: "bookLibrary", title: "書斎", resourceName: "book-hero-library"),
-                .init(key: "bookBrightRoom", title: "陽だまり", resourceName: "book-hero-bright-reading-room"),
-                .init(key: "bookNightShop", title: "夜の書店", resourceName: "book-hero-night-bookshop"),
-                .init(key: "bookReadingTrain", title: "読書列車", resourceName: "book-hero-reading-train"),
+                .init(key: "bookDefault", title: "書籍", resourceName: "book-hero-default"),
             ]
         case "museum":
             [
-                .init(key: "museumGallery", title: "美術館", resourceName: "museum-hero-gallery-v2"),
-                .init(key: "museumWhiteGallery", title: "白いギャラリー", resourceName: "museum-hero-bright-white-gallery"),
-                .init(key: "museumLight", title: "光の展示", resourceName: "museum-hero-immersive-light"),
-                .init(key: "museumClassic", title: "クラシック", resourceName: "museum-hero-classic-hall"),
+                .init(key: "museumDefault", title: "ミュージアム", resourceName: "museum-hero-default"),
             ]
         case "live":
             [
-                .init(key: "liveHouse", title: "ライブハウス", resourceName: "live-hero-livehouse"),
-                .init(key: "liveFestival", title: "昼フェス", resourceName: "live-hero-bright-festival"),
-                .init(key: "liveArena", title: "アリーナ", resourceName: "live-hero-arena"),
-                .init(key: "liveAcoustic", title: "アコースティック", resourceName: "live-hero-bright-acoustic"),
+                .init(key: "liveDefault", title: "ライブ", resourceName: "live-hero-default"),
             ]
         case "sake":
             [
-                .init(key: "sakeBar", title: "バー", resourceName: "sake-hero-tasting-bar"),
-                .init(key: "sakeBrewery", title: "酒蔵", resourceName: "sake-hero-bright-brewery"),
-                .init(key: "sakeWine", title: "ワインセラー", resourceName: "sake-hero-wine-cellar"),
-                .init(key: "sakeCraft", title: "クラフト", resourceName: "sake-hero-bright-taproom"),
+                .init(key: "sakeDefault", title: "お酒", resourceName: "sake-hero-default"),
             ]
         case "theme_park":
             [
-                .init(key: "themeParkAvenue", title: "パーク", resourceName: "theme_park-hero-avenue"),
-                .init(key: "themeParkCarousel", title: "メリーゴーラウンド", resourceName: "theme_park-hero-bright-carousel"),
-                .init(key: "themeParkNight", title: "ナイトパーク", resourceName: "theme_park-hero-night"),
-                .init(key: "themeParkWaterfront", title: "水辺", resourceName: "theme_park-hero-bright-waterfront"),
+                .init(key: "themeParkDefault", title: "テーマパーク", resourceName: "theme_park-hero-default"),
             ]
         case "nature_living":
             [
-                .init(key: "natureSunroom", title: "サンルーム", resourceName: "nature_living-hero-bright-sunroom"),
-                .init(key: "natureGarden", title: "花の庭", resourceName: "nature_living-hero-bright-garden"),
-                .init(key: "natureForest", title: "森", resourceName: "nature_living-hero-forest"),
-                .init(key: "natureCoast", title: "海辺", resourceName: "nature_living-hero-bright-coast"),
+                .init(key: "natureDefault", title: "自然・いきもの", resourceName: "nature_living-hero-default"),
             ]
         case "outing_facility":
             [
-                .init(key: "outingAtrium", title: "施設", resourceName: "outing_facility-hero-bright-atrium"),
-                .init(key: "outingZoo", title: "動物園", resourceName: "outing_facility-hero-bright-zoo"),
-                .init(key: "outingAquarium", title: "水族館", resourceName: "outing_facility-hero-aquarium"),
-                .init(key: "outingGreenhouse", title: "温室", resourceName: "outing_facility-hero-bright-greenhouse"),
+                .init(key: "outingDefault", title: "おでかけ施設", resourceName: "outing_facility-hero-default"),
             ]
         case "goshuin":
             [
                 .init(key: "goshuinShrine", title: "神社", resourceName: "goshuin-hero-bright-shrine"),
                 .init(key: "goshuinTemple", title: "寺院", resourceName: "goshuin-hero-temple"),
                 .init(key: "goshuinMoss", title: "苔庭", resourceName: "goshuin-hero-moss-garden"),
-                .init(key: "goshuinLanterns", title: "灯籠", resourceName: "goshuin-hero-lanterns"),
             ]
         case "random_goods":
             [
-                .init(key: "goodsShelf", title: "コレクション棚", resourceName: "random_goods-hero-collector-shelf"),
-                .init(key: "goodsCapsule", title: "カプセルトイ", resourceName: "random_goods-hero-bright-capsule"),
-                .init(key: "goodsAcrylic", title: "アクスタ", resourceName: "random_goods-hero-bright-acrylic"),
-                .init(key: "goodsCards", title: "カード", resourceName: "random_goods-hero-card-binder"),
+                .init(key: "goodsDefault", title: "コレクション", resourceName: "random_goods-hero-default"),
             ]
         default:
             []

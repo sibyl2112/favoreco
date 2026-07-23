@@ -5,6 +5,234 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-07-23: 観劇の公演地別スケジュールとHero自動要約を追加
+
+### 変更概要
+- `EventVenueEntry`へ公演地名、個別の開始日・終了日を後方互換フィールドとして追加した
+- 対象編集を、東京公演・大阪公演等の公演地ごとに会期・会場・住所を登録するフォームへ変更した
+- Heroは公演スケジュールから全体会期と都市・会場数を自動算出し、会場・住所の全件表示を要約へ置き換えた
+- Hero直下へ公演スケジュールを分離し、開催中・次回を優先して最大2件、全件は開閉操作で表示する
+- 住所は各公演地カードを開いた場合だけ表示し、通常時の縦方向の肥大化を抑えた
+
+### 変更意図
+全国ツアー等で公演地が増えてもHeroを短く保ち、会場別の会期を正確に登録しながら、必要な時だけ全日程と住所を確認できるようにするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`: 公演地名と個別会期の後方互換JSONフィールドを追加
+- `favorecoAPP/favorecoAPP/Views/DetailPresentationLogic.swift`: 全体会期、Hero要約、旧データ補完、開催中・次回優先を実装
+- `favorecoAPP/favorecoAPP/Views/TheaterPerformanceScheduleSection.swift`: コンパクト表示、全件開閉、住所開閉、編集行を追加
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: Hero・本文・対象編集・保存を公演地別スケジュールへ接続
+- `favorecoAPP/favorecoAPPTests/TheaterPerformanceScheduleTests.swift`: 後方互換、要約、全体会期、優先表示、2件上限を検証
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`: 現行仕様と実機確認項目を更新
+
+### 影響する画面・機能
+- 観劇の公開公演Hero、公演スケジュール、対象編集
+- `ExperienceEvent.unitFieldsRaw`に保存する公演会期・会場情報
+- 旧データ、Plan／Visit補完、バックアップは維持し、他ジャンルと単回記録編集には影響しない
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルの構文解析成功
+- iOS 18.6 Simulatorで専用XCTest 5件を実行し、失敗0件
+- 既存の詳細表示ロジック回帰XCTest 14件を実行し、失敗0件
+- テスト実行に伴うアプリ・テストターゲットのビルド成功
+- `git diff --check`成功
+- 実機操作は未確認
+
+### 既知のリスク・残課題
+- 実機で公演地0／1／2／3／10件、追加・削除・再編集、開催中・未来・終了済み混在を確認する
+- 長い公演地名・会場名・住所、会期未登録、Dynamic Type、VoiceOverで表示と開閉操作を確認する
+
+## 2026-07-23: 観劇公開公演Heroをアイキャッチのブラー背景へ変更
+
+### 変更概要
+- 公開公演Heroの背景を、中央ポスターと同じアイキャッチ画像を拡大・ブラーした表示へ変更した
+- 公演アイキャッチがなければ記録の代表写真、それもなければ既存の劇場背景プリセットへ戻す
+- 背景全体へ薄いワイン色を重ね、下半分は黒に近づく段階的なグラデーションで暗くした
+- 中央ポスターは従来どおり鮮明に表示し、背景だけをぼかす構造に分離した
+
+### 変更意図
+公演ごとのアイキャッチをHero全体の世界観へ広げながら、下部のタイトル・会場・リンク・追加操作を背景画像の明暗に左右されず読めるようにするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 背景画像の解決、拡大ブラー、ワイン色・暗色グラデーションを実装
+- `favoreco/CLAUDE.md`: 公開公演Heroの現行背景仕様を更新
+- `docs/15-画面情報設計.md`: Heroの画像優先順位と可読性レイヤーを更新
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響する画面・機能
+- 観劇の公開公演詳細にあるHero背景
+- 公演アイキャッチまたは代表写真の表示上の再利用
+- 中央ポスター、保存データ、対象編集、単回記録詳細、他ジャンルには影響しない
+
+### 確認結果（実機 / ビルド）
+- `EventDetailView.swift`のSwift構文解析成功
+- iOS 18.6 Simulator向けDebug全体ビルド成功
+- Simulatorへインストール・起動成功
+- `git diff --check`成功
+- 公開公演詳細の実機表示は未確認
+
+### 既知のリスク・残課題
+- 明暗差の大きい画像、極端な縦長／横長画像、画像なしで背景の埋まり方と文字コントラストを実機確認する
+- 長いタイトル・複数会場、Dynamic Type、ライト／ダークで下部グラデーションの濃さを確認する
+
+## 2026-07-23: 観劇公開公演へ遠征Mapを追加
+
+### 変更概要
+- 思い出ギャラリーの直下へ、参加した公演の会場を表示する`遠征Map`を追加した
+- 同じ場所マスターの記録は1つのピンへ集約し、ピン中央へ参加回数を表示する
+- 場所マスター参照のない旧記録は、正規化した会場名と約100m単位の座標で同一会場を判定する
+- Mapは全会場が収まる初期範囲にし、パン・ズーム、ピン選択、位置未設定件数の案内を追加した
+
+### 変更意図
+同じ公演へ複数回参加した時も、どの会場へ何回足を運んだかを写真の流れから地理的に振り返れるようにするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Models/TheaterTravelMapSnapshot.swift`: 会場座標の解決、同一会場集約、位置未設定件数を値型Snapshotへ分離
+- `favorecoAPP/favorecoAPP/Views/TheaterTravelMapSection.swift`: 遠征Map、回数付きピン、選択会場表示、空状態を追加
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 思い出ギャラリー直下へ遠征Mapを配置
+- `favorecoAPP/favorecoAPPTests/TheaterTravelMapSnapshotTests.swift`: 場所マスター、旧記録、位置未設定の集約テストを追加
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`: 現行仕様と実機確認項目を更新
+
+### 影響する画面・機能
+- 観劇の公開公演詳細にある思い出ギャラリー下部
+- 参加済みVisitの会場座標・場所マスター参照を使った表示集計
+- 保存モデル、場所データ、単回記録詳細、他ジャンルのMapには影響しない
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルの構文解析成功
+- iOS 18.6 Simulatorで`TheaterTravelMapSnapshotTests`を3件実行し、失敗0件
+- テスト実行に伴うアプリ・テストターゲットのビルド成功
+- `git diff --check`成功
+- 実機表示は未確認
+
+### 既知のリスク・残課題
+- 座標のない参加記録はピン表示できないため、Map下部に位置未設定件数を表示する
+- 実機で0／1／多数会場、同一会場2回、密集地点、長い会場名、Dynamic Type、ライト／ダークを確認する
+
+## 2026-07-23: 観劇公開公演のあらすじ・キャストを開閉可能に変更
+
+### 変更概要
+- `あらすじ`と`キャスト・スタッフ`へ独立した開閉状態を追加した
+- 両方とも初期状態は開いたままにし、見出し全体をタップすると内容を折りたためるようにした
+- 見出し右端へ開閉方向を示す矢印を置き、キャスト件数は閉じた状態でも表示する
+- タップ領域を最小44ptとし、VoiceOverへ展開状態と操作ヒントを通知する
+
+### 変更意図
+長いあらすじやキャスト一覧を必要な時だけ表示し、次の予定・参加履歴へ少ないスクロール量で到達できるようにするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TheaterEventDetailComponents.swift`: 2セクションの開閉状態、共通見出し、アニメーション、アクセシビリティを追加
+- `favoreco/CLAUDE.md`: 観劇公開公演の開閉仕様を追記
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新
+
+### 影響する画面・機能
+- 観劇の公開公演詳細にある`あらすじ`と`キャスト・スタッフ`
+- 保存データ、対象編集、観劇回編集、他ジャンルの詳細表示には影響しない
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルの構文解析成功
+- iOS Simulator向けDebug全体ビルド成功
+- `git diff --check`成功
+- 実機操作は未確認
+
+### 既知のリスク・残課題
+- 実機で連続開閉、長文、キャスト0／1／多数件、Dynamic Type、VoiceOver読み上げを確認する
+- キャスト横スクロールを開閉した後も画面端の戻るジェスチャー判定と競合しないことを確認する
+
+## 2026-07-23: 観劇公開公演の参加履歴とギャラリーを簡素化
+
+### 変更概要
+- `次の予定`を`参加した公演`より上へ移動した
+- 参加履歴は汎用`VisitSummaryRow`の利用をやめ、写真、日付、開演／終演時刻、場所、`お目当て・注目した人`だけを見せる観劇専用行に変更した
+- 新形式の`theater_focus`を優先し、旧形式の観劇回人物・公演キャストも名前表示のフォールバックとして残した
+- 思い出ギャラリーを正方形グリッドから高さ132ptの横並びへ変更し、サムネイル実寸から横幅を求めて元画像の縦横比を維持するようにした
+
+### 変更意図
+公開公演ページの参加履歴に、記録詳細向けのメモ・評価・金額・OCRバッジまで出ていた情報過多を解消するため。また、正方形固定で写真本来の比率を失うギャラリーを、画面幅からはみ出さず横操作で閲覧できる構成にするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 次の予定と参加履歴の並びを変更
+- `favorecoAPP/favorecoAPP/Views/TheaterEventDetailComponents.swift`: 観劇専用参加行と比率維持ギャラリーを実装
+- `favoreco/CLAUDE.md`: 観劇公開公演の現行表示仕様を更新
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追記
+
+### 影響する画面・機能
+- 観劇の公開公演詳細にある次の予定、参加した公演、思い出ギャラリー
+- 参加履歴と写真から既存の観劇回詳細へ進む導線
+- 保存モデル、編集フォーム、金額集計、他ジャンルの履歴表示には影響しない
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルの構文解析成功
+- iOS Simulator向けDebug全体ビルド成功
+- `git diff --check`成功
+- 実機表示は未確認
+
+### 既知のリスク・残課題
+- 参加履歴0／1／多数件、人物未登録、新旧の人物リンク併存、長い人物名／会場名を実機で確認する
+- 写真0／1／6枚以上、極端な縦長／横長比、読込中の幅変化、Dynamic Typeを実機で確認する
+
+## 2026-07-22: 主要一覧Snapshotと画像読込をUUID参照へ軽量化
+
+### 変更概要
+- `HomeSnapshot`、`CategoryTopSnapshot`、`FavoSnapshot`からSwiftDataモデルと画像`Data`の保持を外し、文字列・日時・数値・UUID・サムネイル参照キーだけの値型へ変更した
+- 記録、予定、対象、FAVOの詳細遷移はUUIDを渡し、遷移先の絞り込みQueryで現在のモデルを1件取得する構成へ変更した
+- `ThumbnailReference`と`ThumbnailImage`を追加し、一覧側は参照IDと表示寸法だけを渡し、`ThumbnailLoader`が画像Dataの取得、ダウンサンプル、キャッシュを担当するようにした
+- FAVO専用アイコンが未設定の場合は、参照キー内のフォールバックUUIDから人物写真または作品画像を解決する。人物の旧ファイルパス画像もローダー内で読み取り互換を維持した
+
+### 変更意図
+一覧Snapshotが重いSwiftDataオブジェクトグラフや原寸画像を長く保持し、描画更新や画面遷移時のメモリ使用量と無効化済みモデル参照を増やす構造を解消するため。表示に必要な不変値と参照キーだけを一覧へ渡し、モデルと画像の実体は必要な時点で取得する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Models/HomeSnapshot.swift`: Homeの出力を値・UUID・画像参照へ限定
+- `favorecoAPP/favorecoAPP/Models/CategoryTopSnapshot.swift`: ジャンル・対象・記録のモデル保持をIDと表示値へ変更
+- `favorecoAPP/favorecoAPP/Models/FavoSnapshot.swift`: 人物、ピン、STORIES、コレクションを値型とID配列へ変更
+- `favorecoAPP/favorecoAPP/Utilities/ThumbnailLoader.swift`: UUID参照から1件取得する画像ローダーと共通表示Viewを追加
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`、`CategoryTopView.swift`、`FavoView.swift`: UUID遷移、遷移先Resolver、参照型サムネイル表示へ移行
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`: 現在仕様と実機確認項目を更新
+
+### 影響する画面・機能
+- HomeのPICK UP、予定、最近の記録、気になる、Inbox画像と各詳細遷移
+- ジャンルトップのHero、対象一覧、最近の記録と各詳細遷移
+- FAVOトップ、STORIES、コレクション、人物／作品／場所詳細への遷移
+
+### 確認結果（実機 / ビルド）
+- 主要変更後にiOS Simulator向けDebug全体ビルド成功
+- 最終の画像フォールバック互換調整後は変更Swiftの構文解析と`git diff --check`成功
+- Snapshot出力プロパティに`Data`、`RecordCategory`、`ExperienceEvent`、`Visit`、`Plan`、`FavoriteProfile`、`PersonMaster`、`FavoPin`が残っていないことを静的検索で確認
+- 最終のSimulator再ビルドはSwiftData macroサーバーの不正応答、iPhoneOS再ビルドは停止中のCoreSimulatorServiceによるAsset Catalogエラーで完走できず。XCTestと実機確認は未実施
+
+### 既知のリスク・残課題
+- 画像0件、画像切替直後、人物の旧パス画像、FAVO専用画像なし、大量記録でプレースホルダーとフォールバックを実機確認する
+- 詳細画面が必要とする関連Visit／PlanはID配列から複数解決するため、主対象の1件取得とは別に関連一覧Queryを使用する。大量件数時の取得量は実機計測で継続評価する
+- UUID先のモデルが削除済みの場合に空状態が表示され、クラッシュしないことを確認する
+
+## 2026-07-22: 観劇対象編集のSection初期化エラーを修正
+
+### 変更概要
+- `EditEventView`の`公演期間・会場`を、文字列タイトル形式から明示的なcontent/header/footer形式へ修正した
+- Xcodeに表示されていた`Generic parameter 'Content' could not be inferred`、`Missing argument label 'content:' in call`、`Cannot convert value of type 'String'`の3連鎖エラーを解消した
+
+### 変更意図
+footerを持つSectionへ文字列タイトル用初期化を併用したことで、SwiftUIが文字列をcontentクロージャとして解釈しようとしていたため。headerとfooterを明示し、初期化形式を一意にした。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`
+- `docs/00-開発状況と残課題.md`
+- `docs/project-log.md`
+
+### 影響する画面・機能
+- 観劇の対象編集 > 公演期間・会場
+- 画面内容、入力項目、保存形式、既存データには変更なし
+
+### 確認結果（実機 / ビルド）
+- `EventDetailView.swift`のSwift構文解析成功
+- `git diff --check`成功
+- 同じ誤ったSection初期化形式が他のSwiftファイルにないことを検索確認
+- iPhoneOS向け署名なし全体ビルド成功
+
+### 既知のリスク・残課題
+- UIと保存仕様は変更していないため追加リスクなし
+
 ## 2026-07-22: 大学野球地域リーグの現役使用会場を追加
 
 ### 変更概要
@@ -16255,3 +16483,580 @@ Hero写真1枚とは別に、推しにまつわる写真を記録の添付へ限
 ### 既知のリスク・残課題
 - 暗い背景で金線が消えすぎないか、明るい背景でカードの分離が弱すぎないかを実機確認する
 - アイボリー文字とセカンダリ文字のコントラスト、Dynamic Type最大、0件空状態を実機確認する
+
+## 2026-07-22: 一覧・バックアップ・場所確定・画面責務・Hero素材を横断軽量化
+
+### 変更概要
+- Home／ジャンルトップ／FAVOのSnapshotからSwiftDataモデルと画像`Data`を除き、表示値・UUID・`ThumbnailReference`だけを保持する値型へ変更した。詳細遷移はUUIDで現在のモデルを1件取得し、一覧画像は表示寸法に合わせて遅延取得・縮小・キャッシュする
+- 自動バックアップを初画面表示後の遅延開始へ移し、SwiftData読取を専用`ModelActor`、JSON生成とファイルI/OをMainActor外へ分離した。進行中の重複起動を防ぎ、成功／失敗／スキップ／進行中の最終結果を設定画面へ表示する
+- 記録／予定の全国場所候補は選択時に値型Draftだけを保持し、親の保存時に既存`PlaceMaster`を再検索して、未登録時だけ同一トランザクションで作成するようにした
+- `MainTabView`からRecords／Calendar／Stats、`CategoryTopView`から映画／観劇／御朱印Section、`HomeView`からHero／Attention／Interesting／Coming Up、`SettingsView`から設定カテゴリを別ファイル化した。詳細画面から表示計算と戻るジェスチャー判定も分離した
+- Hero背景を観劇3枚・御朱印3枚・その他ジャンル各1枚の計15枚へ整理し、残すJPEGを最大辺1,280px・品質70%へ圧縮した。40枚を初回同梱から除外し、旧保存キーは先頭プリセットへフォールバックする
+- 自動バックアップ、公開場所確定、詳細表示計算・ジェスチャー、HeroプリセットのXCTestを追加し、テストメソッドを25件から44件へ増やした
+- Swift 6モードで検出した既定MainActor隔離、`PhotosPicker`のSendableクロージャ、サムネイルキャッシュのSendable警告を修正した
+
+### 変更意図
+一覧表示で永続モデルや写真本体を長く保持するメモリ負荷、起動直後にMainActorでバックアップを始める応答遅延、入力キャンセル後に未使用場所だけが残る保存境界、巨大Viewによる型検査・変更影響範囲、初回同梱画像容量、回帰テスト不足、Swift 6移行時の隔離エラー候補をまとめて解消するため。
+
+### 主な変更ファイル
+- `Models/HomeSnapshot.swift`、`CategoryTopSnapshot.swift`、`FavoSnapshot.swift`: 一覧SnapshotをUUIDと表示値だけの値型へ変更
+- `Utilities/ThumbnailLoader.swift`: UUID・表示寸法単位の取得、ダウンサンプル、Sendableなキャッシュ境界を実装
+- `Services/AutomaticBackupService.swift`、`FullBackupService.swift`、`JSONBackupExportService.swift`: バックグラウンド生成、重複防止、結果永続化を実装
+- `Services/PublicPlaceCatalogService.swift`、`Views/AddExperienceView.swift`、`AddTicketPlanView.swift`、`ExperienceBasicUnitEditor.swift`: 公開場所Draftと親保存時確定へ変更
+- `Views/MainTabView.swift`、`RecordsView.swift`、`CalendarView.swift`、`StatsView.swift`: タブ構成と各画面を分割
+- `Views/CategoryTopView.swift`、`CategoryTopMovieSections.swift`、`CategoryTopTheaterSections.swift`、`CategoryTopGoshuinSections.swift`: 共通Containerと専用Sectionを分割
+- `Views/HomeView.swift`、`HomeHeroSection.swift`、`HomeAttentionSection.swift`、`HomeInterestingSection.swift`、`HomeComingUpSection.swift`: Homeのセクション責務を分割
+- `Views/SettingsView.swift`、`SettingsHubs.swift`、`SettingsMasterData.swift`、`SettingsAppHub.swift`、`SettingsInputIntegration.swift`、`SettingsNotifications.swift`、`SettingsDisplay.swift`、`SettingsDataManagement.swift`、`SettingsBilling.swift`、`SettingsSupport.swift`: 設定カテゴリを分割
+- `Views/DetailPresentationLogic.swift`、`EventDetailView.swift`、`ExperienceDetailView.swift`: 表示計算と戻るジェスチャー判定をViewから分離
+- `Resources/CategoryHeroBackgrounds/`: 15枚へ整理し、残存JPEGを再圧縮
+- `favorecoAPPTests/AutomaticBackupPolicyTests.swift`、`PublicPlaceCatalogTests.swift`、`DetailPresentationLogicTests.swift`、`HeroBackgroundPresetTests.swift`: 境界値・重複・rollback・ジェスチャー・表示計算・旧キー互換を追加
+- `Models/CollectibleModels.swift`、`PendingExperiencePhoto.swift`、`Utilities/PlanPreparationFields.swift`、`TicketDefinitions.swift`、写真Pickerを持つ各View: Swift 6隔離／Sendable診断を解消
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、`docs/project-log.md`: 現行仕様、作業状態、検証結果を更新
+
+### 影響する画面・機能
+- Home、FAVO、全ジャンルトップ、記録／予定／対象詳細への遷移と一覧サムネイル
+- 起動時／手動の自動バックアップ、設定のバックアップ履歴・最終結果
+- 新規記録、回追加、記録編集、新規予定、予定編集の全国場所候補
+- 記録、カレンダー、統計、設定全カテゴリ、観劇／御朱印／映画のジャンルトップ
+- 全組み込みジャンルの記録詳細Hero背景と旧プリセット保存値
+- Swift 6コンパイル時の隔離・Sendable境界
+
+### 確認結果（実機 / ビルド）
+- 署名なしiPhoneOS向け通常モードのクリーンビルド成功、警告0件
+- `SWIFT_VERSION=6`を指定した署名なしiPhoneOS向けクリーンビルド成功、警告0件
+- iPhoneOS向けテストターゲットの`build-for-testing`成功。テストメソッドは44件。CoreSimulatorを利用できないため、この作業内ではテスト実行までは未実施
+- `git diff --check`成功
+- `MainTabView`は3,338行から727行、`SettingsView`は3,309行から103行へ縮小
+- Hero背景は55枚・約14.6MBから15枚・2,936KBへ削減（約80.3%）。除外した40枚はGit履歴から復元可能
+
+### 既知のリスク・残課題
+- 実機で大量データ一覧のスクロール、画像0件／切替直後／旧人物画像のフォールバック、遷移先削除済み時の空状態を確認する
+- 自動バックアップの起動直後負荷、端末容量不足、iCloud失敗、同時手動実行、世代削除と最終結果表示を実機で確認する
+- 公開場所候補の選択後キャンセル、同名同住所の再利用、同名異住所、新規場所を含む親保存失敗時に孤立マスターが残らないことを実機で確認する
+- 分割後の全タブ、設定入口、Sheet、Navigation、画面端スワイプとキャスト横スクロールの非競合を実機で一巡する
+- 圧縮Hero背景の画質、明暗テーマ、旧プリセットキーのフォールバック、自分の写真優先を実機で確認する
+
+## 2026-07-22: 観劇の公演種別を7分類＋その他へ確定
+
+### 変更概要
+- 観劇の公演種別を`演劇 / 2.5次元舞台 / ミュージカル / 歌舞伎 / 落語・寄席 / ダンス・バレエ / オペラ / その他`へ統一した
+- 2.5次元舞台を観劇内の独立候補とし、コンサート／ライブはLIVEテンプレ、アイスショー・マジック・サーカス・能・狂言等は`その他`の具体名入力で扱う境界を確定した
+- 公演種別を`ExperienceEvent.subTypeKey`、観劇回の鑑賞方法を`Visit.unitFieldsRaw.styleNames`へ分離した。鑑賞方法候補は`現地 / 配信 / ライブビューイング`へ整理した
+- `その他`の具体名を`VisitUnitFields.eventPerformanceTypeCustomName`へ後方互換保存し、公開公演Heroと再編集で復元する。既存の未知キーと保存済みスタイルは変更しない
+- 固定候補順、具体名必須、標準候補で隠れた具体名を残さないこと、JSON往復をXCTestへ追加した
+
+### 変更意図
+市場統計上の重複と利用者が公演を分類する時の分かりやすさを分けて考え、2.5次元舞台を観劇から外さず独立選択できるようにするため。また、バレエをダンスの包含関係のまま重複候補にせず、利用頻度の低い公演を固定候補で増やさないため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/TheaterPerformanceType.swift`: 安定キー、表示名、その他具体名、共通Pickerを追加
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`: その他の具体名を後方互換JSONへ追加
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 新規観劇の公演種別選択と初期値を追加
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 対象編集と公開公演Heroへ公演種別を接続
+- `favorecoAPP/favorecoAPP/Views/ExperienceBasicUnitEditor.swift`: 観劇回の候補を鑑賞方法へ整理
+- `favorecoAPP/favorecoAPPTests/TheaterPerformanceTypeTests.swift`: 候補順・その他・JSON往復テストを追加
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/spec-A2-種別サブレイヤー.md`、`docs/spec-A4-テンプレ別プリセット.md`、`docs/08-テンプレユニット設計.md`、`docs/00-開発状況と残課題.md`: 現行仕様と状態を更新
+
+### 影響する画面・機能
+- 観劇の新規記録、公演対象編集、公開公演Hero
+- 観劇回の鑑賞方法入力
+- `ExperienceEvent.subTypeKey`、`unitFieldsRaw`、JSON／完全／自動バックアップの既存保存経路
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルと追加XCTestの`swiftc -parse`成功
+- 署名なしiPhoneOS向けのアプリ＋テストターゲット`build-for-testing`成功
+- XCTest実行と実機操作はこの時点で未確認
+
+### 既知のリスク・残課題
+- 新規公演、対象編集、`その他`具体名、公開公演Hero、再起動後の復元を実機確認する
+- 既存の空キー、未知キー、過去の観劇スタイル文字列が編集で失われないことを確認する
+- JSON／完全／自動バックアップで`subTypeKey`とその他具体名が往復することを確認する
+- カスタム候補の追加・並べ替え・非表示・統合は、使用済み安定キーを壊さない管理UIとして観劇完成工程で別途実装する
+
+## 2026-07-22: 観劇の公演団体・親子集計と感情タグを実装
+
+### 変更概要
+- 既存の`PersonMaster`に人物／団体区分と上位団体IDを追加し、`宝塚歌劇団 > 星組`のような親子関係を保存できるようにした
+- 親団体候補から自分自身と自分の子孫を除外し、新しい循環参照を編集画面から作れないようにした。既存データの循環に対しても集計処理は停止する
+- 公演の人物リンク役割へ`上演団体 / 主催 / 制作 / 企画 / 招聘・提供`を追加し、観劇の対象編集から公演単位で追加・削除できるようにした
+- 統計へ`観劇・団体別`を追加し、同じ公演の複数役割を二重加算せず、子団体の公演数・観劇回数を親団体にも合算するようにした
+- 観劇回の基本情報へ感情タグを追加し、既存の共通`Visit.tagNamesRaw`とタグマスターを再利用した。感想セクションにもタグを表示する
+- JSONバックアップをschema 13へ更新し、団体区分と親IDをoptional追加してschema 12以前の読み込みを維持した
+
+### 変更意図
+公演種別、公演団体、個人キャストを別軸にし、宝塚歌劇団と星組のどちらかを犠牲にせず集計できるようにするため。感情タグは観劇専用の別DBを作らず、ジャンル横断の検索・整理を維持するため。
+
+### 主な変更ファイル
+- `Models/CoreModels.swift`、`PersonEntityKind.swift`: 団体区分と親団体ID
+- `Models/TheaterOrganizationStats.swift`、`Views/StatsView.swift`: 団体別の親子集計と表示
+- `Views/ExperiencePeopleUnitEditor.swift`、`EventDetailView.swift`、`MasterManagementView.swift`: 公演団体と親団体の入力・編集
+- `Views/ExperienceEmotionTagEditor.swift`、`AddExperienceView.swift`、`ExperienceDetailView.swift`: 感情タグの入力・保存・表示
+- `Services/JSONBackupExportService.swift`、`JSONBackupImportService.swift`、`MasterMergeService.swift`: バックアップ往復と統合時の親参照付け替え
+- `favorecoAPPTests/TheaterOrganizationTests.swift`、`FavoGalleryReferenceTests.swift`: 親子集計、タグ正規化、schema更新の回帰テスト
+
+### 影響する画面・機能
+- 新規観劇、登録済み公演への回追加、観劇回編集、観劇回詳細
+- 観劇の対象編集、人物・団体マスター、統計
+- JSON／完全／自動バックアップ、人物・団体統合
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの`swiftc -parse`成功
+- 署名なしiPhoneOS向けのアプリ＋テストターゲット`build-for-testing`成功
+- XCTest実行と実機操作は未確認
+
+### 既知のリスク・残課題
+- 旧永続ストアが新しい`PersonMaster`属性を軽量移行し、CloudKit有効／無効の両方で起動できることを実機確認する
+- 団体の多段階層、親候補の循環防止、既存循環データ、0／1／多数公演、長い団体名、Dynamic Typeを実機確認する
+- 現時点の団体統計は公演数と観劇回数。支出、平均評価、感情タグ傾向は観劇統計の後続工程で追加する
+
+## 2026-07-23: 観劇回ごとの実キャスト差分とスナップショットを実装
+
+### 変更概要
+- 公演共通キャストを観劇回へ既定継承し、人物ユニットで休演者だけをOFFにできるようにした
+- その回だけの代役、日替わりゲスト、役替わりをVisit専用`EventPersonLink`として追加・削除できるようにした
+- 新規観劇と既存公演への回追加は、保存時に継承キャストもVisit側へスナップショットリンクとして固定する。後日の公演キャスト変更は過去の観劇回を書き換えない
+- スナップショットフラグのない旧Visitは、従来どおり公演キャストを継承する後方互換とした
+- 公演側の役割候補をキャスト、演出・脚本・振付等のスタッフ、上演団体・主催・制作等に整理した
+
+### 変更意図
+必要な人だけWキャスト、休演、代役、日替わりを正確に残せるようにしつつ、通常の記録で毎回のキャスト入力を強制しないため。また、公式情報の後日更新で「その日に誰を観たか」が変わらない保存境界にするため。
+
+### 主な変更ファイル
+- `Models/TheaterVisitCastResolver.swift`: 公演継承、除外、Visit追加、スナップショット解決
+- `Utilities/VisitUnitFields.swift`: 除外公演リンクIDとスナップショット有無を後方互換JSONへ追加
+- `Views/TheaterVisitCastEditor.swift`: 継承キャストのON/OFFとその回だけの追加UI
+- `Views/ExperiencePeopleUnitEditor.swift`: 観劇の公演側と回側の役割候補を分離
+- `Views/AddExperienceView.swift`: 新規、既存公演への回追加、観劇回編集の保存へ接続
+- `Models/ExperienceDetailSnapshot.swift`、`Views/ExperienceDetailView.swift`: 実キャストの解決と`この回の出演者`表示
+- `Views/EventDetailView.swift`: 公演キャスト・スタッフ・団体の役割選択
+- `favorecoAPPTests/TheaterVisitCastTests.swift`: 後方互換、除外、代役、後日変更非干渉、JSON往復テスト
+
+### 影響する画面・機能
+- 観劇の新規記録、登録済み公演への回追加、観劇回編集・詳細
+- 公演対象編集と公開公演キャスト表示
+- `unitFieldsRaw`と`EventPersonLink`を含むJSON／完全／自動バックアップ
+
+### 確認結果（実機 / ビルド）
+- 署名なしiPhoneOS向けのアプリ＋テストターゲット`build-for-testing`成功
+- 後方互換、休演除外、代役追加、スナップショット固定、役割上書き、JSON往復のXCTestをビルド対象に追加
+- 実機操作とXCTest実行は未確認
+
+### 既知のリスク・残課題
+- 公演キャスト0／1／多数、全員休演除外、同一人物の代役役割上書き、長い役割名、Dynamic Typeを実機確認する
+- 旧記録の公演キャスト継承、編集後のスナップショット化、再起動、JSON／完全／自動バックアップ復元を実機確認する
+- OCR・URL・テキストからの役名×人物名の構造化取込は後続工程
+
+## 2026-07-23: 観劇の対象編集と観劇回編集の保存境界を分離
+
+### 変更概要
+- 観劇回編集の公演名とシリーズを読み取り専用にし、公式URL・SNS等は対象詳細で編集する案内へ変更した
+- 観劇回保存から`ExperienceEvent`のタイトル、シリーズ、公演種別、公式情報、JSON項目、更新日時への書き戻しを止めた
+- 観劇回の写真用途変更でも公演代表写真を暗黙更新しないようにした
+- OCRの公演名候補を観劇回編集では出さず、日時・会場・金額だけを反映対象にした
+- 保存失敗時は`ModelContext.rollback()`を実行し、入力画面にエラーを表示するようにした
+- 観劇の対象不変と、観劇以外の既存更新挙動を確認する境界テストを追加した
+
+### 変更意図
+同じ公演に紐づく一回の観劇を編集しただけで、公演名や公式情報が全履歴に対して変わる事故を防ぐため。公演情報は公開公演ハブの対象編集、当日の情報は観劇回編集という所有境界を画面と保存処理の両方で一致させる。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 観劇回専用UI、対象更新ガード、保存失敗rollback
+- `favorecoAPP/favorecoAPPTests/TheaterVisitEditBoundaryTests.swift`: 対象不変と非観劇互換のXCTest
+- `favoreco/CLAUDE.md`: `EditExperienceView`の現行仕様を更新
+- `docs/15-画面情報設計.md`: 対象／観劇回の編集責務を更新
+- `docs/00-開発状況と残課題.md`: 到達点と実機確認待ちを更新
+
+### 影響する画面・機能
+- 観劇回編集の基本情報、公式情報、OCR、写真、保存失敗表示
+- 公開公演ハブの対象編集
+- 映画・書籍等の既存記録編集は従来挙動を維持
+
+### 確認結果（実機 / ビルド）
+- Simulator向けアプリ＋テストターゲットの`build-for-testing`成功
+- iOS 18.6 Simulatorで`TheaterVisitEditBoundaryTests` 2件を実行し、失敗0件
+- `git diff --check`成功
+
+### 既知のリスク・残課題
+- 実機で観劇回編集に公演編集欄が出ないこと、日時・会場・座席・写真・感想・感情タグ・実キャストが保存できることを確認する
+- 観劇回編集のキャンセルと保存失敗時に、公演／観劇回／場所マスターへ中途半端な変更が残らないことを確認する
+- 映画・書籍等の対象／記録編集分離は、観劇一式の完成後に共通完成条件を抽出して進める
+
+## 2026-07-23: 観劇のキャスト入力をテキスト＋注目人物へ簡素化
+
+### 変更概要
+- 公演のキャスト・スタッフ全体を、改行を保って貼り付けられるテキスト欄へ変更した。値は`ExperienceEvent.unitFieldsRaw.eventCreditsText`へ後方互換JSONとして保存する
+- 個別に記録したい人物だけを、観劇回側の`お目当て・注目した人`として`PersonMaster`と`EventPersonLink(roleKey: theater_focus)`へ保存する
+- 注目人物は人物の職業タグではなく観劇回との関係として扱い、MY FAVOへ自動追加しない
+- 公演団体は団体別集計のため構造化保存を維持し、対象編集の入力候補を団体役割へ限定した
+- 新規観劇では旧形式の実キャストスナップショットを作らない。既存の構造化キャスト、休演除外、代役、Visitスナップショットは削除せず、公開公演・観劇回詳細で互換表示する
+- 公式URLメタデータの出演者候補は観劇の簡易入力へ自動流入させない
+
+### 変更意図
+全キャストを1人ずつ構造化する入力負担を避けつつ、公式情報はそのまま残し、利用者が本当に振り返りたい人物だけを集計可能にするため。団体集計とMY FAVOは別の切り口として維持する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`: 公演クレジット本文の後方互換JSON保存
+- `favorecoAPP/favorecoAPP/Views/TheaterVisitCastEditor.swift`: 改行テキスト入力と注目人物入力へ再構成
+- `favorecoAPP/favorecoAPP/Views/ExperiencePeopleUnitEditor.swift`: 注目役割、団体役割、人物のみ／団体のみの簡易入力設定
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 新規公演、回追加、回編集の簡易入力と保存境界
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 公演クレジット本文と公演団体の対象編集
+- `favorecoAPP/favorecoAPP/Views/ExperienceOfficialInfoUnitEditor.swift`: 観劇では取得メタデータの構造化出演者候補を非表示
+- `favorecoAPP/favorecoAPP/Models/EventDetailSnapshot.swift`、`ExperienceDetailSnapshot.swift`: 公演クレジット本文を表示Snapshotへ追加
+- `favorecoAPP/favorecoAPP/Views/TheaterEventDetailComponents.swift`、`ExperienceDetailView.swift`: テキスト、注目人物、旧形式互換の詳細表示
+- `favorecoAPP/favorecoAPPTests/TheaterPeopleSimplicityTests.swift`: 保存往復、旧JSON、注目人物、旧形式併存の回帰テスト
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、`docs/08-テンプレユニット設計.md`、`docs/15-画面情報設計.md`: 現行仕様と状態を更新
+
+### 影響する画面・機能
+- 観劇の新規公演＋初回記録、登録済み公演への観劇回追加、観劇回編集
+- 観劇の対象編集、公開公演ハブ、単回記録詳細
+- 人物マスター、公演団体集計、旧形式キャスト表示
+- `unitFieldsRaw`を含むJSON／完全／自動バックアップの既存保存経路
+
+### 確認結果（実機 / ビルド）
+- 署名なしiPhoneOS向けアプリ＋テストターゲットの`build-for-testing`成功
+- 新規XCTest 5件がテストターゲットへ含まれることを確認
+- CoreSimulatorService停止のため、この作業内ではXCTest実行と画面操作は未実施
+- `git diff --check`成功
+
+### 既知のリスク・残課題
+- 実機でキャスト・スタッフの0件／長文／大量改行、注目人物0件／1件／多数、Dynamic Typeを確認する
+- 新規、対象編集、観劇回編集、再起動、JSON／完全／自動バックアップ復元で本文と注目人物が往復することを確認する
+- 旧形式の公演キャストとVisitスナップショットが表示され、簡易編集後も消えないことを既存データで確認する
+- 注目人物を人物別統計へどう見せるかは、観劇テンプレ全体の表示整合工程で仕上げる
+
+## 2026-07-23: 観劇の注目人物別統計とバックアップ境界を追加
+
+### 変更概要
+- 観劇回の`EventPersonLink(roleKey: theater_focus)`から、人物ごとの公演数・観劇回数・最新観劇日を算出する`TheaterFocusPersonAnalytics`を追加した
+- 同じ人物が同じ回へ重複して紐づいてもVisit UUIDで1回だけ数え、同じ公演の複数回観劇は公演数1・観劇回数複数として扱う
+- 旧形式キャスト、観劇以外、非表示リンク、非表示人物、団体は注目人物集計から除外した
+- 統計タブへ`観劇・注目人物別`を追加し、Pro以上では上位8件、無料版では必要プランと説明を表示する
+- JSONバックアップが公演クレジット本文と注目人物リンクを保持し、FavoriteProfile／FavoPinを自動生成しないことを回帰テストへ追加した
+
+### 変更意図
+キャスト全員を構造化せず、利用者が選んだ人物だけを集計する簡易方式を、実際に振り返りへつなげるため。MY FAVO、旧キャスト、公演団体とは保存・集計の境界を混ぜない。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Models/TheaterOrganizationStats.swift`: 注目人物別の重複排除集計を追加
+- `favorecoAPP/favorecoAPP/Views/StatsView.swift`: 注目人物別統計カードを追加
+- `favorecoAPP/favorecoAPPTests/TheaterPeopleSimplicityTests.swift`: 集計境界とバックアップJSONの回帰テストを3件追加
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、`docs/project-log.md`: 現行仕様、状態、検証結果を更新
+
+### 影響する画面・機能
+- 統計タブの観劇向け詳細統計
+- 観劇回の注目人物リンクを使う集計
+- 公演クレジット本文・人物リンク・FAVOのJSONバックアップ境界
+
+### 確認結果（実機 / ビルド）
+- 追加した集計モデルとXCTestのSwiftコンパイルは通過
+- iPhoneOS向け`build-for-testing`はアプリ／テストのコンパイル終盤まで進んだが、ローカルの`swift-plugin-server`がSwiftData macroへ不正応答を返して全体完走せず
+- 再試行でもCoreSimulatorService停止とSwiftData macroサービス異常を確認。今回の変更箇所固有のコンパイルエラーは検出されていない
+- `git diff --check`成功
+
+### 既知のリスク・残課題
+- 実機で注目人物0／1／8件超、同一人物の同一公演複数回、同数時の最新日順、長い人物名、Dynamic Typeを確認する
+- 無料版／Pro以上の表示切替と、人物・リンクの非表示後に集計から外れることを確認する
+- CoreSimulatorServiceとSwiftData macroサービス復旧後に追加XCTest 3件を実行する
+
+## 2026-07-23: 観劇回の注目人物へ関係タグを追加
+
+### 変更概要
+- 観劇回の`お目当て・注目した人`ごとに、`お目当て / 気になった / 刺さった / 尊い`を任意・複数選択できるチップを追加した
+- タグは人物マスターやFAVOではなく、Visit側`EventPersonLink(roleKey: theater_focus)`の`memo`へ名前空間付きJSONで保存する
+- 既存リンクの変更は画面内Draftへ保持し、観劇回の保存時だけ反映する。キャンセル時はモデルを変更しない
+- 安定キー、重複除去、既定順、未知キー保持、旧自由メモをタグとして誤読しない後方互換を実装した
+- 新規人物リンク、メタデータ往復、JSONバックアップ往復の回帰テストを追加した
+
+### 変更意図
+同じ人物でも「この回はお目当て」「この回で刺さった」のように印象が変わるため、人物の恒久属性や推し設定ではなく、観劇回と人物の関係として記録するため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/TheaterFocusReaction.swift`: タグ定義、並び順、名前空間付き保存形式
+- `favorecoAPP/favorecoAPP/Views/ExperiencePeopleUnitEditor.swift`: 新規・既存人物用の複数選択チップと保存Draft
+- `favorecoAPP/favorecoAPP/Views/TheaterVisitCastEditor.swift`: 観劇の注目人物入力へタグ候補を接続
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 既存リンクのタグを観劇回保存時に確定
+- `favorecoAPP/favorecoAPPTests/TheaterPeopleSimplicityTests.swift`: 新規・後方互換・バックアップ往復テスト
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、`docs/08-テンプレユニット設計.md`、`docs/15-画面情報設計.md`: 現行仕様と状態を更新
+
+### 影響する画面・機能
+- 新規観劇、登録済み公演への観劇回追加、観劇回編集の注目人物入力
+- 注目人物リンクのJSON／完全／自動バックアップ（既存`memo`保存経路を利用）
+- 人物マスター、MY FAVO、公演情報、観劇回全体の感情タグは変更しない
+
+### 確認結果（実機 / ビルド）
+- iOS Simulator向けDebug全体ビルド成功
+- iOS 18.6 Simulatorで観劇人物系XCTest 10件を実行し、失敗0件
+- `git diff --check`は最終確認で実施
+
+### 既知のリスク・残課題
+- 実機で未選択／1件／複数選択、既存人物の変更・キャンセル、長い名前、Dynamic Typeを確認する
+- 再起動とJSON／完全／自動バックアップ復元後に人物ごとのタグが維持されることを確認する
+- タグ別の人物集計やカスタムタグ管理は利用実績を見て判断し、現時点では追加しない
+
+## 2026-07-23: 遠征Map SnapshotのSwift 6隔離警告を解消
+
+### 変更概要
+- SwiftDataモデル`Visit`を読む`TheaterTravelMapSnapshot.make`へ`@MainActor`を明示した
+- テストビルドで検出された「MainActor隔離initializerを非隔離同期コンテキストから呼ぶ」警告を解消した
+
+### 変更意図
+Swift 5モードでは警告に留まる隔離違反を、Swift 6移行時のエラーとして残さないため。呼び出し元のSwiftUI ViewとXCTestは既にMainActor上にあり、実行位置を実態へ合わせた。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Models/TheaterTravelMapSnapshot.swift`: Snapshot生成のMainActor境界を明示
+- `docs/00-開発状況と残課題.md`、`docs/project-log.md`: 検出理由と確認結果を記録
+
+### 影響する画面・機能
+- 観劇公開公演の遠征Map集約生成
+- 地図の集約キー、座標、表示内容は変更しない
+
+### 確認結果（実機 / ビルド）
+- iOS 18.6 Simulatorで観劇人物系10件と遠征Map 3件、計13件を実行し、失敗0件
+- 修正前に出ていたMainActor隔離警告が、修正後の再ビルドで出ないことを確認
+- `git diff --check`成功
+
+### 既知のリスク・残課題
+- 実機での地図表示・操作確認は継続して必要
+
+## 2026-07-23: 観劇回の注目人物カードから人物マスター編集へ接続
+
+### 変更概要
+- 観劇回詳細の登録済み`お目当て・注目した人`カードをタップすると、人物UUIDで現在の`PersonMaster`を1件取得して既存の人物編集画面を開くようにした
+- 人物編集では表示名・よみ・写真を後から補完でき、FAVO登録は同画面の明示的な任意操作として維持した
+- 人物実体がない旧形式リンクは従来どおり表示し、編集操作だけを出さない
+- 人物マスターの名前・よみ・写真を更新しても、観劇回の人物リンクと`お目当て / 尊い`等の関係タグが維持される回帰テストを追加した
+
+### 変更意図
+観劇回で人物名だけ先に登録した後、写真や読みを無理なく補完できるようにしつつ、観劇回の印象と恒久的な人物情報、任意のFAVO設定を混同しないため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 注目人物カードのタップとUUIDベースの編集Sheetを追加
+- `favorecoAPP/favorecoAPP/Views/MasterManagementView.swift`: 人物UUIDを受けて1件取得する編集DestinationとSheet用の閉じる操作を追加
+- `favorecoAPP/favorecoAPPTests/TheaterPeopleSimplicityTests.swift`: 人物編集後のリンク・関係タグ維持テストを追加
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、`docs/15-画面情報設計.md`: 現行仕様と現在地を更新
+
+### 影響する画面・機能
+- 観劇の単回記録詳細にある`お目当て・注目した人`
+- 設定からも共用する人物・団体マスター編集
+- 人物のFavoriteProfileを使うFAVO登録
+- Visit側人物リンクと関係タグの保存境界
+
+### 確認結果（実機 / ビルド）
+- iOS Simulator向けDebug全体ビルド成功
+- iOS 18.6 Simulatorで観劇人物系XCTest 11件を実行し、失敗0件
+- 登録済み人物／人物未登録リンクの分岐、UUID再取得、既存の設定画面側NavigationLinkをコードレビューで確認
+- `git diff --check`成功
+
+### 既知のリスク・残課題
+- 実機で人物カードのタップ領域、編集保存／閉じる、写真変更、FAVO ON／OFFを確認する
+- 長い人物名、人物多数、Dynamic Type、VoiceOverの操作順は実機確認が必要
+
+## 2026-07-23: 人物の検索・登録サジェストを全入口で必須化
+
+### 変更概要
+- 人物候補の照合を`PersonMasterSuggestion`へ共通化し、表示名・よみ・別名を空白・全半角・大文字小文字の差を無視して検索できるようにした
+- 観劇を含む記録の人物入力、人物マスター管理／新規登録、FAVO管理／新規登録で候補を常時表示し、汎用の入力補助設定から人物を除外した
+- 候補選択時と完全一致入力時は既存人物マスターを再利用し、FAVOでは既存プロフィールとピンも再利用するようにした
+- 設定名を`場所などの登録済み候補を表示`へ変更し、人物候補は常時表示する旨を説明した
+
+### 変更意図
+人物を検索する入口と登録する入口を分断せず、読みや別名で探した場合も既存人物へ到達させ、観劇回・人物マスター・FAVO間で同じ人物が重複登録されるのを防ぐため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/PersonMasterSuggestion.swift`: 共通の正規化、候補順位、完全一致判定を追加
+- `favorecoAPP/favorecoAPP/Views/ExperiencePeopleUnitEditor.swift`: 記録入力の人物候補を常時表示し、既存人物再利用へ統一
+- `favorecoAPP/favorecoAPP/Views/MasterManagementView.swift`: 人物マスターの検索・新規登録に候補を接続
+- `favorecoAPP/favorecoAPP/Views/FavoView.swift`、`FavoProfileEditorView.swift`: FAVO検索・新規登録に候補と既存データ再利用を接続
+- `favorecoAPP/favorecoAPP/Views/SettingsInputIntegration.swift`: 人物以外を制御する設定であることを明確化
+- `favorecoAPP/favorecoAPPTests/PersonMasterSuggestionTests.swift`: 名前・よみ・別名・正規化・除外・完全一致再利用の回帰テストを追加
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、`docs/08-テンプレユニット設計.md`、`docs/15-画面情報設計.md`: 現行仕様と現在地を更新
+
+### 影響する画面・機能
+- 新規記録、既存対象への回追加、記録編集の人物・団体入力
+- 設定の人物・団体マスター管理と人物新規登録
+- FAVO管理とFAVO人物新規登録
+- 設定の登録済み候補表示
+
+### 確認結果（実機 / ビルド）
+- iOS 18.6 Simulatorで人物サジェスト5件と観劇人物回帰11件、計16件を実行し、失敗0件
+- 署名なしiPhoneOS向け全体ビルドと、テスト実行時のアプリ＋テストターゲットビルドに成功
+- 表示名・よみ・別名、全半角・空白・改行差、非表示人物除外、人物／団体の入力制限、完全一致再利用を自動テストで確認
+
+### 既知のリスク・残課題
+- 実機で候補0／1／4件、長い名前、よみ／別名検索、FAVO追加済み人物の再選択を確認する
+- 同姓同名や同じ別名が複数存在する場合は候補表示から利用者が選ぶ。完全一致が複数ある場合の識別情報追加は利用実績を見て判断する
+
+## 2026-07-23: ジャンルトップ英字見出しへ日本語の背面文字を追加
+
+### 変更概要
+- ジャンルトップの英字セクション見出しを共通部品へまとめ、英語の背面へ少し大きい日本語を薄く重ねた
+- A案として、日本語は25pt基準・約11%濃度で英語より7pt右、4pt上へずらした
+- 観劇の対応を`Coming Up / これからの観劇`、`Interests / 気になる公演`、`Productions / 公演情報`、`Ticket Progress / チケット進捗`とし、将来用に`Performance Log / 観劇記録`も定義した
+- LIVE、美術展、映画の既存英字見出しにも、ジャンル内容に合う日本語を同じ見た目で適用した
+- 背面文字を装飾扱いにし、VoiceOverでは日本語見出しを1回だけ読み上げるようにした
+
+### 変更意図
+英字ディスプレイ明朝を主役にした現行のジャンル世界観を維持しながら、セクションの意味を日本語でも直感的に伝え、参照画像の英語背面文字とは逆の階層を実現するため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 重ね見出し部品、ジャンル別語彙、既存英字見出しへの適用
+- `favoreco/CLAUDE.md`: 見た目、語彙、アクセシビリティの現行仕様
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認待ちを更新
+- `docs/project-log.md`: 変更理由と検証結果を記録
+
+### 影響する画面・機能
+- 観劇ジャンルトップの`Interests / Coming Up / Productions / Ticket Progress`
+- LIVEジャンルトップの`Interests / Coming Up / Live History / Ticket Progress`
+- 美術展・映画ジャンルトップの`Interests / Coming Up`
+- Homeとカレンダーが共用するチケット進捗部品は、日本語背面文字を渡さないため従来表示を維持
+- 保存モデル、一覧分類、件数、遷移、表示方式切替には変更なし
+
+### 確認結果（実機 / ビルド）
+- `CategoryTopView.swift`のSwift構文解析成功
+- 対象Swiftファイルの`git diff --check`成功
+- Simulator向けビルドはローカルの`simdiskimaged`停止によりAsset Catalog処理前に中断
+- 署名なしiPhoneOS向け全体ビルド成功
+- 実機表示は未確認
+
+### 既知のリスク・残課題
+- 観劇・LIVEの暗色背景と、美術展・映画の明色背景で背面文字の濃度を実機確認する
+- 0件／件数あり、Dynamic Type大、長い日本語見出しで件数や表示切替と重ならないことを確認する
+- `Performance Log`は現行ジャンルトップに独立セクションがないため、今回は新設していない
+
+## 2026-07-23: 観劇一式の完全バックアップ往復テストを追加
+
+### 変更概要
+- 観劇の主要データを1つのfixtureへまとめ、`.favorecobackup`のmanifestと写真mediaを書き出して、空のSwiftDataストアへ復元する統合テストを追加した
+- 公演種別、公式期間、複数公演地、団体親子、キャスト本文、観劇日時・スタイル・座席・感想・感情タグ・同行者、注目人物と関係タグ、場所、思い出／チケット／グッズ写真、OCR・金額、予定・申込・任意タグ、ホテル／新幹線の遠征準備・費用を検証した
+- 観劇回への人物登録からFavoriteProfile／FavoPinが自動生成されないことを確認した
+- 通知予約ID、Keychain参照、外部カレンダーIDは端末固有情報として復元時に解除されることを確認した
+
+### 変更意図
+機能単位に分散していた往復テストだけでは、実際の1公演を完全バックアップした際のモデル間関係と写真本体の復元漏れを検出しにくいため。画面構成の変更と独立した保存完成条件を先に固定するため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPPTests/TheaterFullBackupRoundTripTests.swift`: 観劇一式の完全バックアップ作成、空ストア復元、値・UUID関係・写真本体・端末固有参照解除の統合テスト
+- `favoreco/CLAUDE.md`: 観劇バックアップの回帰基準を追加
+- `docs/00-開発状況と残課題.md`: 実装済み内容と確認結果を現在地へ追加
+- `docs/08-テンプレユニット設計.md`: 観劇テンプレートの保存完成条件を追加
+- `docs/project-log.md`: 変更理由と検証結果を記録
+
+### 影響する画面・機能
+- 本番コードと画面構成は変更していない
+- 写真付き完全バックアップの観劇データ復元
+- 公演、観劇回、人物・団体、場所、予定、申込、写真の関係再構築
+
+### 確認結果（実機 / ビルド）
+- 新規の完全バックアップ統合XCTest 1件をiOS 18.6 Simulatorで実行し、失敗0件
+- 統合テストを含む観劇関連8 suite・計36件をiOS 18.6 Simulatorで実行し、失敗0件
+- テスト実行時にアプリとテストターゲットのビルド成功
+
+### 既知のリスク・残課題
+- 自動テストの写真は小さな疑似バイナリであり、実機の大容量JPEG／HEICを使ったFiles書き出し・復元時間と空き容量警告は別途確認する
+- UIから作成した実データで、Filesアプリへの書き出し、アプリ内データ削除、完全復元を一巡する実機確認は残る
+
+## 2026-07-23: ジャンル横スワイプ時の画面停止を暫定解消
+
+### 変更概要
+- ジャンル確定時のHero／本文に付けていた新旧ページ横移動トランジションと、画面全体へ波及する切替アニメーションを外した
+- `CategoryEventSnapshot`のUUIDから対象を解決する際、全ジャンルの`events`関係を毎回`flatMap`する処理をやめ、現在ジャンルの関係内だけを照合するようにした
+- 記録解決も一時Dictionaryを毎回作らず、SnapshotのUUID集合と`allVisits`を照合するようにした
+- ジャンル確定後240msは次の移動を受け付けないガードを追加し、連続入力で重い画面再構築が重ならないようにした
+
+### 変更意図
+左右スワイプ確定時に、新旧の画像・Map・大量一覧を持つジャンルトップを同時描画しながら、各タイルが全ジャンルのSwiftData関係を繰り返し走査していた。データ量に比例してメインスレッドの処理が増え、操作不能に見える停止が起きるため、旧ページを保持しない即時差し替えと現在ジャンル限定のモデル解決へ切り替えた。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 重い新旧ページ遷移の撤去、現在ジャンル限定のUUID解決、連続移動ガード
+- `favoreco/CLAUDE.md`: 現在のジャンル切替・性能境界へ更新
+- `docs/spec-B1-ライブラリ画面.md`: 章切替と方向限定パンの確定後挙動を更新
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認待ちを追加
+- `docs/project-log.md`: 原因、意図、検証結果を記録
+
+### 影響する画面・機能
+- 総合HomeのHeroより下からジャンルへ移動する左右スワイプ
+- 全ジャンルトップのHeroより下、上部ジャンル列、章末カードによるジャンル切替
+- ジャンルトップの対象一覧、最近の記録、訪問場所Map、画像表示
+- 保存モデル、記録追加／編集、詳細画面、CloudKit同期には影響しない
+
+### 確認結果（実機 / ビルド）
+- `CategoryTopView.swift`のSwift構文解析成功
+- 対象Swiftファイルの`git diff --check`成功
+- 主要修正適用後、iOS 26.5 SDKのgeneric iOS Simulator向けDebug全体ビルド成功
+- 隣接ジャンルの先読みでも現在ジャンルへ誤解決しない補正後、Swift構文解析と差分チェックに再度成功
+- 最終全体再ビルドはローカルのCoreSimulator／simdiskimagedが停止し、Simulator向けはSwiftData macroサービス、iPhoneOS向けはAsset Catalog処理で中断した。今回のSwift差分由来の構文エラーは出ていない
+- 全ジャンル走査を行う`allCategories.flatMap`が対象UUID解決から除かれ、切替時に新旧本文のtransitionを保持しないことをコードレビューで確認
+
+### 既知のリスク・残課題
+- 実機で総合↔先頭、観劇↔美術展、観劇以外同士、最終↔総合を両方向へ連続操作し、停止しないことを確認する
+- 0件／1件／大量データ、画像多数、Map表示ありの各ジャンルで、縦スクロール、通常タップ、内側横スクロール、画面端操作との非競合を確認する
+- 本文は切替確定後に即時差し替わる。性能安定後に横方向の視覚連続性を再導入する場合も、新旧の重いViewを同時保持しない方式に限定する
+
+## 2026-07-23: 人物登録境界とバックアップ反復復元を冪等化
+
+### 変更概要
+- 観劇回、人物マスター、FAVOの登録経路を実SwiftDataストア上で接続する境界テストを追加した
+- 表示名・よみ・別名から既存人物を再利用し、観劇回への注目人物登録だけではFAVOを生成しないことを確認した
+- 人物のMY FAVO追加を`PersonFavoRegistrationService`へ集約し、既存プロフィール／ピンを再利用して繰り返し保存でも各1件に保つようにした
+- 同じ完全バックアップを同一ストアへ2回復元し、全モデル・リンク・写真がUUID更新されて増殖しないテストを追加した
+
+### 変更意図
+画面ごとの単体的なサジェスト確認だけでなく、人物を観劇回で登録し、人物マスターで推し設定し、FAVOへ追加する実際の保存境界を一続きで保証するため。また、利用者が同じバックアップを誤って再度選んでも記録や写真が重複しないことを観劇テンプレートの完成条件へ含めるため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/PersonFavoRegistrationService.swift`: 人物プロフィールとMY FAVOピンの冪等な保存境界を追加
+- `favorecoAPP/favorecoAPP/Views/FavoProfileEditorView.swift`: 新規／既存人物のMY FAVO追加を共通サービスへ接続
+- `favorecoAPP/favorecoAPPTests/PersonRegistrationBoundaryTests.swift`: 観劇回→人物マスター→FAVOの保存往復と重複防止を検証
+- `favorecoAPP/favorecoAPPTests/TheaterFullBackupRoundTripTests.swift`: 同一完全バックアップの2回復元を検証
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、`docs/08-テンプレユニット設計.md`: 現行仕様と完成条件を更新
+
+### 影響する画面・機能
+- FAVO管理からの人物新規登録、登録済み人物のMY FAVO追加
+- 観劇回の注目人物、人物マスター、FAVO間のデータ関係
+- 写真付き完全バックアップの反復復元
+- 観劇登録画面・公開公演ページのUI構成には変更なし
+
+### 確認結果（実機 / ビルド）
+- iOS 18.6 Simulatorで人物候補5件、人物登録境界1件、観劇人物回帰11件、完全バックアップ2件の計19件を実行し、失敗0件
+- 署名なしiPhoneOS向け全体ビルド成功
+- 変更箇所を再読し、FAVOの4件上限判定前にプロフィールだけが作られないことを確認
+
+### 既知のリスク・残課題
+- 実機で人物を観劇回へ登録し、人物詳細で推し設定し、FAVOへ追加する一巡操作は未確認
+- 同姓同名が複数ある場合は候補から利用者が選ぶ現行仕様を維持する
+- 大容量JPEG／HEICを含む完全バックアップの反復復元時間と空き容量は実機確認が必要
+
+## 2026-07-23: FAVO上限・永続ストア再起動・Swift 6回帰を追加検証
+
+### 変更概要
+- MY FAVOが4件満杯の時、未固定人物へプロフィールもピンも作らず、保存済み状態を変えない失敗系テストを追加した
+- 4件満杯でも既に固定済みの人物は同じピンを再利用し、不足しているプロフィールだけを1件作れることを追加検証した
+- 一時SQLiteストアへ観劇回・注目人物・関係タグ・FAVOを保存し、ModelContainerを開き直した後もUUID関係が維持される再起動相当テストを追加した
+- 完全バックアップの初回復元後にSQLiteストアを開き直し、同じバックアップを再復元してもモデル・リンク・写真が増殖しないテストを追加した
+- Swift 6ビルドで検出した人物タグ解析のMainActor隔離エラーを、データやUIへ触れない純粋解析関数の`nonisolated`明示で修正した
+
+### 変更意図
+メモリ内の正常系だけでは検出できない、上限到達時の半端な保存と、アプリ再起動後に初めて現れるSwiftData関係切れ・バックアップ重複を公開前に自動検出できるようにするため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPPTests/PersonRegistrationBoundaryTests.swift`: FAVO上限2件と永続ストア再起動1件を追加
+- `favorecoAPP/favorecoAPPTests/TheaterFullBackupRoundTripTests.swift`: 再起動を挟む完全バックアップ再復元を追加
+- `favorecoAPP/favorecoAPP/Models/PersonActivityTag.swift`: Swift 6で安全な純粋タグ解析の隔離境界を明示
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、`docs/08-テンプレユニット設計.md`: 保存完成条件と確認結果を更新
+
+### 影響する画面・機能
+- MY FAVOへの人物追加と4件上限
+- 観劇回の注目人物・関係タグ、人物プロフィール、FAVOピンの再起動後復元
+- 写真付き完全バックアップの再起動を挟む反復復元
+- 人物／団体の活動タグ解析と人物種別判定
+- 画面レイアウトと観劇登録導線には変更なし
+
+### 確認結果（実機 / ビルド）
+- 追加した永続化・上限系を含む人物／観劇／バックアップ関連10 suite・47件をiOS 18.6 Simulatorで実行し、失敗0件
+- 最終隔離修正後も同じ47件を再実行して成功
+- `SWIFT_VERSION=6`、署名なしiPhoneOS向け全体ビルド成功
+- `git diff --check`成功
+
+### 既知のリスク・残課題
+- SDK 26.5のDebug実行では、保存済み人物へ新規`FavoriteProfile`を同一トランザクションで接続する際にSwiftData内部のtemporary persistentIdentifier診断が出る。保存と再オープン後の関係は正常で、片側関係設定でも再現するため、データの原子性を優先して二段階保存にはしない
+- 大容量JPEG／HEIC、Filesアプリ経由、空き容量不足の実データ復元は実機確認が必要

@@ -3,7 +3,7 @@ import Combine
 import Foundation
 import SwiftData
 
-struct PublicPlaceCatalogEntry: Codable, Identifiable, Hashable, Sendable {
+nonisolated struct PublicPlaceCatalogEntry: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let catalogID: String
     let parentPlaceID: String
@@ -25,6 +25,16 @@ struct PublicPlaceCatalogEntry: Codable, Identifiable, Hashable, Sendable {
     let updatedAt: Date
 
     var isClosed: Bool { operationalStatusRaw == PlaceOperationalStatus.closed.rawValue }
+}
+
+/// A value-only selection kept by an unsaved record/plan form.
+/// Selecting a catalog result must not create a SwiftData object by itself.
+nonisolated struct PublicPlaceSelectionDraft: Equatable, Sendable {
+    let entry: PublicPlaceCatalogEntry
+
+    init(entry: PublicPlaceCatalogEntry) {
+        self.entry = entry
+    }
 }
 
 enum PublicPlaceCatalogSearch {
@@ -51,7 +61,7 @@ enum PublicPlaceCatalogSearch {
     }
 }
 
-struct PublicPlaceCatalogCache: Codable, Sendable {
+nonisolated struct PublicPlaceCatalogCache: Codable, Sendable {
     static let schemaVersion = 1
 
     var schemaVersion: Int = Self.schemaVersion
@@ -77,7 +87,7 @@ struct PublicPlaceCatalogCache: Codable, Sendable {
     }
 }
 
-struct PublicPlaceCatalogChange: Sendable {
+nonisolated struct PublicPlaceCatalogChange: Sendable {
     let id: String
     let isPublished: Bool
     let isDeleted: Bool
@@ -85,7 +95,7 @@ struct PublicPlaceCatalogChange: Sendable {
     let entry: PublicPlaceCatalogEntry?
 }
 
-enum PublicPlaceCatalogError: LocalizedError {
+nonisolated enum PublicPlaceCatalogError: LocalizedError {
     case invalidRecord(String)
 
     var errorDescription: String? {
@@ -114,6 +124,31 @@ enum PublicPlaceCatalogImporter {
             guard normalizedPlaceText(place.name) == normalizedName else { return false }
             return normalizedAddress.isEmpty || normalizedPlaceText(place.address) == normalizedAddress
         }
+    }
+
+    static func matchingPlace(
+        for selection: PublicPlaceSelectionDraft,
+        in places: [PlaceMaster]
+    ) -> PlaceMaster? {
+        matchingPlace(for: selection.entry, in: places)
+    }
+
+    /// Resolves a form selection while its parent save transaction is in progress.
+    /// This intentionally inserts without saving; the caller commits the parent and
+    /// the new PlaceMaster together, or rolls both back on failure.
+    @MainActor
+    static func resolveSelection(
+        _ selection: PublicPlaceSelectionDraft,
+        existingPlaces: [PlaceMaster],
+        in modelContext: ModelContext,
+        now: Date = Date()
+    ) -> PlaceMaster {
+        if let existing = matchingPlace(for: selection, in: existingPlaces) {
+            return existing
+        }
+        let place = makePlaceMaster(from: selection.entry, now: now)
+        modelContext.insert(place)
+        return place
     }
 
     @MainActor
@@ -380,7 +415,7 @@ actor PublicPlaceCatalogRepository {
 }
 
 private extension JSONDecoder {
-    static var catalogDecoder: JSONDecoder {
+    nonisolated static var catalogDecoder: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
@@ -388,7 +423,7 @@ private extension JSONDecoder {
 }
 
 private extension JSONEncoder {
-    static var catalogEncoder: JSONEncoder {
+    nonisolated static var catalogEncoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]

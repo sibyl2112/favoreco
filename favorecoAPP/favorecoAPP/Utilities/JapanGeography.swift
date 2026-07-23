@@ -1,6 +1,6 @@
 import Foundation
 
-enum JapanArea: String, CaseIterable, Identifiable {
+nonisolated enum JapanArea: String, CaseIterable, Identifiable {
     case hokkaido
     case tohoku
     case kanto
@@ -43,7 +43,7 @@ enum JapanArea: String, CaseIterable, Identifiable {
     }
 }
 
-enum JapanPrefecture {
+nonisolated enum JapanPrefecture {
     static let all = JapanArea.allCases.flatMap(\.prefectures)
 
     static func extract(from text: String) -> String {

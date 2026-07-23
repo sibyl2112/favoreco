@@ -17,14 +17,13 @@ struct EventDetailBackSwipeExclusionPreferenceKey: PreferenceKey {
         value.append(contentsOf: nextValue())
     }
 }
-
-private struct TheaterPublicVenue: Identifiable {
+struct TheaterPublicVenue: Identifiable {
     let id = UUID()
     let name: String
     let address: String
 }
 
-private struct TheaterPublicLink: Identifiable {
+struct TheaterPublicLink: Identifiable {
     let id = UUID()
     let title: String
     let systemImage: String
@@ -121,25 +120,31 @@ struct EventDetailView: View {
         let scheduleSnapshot = TheaterEventScheduleSnapshot.make(event: event)
         let expenseSnapshot = TheaterEventExpenseSnapshot.make(event: event)
         let isTheater = category?.templateKey == "theater"
+        let eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        let performanceSchedules = EventDetailPresentation.theaterSchedules(
+            event: event,
+            fields: eventFields
+        )
 
         ScrollView {
             VStack(alignment: .leading, spacing: isTheater ? 24 : 20) {
                 if isTheater {
-                    theaterHero(snapshot: snapshot)
+                    theaterHero(snapshot: snapshot, schedules: performanceSchedules)
                         .padding(.horizontal, -20)
                         .padding(.top, -24)
+                    TheaterPerformanceScheduleSection(
+                        schedules: performanceSchedules,
+                        accentColor: theaterGold
+                    )
                     TheaterEventInformationSection(event: event, accentColor: theaterGold)
                     TheaterEventPeopleSection(
+                        creditsText: snapshot.creditsText,
                         castLinks: snapshot.castLinks,
                         staffLinks: snapshot.staffLinks,
                         accentColor: theaterGold
                     )
                     TheaterEventTicketProgressSection(
                         references: scheduleSnapshot.ticketReferences,
-                        accentColor: theaterGold
-                    )
-                    TheaterEventParticipationHistorySection(
-                        visits: snapshot.visits,
                         accentColor: theaterGold
                     )
                     TheaterEventUpcomingPlansSection(
@@ -149,12 +154,20 @@ struct EventDetailView: View {
                         accentColor: theaterGold,
                         onAddPlan: { isShowingAddPlan = true }
                     )
+                    TheaterEventParticipationHistorySection(
+                        visits: snapshot.visits,
+                        accentColor: theaterGold
+                    )
                     TheaterEventExpenseSection(
                         snapshot: expenseSnapshot,
                         accentColor: theaterGold
                     )
                     TheaterEventMemoryGallerySection(
                         items: snapshot.memoryPhotos,
+                        accentColor: theaterGold
+                    )
+                    TheaterEventTravelMapSection(
+                        snapshot: TheaterTravelMapSnapshot.make(visits: snapshot.visits),
                         accentColor: theaterGold
                     )
                 } else if category?.templateKey == "random_goods" {
@@ -329,15 +342,31 @@ struct EventDetailView: View {
         Color(red: 0.82, green: 0.62, blue: 0.30)
     }
 
-    private func theaterHero(snapshot: EventDetailSnapshot) -> some View {
+    private func theaterHero(
+        snapshot: EventDetailSnapshot,
+        schedules: [TheaterPerformanceScheduleItem]
+    ) -> some View {
         let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
-        let venues = resolvedTheaterVenues(fields: fields)
         return ZStack(alignment: .top) {
-            theaterHeroBackground(fields: fields)
+            theaterHeroBackground(snapshot: snapshot, fields: fields)
 
             VStack(spacing: 12) {
                 Spacer().frame(height: 88)
                 theaterPoster(snapshot: snapshot)
+
+                let performanceTypeName = TheaterPerformanceType.displayName(
+                    for: event.subTypeKey,
+                    customName: fields.eventPerformanceTypeCustomName
+                )
+                if !performanceTypeName.isEmpty {
+                    Text(performanceTypeName)
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(theaterGold)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.22), in: Capsule())
+                        .overlay { Capsule().stroke(theaterGold.opacity(0.28), lineWidth: 0.6) }
+                }
 
                 if !event.seriesName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(event.seriesName)
@@ -359,19 +388,11 @@ struct EventDetailView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Label(resolvedTheaterPeriodText(fields: fields), systemImage: "calendar")
-                    ForEach(venues) { venue in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label(venue.name, systemImage: "mappin.and.ellipse")
-                            if !venue.address.isEmpty {
-                                Text(venue.address)
-                                    .font(FavorecoTypography.caption)
-                                    .foregroundStyle(.white.opacity(0.62))
-                                    .padding(.leading, 27)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                    }
+                    Label(EventDetailPresentation.theaterPeriodText(event: event, fields: fields), systemImage: "calendar")
+                    Label(
+                        EventDetailPresentation.theaterHeroVenueSummary(schedules: schedules),
+                        systemImage: "mappin.and.ellipse"
+                    )
                     if !event.organizerNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Label(event.organizerNameSnapshot, systemImage: "building.2")
                     }
@@ -400,28 +421,55 @@ struct EventDetailView: View {
         .frame(minHeight: 720, alignment: .top)
     }
 
-    private func theaterHeroBackground(fields: VisitUnitFields) -> some View {
+    private func theaterHeroBackground(snapshot: EventDetailSnapshot, fields: VisitUnitFields) -> some View {
         GeometryReader { proxy in
+            ZStack(alignment: .top) {
+                theaterWine
+
+                theaterHeroBackdropImage(snapshot: snapshot, fields: fields)
+                    .frame(width: proxy.size.width, height: max(proxy.size.height, 720))
+                    .scaleEffect(1.14)
+                    .blur(radius: 26, opaque: true)
+                    .clipped()
+
+                theaterWine.opacity(0.22)
+
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.34), location: 0),
+                        .init(color: .black.opacity(0.08), location: 0.25),
+                        .init(color: theaterWine.opacity(0.46), location: 0.52),
+                        .init(color: Color(red: 0.20, green: 0.025, blue: 0.06).opacity(0.90), location: 0.78),
+                        .init(color: .black.opacity(0.96), location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+        }
+        .clipped()
+    }
+
+    @ViewBuilder
+    private func theaterHeroBackdropImage(
+        snapshot: EventDetailSnapshot,
+        fields: VisitUnitFields
+    ) -> some View {
+        if let data = event.eyecatchData, let image = UIImage(data: data) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else if let photo = snapshot.representativePhoto {
+            RepresentativePhotoImage(photo: photo, maxPixelSize: 1_200, contentMode: .fill)
+        } else {
             let resourceName = HeroBackgroundPreset.resolved(
                 categoryKey: "theater",
                 storedKey: fields.heroBackgroundPresetKey
             )?.resourceName ?? "theater-hero-venue-v2"
-            ZStack(alignment: .top) {
-                theaterWine
-                Image(resourceName)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: proxy.size.width, height: 470)
-                    .clipped()
-                LinearGradient(
-                    colors: [.black.opacity(0.48), .clear, theaterWine.opacity(0.3), theaterWine],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 520)
-            }
+            Image(resourceName)
+                .resizable()
+                .scaledToFill()
         }
-        .clipped()
     }
 
     @ViewBuilder
@@ -470,24 +518,19 @@ struct EventDetailView: View {
         DragGesture(minimumDistance: 18, coordinateSpace: .global)
             .onEnded { value in
                 guard category?.templateKey == "theater" else { return }
-                let startsAtLeadingEdge = value.startLocation.x <= 32
-                let startsInExcludedArea = backSwipeExclusionFrames.contains {
-                    $0.contains(value.startLocation)
-                }
-                let horizontalDistance = value.translation.width
-                let verticalDistance = abs(value.translation.height)
-                let isHorizontalSwipe = horizontalDistance >= 72
-                    && horizontalDistance > verticalDistance * 1.35
-                    && value.predictedEndTranslation.width >= 110
-
-                guard startsAtLeadingEdge, !startsInExcludedArea, isHorizontalSwipe else { return }
+                guard DetailBackSwipePolicy.shouldClose(
+                    startLocation: value.startLocation,
+                    translation: value.translation,
+                    predictedEndTranslation: value.predictedEndTranslation,
+                    exclusionFrames: backSwipeExclusionFrames
+                ) else { return }
                 dismiss()
             }
     }
 
     @ViewBuilder
     private func theaterOfficialLinks(fields: VisitUnitFields) -> some View {
-        let links = resolvedTheaterLinks(fields: fields)
+        let links = EventDetailPresentation.theaterLinks(event: event, fields: fields)
         if !links.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -506,71 +549,6 @@ struct EventDetailView: View {
                 }
             }
         }
-    }
-
-    private func resolvedTheaterPeriodText(fields: VisitUnitFields) -> String {
-        let plans = (event.plans ?? []).filter { !$0.isArchived }
-        let visits = event.visits ?? []
-        let fallbackDates = plans.flatMap { [$0.startsAt, $0.endsAt] }
-            + visits.flatMap { [$0.visitedAt, max($0.endedAt, $0.visitedAt)] }
-        let start = fields.eventPeriodStartsAt ?? fallbackDates.min()
-        let end = fields.eventPeriodEndsAt ?? fallbackDates.max()
-        guard let start else { return "公演期間 未登録" }
-        guard let end, !Calendar.current.isDate(start, inSameDayAs: end) else {
-            return FavorecoDateText.compactDateWithHalfWidthWeekday(start)
-        }
-        return "\(FavorecoDateText.compactDate(start))–\(FavorecoDateText.compactDateWithHalfWidthWeekday(end))"
-    }
-
-    private func resolvedTheaterVenues(fields: VisitUnitFields) -> [TheaterPublicVenue] {
-        let explicit = fields.eventVenues.compactMap { entry -> TheaterPublicVenue? in
-            guard !entry.trimmedName.isEmpty else { return nil }
-            return TheaterPublicVenue(name: entry.trimmedName, address: entry.trimmedAddress)
-        }
-        if !explicit.isEmpty { return deduplicatedTheaterVenues(explicit) }
-
-        let planVenues = (event.plans ?? []).filter { !$0.isArchived }.compactMap { plan -> TheaterPublicVenue? in
-            let name = plan.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty else { return nil }
-            return TheaterPublicVenue(name: name, address: plan.placeMaster?.address ?? "")
-        }
-        let visitVenues = (event.visits ?? []).compactMap { visit -> TheaterPublicVenue? in
-            let name = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty else { return nil }
-            return TheaterPublicVenue(name: name, address: visit.placeMaster?.address ?? "")
-        }
-        let venues = deduplicatedTheaterVenues(planVenues + visitVenues)
-        return venues.isEmpty ? [TheaterPublicVenue(name: "会場 未登録", address: "")] : venues
-    }
-
-    private func deduplicatedTheaterVenues(_ venues: [TheaterPublicVenue]) -> [TheaterPublicVenue] {
-        var seen = Set<String>()
-        return venues.filter { venue in
-            let key = venue.name.folding(options: [.caseInsensitive, .widthInsensitive], locale: .current)
-            return seen.insert(key).inserted
-        }
-    }
-
-    private func resolvedTheaterLinks(fields: VisitUnitFields) -> [TheaterPublicLink] {
-        var result: [TheaterPublicLink] = []
-        if let url = URL(string: event.officialURL), !event.officialURL.isEmpty {
-            result.append(TheaterPublicLink(title: "公式", systemImage: "link", url: url))
-        }
-        let ticketURLText = (event.plans ?? [])
-            .filter { !$0.isArchived }
-            .flatMap { $0.ticketAttempts ?? [] }
-            .map(\.purchaseURL)
-            .first { !$0.isEmpty }
-            ?? (event.plans ?? []).map(\.sourceURL).first { !$0.isEmpty }
-        if let ticketURLText, let url = URL(string: ticketURLText) {
-            result.append(TheaterPublicLink(title: "チケット", systemImage: "ticket", url: url))
-        }
-        for (index, value) in fields.socialLinks.enumerated() {
-            if let url = URL(string: value) {
-                result.append(TheaterPublicLink(title: "SNS \(index + 1)", systemImage: "bubble.left.and.bubble.right", url: url))
-            }
-        }
-        return result
     }
 
     private func archiveThisEvent() {
@@ -963,11 +941,14 @@ struct EditEventView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @State private var draft: EventDraft
     @State private var eyecatchData: Data?
     @State private var selectedEyecatchItem: PhotosPickerItem?
     @State private var isProcessingEyecatch = false
     @State private var saveErrorMessage: String?
+    @State private var pendingPeople: [PendingPersonLink] = []
+    @State private var deletedPersonLinkIDs: Set<UUID> = []
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: event.category)
@@ -983,6 +964,7 @@ struct EditEventView: View {
         NavigationStack {
             Form {
                 Section {
+                    let photoActionTitle = eyecatchData == nil ? "写真を選ぶ" : "写真を変更"
                     if let eyecatchData, let image = UIImage(data: eyecatchData) {
                         eyecatchPreview(image)
 
@@ -992,7 +974,7 @@ struct EditEventView: View {
                     }
 
                     PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
-                        Label(eyecatchData == nil ? "写真を選ぶ" : "写真を変更", systemImage: "photo")
+                        Label(photoActionTitle, systemImage: "photo")
                     }
                     .disabled(isProcessingEyecatch)
                     .onChange(of: selectedEyecatchItem) { _, item in
@@ -1037,6 +1019,12 @@ struct EditEventView: View {
                 Section(template.targetSectionTitle) {
                     TextField(template.titlePlaceholder, text: $draft.title)
                     TextField(template.seriesPlaceholder, text: $draft.seriesName)
+                    if event.category?.templateKey == "theater" {
+                        TheaterPerformanceTypePicker(
+                            selection: $draft.subTypeKey,
+                            customName: $draft.performanceTypeCustomName
+                        )
+                    }
                     TextField("サブタイトル（任意）", text: $draft.eventSubtitle)
                     TextField("公式URL（任意）", text: $draft.officialURL)
                         .textInputAutocapitalization(.never)
@@ -1048,40 +1036,51 @@ struct EditEventView: View {
                 }
 
                 if event.category?.templateKey == "theater" {
-                    Section("公演期間・会場") {
-                        Toggle("公式の公演期間を登録", isOn: $draft.hasPerformancePeriod)
-
-                        if draft.hasPerformancePeriod {
-                            DatePicker(
-                                "開始日",
-                                selection: $draft.performanceStartsAt,
-                                displayedComponents: .date
-                            )
-                            DatePicker(
-                                "終了日",
-                                selection: $draft.performanceEndsAt,
-                                in: draft.performanceStartsAt...,
-                                displayedComponents: .date
-                            )
-                        }
-
+                    Section {
                         ForEach($draft.venueEntries) { $venue in
-                            VStack(alignment: .leading, spacing: 8) {
-                                TextField("会場名", text: $venue.name)
-                                TextField("住所（任意）", text: $venue.address)
-                            }
+                            TheaterScheduleEntryEditor(
+                                entry: $venue,
+                                fallbackStart: draft.performanceStartsAt,
+                                fallbackEnd: draft.performanceEndsAt
+                            )
                         }
                         .onDelete { offsets in
                             draft.venueEntries.remove(atOffsets: offsets)
                         }
 
                         Button {
-                            draft.venueEntries.append(EventVenueEntry())
+                            let usesLegacySharedPeriod = draft.venueEntries.isEmpty
+                                && draft.hasPerformancePeriod
+                            draft.venueEntries.append(
+                                EventVenueEntry(
+                                    startsAt: usesLegacySharedPeriod ? draft.performanceStartsAt : nil,
+                                    endsAt: usesLegacySharedPeriod ? draft.performanceEndsAt : nil
+                                )
+                            )
                         } label: {
-                            Label("会場を追加", systemImage: "plus.circle")
+                            Label("公演地を追加", systemImage: "plus.circle")
                         }
+                    } header: {
+                        Text("公演スケジュール")
                     } footer: {
-                        Text("未登録の場合は、予定と参加履歴の日付・会場から補完表示します。")
+                        Text("東京公演・大阪公演など、公演地ごとに会期と会場を登録します。未登録の場合は予定と参加履歴から補完表示します。")
+                    }
+                }
+
+                if event.category?.templateKey == "theater" {
+                    Section("キャスト・スタッフ") {
+                        TheaterCreditsTextEditor(text: $draft.creditsText)
+                    }
+
+                    Section("公演団体") {
+                        PeopleUnitEditor(
+                            existingLinks: visibleEventOrganizationLinks,
+                            deletedLinkIDs: $deletedPersonLinkIDs,
+                            pendingLinks: $pendingPeople,
+                            personMasters: personMasters,
+                            roleOptions: PersonRoleOption.theaterOrganizations,
+                            emptyDescription: "団体別に振り返りたい場合だけ、上演団体・主催・制作などを追加します。"
+                        )
                     }
                 }
 
@@ -1173,13 +1172,27 @@ struct EditEventView: View {
     private func save() {
         event.title = draft.trimmedTitle
         event.seriesName = draft.trimmedSeriesName
+        if event.category?.templateKey == "theater" {
+            event.subTypeKey = draft.subTypeKey
+        }
         event.officialURL = draft.trimmedOfficialURL
         var unitFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
         unitFields.socialLinks = draft.normalizedSocialLinks
         unitFields.eventSubtitle = draft.trimmedEventSubtitle
-        unitFields.eventPeriodStartsAt = draft.hasPerformancePeriod ? draft.performanceStartsAt : nil
-        unitFields.eventPeriodEndsAt = draft.hasPerformancePeriod ? draft.performanceEndsAt : nil
-        unitFields.eventVenues = draft.normalizedVenueEntries
+        unitFields.eventCreditsText = draft.trimmedCreditsText
+        unitFields.eventPerformanceTypeCustomName = TheaterPerformanceType.customNameForStorage(
+            key: draft.subTypeKey,
+            input: draft.performanceTypeCustomName
+        )
+        let normalizedVenueEntries = draft.normalizedVenueEntries
+        unitFields.eventVenues = normalizedVenueEntries
+        if normalizedVenueEntries.isEmpty {
+            unitFields.eventPeriodStartsAt = draft.hasPerformancePeriod ? draft.performanceStartsAt : nil
+            unitFields.eventPeriodEndsAt = draft.hasPerformancePeriod ? draft.performanceEndsAt : nil
+        } else {
+            unitFields.eventPeriodStartsAt = normalizedVenueEntries.compactMap(\.startsAt).min()
+            unitFields.eventPeriodEndsAt = normalizedVenueEntries.compactMap { $0.endsAt ?? $0.startsAt }.max()
+        }
         unitFields.heroBackgroundPresetKey = draft.heroBackgroundPresetKey
         event.memo = draft.trimmedMemo
         event.importMemo = draft.trimmedImportMemo
@@ -1189,6 +1202,8 @@ struct EditEventView: View {
         }
         event.unitFieldsRaw = unitFields.encodedRawValue
         event.updatedAt = Date()
+        deleteMarkedPersonLinks()
+        insertPendingPeople()
 
         do {
             try modelContext.save()
@@ -1197,6 +1212,37 @@ struct EditEventView: View {
             modelContext.rollback()
             saveErrorMessage = "対象情報を保存できませんでした。もう一度お試しください。"
             assertionFailure("Failed to update event: \(error)")
+        }
+    }
+
+    private var visibleEventOrganizationLinks: [EventPersonLink] {
+        let organizationRoleKeys = Set(PersonRoleOption.theaterOrganizations.map(\.key))
+        return (event.personLinks ?? [])
+            .filter {
+                !$0.isArchived
+                    && !deletedPersonLinkIDs.contains($0.id)
+                    && $0.visit == nil
+                    && organizationRoleKeys.contains($0.roleKey)
+            }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private func deleteMarkedPersonLinks() {
+        for link in event.personLinks ?? [] where deletedPersonLinkIDs.contains(link.id) {
+            modelContext.delete(link)
+        }
+    }
+
+    private func insertPendingPeople() {
+        let startIndex = (event.personLinks ?? []).filter { !$0.isArchived && $0.visit == nil }.count
+        for (offset, pending) in pendingPeople.enumerated() {
+            let person = resolvePersonMaster(for: pending, from: personMasters, in: modelContext)
+            modelContext.insert(pending.makeEventPersonLink(
+                person: person,
+                event: event,
+                visit: nil,
+                sortOrder: startIndex + offset
+            ))
         }
     }
 
@@ -1215,9 +1261,12 @@ struct EditEventView: View {
 private struct EventDraft {
     var title: String
     var seriesName: String
+    var subTypeKey: String
+    var performanceTypeCustomName: String
     var officialURL: String
     var socialLinksText: String
     var eventSubtitle: String
+    var creditsText: String
     var memo: String
     var importMemo: String
     var eyecatchAspectRatioKey: String
@@ -1230,10 +1279,13 @@ private struct EventDraft {
     init(event: ExperienceEvent) {
         title = event.title
         seriesName = event.seriesName
+        subTypeKey = event.subTypeKey
         officialURL = event.officialURL
         let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        performanceTypeCustomName = fields.eventPerformanceTypeCustomName
         socialLinksText = fields.socialLinks.joined(separator: "\n")
         eventSubtitle = fields.eventSubtitle
+        creditsText = fields.eventCreditsText
         memo = event.memo
         importMemo = event.importMemo
         eyecatchAspectRatioKey = EyecatchAspectRatio.resolved(for: event).key
@@ -1241,7 +1293,16 @@ private struct EventDraft {
         performanceStartsAt = fields.eventPeriodStartsAt ?? (event.plans ?? []).map(\.startsAt).min() ?? Date()
         let fallbackEnd = (event.plans ?? []).map(\.endsAt).max() ?? performanceStartsAt
         performanceEndsAt = max(fields.eventPeriodEndsAt ?? fallbackEnd, performanceStartsAt)
-        venueEntries = fields.eventVenues
+        let usesLegacySharedPeriod = !fields.eventVenues.isEmpty
+            && fields.eventVenues.allSatisfy { $0.startsAt == nil && $0.endsAt == nil }
+        venueEntries = fields.eventVenues.map { entry in
+            var migrated = entry
+            if usesLegacySharedPeriod {
+                migrated.startsAt = fields.eventPeriodStartsAt
+                migrated.endsAt = fields.eventPeriodEndsAt
+            }
+            return migrated
+        }
         heroBackgroundPresetKey = fields.heroBackgroundPresetKey
     }
 
@@ -1259,6 +1320,10 @@ private struct EventDraft {
 
     var trimmedEventSubtitle: String {
         eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedCreditsText: String {
+        creditsText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var normalizedSocialLinks: [String] {
@@ -1281,7 +1346,10 @@ private struct EventDraft {
             let normalized = EventVenueEntry(
                 id: entry.id,
                 name: entry.trimmedName,
-                address: entry.trimmedAddress
+                address: entry.trimmedAddress,
+                performanceLabel: entry.trimmedPerformanceLabel.isEmpty ? nil : entry.trimmedPerformanceLabel,
+                startsAt: entry.startsAt,
+                endsAt: entry.startsAt.map { max(entry.endsAt ?? $0, $0) }
             )
             return normalized.isEmpty ? nil : normalized
         }
@@ -1289,6 +1357,10 @@ private struct EventDraft {
 
     var canSave: Bool {
         !trimmedTitle.isEmpty
+            && TheaterPerformanceType.isValidSelection(
+                key: subTypeKey,
+                customName: performanceTypeCustomName
+            )
     }
 }
 

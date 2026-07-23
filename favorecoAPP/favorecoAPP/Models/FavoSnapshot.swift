@@ -1,33 +1,40 @@
 import Foundation
 
 struct FavoPersonSnapshot: Identifiable {
-    let profile: FavoriteProfile
-    let person: PersonMaster
-    let visits: [Visit]
-    let upcomingPlans: [Plan]
+    let profileID: UUID
+    let personID: UUID
+    let personDisplayName: String
+    let displayName: String
+    let isPrimary: Bool
+    let isPinned: Bool
+    let sortOrder: Int
+    let colorHex: String
+    let startedAt: Date
+    let hasStartedAt: Bool
+    let includesStartDay: Bool
+    let originText: String
+    let memo: String
+    let thumbnailReference: ThumbnailReference
+    let visitIDs: [UUID]
+    let upcomingPlanIDs: [UUID]
     let categorySummaries: [FavoCategorySummary]
     let frequentPlaces: [FavoPlaceSummary]
     let photoCount: Int
     let spendingBreakdown: FavoSpendingBreakdown
 
-    var id: UUID { profile.id }
-
-    var displayName: String {
-        let nickname = profile.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
-        return nickname.isEmpty ? person.displayName : nickname
-    }
+    var id: UUID { profileID }
 
     var supportDayCount: Int? {
-        guard profile.hasStartedAt else { return nil }
+        guard hasStartedAt else { return nil }
         let calendar = Calendar.current
-        let start = calendar.startOfDay(for: profile.startedAt)
+        let start = calendar.startOfDay(for: startedAt)
         let today = calendar.startOfDay(for: Date())
         let elapsed = max(calendar.dateComponents([.day], from: start, to: today).day ?? 0, 0)
-        return elapsed + (profile.includesStartDay ? 1 : 0)
+        return elapsed + (includesStartDay ? 1 : 0)
     }
 
-    var latestVisit: Visit? { visits.first }
-    var firstVisit: Visit? { visits.last }
+    var latestVisitID: UUID? { visitIDs.first }
+    var firstVisitID: UUID? { visitIDs.last }
     var recordedSpending: Decimal { spendingBreakdown.total }
 }
 
@@ -152,7 +159,12 @@ struct FavoStorySnapshot: Identifiable {
     let id: String
     let label: String
     let title: String
-    let visit: Visit
+    let visitID: UUID
+    let visitTitle: String
+    let visitedAt: Date
+    let placeName: String
+    let categoryIcon: String
+    let categoryColorHex: String
 }
 
 struct FavoCollectionSummary: Identifiable {
@@ -162,30 +174,26 @@ struct FavoCollectionSummary: Identifiable {
     let detail: String
     let iconSymbol: String
     let colorHex: String
-    let visits: [Visit]
+    let visitIDs: [UUID]
 }
 
 struct FavoPinnedTargetSnapshot: Identifiable {
-    let pin: FavoPin
-    let profile: FavoriteProfile?
+    let pinID: UUID
+    let profileID: UUID?
+    let targetID: UUID
     let kind: FavoTargetKind
     let title: String
     let subtitle: String
     let iconSymbol: String
     let colorHex: String
-    let visits: [Visit]
-    let upcomingPlans: [Plan]
+    let thumbnailReference: ThumbnailReference?
+    let visitIDs: [UUID]
+    let upcomingPlanIDs: [UUID]
+    let photoCount: Int
     let spendingBreakdown: FavoSpendingBreakdown
     let personSnapshot: FavoPersonSnapshot?
 
-    var id: UUID { pin.id }
-    var photoCount: Int {
-        visits.reduce(0) { result, visit in
-            result + (visit.photos ?? []).filter {
-                $0.mediaKind == "photo" && $0.hasStoredData
-            }.count
-        }
-    }
+    var id: UUID { pinID }
     var recordedSpending: Decimal {
         spendingBreakdown.total
     }
@@ -201,7 +209,7 @@ struct FavoSnapshot {
     let activePlaceCount: Int
 
     var primaryFavorite: FavoPersonSnapshot? {
-        favorites.first(where: { $0.profile.isPrimary }) ?? favorites.first
+        favorites.first(where: \.isPrimary) ?? favorites.first
     }
 
     static func make(
@@ -259,10 +267,22 @@ struct FavoSnapshot {
             }
 
             return FavoPersonSnapshot(
-                profile: profile,
-                person: person,
-                visits: relatedVisits,
-                upcomingPlans: relatedPlans,
+                profileID: profile.id,
+                personID: person.id,
+                personDisplayName: person.displayName,
+                displayName: Self.preferredTitle(profile.nickname, fallback: person.displayName),
+                isPrimary: profile.isPrimary,
+                isPinned: profile.isPinned,
+                sortOrder: profile.sortOrder,
+                colorHex: profile.colorHex,
+                startedAt: profile.startedAt,
+                hasStartedAt: profile.hasStartedAt,
+                includesStartDay: profile.includesStartDay,
+                originText: profile.originText,
+                memo: profile.memo,
+                thumbnailReference: .profileIcon(profile.id, fallback: .person(person.id)),
+                visitIDs: relatedVisits.map(\.id),
+                upcomingPlanIDs: relatedPlans.map(\.id),
                 categorySummaries: Self.categorySummaries(for: relatedVisits),
                 frequentPlaces: Self.frequentPlaces(for: relatedVisits),
                 photoCount: relatedVisits.reduce(0) { partialResult, visit in
@@ -274,13 +294,13 @@ struct FavoSnapshot {
             )
         }
         .sorted { lhs, rhs in
-            if lhs.profile.isPrimary != rhs.profile.isPrimary { return lhs.profile.isPrimary }
-            if lhs.profile.isPinned != rhs.profile.isPinned { return lhs.profile.isPinned }
-            if lhs.profile.sortOrder != rhs.profile.sortOrder { return lhs.profile.sortOrder < rhs.profile.sortOrder }
-            return lhs.person.displayName.localizedStandardCompare(rhs.person.displayName) == .orderedAscending
+            if lhs.isPrimary != rhs.isPrimary { return lhs.isPrimary }
+            if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
+            if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+            return lhs.personDisplayName.localizedStandardCompare(rhs.personDisplayName) == .orderedAscending
         }
 
-        let favoritesByPersonID = Dictionary(uniqueKeysWithValues: favorites.map { ($0.person.id, $0) })
+        let favoritesByPersonID = Dictionary(uniqueKeysWithValues: favorites.map { ($0.personID, $0) })
         let profilesByTargetKey = Dictionary(
             profiles.compactMap { profile -> (String, FavoriteProfile)? in
                 guard let targetID = profile.targetID else { return nil }
@@ -311,11 +331,11 @@ struct FavoSnapshot {
                     let personLinks = linksByPersonID[person.id] ?? []
                     let eventIDs = Set(personLinks.compactMap { $0.event?.id })
                     let directVisitIDs = Set(personLinks.compactMap { $0.visit?.id })
-                    let relatedVisits = favorite?.visits ?? Self.uniqueVisits(
+                    let relatedVisits = Self.uniqueVisits(
                         eventIDs.flatMap { visitsByEventID[$0] ?? [] }
                             + directVisitIDs.compactMap { visitsByID[$0] }
                     )
-                    let relatedPlans = favorite?.upcomingPlans ?? eventIDs
+                    let relatedPlans = eventIDs
                         .flatMap { plansByEventID[$0] ?? [] }
                         .filter { $0.startsAt >= startOfToday }
                         .sorted { lhs, rhs in
@@ -324,15 +344,20 @@ struct FavoSnapshot {
                         }
                     let profileTitle = favorite?.displayName ?? person.displayName
                     return FavoPinnedTargetSnapshot(
-                        pin: pin,
-                        profile: targetProfile,
+                        pinID: pin.id,
+                        profileID: targetProfile?.id,
+                        targetID: targetID,
                         kind: .person,
                         title: Self.preferredTitle(targetProfile?.nickname ?? pin.customTitle, fallback: profileTitle),
                         subtitle: "人物・団体 · \(relatedVisits.count)件",
                         iconSymbol: "person.fill",
-                        colorHex: targetProfile?.colorHex ?? favorite?.profile.colorHex ?? "#8F5E73",
-                        visits: relatedVisits,
-                        upcomingPlans: relatedPlans,
+                        colorHex: targetProfile?.colorHex ?? favorite?.colorHex ?? "#8F5E73",
+                        thumbnailReference: targetProfile.map {
+                            .profileIcon($0.id, fallback: .person(person.id))
+                        } ?? .person(person.id),
+                        visitIDs: relatedVisits.map(\.id),
+                        upcomingPlanIDs: relatedPlans.map(\.id),
+                        photoCount: Self.photoCount(in: relatedVisits),
                         spendingBreakdown: favorite?.spendingBreakdown ?? FavoSpendingBreakdown.make(visits: relatedVisits),
                         personSnapshot: favorite
                     )
@@ -343,15 +368,20 @@ struct FavoSnapshot {
                         .filter { $0.startsAt >= startOfToday }
                         .sorted { $0.startsAt < $1.startsAt }
                     return FavoPinnedTargetSnapshot(
-                        pin: pin,
-                        profile: targetProfile,
+                        pinID: pin.id,
+                        profileID: targetProfile?.id,
+                        targetID: targetID,
                         kind: .event,
                         title: Self.preferredTitle(targetProfile?.nickname ?? pin.customTitle, fallback: event.title.isEmpty ? "無題の作品" : event.title),
                         subtitle: "\(event.category?.name ?? "作品・体験") · \(relatedVisits.count)件",
                         iconSymbol: event.category?.iconSymbol ?? "sparkles.rectangle.stack",
                         colorHex: targetProfile?.colorHex ?? event.category?.colorHex ?? "#147C88",
-                        visits: relatedVisits,
-                        upcomingPlans: relatedPlans,
+                        thumbnailReference: targetProfile.map {
+                            .profileIcon($0.id, fallback: .event(event.id))
+                        } ?? .event(event.id),
+                        visitIDs: relatedVisits.map(\.id),
+                        upcomingPlanIDs: relatedPlans.map(\.id),
+                        photoCount: Self.photoCount(in: relatedVisits),
                         spendingBreakdown: FavoSpendingBreakdown.make(visits: relatedVisits),
                         personSnapshot: nil
                     )
@@ -364,15 +394,18 @@ struct FavoSnapshot {
                     let location = place.prefecture.isEmpty ? "場所" : place.prefecture
                     let placeContext = place.isClosed ? "閉館 · \(location)" : location
                     return FavoPinnedTargetSnapshot(
-                        pin: pin,
-                        profile: targetProfile,
+                        pinID: pin.id,
+                        profileID: targetProfile?.id,
+                        targetID: targetID,
                         kind: .place,
                         title: Self.preferredTitle(targetProfile?.nickname ?? pin.customTitle, fallback: place.name.isEmpty ? "名称未設定の場所" : place.name),
                         subtitle: "\(placeContext) · \(relatedVisits.count)件",
                         iconSymbol: "mappin.and.ellipse",
                         colorHex: targetProfile?.colorHex ?? "#2F7FB8",
-                        visits: relatedVisits,
-                        upcomingPlans: relatedPlans,
+                        thumbnailReference: targetProfile.map { .profileIcon($0.id) },
+                        visitIDs: relatedVisits.map(\.id),
+                        upcomingPlanIDs: relatedPlans.map(\.id),
+                        photoCount: Self.photoCount(in: relatedVisits),
                         spendingBreakdown: FavoSpendingBreakdown.make(visits: relatedVisits),
                         personSnapshot: nil
                     )
@@ -409,7 +442,12 @@ struct FavoSnapshot {
                     id: "\(label)-\(visit.id.uuidString)",
                     label: label,
                     title: title,
-                    visit: visit
+                    visitID: visit.id,
+                    visitTitle: visit.event?.title ?? "無題の記録",
+                    visitedAt: visit.visitedAt,
+                    placeName: Self.placeIdentity(for: visit)?.name ?? "",
+                    categoryIcon: visit.event?.category?.iconSymbol ?? "sparkles",
+                    categoryColorHex: visit.event?.category?.colorHex ?? "#147C88"
                 )
             )
         }
@@ -458,7 +496,7 @@ struct FavoSnapshot {
                     detail: "\(photoVisits.count)件の思い出から",
                     iconSymbol: "photo.on.rectangle.angled",
                     colorHex: "#8A5FA8",
-                    visits: photoVisits
+                    visitIDs: photoVisits.map(\.id)
                 )
             )
         }
@@ -475,7 +513,7 @@ struct FavoSnapshot {
                     detail: "\(favoritePlace.count)回訪れています",
                     iconSymbol: "mappin.and.ellipse",
                     colorHex: "#2F7FB8",
-                    visits: placeVisits
+                    visitIDs: placeVisits.map(\.id)
                 )
             )
         }
@@ -494,7 +532,7 @@ struct FavoSnapshot {
                     detail: "\(currentYear)年",
                     iconSymbol: "calendar",
                     colorHex: "#B66A45",
-                    visits: currentYearVisits
+                    visitIDs: currentYearVisits.map(\.id)
                 )
             )
         }
@@ -510,7 +548,7 @@ struct FavoSnapshot {
                 detail: "\(visits.count)件の思い出",
                 iconSymbol: "square.grid.2x2",
                 colorHex: "#147C88",
-                visits: visits
+                visitIDs: visits.map(\.id)
             )
         )
 
@@ -526,6 +564,14 @@ struct FavoSnapshot {
                 if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
                 return lhs.id.uuidString < rhs.id.uuidString
             }
+    }
+
+    private static func photoCount(in visits: [Visit]) -> Int {
+        visits.reduce(0) { result, visit in
+            result + (visit.photos ?? []).filter {
+                $0.mediaKind == "photo" && $0.hasStoredData
+            }.count
+        }
     }
 
     private static func categorySummaries(for visits: [Visit]) -> [FavoCategorySummary] {

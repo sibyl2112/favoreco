@@ -13,6 +13,7 @@ struct EventDetailSnapshot {
     let hasPhotos: Bool
     let castLinks: [EventPersonLink]
     let staffLinks: [EventPersonLink]
+    let creditsText: String
     let memoryPhotos: [EventDetailMemoryPhoto]
     let eventTitle: String
     let firstVisitText: String
@@ -30,6 +31,7 @@ struct EventDetailSnapshot {
         let people = deduplicatedPeople(in: event)
         let castLinks = people.filter { isTheaterCastLink($0) }
         let staffLinks = people.filter { !isTheaterCastLink($0) }
+        let creditsText = VisitUnitFields(rawValue: event.unitFieldsRaw).eventCreditsText
         let memoryPhotos = visits.flatMap { visit in
             (visit.photos ?? [])
                 .filter {
@@ -55,6 +57,7 @@ struct EventDetailSnapshot {
             hasPhotos: !photoResolution.photos.isEmpty,
             castLinks: castLinks,
             staffLinks: staffLinks,
+            creditsText: creditsText,
             memoryPhotos: memoryPhotos,
             eventTitle: event.title.isEmpty ? "記録" : event.title,
             firstVisitText: visits.last.map { FavorecoDateText.compactDate($0.visitedAt) } ?? "-",
@@ -83,13 +86,7 @@ struct EventDetailSnapshot {
     }
 
     private static func isTheaterCastLink(_ link: EventPersonLink) -> Bool {
-        let castRoleKeys: Set<String> = ["actor", "cast", "lead", "artist", "performer", "guest"]
-        if castRoleKeys.contains(link.roleKey) { return true }
-        let role = link.displayRole
-        return role.contains("出演")
-            || role.contains("主演")
-            || role.contains("キャスト")
-            || role.contains("俳優")
+        TheaterVisitCastResolver.isCastLink(link)
     }
 
     private static func personName(for link: EventPersonLink) -> String {

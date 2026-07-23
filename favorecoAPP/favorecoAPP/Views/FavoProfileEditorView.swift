@@ -131,13 +131,15 @@ struct FavoProfileEditorView: View {
     }
 
     private var imageSection: some View {
-        Section {
+        let heroActionTitle = draft.heroImageData == nil ? "大きな写真を選ぶ" : "大きな写真を変更"
+        let iconActionTitle = draft.iconImageData == nil ? "アイコンを選ぶ" : "アイコンを変更"
+        return Section {
             imagePreview(data: draft.heroImageData, fallbackSymbol: "rectangle.on.rectangle")
                 .frame(maxWidth: .infinity)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             PhotosPicker(selection: $heroPickerItem, matching: .images) {
-                Label(draft.heroImageData == nil ? "大きな写真を選ぶ" : "大きな写真を変更", systemImage: "photo")
+                Label(heroActionTitle, systemImage: "photo")
             }
             if draft.heroImageData != nil {
                 Button("大きな写真を外す", role: .destructive) { draft.heroImageData = nil }
@@ -151,7 +153,7 @@ struct FavoProfileEditorView: View {
                     Text("FAVO用アイコン")
                         .font(FavorecoTypography.bodyStrong)
                     PhotosPicker(selection: $iconPickerItem, matching: .images) {
-                        Text(draft.iconImageData == nil ? "アイコンを選ぶ" : "アイコンを変更")
+                        Text(iconActionTitle)
                     }
             if draft.iconImageData != nil {
                         Button("アイコンを外す", role: .destructive) { draft.iconImageData = nil }
@@ -434,10 +436,15 @@ struct FavoNewPersonView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
+    @Query(sort: \FavoPin.sortOrder) private var pins: [FavoPin]
     let nextSortOrder: Int
     @State private var name = ""
     @State private var reading = ""
     @State private var errorMessage = ""
+
+    private var suggestions: [PersonMaster] {
+        PersonMasterSuggestion.matching(people, query: trimmedName)
+    }
 
     var body: some View {
         NavigationStack {
@@ -445,6 +452,37 @@ struct FavoNewPersonView: View {
                 Section("人物・団体マスター") {
                     TextField("正式名", text: $name)
                     TextField("よみ（任意）", text: $reading)
+                }
+                if !suggestions.isEmpty {
+                    Section {
+                        ForEach(suggestions) { person in
+                            Button {
+                                addExistingPerson(person)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: PersonActivityTags.icon(for: person.roleTagsRaw))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 24)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(person.displayName)
+                                            .foregroundStyle(.primary)
+                                        Text(PersonMasterSuggestion.subtitle(for: person))
+                                            .font(FavorecoTypography.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text("選択")
+                                        .font(FavorecoTypography.captionStrong)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } header: {
+                        Text("登録済み候補")
+                    } footer: {
+                        Text("候補を選ぶと人物マスターを重複作成せず、MY FAVOへ追加します。")
+                    }
                 }
                 Section {
                     Text("保存すると人物・団体マスター、FAVOプロフィール、MY FAVOへの固定を同時に作成します。写真や詳細は保存後の「FAVOプロフィール」から設定できます。")
@@ -472,11 +510,8 @@ struct FavoNewPersonView: View {
     private func save() {
         let now = Date()
         let normalizedName = normalizedFavoMasterText(trimmedName)
-        if people.contains(where: {
-            !$0.isArchived
-                && ($0.normalizedName == normalizedName || normalizedFavoMasterText($0.displayName) == normalizedName)
-        }) {
-            errorMessage = "同じ名前の人物・団体がすでにあります。検索結果から選んでください。"
+        if let existing = PersonMasterSuggestion.exactMatch(in: people, query: trimmedName) {
+            errorMessage = "「\(existing.displayName)」が登録済みです。上の候補から選んでください。"
             return
         }
         let person = PersonMaster(
@@ -486,17 +521,41 @@ struct FavoNewPersonView: View {
             createdAt: now,
             updatedAt: now
         )
-        let profile = FavoriteProfile(isFavorite: true, createdAt: now, updatedAt: now, person: person)
-        let pin = FavoPin(targetKindKey: FavoTargetKind.person.rawValue, sortOrder: nextSortOrder, createdAt: now, updatedAt: now, person: person)
         modelContext.insert(person)
-        modelContext.insert(profile)
-        modelContext.insert(pin)
         do {
-            try modelContext.save()
+            _ = try PersonFavoRegistrationService.ensureRegistered(
+                person: person,
+                preferredSortOrder: nextSortOrder,
+                in: modelContext,
+                now: now
+            )
             dismiss()
         } catch {
             modelContext.rollback()
             errorMessage = "保存できませんでした: \(error.localizedDescription)"
+        }
+    }
+
+    private func addExistingPerson(_ person: PersonMaster) {
+        guard nextSortOrder < 4 else {
+            errorMessage = "MY FAVOは最大4件です。先に1件外してください。"
+            return
+        }
+        if pins.contains(where: { $0.targetKind == .person && $0.person?.id == person.id }) {
+            errorMessage = "「\(person.displayName)」はMY FAVOへ追加済みです。"
+            return
+        }
+
+        do {
+            _ = try PersonFavoRegistrationService.ensureRegistered(
+                person: person,
+                preferredSortOrder: nextSortOrder,
+                in: modelContext
+            )
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            errorMessage = "MY FAVOへ追加できませんでした: \(error.localizedDescription)"
         }
     }
 }

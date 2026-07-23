@@ -38,7 +38,6 @@ struct favorecoAPPApp: App {
                     _ = try? TicketNotificationMetadataMigrationService.normalize(
                         in: sharedModelContainer.mainContext
                     )
-                    _ = try? AutomaticBackupService.createIfDue(in: sharedModelContainer.mainContext)
                 }
         }
         .modelContainer(sharedModelContainer)

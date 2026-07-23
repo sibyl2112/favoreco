@@ -49,6 +49,7 @@ struct AddExperienceView: View {
         var preparedDraft = initialDraft
         if preparedDraft.subTypeKey.isEmpty {
             switch category.templateKey {
+            case "theater": preparedDraft.subTypeKey = TheaterPerformanceType.play.rawValue
             case "theme_park": preparedDraft.subTypeKey = OutingFacilityType.themePark.rawValue
             case "nature_living": preparedDraft.subTypeKey = OutingFacilityType.natureOther.rawValue
             default: break
@@ -84,7 +85,7 @@ struct AddExperienceView: View {
                     Button("保存") {
                         save()
                     }
-                    .disabled(!draft.canSave)
+                    .disabled(!draft.canSave || !draft.hasValidPerformanceType(for: category))
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
@@ -118,11 +119,11 @@ struct AddExperienceView: View {
     private func addStatus(for unitID: String) -> RecordUnitStatus {
         switch unitID {
         case "basic":
-            return draft.canSave ? .entered : .required
+            return draft.canSave && draft.hasValidPerformanceType(for: category) ? .entered : .required
         case "officialInfo":
             return draft.trimmedOfficialURL.isEmpty && draft.normalizedSocialLinks.isEmpty ? .optional : .entered
         case "people":
-            return pendingPeople.isEmpty ? .optional : .entered
+            return draft.trimmedTheaterCreditsText.isEmpty && pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
             return draft.hasTicketPlan ? .entered : .optional
         case "photos":
@@ -166,8 +167,18 @@ struct AddExperienceView: View {
                     supportsStyles: category.templateKey == "theater",
                     ratingText: draft.ratingLabel,
                     onSelectPlace: { draft.apply(placeMaster: $0) },
+                    onSelectPublicPlace: { draft.apply(publicPlace: $0) },
                     onOpenPlaceSearch: { isShowingPlaceSearch = true }
                 )
+                if category.templateKey == "theater" {
+                    Divider()
+                    TheaterPerformanceTypePicker(
+                        selection: $draft.subTypeKey,
+                        customName: $draft.performanceTypeCustomName
+                    )
+                    Divider()
+                    ExperienceEmotionTagEditor(tagNamesText: $draft.tagNamesText)
+                }
                 if category.isOutingFacilityGenre {
                     Divider()
                     OutingFacilityTypePicker(selection: $draft.subTypeKey)
@@ -184,15 +195,29 @@ struct AddExperienceView: View {
                 venueName: venueNameBinding,
                 venueAddress: venueAddressBinding,
                 pendingPeople: $pendingPeople,
-                advancedEntries: $draft.advancedEntries
+                advancedEntries: $draft.advancedEntries,
+                allowsContributorCandidates: category.templateKey != "theater"
             )
         case "people":
-            PeopleUnitEditor(
-                existingLinks: [],
-                deletedLinkIDs: .constant([]),
-                pendingLinks: $pendingPeople,
-                personMasters: personMasters
-            )
+            if category.templateKey == "theater" {
+                VStack(alignment: .leading, spacing: 18) {
+                    TheaterCreditsTextEditor(text: $draft.theaterCreditsText)
+                    Divider()
+                    TheaterFocusPeopleEditor(
+                        existingLinks: [],
+                        deletedLinkIDs: .constant([]),
+                        pendingLinks: $pendingPeople,
+                        personMasters: personMasters
+                    )
+                }
+            } else {
+                PeopleUnitEditor(
+                    existingLinks: [],
+                    deletedLinkIDs: .constant([]),
+                    pendingLinks: $pendingPeople,
+                    personMasters: personMasters
+                )
+            }
         case "ticketPlan":
             ExperienceTicketUnitEditor(
                 outcomeKey: $draft.outcomeKey,
@@ -289,6 +314,7 @@ struct AddExperienceView: View {
             seatText: draft.trimmedSeatText,
             eyecatchPath: coverPhotoPath,
             note: draft.trimmedNote,
+            tagNamesRaw: draft.normalizedTagNamesRaw,
             amount: parsedCurrencyAmount(from: draft.amountText),
             latitude: draft.latitude,
             longitude: draft.longitude,
@@ -301,13 +327,21 @@ struct AddExperienceView: View {
             createdAt: now,
             updatedAt: now,
             event: event,
-            placeMaster: resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
+            placeMaster: resolvePlaceMaster(
+                for: draft.placeSnapshot,
+                publicSelection: draft.publicPlaceSelection,
+                from: placeMasters,
+                in: modelContext
+            )
         )
 
         modelContext.insert(event)
         event.representativeEyecatchPath = coverPhotoPath
         modelContext.insert(visit)
-        insertPendingPeople(for: event, visit: nil)
+        insertPendingPeople(
+            for: category.templateKey == "theater" ? nil : event,
+            visit: category.templateKey == "theater" ? visit : nil
+        )
         insertPendingPhotos(for: visit)
         onSave?()
 
@@ -333,30 +367,16 @@ struct AddExperienceView: View {
         }
     }
 
-    private func insertPendingPeople(for event: ExperienceEvent?, visit: Visit?) {
+    @discardableResult
+    private func insertPendingPeople(for event: ExperienceEvent?, visit: Visit?) -> [EventPersonLink] {
+        var links: [EventPersonLink] = []
         for (index, pendingPerson) in pendingPeople.enumerated() {
-            let person = findOrCreatePerson(named: pendingPerson.name, roleKey: pendingPerson.role.key)
-            modelContext.insert(pendingPerson.makeEventPersonLink(person: person, event: event, visit: visit, sortOrder: index))
+            let person = resolvePersonMaster(for: pendingPerson, from: personMasters, in: modelContext)
+            let link = pendingPerson.makeEventPersonLink(person: person, event: event, visit: visit, sortOrder: index)
+            modelContext.insert(link)
+            links.append(link)
         }
-    }
-
-    private func findOrCreatePerson(named name: String, roleKey: String) -> PersonMaster {
-        let normalizedName = normalizedPersonName(name)
-        if let person = personMasters.first(where: { $0.normalizedName == normalizedName || normalizedPersonName($0.displayName) == normalizedName }) {
-            person.updatedAt = Date()
-            return person
-        }
-
-        let now = Date()
-        let person = PersonMaster(
-            displayName: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            roleTagsRaw: roleKey,
-            normalizedName: normalizedName,
-            createdAt: now,
-            updatedAt: now
-        )
-        modelContext.insert(person)
-        return person
+        return links
     }
 }
 
@@ -383,7 +403,9 @@ struct EditExperienceView: View {
     @State private var existingPhotoMetadata: [UUID: PhotoMetadataDraft] = [:]
     @State private var pendingPeople: [PendingPersonLink] = []
     @State private var deletedPersonLinkIDs: Set<UUID> = []
+    @State private var existingFocusReactionTagKeys: [UUID: Set<String>]
     @State private var isShowingPlaceSearch = false
+    @State private var saveErrorMessage: String?
 
     private var event: ExperienceEvent? {
         visit.event
@@ -397,6 +419,21 @@ struct EditExperienceView: View {
         CategoryRecordTemplate.template(for: category)
     }
 
+    private var isTheaterVisit: Bool {
+        category?.templateKey == "theater"
+    }
+
+    private var visitFocusLinks: [EventPersonLink] {
+        personLinks
+            .filter {
+                !$0.isArchived
+                    && $0.visit?.id == visit.id
+                    && $0.roleKey == PersonRoleOption.theaterFocus.key
+                    && !deletedPersonLinkIDs.contains($0.id)
+            }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
     init(visit: Visit) {
         self.visit = visit
         _draft = State(initialValue: AddExperienceDraft(visit: visit))
@@ -404,6 +441,14 @@ struct EditExperienceView: View {
         let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
         _heroBackgroundPath = State(initialValue: unitFields.heroBackgroundPath)
         _heroBackgroundPresetKey = State(initialValue: unitFields.heroBackgroundPresetKey)
+        _existingFocusReactionTagKeys = State(initialValue: Dictionary(uniqueKeysWithValues:
+            (visit.personLinks ?? [])
+                .filter { !$0.isArchived && $0.roleKey == PersonRoleOption.theaterFocus.key }
+                .compactMap { link in
+                    let keys = TheaterFocusLinkMetadata(memo: link.memo).reactionKeys
+                    return keys.isEmpty ? nil : (link.id, Set(keys))
+                }
+        ))
     }
 
     var body: some View {
@@ -421,7 +466,7 @@ struct EditExperienceView: View {
                     }
                 }
             }
-            .navigationTitle("記録を編集")
+            .navigationTitle(isTheaterVisit ? "観劇回を編集" : "記録を編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -433,7 +478,7 @@ struct EditExperienceView: View {
                     Button("保存") {
                         save()
                     }
-                    .disabled(!draft.canSave)
+                    .disabled(!isTheaterVisit && !draft.canSave)
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
@@ -441,6 +486,14 @@ struct EditExperienceView: View {
                     let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
                     draft.apply(place: candidate, preservingVenueName: preservesVenueName)
                 }
+            }
+            .alert("保存に失敗しました", isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { saveErrorMessage = nil }
+            } message: {
+                Text(saveErrorMessage ?? "")
             }
         }
     }
@@ -460,10 +513,20 @@ struct EditExperienceView: View {
     private func editStatus(for unitID: String) -> RecordUnitStatus {
         switch unitID {
         case "basic":
-            return draft.canSave ? .entered : .required
+            return isTheaterVisit || draft.canSave ? .entered : .required
         case "officialInfo":
+            if isTheaterVisit {
+                let hasOfficialURL = !(event?.officialURL ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty
+                let hasSocialLinks = !VisitUnitFields(rawValue: event?.unitFieldsRaw ?? "").socialLinks.isEmpty
+                return hasOfficialURL || hasSocialLinks ? .entered : .optional
+            }
             return draft.trimmedOfficialURL.isEmpty && draft.normalizedSocialLinks.isEmpty ? .optional : .entered
         case "people":
+            if category?.templateKey == "theater" {
+                return visitFocusLinks.isEmpty && pendingPeople.isEmpty ? .optional : .entered
+            }
             return visiblePersonLinks.isEmpty && pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
             return draft.hasTicketPlan ? .entered : .optional
@@ -489,52 +552,96 @@ struct EditExperienceView: View {
         switch unit.id {
         case "basic":
             VStack(alignment: .leading, spacing: 12) {
-                ExperienceBasicUnitEditor(
-                    template: template,
-            title: $draft.title,
-            seriesName: $draft.seriesName,
-            visitedAt: $draft.visitedAt,
-            endedAt: $draft.endedAt,
-            styleNamesText: $draft.styleNamesText,
-            venueName: venueNameBinding,
-                    venueAddress: venueAddressBinding,
-                    overallRating: $draft.overallRating,
-                    latitude: draft.latitude,
-                    longitude: draft.longitude,
-                    placeMasters: placeMasters,
-            usesPlaceSuggestions: usesInputSuggestionDictionary,
-            usesMapSearchAssist: usesMapSearchAssist,
-            supportsPerformanceTime: category?.usesOpeningTime == true,
-            supportsStyles: category?.templateKey == "theater",
-            ratingText: draft.ratingLabel,
-                    onSelectPlace: { draft.apply(placeMaster: $0) },
-                    onOpenPlaceSearch: { isShowingPlaceSearch = true }
-                )
+                if isTheaterVisit {
+                    ExperienceBasicUnitEditor(
+                        template: template,
+                        eventTitle: event?.title ?? "",
+                        eventSeriesName: event?.seriesName ?? "",
+                        visitedAt: $draft.visitedAt,
+                        endedAt: $draft.endedAt,
+                        styleNamesText: $draft.styleNamesText,
+                        venueName: venueNameBinding,
+                        venueAddress: venueAddressBinding,
+                        overallRating: $draft.overallRating,
+                        latitude: draft.latitude,
+                        longitude: draft.longitude,
+                        placeMasters: placeMasters,
+                        usesPlaceSuggestions: usesInputSuggestionDictionary,
+                        usesMapSearchAssist: usesMapSearchAssist,
+                        supportsPerformanceTime: category?.usesOpeningTime == true,
+                        supportsStyles: true,
+                        ratingText: draft.ratingLabel,
+                        onSelectPlace: { draft.apply(placeMaster: $0) },
+                        onSelectPublicPlace: { draft.apply(publicPlace: $0) },
+                        onOpenPlaceSearch: { isShowingPlaceSearch = true }
+                    )
+                } else {
+                    ExperienceBasicUnitEditor(
+                        template: template,
+                        title: $draft.title,
+                        seriesName: $draft.seriesName,
+                        visitedAt: $draft.visitedAt,
+                        endedAt: $draft.endedAt,
+                        styleNamesText: $draft.styleNamesText,
+                        venueName: venueNameBinding,
+                        venueAddress: venueAddressBinding,
+                        overallRating: $draft.overallRating,
+                        latitude: draft.latitude,
+                        longitude: draft.longitude,
+                        placeMasters: placeMasters,
+                        usesPlaceSuggestions: usesInputSuggestionDictionary,
+                        usesMapSearchAssist: usesMapSearchAssist,
+                        supportsPerformanceTime: category?.usesOpeningTime == true,
+                        supportsStyles: false,
+                        ratingText: draft.ratingLabel,
+                        onSelectPlace: { draft.apply(placeMaster: $0) },
+                        onSelectPublicPlace: { draft.apply(publicPlace: $0) },
+                        onOpenPlaceSearch: { isShowingPlaceSearch = true }
+                    )
+                }
+                if isTheaterVisit {
+                    Divider()
+                    ExperienceEmotionTagEditor(tagNamesText: $draft.tagNamesText)
+                }
                 if category?.isOutingFacilityGenre == true {
                     Divider()
                     OutingFacilityTypePicker(selection: $draft.subTypeKey)
                 }
             }
         case "officialInfo":
-            ExperienceOfficialInfoUnitEditor(
-                officialURL: $draft.officialURL,
-                socialLinksText: $draft.socialLinksText,
-                eventSubtitle: $draft.eventSubtitle,
-                title: $draft.title,
-                seriesName: $draft.seriesName,
-                visitedAt: $draft.visitedAt,
-                venueName: venueNameBinding,
-                venueAddress: venueAddressBinding,
-                pendingPeople: $pendingPeople,
-                advancedEntries: $draft.advancedEntries
-            )
+            if isTheaterVisit {
+                ExperienceOfficialInfoReferenceView()
+            } else {
+                ExperienceOfficialInfoUnitEditor(
+                    officialURL: $draft.officialURL,
+                    socialLinksText: $draft.socialLinksText,
+                    eventSubtitle: $draft.eventSubtitle,
+                    title: $draft.title,
+                    seriesName: $draft.seriesName,
+                    visitedAt: $draft.visitedAt,
+                    venueName: venueNameBinding,
+                    venueAddress: venueAddressBinding,
+                    pendingPeople: $pendingPeople,
+                    advancedEntries: $draft.advancedEntries
+                )
+            }
         case "people":
-            PeopleUnitEditor(
-                existingLinks: visiblePersonLinks,
-                deletedLinkIDs: $deletedPersonLinkIDs,
-                pendingLinks: $pendingPeople,
-                personMasters: personMasters
-            )
+            if category?.templateKey == "theater" {
+                TheaterFocusPeopleEditor(
+                    existingLinks: visitFocusLinks,
+                    deletedLinkIDs: $deletedPersonLinkIDs,
+                    pendingLinks: $pendingPeople,
+                    personMasters: personMasters,
+                    existingReactionTagKeys: $existingFocusReactionTagKeys
+                )
+            } else {
+                PeopleUnitEditor(
+                    existingLinks: visiblePersonLinks,
+                    deletedLinkIDs: $deletedPersonLinkIDs,
+                    pendingLinks: $pendingPeople,
+                    personMasters: personMasters
+                )
+            }
         case "ticketPlan":
             ExperienceTicketUnitEditor(
                 outcomeKey: $draft.outcomeKey,
@@ -559,9 +666,14 @@ struct EditExperienceView: View {
                 aspectRatioKey: $draft.eyecatchAspectRatioKey
             )
         case "importOCR":
-            OCRUnitEditor(ocrText: $draft.ocrText, selectedItems: $selectedOCRItems) { suggestion in
+            OCRUnitEditor(
+                ocrText: $draft.ocrText,
+                selectedItems: $selectedOCRItems,
+                supportsTitleSuggestion: !isTheaterVisit
+            ) { suggestion in
                 switch suggestion.kind {
-                case .title: draft.title = suggestion.value
+                case .title:
+                    if !isTheaterVisit { draft.title = suggestion.value }
                 case .date: if let date = suggestion.dateValue { draft.visitedAt = date }
                 case .venue:
                     draft.venueName = suggestion.value
@@ -609,34 +721,12 @@ struct EditExperienceView: View {
         let existingUnitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
 
         if let event {
-            event.title = draft.trimmedTitle
-            event.seriesName = draft.trimmedSeriesName
-            if event.category?.isOutingFacilityGenre == true {
-                event.subTypeKey = draft.subTypeKey
-                let destination = outingCategory(
-                    for: draft.subTypeKey,
-                    fallback: event.category,
-                    in: categories
-                )
-                if destination?.isArchived == true {
-                    destination?.isArchived = false
-                    destination?.updatedAt = now
-                }
-                event.category = destination
-                for plan in event.plans ?? [] {
-                    plan.category = destination
-                    plan.updatedAt = now
-                }
-            }
-            event.officialURL = draft.trimmedOfficialURL
-            var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
-            eventFields.socialLinks = draft.normalizedSocialLinks
-            eventFields.eventSubtitle = draft.trimmedEventSubtitle
-            if event.category?.templateKey == "book" {
-                eventFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
-            }
-            event.unitFieldsRaw = eventFields.encodedRawValue
-            event.updatedAt = now
+            applyTargetChangesFromExperienceEdit(
+                to: event,
+                draft: draft,
+                categories: categories,
+                at: now
+            )
         }
 
         visit.visitedAt = draft.visitedAt
@@ -644,14 +734,25 @@ struct EditExperienceView: View {
         visit.venueNameSnapshot = draft.trimmedVenueName
         visit.latitude = draft.latitude
         visit.longitude = draft.longitude
-        visit.placeMaster = resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
+        visit.placeMaster = resolvePlaceMaster(
+            for: draft.placeSnapshot,
+            publicSelection: draft.publicPlaceSelection,
+            from: placeMasters,
+            in: modelContext
+        )
         visit.overallRating = draft.overallRating
         visit.outcomeKey = draft.outcomeKey
         visit.seatText = draft.trimmedSeatText
         visit.eyecatchPath = coverPhotoPath
         visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
+        visit.tagNamesRaw = draft.normalizedTagNamesRaw
         var updatedUnitFields = draft.makeUnitFields(for: event?.category)
+        if category?.templateKey == "theater" {
+            // 旧形式の「この回だけのキャスト」状態は保持するが、
+            // 新しいシンプル入力で暗黙に旧スナップショットへ切り替えない。
+            updatedUnitFields.hasVisitCastSnapshot = existingUnitFields.hasVisitCastSnapshot
+        }
         updatedUnitFields.heroBackgroundPath = heroBackgroundPath
         updatedUnitFields.heroBackgroundPresetKey = heroBackgroundPresetKey
         if preservesWeather {
@@ -659,8 +760,13 @@ struct EditExperienceView: View {
         }
         visit.unitFieldsRaw = updatedUnitFields.encodedRawValue
         visit.updatedAt = now
+        applyExistingFocusReactionTags(at: now)
         deleteMarkedPersonLinks()
-        insertPendingPeople(for: event, visit: nil)
+        if category?.templateKey == "theater" {
+            insertPendingPeople(for: nil, visit: visit)
+        } else {
+            insertPendingPeople(for: event, visit: nil)
+        }
         applyExistingPhotoMetadata()
         deleteMarkedPhotos()
         insertPendingPhotos(for: visit)
@@ -670,6 +776,10 @@ struct EditExperienceView: View {
             Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
             dismiss()
         } catch {
+            modelContext.rollback()
+            saveErrorMessage = isTheaterVisit
+                ? "観劇回を更新できませんでした。入力内容を確認して、もう一度お試しください。"
+                : "記録を更新できませんでした。入力内容を確認して、もう一度お試しください。"
             assertionFailure("Failed to update experience: \(error)")
         }
     }
@@ -705,7 +815,8 @@ struct EditExperienceView: View {
                 ? metadata.ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
                 : ""
             photo.amount = metadata.purpose.supportsAmount ? metadata.amount : Decimal(0)
-            if metadata.purpose != .memory,
+            if !isTheaterVisit,
+               metadata.purpose != .memory,
                event?.representativeEyecatchPath == photo.relativePath {
                 event?.representativeEyecatchPath = coverPhotoPath
             }
@@ -724,31 +835,28 @@ struct EditExperienceView: View {
         }
     }
 
-    private func insertPendingPeople(for event: ExperienceEvent?, visit: Visit?) {
-        let startIndex = visiblePersonLinks.count
-        for (offset, pendingPerson) in pendingPeople.enumerated() {
-            let person = findOrCreatePerson(named: pendingPerson.name, roleKey: pendingPerson.role.key)
-            modelContext.insert(pendingPerson.makeEventPersonLink(person: person, event: event, visit: visit, sortOrder: startIndex + offset))
+    private func applyExistingFocusReactionTags(at date: Date) {
+        guard isTheaterVisit else { return }
+        for link in visitFocusLinks {
+            guard let tagKeys = existingFocusReactionTagKeys[link.id] else { continue }
+            link.memo = TheaterFocusLinkMetadata(
+                reactionKeys: TheaterFocusReaction.orderedKeys(tagKeys)
+            ).encodedMemo
+            link.updatedAt = date
         }
     }
 
-    private func findOrCreatePerson(named name: String, roleKey: String) -> PersonMaster {
-        let normalizedName = normalizedPersonName(name)
-        if let person = personMasters.first(where: { $0.normalizedName == normalizedName || normalizedPersonName($0.displayName) == normalizedName }) {
-            person.updatedAt = Date()
-            return person
+    @discardableResult
+    private func insertPendingPeople(for event: ExperienceEvent?, visit: Visit?) -> [EventPersonLink] {
+        let startIndex = visiblePersonLinks.count
+        var links: [EventPersonLink] = []
+        for (offset, pendingPerson) in pendingPeople.enumerated() {
+            let person = resolvePersonMaster(for: pendingPerson, from: personMasters, in: modelContext)
+            let link = pendingPerson.makeEventPersonLink(person: person, event: event, visit: visit, sortOrder: startIndex + offset)
+            modelContext.insert(link)
+            links.append(link)
         }
-
-        let now = Date()
-        let person = PersonMaster(
-            displayName: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            roleTagsRaw: roleKey,
-            normalizedName: normalizedName,
-            createdAt: now,
-            updatedAt: now
-        )
-        modelContext.insert(person)
-        return person
+        return links
     }
 }
 
@@ -879,6 +987,9 @@ struct AddVisitView: View {
         case "money":
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "people":
+            if event.category?.templateKey == "theater" {
+                return pendingPeople.isEmpty ? .optional : .entered
+            }
             return pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
             return draft.hasTicketPlan ? .entered : .optional
@@ -897,27 +1008,34 @@ struct AddVisitView: View {
     private func visitContent(for unit: RecordUnitDefinition) -> some View {
         switch unit.id {
         case "basic":
-            ExperienceBasicUnitEditor(
-                template: template,
-                eventTitle: event.title,
-                eventSeriesName: event.seriesName,
-                visitedAt: $draft.visitedAt,
-                endedAt: $draft.endedAt,
-                styleNamesText: $draft.styleNamesText,
-                venueName: venueNameBinding,
-                venueAddress: venueAddressBinding,
-                overallRating: $draft.overallRating,
-                latitude: draft.latitude,
-                longitude: draft.longitude,
-                placeMasters: placeMasters,
-                usesPlaceSuggestions: usesInputSuggestionDictionary,
-                usesMapSearchAssist: usesMapSearchAssist,
-                supportsPerformanceTime: event.category?.usesOpeningTime == true,
-                supportsStyles: event.category?.templateKey == "theater",
-                ratingText: draft.ratingLabel,
-                onSelectPlace: { draft.apply(placeMaster: $0) },
-                onOpenPlaceSearch: { isShowingPlaceSearch = true }
-            )
+            VStack(alignment: .leading, spacing: 12) {
+                ExperienceBasicUnitEditor(
+                    template: template,
+                    eventTitle: event.title,
+                    eventSeriesName: event.seriesName,
+                    visitedAt: $draft.visitedAt,
+                    endedAt: $draft.endedAt,
+                    styleNamesText: $draft.styleNamesText,
+                    venueName: venueNameBinding,
+                    venueAddress: venueAddressBinding,
+                    overallRating: $draft.overallRating,
+                    latitude: draft.latitude,
+                    longitude: draft.longitude,
+                    placeMasters: placeMasters,
+                    usesPlaceSuggestions: usesInputSuggestionDictionary,
+                    usesMapSearchAssist: usesMapSearchAssist,
+                    supportsPerformanceTime: event.category?.usesOpeningTime == true,
+                    supportsStyles: event.category?.templateKey == "theater",
+                    ratingText: draft.ratingLabel,
+                    onSelectPlace: { draft.apply(placeMaster: $0) },
+                    onSelectPublicPlace: { draft.apply(publicPlace: $0) },
+                    onOpenPlaceSearch: { isShowingPlaceSearch = true }
+                )
+                if event.category?.templateKey == "theater" {
+                    Divider()
+                    ExperienceEmotionTagEditor(tagNamesText: $draft.tagNamesText)
+                }
+            }
         case "memo":
             ExperienceMemoUnitEditor(
                 text: $draft.note,
@@ -957,12 +1075,21 @@ struct AddVisitView: View {
                 }
             }
         case "people":
-            PeopleUnitEditor(
-                existingLinks: [],
-                deletedLinkIDs: .constant([]),
-                pendingLinks: $pendingPeople,
-                personMasters: personMasters
-            )
+            if event.category?.templateKey == "theater" {
+                TheaterFocusPeopleEditor(
+                    existingLinks: [],
+                    deletedLinkIDs: .constant([]),
+                    pendingLinks: $pendingPeople,
+                    personMasters: personMasters
+                )
+            } else {
+                PeopleUnitEditor(
+                    existingLinks: [],
+                    deletedLinkIDs: .constant([]),
+                    pendingLinks: $pendingPeople,
+                    personMasters: personMasters
+                )
+            }
         case "ticketPlan":
             ExperienceTicketUnitEditor(
                 outcomeKey: $draft.outcomeKey,
@@ -1009,6 +1136,7 @@ struct AddVisitView: View {
             seatText: draft.trimmedSeatText,
             eyecatchPath: coverPhotoPath,
             note: draft.trimmedNote,
+            tagNamesRaw: draft.normalizedTagNamesRaw,
             amount: parsedCurrencyAmount(from: draft.amountText),
             latitude: draft.latitude,
             longitude: draft.longitude,
@@ -1021,7 +1149,12 @@ struct AddVisitView: View {
             createdAt: now,
             updatedAt: now,
             event: event,
-            placeMaster: resolvePlaceMaster(for: draft.placeSnapshot, from: placeMasters, in: modelContext)
+            placeMaster: resolvePlaceMaster(
+                for: draft.placeSnapshot,
+                publicSelection: draft.publicPlaceSelection,
+                from: placeMasters,
+                in: modelContext
+            )
         )
 
         event.stateKey = "active"
@@ -1082,28 +1215,9 @@ struct AddVisitView: View {
 
     private func insertPendingPeople(for visit: Visit) {
         for (index, pendingPerson) in pendingPeople.enumerated() {
-            let person = findOrCreatePerson(named: pendingPerson.name, roleKey: pendingPerson.role.key)
+            let person = resolvePersonMaster(for: pendingPerson, from: personMasters, in: modelContext)
             modelContext.insert(pendingPerson.makeEventPersonLink(person: person, event: nil, visit: visit, sortOrder: index))
         }
-    }
-
-    private func findOrCreatePerson(named name: String, roleKey: String) -> PersonMaster {
-        let normalizedName = normalizedPersonName(name)
-        if let person = personMasters.first(where: { $0.normalizedName == normalizedName || normalizedPersonName($0.displayName) == normalizedName }) {
-            person.updatedAt = Date()
-            return person
-        }
-
-        let now = Date()
-        let person = PersonMaster(
-            displayName: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            roleTagsRaw: roleKey,
-            normalizedName: normalizedName,
-            createdAt: now,
-            updatedAt: now
-        )
-        modelContext.insert(person)
-        return person
     }
 }
 
@@ -1121,9 +1235,11 @@ struct AddExperienceDraft {
     var title: String = ""
     var seriesName: String = ""
     var subTypeKey: String = ""
+    var performanceTypeCustomName: String = ""
     var officialURL: String = ""
     var socialLinksText: String = ""
     var eventSubtitle: String = ""
+    var theaterCreditsText: String = ""
     var visitedAt: Date = Date()
     var endedAt: Date = Date()
     var styleNamesText: String = ""
@@ -1131,6 +1247,7 @@ struct AddExperienceDraft {
     var venueAddress: String = ""
     var latitude: Double = 0
     var longitude: Double = 0
+    var publicPlaceSelection: PublicPlaceSelectionDraft?
     var overallRating: Double = 0
     var outcomeKey: String = ""
     var seatText: String = ""
@@ -1140,6 +1257,8 @@ struct AddExperienceDraft {
     var advancedEntries: [AdvancedFieldEntry] = []
     var amountText: String = ""
     var note: String = ""
+    var tagNamesText: String = ""
+    var excludedEventCastLinkIDs: Set<UUID> = []
 
     init() {}
 
@@ -1149,8 +1268,10 @@ struct AddExperienceDraft {
         subTypeKey = visit.event?.subTypeKey ?? ""
         officialURL = visit.event?.officialURL ?? ""
         let eventFields = VisitUnitFields(rawValue: visit.event?.unitFieldsRaw ?? "")
+        performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
         socialLinksText = eventFields.socialLinks.joined(separator: "\n")
         eventSubtitle = eventFields.eventSubtitle
+        theaterCreditsText = eventFields.eventCreditsText
         visitedAt = visit.visitedAt
         endedAt = visit.endedAt
         styleNamesText = VisitUnitFields(rawValue: visit.unitFieldsRaw).styleNames.joined(separator: "、")
@@ -1169,6 +1290,19 @@ struct AddExperienceDraft {
         advancedEntries = unitFields.advancedEntries
         amountText = formattedCurrencyAmount(visit.amount)
         note = visit.note
+        tagNamesText = visit.tagNamesRaw
+        excludedEventCastLinkIDs = Set(unitFields.excludedEventCastLinkIDs)
+        if unitFields.hasVisitCastSnapshot {
+            let capturedEventLinkIDs = Set(
+                (visit.personLinks ?? []).compactMap { TheaterVisitCastResolver.sourceEventLinkID(for: $0) }
+            )
+            let currentEventCastLinkIDs = Set(
+                (visit.event?.personLinks ?? [])
+                    .filter { TheaterVisitCastResolver.isCastLink($0) }
+                    .map(\.id)
+            )
+            excludedEventCastLinkIDs.formUnion(currentEventCastLinkIDs.subtracting(capturedEventLinkIDs))
+        }
     }
 
     init(inboxItem: InboxItem) {
@@ -1191,6 +1325,10 @@ struct AddExperienceDraft {
 
     var trimmedEventSubtitle: String {
         eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedTheaterCreditsText: String {
+        theaterCreditsText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var normalizedSocialLinks: [String] {
@@ -1218,6 +1356,7 @@ struct AddExperienceDraft {
     }
 
     mutating func apply(place: PlaceSearchCandidate, preservingVenueName: Bool) {
+        publicPlaceSelection = nil
         if !preservingVenueName {
             venueName = place.name
         }
@@ -1229,25 +1368,40 @@ struct AddExperienceDraft {
     }
 
     mutating func apply(placeMaster: PlaceMaster) {
+        publicPlaceSelection = nil
         venueName = placeMaster.name
         venueAddress = placeMaster.address
         latitude = placeMaster.latitude
         longitude = placeMaster.longitude
     }
 
+    mutating func apply(publicPlace selection: PublicPlaceSelectionDraft) {
+        publicPlaceSelection = selection
+        venueName = selection.entry.officialName
+        venueAddress = selection.entry.address
+        latitude = selection.entry.latitude
+        longitude = selection.entry.longitude
+    }
+
     mutating func clearPlaceSelection() {
+        publicPlaceSelection = nil
         venueAddress = ""
         latitude = 0
         longitude = 0
     }
 
     mutating func clearPlaceCoordinates() {
+        publicPlaceSelection = nil
         latitude = 0
         longitude = 0
     }
 
     var trimmedNote: String {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedTagNamesRaw: String {
+        TheaterEmotionTags.encoded(TheaterEmotionTags.names(from: tagNamesText))
     }
 
     var trimmedAmountText: String {
@@ -1276,6 +1430,7 @@ struct AddExperienceDraft {
         VisitUnitFields(
             ocrText: trimmedOCRText,
             styleNames: normalizedStyleNames(from: styleNamesText),
+            excludedEventCastLinkIDs: excludedEventCastLinkIDs.sorted { $0.uuidString < $1.uuidString },
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
                 : eyecatchAspectRatioKey,
@@ -1288,6 +1443,11 @@ struct AddExperienceDraft {
         return VisitUnitFields(
             socialLinks: normalizedSocialLinks,
             eventSubtitle: trimmedEventSubtitle,
+            eventCreditsText: trimmedTheaterCreditsText,
+            eventPerformanceTypeCustomName: TheaterPerformanceType.customNameForStorage(
+                key: subTypeKey,
+                input: performanceTypeCustomName
+            ),
             eyecatchAspectRatioKey: category?.templateKey == "book"
                 ? (eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.hardcoverBook.key : eyecatchAspectRatioKey)
                 : ""
@@ -1296,6 +1456,14 @@ struct AddExperienceDraft {
 
     var canSave: Bool {
         !trimmedTitle.isEmpty
+    }
+
+    func hasValidPerformanceType(for category: RecordCategory?) -> Bool {
+        category?.templateKey != "theater"
+            || TheaterPerformanceType.isValidSelection(
+                key: subTypeKey,
+                customName: performanceTypeCustomName
+            )
     }
 
     var ratingLabel: String {
@@ -1326,6 +1494,46 @@ private struct OutingFacilityTypePicker: View {
     }
 }
 
+@MainActor
+func applyTargetChangesFromExperienceEdit(
+    to event: ExperienceEvent,
+    draft: AddExperienceDraft,
+    categories: [RecordCategory],
+    at now: Date
+) {
+    // 観劇回は過去の一回を記録する単位。公演情報の正本は公演ハブの対象編集だけで更新する。
+    guard event.category?.templateKey != "theater" else { return }
+
+    event.title = draft.trimmedTitle
+    event.seriesName = draft.trimmedSeriesName
+    if event.category?.isOutingFacilityGenre == true {
+        event.subTypeKey = draft.subTypeKey
+        let destination = outingCategory(
+            for: draft.subTypeKey,
+            fallback: event.category,
+            in: categories
+        )
+        if destination?.isArchived == true {
+            destination?.isArchived = false
+            destination?.updatedAt = now
+        }
+        event.category = destination
+        for plan in event.plans ?? [] {
+            plan.category = destination
+            plan.updatedAt = now
+        }
+    }
+    event.officialURL = draft.trimmedOfficialURL
+    var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+    eventFields.socialLinks = draft.normalizedSocialLinks
+    eventFields.eventSubtitle = draft.trimmedEventSubtitle
+    if event.category?.templateKey == "book" {
+        eventFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
+    }
+    event.unitFieldsRaw = eventFields.encodedRawValue
+    event.updatedAt = now
+}
+
 private func outingCategory(
     for subTypeKey: String,
     fallback: RecordCategory?,
@@ -1347,6 +1555,7 @@ struct VisitDraft {
     var venueAddress: String = ""
     var latitude: Double = 0
     var longitude: Double = 0
+    var publicPlaceSelection: PublicPlaceSelectionDraft?
     var overallRating: Double = 0
     var outcomeKey: String = ""
     var seatText: String = ""
@@ -1356,6 +1565,8 @@ struct VisitDraft {
     var advancedEntries: [AdvancedFieldEntry] = []
     var amountText: String = ""
     var note: String = ""
+    var tagNamesText: String = ""
+    var excludedEventCastLinkIDs: Set<UUID> = []
 
     init() {}
 
@@ -1410,6 +1621,7 @@ struct VisitDraft {
     }
 
     mutating func apply(place: PlaceSearchCandidate, preservingVenueName: Bool) {
+        publicPlaceSelection = nil
         if !preservingVenueName {
             venueName = place.name
         }
@@ -1421,25 +1633,40 @@ struct VisitDraft {
     }
 
     mutating func apply(placeMaster: PlaceMaster) {
+        publicPlaceSelection = nil
         venueName = placeMaster.name
         venueAddress = placeMaster.address
         latitude = placeMaster.latitude
         longitude = placeMaster.longitude
     }
 
+    mutating func apply(publicPlace selection: PublicPlaceSelectionDraft) {
+        publicPlaceSelection = selection
+        venueName = selection.entry.officialName
+        venueAddress = selection.entry.address
+        latitude = selection.entry.latitude
+        longitude = selection.entry.longitude
+    }
+
     mutating func clearPlaceSelection() {
+        publicPlaceSelection = nil
         venueAddress = ""
         latitude = 0
         longitude = 0
     }
 
     mutating func clearPlaceCoordinates() {
+        publicPlaceSelection = nil
         latitude = 0
         longitude = 0
     }
 
     var trimmedNote: String {
         note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedTagNamesRaw: String {
+        TheaterEmotionTags.encoded(TheaterEmotionTags.names(from: tagNamesText))
     }
 
     var trimmedAmountText: String {
@@ -1468,6 +1695,7 @@ struct VisitDraft {
         VisitUnitFields(
             ocrText: trimmedOCRText,
             styleNames: normalizedStyleNames(from: styleNamesText),
+            excludedEventCastLinkIDs: excludedEventCastLinkIDs.sorted { $0.uuidString < $1.uuidString },
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
                 : eyecatchAspectRatioKey,
@@ -1494,9 +1722,17 @@ struct PlaceSnapshot {
 @MainActor
 func resolvePlaceMaster(
     for snapshot: PlaceSnapshot,
+    publicSelection: PublicPlaceSelectionDraft? = nil,
     from placeMasters: [PlaceMaster],
     in modelContext: ModelContext
 ) -> PlaceMaster? {
+    if let publicSelection {
+        return PublicPlaceCatalogImporter.resolveSelection(
+            publicSelection,
+            existingPlaces: placeMasters,
+            in: modelContext
+        )
+    }
     let name = snapshot.name.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !name.isEmpty else { return nil }
 

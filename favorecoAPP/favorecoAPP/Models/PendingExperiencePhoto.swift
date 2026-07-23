@@ -7,7 +7,7 @@ import Foundation
 import UIKit
 import ImageIO
 
-enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sendable {
     case memory
     case ticket
     case goods
@@ -40,7 +40,7 @@ enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-struct PhotoMetadataDraft: Sendable {
+nonisolated struct PhotoMetadataDraft: Sendable {
     var purpose: ExperiencePhotoPurpose = .memory
     var ocrText: String = ""
     var amountText: String = ""
@@ -55,7 +55,7 @@ struct PhotoMetadataDraft: Sendable {
         self.amountText = amountText
     }
 
-    init(photo: PhotoBlob) {
+    @MainActor init(photo: PhotoBlob) {
         purpose = .resolved(from: photo.purpose)
         ocrText = photo.ocrText
         amountText = Self.formattedAmount(photo.amount)
@@ -84,7 +84,7 @@ struct PhotoMetadataDraft: Sendable {
     }
 }
 
-struct PendingPhoto: Identifiable, Sendable {
+nonisolated struct PendingPhoto: Identifiable, Sendable {
     let id = UUID()
     var data: Data
     var originalFilename: String
@@ -96,7 +96,7 @@ struct PendingPhoto: Identifiable, Sendable {
         "local/\(id.uuidString).jpg"
     }
 
-    func makePhotoBlob(visit: Visit) -> PhotoBlob {
+    @MainActor func makePhotoBlob(visit: Visit) -> PhotoBlob {
         PhotoBlob(
             relativePath: relativePath,
             originalFilename: originalFilename,

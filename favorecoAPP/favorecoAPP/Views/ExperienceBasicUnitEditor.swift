@@ -1,11 +1,8 @@
 import MapKit
-import SwiftData
 import SwiftUI
 
 struct ExperienceBasicUnitEditor: View {
-    @Environment(\.modelContext) private var modelContext
     @StateObject private var publicPlaceStore = PublicPlaceCatalogStore.shared
-    @State private var placeImportError = ""
     let template: CategoryRecordTemplate
     private let editableTitle: Binding<String>?
     private let editableSeriesName: Binding<String>?
@@ -26,6 +23,7 @@ struct ExperienceBasicUnitEditor: View {
     let supportsStyles: Bool
     let ratingText: String
     let onSelectPlace: (PlaceMaster) -> Void
+    let onSelectPublicPlace: (PublicPlaceSelectionDraft) -> Void
     let onOpenPlaceSearch: () -> Void
 
     init(
@@ -47,6 +45,7 @@ struct ExperienceBasicUnitEditor: View {
         supportsStyles: Bool,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
+        onSelectPublicPlace: @escaping (PublicPlaceSelectionDraft) -> Void,
         onOpenPlaceSearch: @escaping () -> Void
     ) {
         self.template = template
@@ -69,6 +68,7 @@ struct ExperienceBasicUnitEditor: View {
         self.supportsStyles = supportsStyles
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
+        self.onSelectPublicPlace = onSelectPublicPlace
         self.onOpenPlaceSearch = onOpenPlaceSearch
     }
 
@@ -91,6 +91,7 @@ struct ExperienceBasicUnitEditor: View {
         supportsStyles: Bool,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
+        onSelectPublicPlace: @escaping (PublicPlaceSelectionDraft) -> Void,
         onOpenPlaceSearch: @escaping () -> Void
     ) {
         self.template = template
@@ -113,6 +114,7 @@ struct ExperienceBasicUnitEditor: View {
         self.supportsStyles = supportsStyles
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
+        self.onSelectPublicPlace = onSelectPublicPlace
         self.onOpenPlaceSearch = onOpenPlaceSearch
     }
 
@@ -160,7 +162,7 @@ struct ExperienceBasicUnitEditor: View {
             }
             if supportsStyles {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("スタイル")
+                    Text("鑑賞方法")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
 
@@ -222,7 +224,7 @@ struct ExperienceBasicUnitEditor: View {
     private var placeSuggestionList: some View {
         let suggestions = usesPlaceSuggestions ? placeSuggestions : []
         let publicSuggestions = usesPlaceSuggestions ? publicCatalogSuggestions : []
-        if !suggestions.isEmpty || !publicSuggestions.isEmpty || !placeImportError.isEmpty {
+        if !suggestions.isEmpty || !publicSuggestions.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 if !suggestions.isEmpty {
                     Text("登録済みの場所")
@@ -263,7 +265,7 @@ struct ExperienceBasicUnitEditor: View {
                         .foregroundStyle(.secondary)
                     ForEach(publicSuggestions) { entry in
                         Button {
-                            importPublicPlace(entry)
+                            onSelectPublicPlace(PublicPlaceSelectionDraft(entry: entry))
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: "building.2.crop.circle")
@@ -285,11 +287,6 @@ struct ExperienceBasicUnitEditor: View {
                         }
                         .buttonStyle(.plain)
                     }
-                }
-                if !placeImportError.isEmpty {
-                    Text(placeImportError)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.red)
                 }
             }
         }
@@ -329,20 +326,6 @@ struct ExperienceBasicUnitEditor: View {
         )
     }
 
-    private func importPublicPlace(_ entry: PublicPlaceCatalogEntry) {
-        do {
-            let place = try PublicPlaceCatalogImporter.importEntry(
-                entry,
-                existingPlaces: placeMasters,
-                in: modelContext
-            )
-            placeImportError = ""
-            onSelectPlace(place)
-        } catch {
-            placeImportError = "場所マスターへ追加できませんでした。"
-        }
-    }
-
     private var ratingSlider: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -356,13 +339,7 @@ struct ExperienceBasicUnitEditor: View {
     }
 
     private var theaterStyleSuggestions: [String] {
-        [
-            "ミュージカル", "宝塚歌劇団", "劇団四季", "2.5次元",
-            "ストレートプレイ", "イマーシブ演劇", "大衆演劇",
-            "歌舞伎・伝統芸能", "ダンス・バレエ", "ディナーショー",
-            "ファンミーティング", "ライブ", "朗読劇",
-            "STARTO ENTERTAINMENT", "その他",
-        ]
+        ["現地", "配信", "ライブビューイング"]
     }
 
     private var selectedStyleNames: [String] {

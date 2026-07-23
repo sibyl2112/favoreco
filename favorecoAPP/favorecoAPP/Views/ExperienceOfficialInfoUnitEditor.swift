@@ -12,6 +12,7 @@ struct ExperienceOfficialInfoUnitEditor: View {
     @Binding var venueAddress: String
     @Binding var pendingPeople: [PendingPersonLink]
     @Binding var advancedEntries: [AdvancedFieldEntry]
+    var allowsContributorCandidates = true
 
     @AppStorage(AppStorageKeys.usesURLImportAssist) private var usesURLImportAssist = true
     @State private var candidate: URLMetadataCandidate?
@@ -94,7 +95,10 @@ struct ExperienceOfficialInfoUnitEditor: View {
 
     @ViewBuilder
     private func structuredCandidates(_ candidate: URLMetadataCandidate) -> some View {
-        if candidate.eventDate != nil || !candidate.venueName.isEmpty || !candidate.venueAddress.isEmpty || !candidate.contributors.isEmpty {
+        if candidate.eventDate != nil
+            || !candidate.venueName.isEmpty
+            || !candidate.venueAddress.isEmpty
+            || (allowsContributorCandidates && !candidate.contributors.isEmpty) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(structuredCandidateTitle(candidate.structuredType))
                     .font(FavorecoTypography.captionStrong)
@@ -130,15 +134,17 @@ struct ExperienceOfficialInfoUnitEditor: View {
                     .buttonStyle(.bordered)
                 }
 
-                ForEach(candidate.contributors) { contributor in
-                    Button {
-                        appendContributor(contributor)
-                    } label: {
-                        Label("\(contributor.roleName): \(contributor.name)", systemImage: "person.badge.plus")
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                if allowsContributorCandidates {
+                    ForEach(candidate.contributors) { contributor in
+                        Button {
+                            appendContributor(contributor)
+                        } label: {
+                            Label("\(contributor.roleName): \(contributor.name)", systemImage: "person.badge.plus")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(hasContributor(contributor))
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(hasContributor(contributor))
                 }
             }
         } else {
