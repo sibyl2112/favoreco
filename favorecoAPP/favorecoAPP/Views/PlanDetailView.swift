@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct PlanDetailView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
@@ -16,6 +17,7 @@ struct PlanDetailView: View {
     @Environment(\.favorecoThemePalette) private var themePalette
     let plan: Plan
     var highlightedPreparationTaskID: UUID? = nil
+    let onBack: (() -> Void)?
     @State private var isShowingEditPlan = false
     @State private var isShowingAddAttempt = false
     @State private var editingAttempt: TicketAttempt?
@@ -26,8 +28,21 @@ struct PlanDetailView: View {
     @State private var operationError = ""
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
 
+    init(
+        plan: Plan,
+        highlightedPreparationTaskID: UUID? = nil,
+        onBack: (() -> Void)? = nil
+    ) {
+        self.plan = plan
+        self.highlightedPreparationTaskID = highlightedPreparationTaskID
+        self.onBack = onBack
+    }
+
     private var categoryColor: Color {
-        themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88")
+        if (plan.event?.category ?? plan.category)?.templateKey == "theater" {
+            return Color(red: 0.82, green: 0.62, blue: 0.30)
+        }
+        return themePalette.categoryColor(hex: plan.category?.colorHex ?? "#147C88")
     }
 
     private var attempts: [TicketAttempt] {
@@ -86,78 +101,47 @@ struct PlanDetailView: View {
             .first
     }
 
+    private var nextPlanActionCallout: TicketAttemptNextAction? {
+        guard let action = nextPlanAction else { return nil }
+        return TicketAttemptNextAction(
+            title: action.title,
+            date: action.date,
+            icon: action.systemImage,
+            tint: action.isOverdue ? .red : .orange,
+            priority: action.priority,
+            isOverdue: action.isOverdue
+        )
+    }
+
+    private var isTheaterPlan: Bool {
+        (plan.event?.category ?? plan.category)?.templateKey == "theater"
+    }
+
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    headerSection
-                    basicSection
-                    ticketSection
-                    expenseSection
-                    preparationSection
-                    officialSection
-                    memoSection
-                }
-                .padding(20)
-            }
-            .task(id: highlightedPreparationTaskID) {
-                guard let highlightedPreparationTaskID else { return }
-                await Task.yield()
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    proxy.scrollTo(highlightedPreparationTaskID, anchor: .center)
-                }
+        Group {
+            if isTheaterPlan, let visit = plan.visit {
+                ExperienceDetailView(visit: visit, onBack: onBack)
+            } else if isTheaterPlan {
+                theaterDetailContent
+            } else {
+                standardDetailContent
             }
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("予定・チケット")
+        .navigationTitle(isTheaterPlan ? "" : "予定・チケット")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(isTheaterPlan ? .hidden : .visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button {
-                        isShowingEditPlan = true
-                    } label: {
-                        Label("予定を編集", systemImage: "pencil")
-                    }
-
-                    Button {
-                        isShowingAddAttempt = true
-                    } label: {
-                        Label("申込を追加", systemImage: "ticket")
-                    }
-
-                    Button {
-                        calendarDraft = makeCalendarDraft()
-                    } label: {
-                        Label("カレンダーに追加", systemImage: "calendar.badge.plus")
-                    }
-
-                    if let destination = preferredOpenDestination {
-                        Button {
-                            openURL(destination.url)
-                        } label: {
-                            Label(destination.label, systemImage: "safari")
-                        }
-                    }
-
-                    Button {
-                        if let visit = plan.visit {
-                            navigatingVisit = visit
-                        } else {
-                            prepareRecordEntry()
-                        }
-                    } label: {
-                        Label(plan.visit == nil ? "参加記録を入力" : "参加記録を開く", systemImage: "sparkles")
-                    }
-
-                    Button(role: .destructive) {
-                        isShowingDeleteConfirmation = true
-                    } label: {
-                        Label("予定を削除", systemImage: "trash")
-                    }
+                    planActionItems
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+            }
+        }
+        .overlay(alignment: .top) {
+            if isTheaterPlan, plan.visit == nil {
+                theaterNavigationControls
             }
         }
         .sheet(isPresented: $isShowingEditPlan) {
@@ -203,6 +187,490 @@ struct PlanDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(operationError)
+        }
+    }
+
+    private var standardDetailContent: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    headerSection
+                    basicSection
+                    ticketSection
+                    expenseSection
+                    preparationSection
+                    officialSection
+                    memoSection
+                }
+                .padding(20)
+            }
+            .task(id: highlightedPreparationTaskID) {
+                guard let highlightedPreparationTaskID else { return }
+                await Task.yield()
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    proxy.scrollTo(highlightedPreparationTaskID, anchor: .center)
+                }
+            }
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+
+    @ViewBuilder
+    private var planActionItems: some View {
+        Button {
+            isShowingEditPlan = true
+        } label: {
+            Label("予定を編集", systemImage: "pencil")
+        }
+
+        Button {
+            isShowingAddAttempt = true
+        } label: {
+            Label("チケットを追加", systemImage: "ticket")
+        }
+
+        Button {
+            calendarDraft = makeCalendarDraft()
+        } label: {
+            Label("カレンダーに追加", systemImage: "calendar.badge.plus")
+        }
+
+        if let destination = preferredOpenDestination {
+            Button {
+                openURL(destination.url)
+            } label: {
+                Label(destination.label, systemImage: "safari")
+            }
+        }
+
+        Button {
+            if let visit = plan.visit {
+                navigatingVisit = visit
+            } else {
+                prepareRecordEntry()
+            }
+        } label: {
+            Label(plan.visit == nil ? "参加記録を入力" : "参加記録を開く", systemImage: "sparkles")
+        }
+
+        Button(role: .destructive) {
+            isShowingDeleteConfirmation = true
+        } label: {
+            Label("予定を削除", systemImage: "trash")
+        }
+    }
+
+    private var theaterAccentColor: Color {
+        Color(red: 0.82, green: 0.62, blue: 0.30)
+    }
+
+    private var theaterGenreColor: Color {
+        Color(hex: (plan.event?.category ?? plan.category)?.colorHex ?? "#8B2F45")
+    }
+
+    private var theaterDetailContent: some View {
+        TheaterExperiencePage(
+            genreColor: theaterGenreColor,
+            scrollTargetID: highlightedPreparationTaskID,
+            showsScrollingFrame: onBack != nil
+        ) {
+            theaterHero
+        } content: {
+            theaterEventInformationSection
+            theaterNextActionsSection
+            ticketSection
+            preparationSection
+            expenseSection
+            theaterPlanMemoSection
+        }
+    }
+
+    private var theaterNavigationControls: some View {
+        HStack {
+            Button {
+                closeDetail()
+            } label: {
+                if onBack != nil {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("閉じる")
+                    }
+                    .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 15)
+                    .frame(height: 50)
+                    .background(.black.opacity(0.48), in: Capsule())
+                    .overlay {
+                        Capsule().stroke(.white.opacity(0.24), lineWidth: 0.8)
+                    }
+                } else {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 23, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 50, height: 50)
+                        .background(.black.opacity(0.48), in: Circle())
+                        .overlay {
+                            Circle().stroke(.white.opacity(0.20), lineWidth: 0.7)
+                        }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(onBack != nil ? "閉じる" : "戻る")
+
+            Spacer()
+
+            Menu {
+                planActionItems
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(theaterAccentColor)
+                    .frame(width: 50, height: 50)
+                    .background(theaterGenreColor.opacity(0.86), in: Circle())
+                    .overlay {
+                        Circle().stroke(theaterAccentColor.opacity(0.72), lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("予定メニュー")
+        }
+        .padding(.horizontal, 20)
+        .safeAreaPadding(.top, 8)
+    }
+
+    private var theaterHero: some View {
+        ZStack(alignment: .bottomLeading) {
+            theaterHeroBackground
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    HStack(spacing: 8) {
+                        if let seriesName = plan.event?.seriesName, !seriesName.isEmpty {
+                            Text(seriesName)
+                                .lineLimit(1)
+                            Text("•")
+                        }
+                        Text("観劇予定")
+                    }
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.white.opacity(0.76))
+                    .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
+
+                    Spacer(minLength: 8)
+                    theaterHeroWeather
+                }
+
+                if let event = plan.event {
+                    NavigationLink {
+                        EventDetailView(event: event)
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 7) {
+                            theaterHeroTitle
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white.opacity(0.86))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    theaterHeroTitle
+                }
+
+                let eventSubtitle = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "")
+                    .eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !eventSubtitle.isEmpty {
+                    Text(eventSubtitle)
+                        .font(FavorecoTypography.bodyStrong)
+                        .foregroundStyle(.white.opacity(0.82))
+                        .lineLimit(2)
+                }
+
+                HStack(alignment: .top, spacing: 16) {
+                    TheaterPlanArtwork(
+                        event: plan.event,
+                        fallbackSymbol: (plan.event?.category ?? plan.category)?.iconSymbol ?? "theatermasks.fill",
+                        tint: theaterAccentColor
+                    )
+                    .frame(width: 140)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        theaterHeroDateRow
+
+                        theaterHeroMetadataRow(
+                            icon: "clock",
+                            text: theaterPerformanceTime,
+                            tint: .white.opacity(0.86)
+                        )
+
+                        let styles = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "").styleNames
+                        theaterHeroMetadataRow(
+                            icon: "tag.fill",
+                            text: displayText(styles.joined(separator: "・")),
+                            tint: .white.opacity(0.86)
+                        )
+
+                        theaterHeroMetadataRow(
+                            icon: "mappin.and.ellipse",
+                            text: displayText(plan.venueNameSnapshot),
+                            tint: .white.opacity(0.86)
+                        )
+
+                        theaterHeroMetadataRow(
+                            icon: "chair",
+                            text: displayText(theaterSeatText),
+                            tint: .white.opacity(0.86)
+                        )
+
+                        theaterHeroMetadataRow(
+                            icon: "star.fill",
+                            text: "—",
+                            tint: .white.opacity(0.90)
+                        )
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
+        }
+        .frame(minHeight: 560, alignment: .bottom)
+    }
+
+    private var theaterHeroTitle: some View {
+        Text(theaterDisplayTitle)
+            .font(FavorecoTypography.jpSerif(27, weight: .bold, relativeTo: .title2))
+            .foregroundStyle(.white)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+            .shadow(color: .black.opacity(0.62), radius: 5, y: 2)
+    }
+
+    private var theaterDisplayTitle: String {
+        let eventTitle = plan.event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !eventTitle.isEmpty { return eventTitle }
+        let planTitle = plan.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return planTitle.isEmpty ? "予定" : planTitle
+    }
+
+    private var theaterHeroBackground: some View {
+        GeometryReader { proxy in
+            let fields = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "")
+            let resourceName = HeroBackgroundPreset.resolved(
+                categoryKey: "theater",
+                storedKey: fields.heroBackgroundPresetKey
+            )?.resourceName ?? "theater-hero-default"
+            let imageBandHeight = min(proxy.size.height * 0.78, 440)
+
+            ZStack(alignment: .top) {
+                theaterGenreColor
+                if let image = theaterHeroBackgroundImage(resourceName: resourceName) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: imageBandHeight)
+                        .clipped()
+                } else {
+                    LinearGradient(
+                        colors: [theaterGenreColor.opacity(0.92), Color.black.opacity(0.72)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .frame(height: imageBandHeight)
+                }
+
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.42), location: 0.00),
+                        .init(color: .black.opacity(0.14), location: 0.24),
+                        .init(color: .clear, location: 0.48),
+                        .init(color: theaterGenreColor.opacity(0.18), location: 0.70),
+                        .init(color: theaterGenreColor.opacity(0.82), location: 0.92),
+                        .init(color: theaterGenreColor, location: 1.00),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: imageBandHeight)
+            }
+        }
+        .clipped()
+    }
+
+    private func theaterHeroBackgroundImage(resourceName: String) -> UIImage? {
+        if let image = UIImage(named: resourceName) { return image }
+        guard let url = Bundle.main.url(forResource: resourceName, withExtension: "jpg") else {
+            return nil
+        }
+        return UIImage(contentsOfFile: url.path)
+    }
+
+    private var theaterPerformanceTime: String {
+        let start = FavorecoDateText.time(plan.startsAt)
+        guard plan.endsAt > plan.startsAt else { return "開演 \(start)" }
+        return "\(start)-\(FavorecoDateText.time(plan.endsAt))"
+    }
+
+    private var theaterSeatText: String {
+        attempts
+            .map(\.seatText)
+            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            ?? ""
+    }
+
+    private var theaterHeroDateRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "calendar")
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(width: 20)
+            Text(FavorecoDateText.fullDate(plan.startsAt))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+        .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+        .foregroundStyle(.white.opacity(0.96))
+    }
+
+    private var theaterHeroWeather: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "cloud.sun")
+            Text("—")
+        }
+        .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+        .foregroundStyle(.white.opacity(0.92))
+        .fixedSize()
+    }
+
+    private func theaterHeroMetadataRow(icon: String, text: String, tint: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+                .frame(width: 20)
+            Text(text)
+                .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+                .foregroundStyle(.white.opacity(0.96))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func displayText(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "—" : trimmed
+    }
+
+    private var theaterEventInformationSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("作品・公演情報", systemImage: "theatermasks")
+                    .font(FavorecoTypography.sectionTitle)
+                Spacer()
+                if let event = plan.event {
+                    NavigationLink {
+                        EventDetailView(event: event)
+                    } label: {
+                        Label("公演情報を開く", systemImage: "chevron.right")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(theaterAccentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if let event = plan.event {
+                if !event.seriesName.isEmpty {
+                    PlanInfoRow(icon: "rectangle.stack", title: "公演", value: event.seriesName)
+                }
+                let subtitle = VisitUnitFields(rawValue: event.unitFieldsRaw)
+                    .eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !subtitle.isEmpty {
+                    PlanInfoRow(icon: "text.quote", title: "副題", value: subtitle)
+                }
+                if !event.organizerNameSnapshot.isEmpty {
+                    PlanInfoRow(icon: "building.2", title: "主催", value: event.organizerNameSnapshot)
+                }
+                if !event.memo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(event.memo)
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let officialURL = URL(string: event.officialURL), !event.officialURL.isEmpty {
+                    Link(destination: officialURL) {
+                        Label("公式サイト", systemImage: "arrow.up.right.square")
+                            .font(FavorecoTypography.bodyStrong)
+                            .foregroundStyle(theaterAccentColor)
+                    }
+                }
+            } else {
+                Text("この予定には公演情報が紐づいていません。予定を編集すると、公演情報とまとめて管理できます。")
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .planSectionCard()
+    }
+
+    private var theaterNextActionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("次にやること", systemImage: "checklist")
+                .font(FavorecoTypography.sectionTitle)
+
+            if let nextPlanActionCallout {
+                TicketNextActionCallout(action: nextPlanActionCallout)
+            } else if attempts.isEmpty {
+                Text("チケット申込を追加すると、申込・当落・入金・受取の次の期限をここに表示します。")
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.secondary)
+            } else {
+                Label("現在、期限のある対応はありません", systemImage: "checkmark.circle")
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(theaterAccentColor)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    isShowingAddAttempt = true
+                } label: {
+                    Label("チケット申込", systemImage: "ticket")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(theaterAccentColor)
+
+                Button {
+                    isShowingEditPlan = true
+                } label: {
+                    Label("予定を編集", systemImage: "pencil")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(theaterAccentColor)
+            }
+        }
+        .planSectionCard()
+    }
+
+    @ViewBuilder
+    private var theaterPlanMemoSection: some View {
+        if !plan.memo.isEmpty || (!plan.officialURL.isEmpty && plan.officialURL != plan.event?.officialURL) {
+            VStack(alignment: .leading, spacing: 12) {
+                planSectionTitle("予定メモ")
+                if !plan.memo.isEmpty {
+                    Text(plan.memo)
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let url = URL(string: plan.officialURL),
+                   !plan.officialURL.isEmpty,
+                   plan.officialURL != plan.event?.officialURL {
+                    Link(destination: url) {
+                        Label("この予定の公式URL", systemImage: "arrow.up.right.square")
+                            .foregroundStyle(theaterAccentColor)
+                    }
+                }
+            }
+            .planSectionCard()
         }
     }
 
@@ -327,7 +795,7 @@ struct PlanDetailView: View {
                 Button {
                     isShowingAddAttempt = true
                 } label: {
-                    Label("申込を追加", systemImage: "plus")
+                    Label("チケットを追加", systemImage: "plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -342,7 +810,7 @@ struct PlanDetailView: View {
                     Button {
                         isShowingAddAttempt = true
                     } label: {
-                        Label("申込を追加", systemImage: "plus")
+                        Label("チケットを追加", systemImage: "plus")
                             .font(FavorecoTypography.captionStrong)
                     }
                     .buttonStyle(.borderless)
@@ -358,7 +826,7 @@ struct PlanDetailView: View {
                         Button {
                             editingAttempt = attempt
                         } label: {
-                            Label("申込を編集", systemImage: "pencil")
+                            Label("チケットを編集", systemImage: "pencil")
                         }
 
                         let transitions = TicketStatusTransitionDefinition.transitions(for: attempt)
@@ -491,7 +959,7 @@ struct PlanDetailView: View {
             } else {
                 ExternalCalendarLinkStore.clear(planID: plan.id)
             }
-            dismiss()
+            closeDetail()
         } catch {
             modelContext.rollback()
             operationError = "予定を非表示にできませんでした。もう一度お試しください。"
@@ -531,6 +999,14 @@ struct PlanDetailView: View {
         recordEventForVisit = event
     }
 
+    private func closeDetail() {
+        if let onBack {
+            onBack()
+        } else {
+            dismiss()
+        }
+    }
+
     private func updateAttemptStatus(_ attempt: TicketAttempt, to statusKey: String) {
         do {
             try TicketAttemptStatusUpdater.update(
@@ -548,6 +1024,36 @@ struct PlanDetailView: View {
 private struct TicketOpenDestination {
     let label: String
     let url: URL
+}
+
+private struct TheaterPlanArtwork: View {
+    let event: ExperienceEvent?
+    let fallbackSymbol: String
+    let tint: Color
+
+    var body: some View {
+        Group {
+            if let data = event?.eyecatchData, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if let event, let photo = EventRepresentativePhotoResolver.photo(for: event) {
+                RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fill)
+            } else {
+                ZStack {
+                    tint.opacity(0.18)
+                    Image(systemName: fallbackSymbol)
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(tint)
+                }
+            }
+        }
+        .aspectRatio(148.0 / 209.0, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .clipped()
+        .background(Color(.secondarySystemBackground))
+        .theaterPosterFrame(tint: tint)
+    }
 }
 
 private struct TicketAttemptDetailCard: View {
@@ -604,7 +1110,7 @@ private struct TicketAttemptDetailCard: View {
                 PlanInfoRow(icon: "yensign.circle", title: "入金", value: FavorecoDateText.fullDateTime(attempt.paymentDeadlineAt))
             }
             if attempt.issueStartAt != Date.distantPast {
-                PlanInfoRow(icon: "ticket.fill", title: "発券", value: FavorecoDateText.fullDateTime(attempt.issueStartAt))
+                PlanInfoRow(icon: "ticket.fill", title: "チケット受取", value: FavorecoDateText.fullDateTime(attempt.issueStartAt))
             }
             if attempt.price != Decimal(0) || attempt.fee != Decimal(0) {
                 PlanInfoRow(icon: "creditcard", title: "金額", value: amountText)
@@ -681,7 +1187,7 @@ private struct TicketAttemptDetailCard: View {
             return .orange
         case "当落発表":
             return .purple
-        case "発券開始":
+        case "チケット受取開始":
             return .teal
         default:
             return accentColor

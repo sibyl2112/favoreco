@@ -238,12 +238,16 @@ enum TicketNotificationScheduler {
         if UserDefaults.standard.bool(forKey: AppStorageKeys.notificationApplicationStartEnabled),
            attempt.saleStartAt != Date.distantPast {
             let timing = pointTiming(forKey: AppStorageKeys.notificationApplicationStartTiming)
+            let copy = applicationStartNotificationCopy(
+                attempt: attempt,
+                planTitle: planTitle(plan)
+            )
             specs.append(
                 TicketNotificationSpec(
                     identifier: "ticket.\(attempt.id.uuidString).applicationStart",
                     fireDate: pointFireDate(date: attempt.saleStartAt, timing: timing),
-                    title: "申込開始",
-                    body: "\(planTitle(plan)) の申込が始まります。"
+                    title: copy.title,
+                    body: copy.body
                 )
             )
         }
@@ -304,13 +308,23 @@ enum TicketNotificationScheduler {
                 TicketNotificationSpec(
                     identifier: "ticket.\(attempt.id.uuidString).ticketIssue",
                     fireDate: pointFireDate(date: attempt.issueStartAt, timing: timing),
-                    title: "発券開始",
-                    body: "\(planTitle(plan)) の発券開始日です。"
+                    title: "チケット受取開始",
+                    body: "\(planTitle(plan)) のチケットを受け取れる日時です。"
                 )
             )
         }
 
         return specs
+    }
+
+    static func applicationStartNotificationCopy(
+        attempt: TicketAttempt,
+        planTitle: String
+    ) -> (title: String, body: String) {
+        if TicketProgressTimeline.usesLotteryFlow(attempt) {
+            return ("申込開始", "\(planTitle) の申込が始まります。")
+        }
+        return ("発売開始", "\(planTitle) のチケット発売が始まります。")
     }
 
     private static func performanceReminderSpecs(plan: Plan) -> [TicketNotificationSpec] {
@@ -333,7 +347,7 @@ enum TicketNotificationScheduler {
                     identifier: "plan.\(plan.id.uuidString).performance.previousDay",
                     fireDate: previousDayEvening,
                     title: "明日の予定",
-                    body: "\(planTitle(plan)) は明日です。"
+                    body: "明日は「\(planTitle(plan))」です。チケットや持ち物、移動予定など、当日の準備を確認しましょう。"
                 )
             )
         }
@@ -350,7 +364,7 @@ enum TicketNotificationScheduler {
                     identifier: "plan.\(plan.id.uuidString).performance.sameDay",
                     fireDate: dayMorning,
                     title: "今日の予定",
-                    body: "\(planTitle(plan)) は今日です。"
+                    body: "今日は「\(planTitle(plan))」です。チケットと持ち物を確認し、時間に余裕を持って向かいましょう。"
                 )
             )
         }

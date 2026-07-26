@@ -85,7 +85,14 @@ struct AddTicketPlanView: View {
     }
 
     private var activeAccounts: [TicketAccount] {
-        accounts.filter { !$0.isArchived }
+        accounts
+            .filter { !$0.isArchived }
+            .sorted {
+                if $0.serviceName != $1.serviceName {
+                    return $0.serviceName.localizedStandardCompare($1.serviceName) == .orderedAscending
+                }
+                return $0.accountName.localizedStandardCompare($1.accountName) == .orderedAscending
+            }
     }
 
     private var selectedCategory: RecordCategory? {
@@ -97,7 +104,7 @@ struct AddTicketPlanView: View {
     }
 
     private var selectedAccount: TicketAccount? {
-        activeAccounts.first { $0.id == draft.accountID }
+        accounts.first { $0.id == draft.accountID }
     }
 
     private var interestedEvents: [ExperienceEvent] {
@@ -261,7 +268,12 @@ struct AddTicketPlanView: View {
                     if entryMode == .ticketSchedule, let selectedExistingPlan {
                         LabeledContent("ジャンル", value: selectedExistingPlan.category?.name ?? "未設定")
                         LabeledContent("予定", value: selectedExistingPlan.title)
-                        LabeledContent("日時", value: FavorecoDateText.compactDateTime(selectedExistingPlan.startsAt))
+                        LabeledContent(
+                            "日時",
+                            value: selectedExistingPlan.hasConfirmedSchedule
+                                ? FavorecoDateText.compactDateTime(selectedExistingPlan.startsAt)
+                                : "参加日未定"
+                        )
                         if !selectedExistingPlan.venueNameSnapshot.isEmpty {
                             LabeledContent("会場", value: selectedExistingPlan.venueNameSnapshot)
                         }
@@ -277,21 +289,47 @@ struct AddTicketPlanView: View {
                     }
 
                     if selectedExistingPlan == nil {
-                        TextField("公演・イベント名", text: $draft.title)
-                        TextField("サブタイトル（任意）", text: $draft.subtitle)
-                        if usesOpeningTime {
-                            FiveMinuteDateTimeRow(title: "開場", selection: openingTimeBinding)
+                        ExplicitFormTextField(
+                            title: "公演・イベント名",
+                            prompt: "公演・イベント名を入力",
+                            text: $draft.title
+                        )
+                        ExplicitFormTextField(
+                            title: "サブタイトル",
+                            prompt: "任意",
+                            text: $draft.subtitle
+                        )
+                        if entryMode == .ticketSchedule {
+                            Toggle("参加する日時が決まっている", isOn: $draft.hasConfirmedSchedule)
+                            if !draft.hasConfirmedSchedule {
+                                Text("日程はチケット取得後にも設定できます。決まるまではComing Upとカレンダーには表示されません。")
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                        FiveMinuteDateTimeRow(title: "開始", selection: startTimeBinding)
-                        FiveMinuteDateTimeRow(title: "終了", selection: endTimeBinding)
-                        TextField("会場", text: venueNameBinding)
+                        if draft.hasConfirmedSchedule {
+                            if usesOpeningTime {
+                                FiveMinuteDateTimeRow(title: "開場", selection: openingTimeBinding)
+                            }
+                            FiveMinuteDateTimeRow(title: "開始", selection: startTimeBinding)
+                            FiveMinuteDateTimeRow(title: "終了", selection: endTimeBinding)
+                        }
+                        ExplicitFormTextField(
+                            title: "会場",
+                            prompt: "会場名を入力、または下のApple Mapsから選択",
+                            text: venueNameBinding
+                        )
                         placeSuggestionList
-                        TextField("住所（地図・カレンダーでは住所を優先）", text: venueAddressBinding)
+                        ExplicitFormTextField(
+                            title: "住所",
+                            prompt: "任意（地図・カレンダーでは住所を優先）",
+                            text: venueAddressBinding
+                        )
                             .textContentType(.fullStreetAddress)
                         Button {
                             isShowingPlaceSearch = true
                         } label: {
-                            Label("Apple Mapsから会場を選択", systemImage: "map")
+                            Label("Apple Mapsで会場・住所を入力", systemImage: "map")
                         }
                         PlaceMapPreview(
                             venueName: draft.venueName,
@@ -299,23 +337,23 @@ struct AddTicketPlanView: View {
                             latitude: draft.latitude,
                             longitude: draft.longitude
                         )
-                        TextField("公式URL", text: $draft.officialURL)
+                        ExplicitFormTextField(
+                            title: "この予定の公式URL",
+                            prompt: "この予定専用の案内ページ（任意）",
+                            text: $draft.officialURL
+                        )
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
                     }
                 }
 
-                if !editsPlanOnly {
-                    Section("申込状況") {
-                        if entryMode == .ticketSchedule {
-                            LabeledContent("入力内容", value: "チケットスケジュール")
-                        } else {
-                            Toggle("申込情報も作成", isOn: $draft.createsTicketAttempt)
-                        }
+                if !editsPlanOnly, entryMode == .ticketSchedule {
+                    Section("チケット情報") {
+                        LabeledContent("入力内容", value: "チケットスケジュール")
 
                         if draft.createsTicketAttempt {
-                            Picker("今の状態", selection: $draft.flowKey) {
-                                ForEach(TicketFlowDefinition.all) { flow in
+                            Picker("登録内容", selection: $draft.flowKey) {
+                                ForEach(draft.flowOptions) { flow in
                                     Text(flow.name).tag(flow.key)
                                 }
                             }
@@ -327,16 +365,8 @@ struct AddTicketPlanView: View {
                                 .font(FavorecoTypography.caption)
                                 .foregroundStyle(.secondary)
 
-                            if draft.showsDetailedStatus {
-                                Picker("詳細状態", selection: $draft.statusKey) {
-                                    ForEach(draft.statusOptions) { status in
-                                        Text(status.name).tag(status.key)
-                                    }
-                                }
-                            }
-
                             if draft.showsEntryRoute {
-                                Picker("区分", selection: $draft.entryRouteKey) {
+                                Picker(draft.entryRouteLabel, selection: $draft.entryRouteKey) {
                                     Text("未設定").tag("")
                                     ForEach(draft.entryRouteOptions) { route in
                                         Text(route.name).tag(route.key)
@@ -345,18 +375,21 @@ struct AddTicketPlanView: View {
                             }
 
                             if draft.showsAccountFields {
-                                Picker("名義・アカウント", selection: $draft.accountID) {
+                                Picker("申込アカウント（任意）", selection: $draft.accountID) {
                                     Text("未設定").tag(Optional<UUID>.none)
                                     ForEach(activeAccounts) { account in
                                         Text(accountLabel(account)).tag(Optional(account.id))
                                     }
                                 }
+                                .onChange(of: draft.accountID) { _, newValue in
+                                    draft.applyAccount(activeAccounts.first { $0.id == newValue })
+                                }
 
-                                TextField("名義メモ", text: $draft.holderName)
+                                TextField("名義（任意）", text: $draft.holderName)
                             }
 
                             if draft.showsTicketGuide {
-                                Picker("プレイガイド", selection: $draft.ticketGuideKey) {
+                                Picker("購入先", selection: $draft.ticketGuideKey) {
                                     ForEach(TicketGuideDefinition.all) { guide in
                                         Text(guide.name).tag(guide.key)
                                     }
@@ -364,9 +397,10 @@ struct AddTicketPlanView: View {
                                 .onChange(of: draft.ticketGuideKey) { _, newValue in
                                     draft.applyTicketGuide(newValue)
                                 }
+                                .disabled(draft.accountID != nil)
 
                                 if draft.ticketGuideKey == TicketGuideDefinition.customKey {
-                                    TextField("購入先・サイト名", text: $draft.ticketSite)
+                                    TextField("FC・公式サイトなど", text: $draft.ticketSite)
                                     TextField("申込・購入URL", text: $draft.purchaseURL)
                                         .keyboardType(.URL)
                                         .textInputAutocapitalization(.never)
@@ -379,7 +413,7 @@ struct AddTicketPlanView: View {
                     }
 
                     if draft.createsTicketAttempt && draft.showsAnyTicketMilestone {
-                        Section("締切・発券") {
+                        Section("チケットスケジュール") {
                             if draft.showsSaleStart {
                                 DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
                             }
@@ -393,7 +427,11 @@ struct AddTicketPlanView: View {
                                 DateToggleRow(title: "入金締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
                             }
                             if draft.showsIssueStart {
-                                DateToggleRow(title: "発券開始", isOn: $draft.hasIssueStart, date: $draft.issueStartAt)
+                                DateToggleRow(
+                                    title: "チケット受取開始（任意）",
+                                    isOn: $draft.hasIssueStart,
+                                    date: $draft.issueStartAt
+                                )
                             }
                         }
                     }
@@ -411,15 +449,30 @@ struct AddTicketPlanView: View {
                     }
                 }
 
-                Section("タグ・メモ") {
+                Section(editsPlanOnly ? "予定メモ" : "タグ・メモ") {
                     if !editsPlanOnly && draft.createsTicketAttempt {
                         TextField("任意タグ（カンマ区切り）", text: $draft.tagNamesText)
                         Text("例: S席、第1希望、同行者分")
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                     }
-                    TextField("メモ", text: $draft.memo, axis: .vertical)
+                    if editsPlanOnly {
+                        TextField(
+                            "この予定について残すメモ（任意）",
+                            text: $draft.memo,
+                            axis: .vertical
+                        )
                         .lineLimit(3...8)
+                    } else {
+                        ExplicitFormTextField(
+                            title: "メモ",
+                            prompt: "任意",
+                            text: $draft.memo,
+                            axis: .vertical,
+                            minimumLines: 3,
+                            maximumLines: 8
+                        )
+                    }
                 }
             }
             .navigationTitle(navigationTitle)
@@ -642,7 +695,7 @@ struct AddTicketPlanView: View {
 
     private func accountLabel(_ account: TicketAccount) -> String {
         let holder = account.accountName.isEmpty ? "名義未設定" : account.accountName
-        return "\(account.serviceName) / \(holder)"
+        return "\(account.serviceName)｜\(holder)"
     }
 
     private func planSelectionDescription(_ plan: Plan) -> String {
@@ -694,7 +747,7 @@ struct AddTicketPlanView: View {
         let plan = Plan(
             title: draft.trimmedTitle,
             subtitle: draft.trimmedSubtitle,
-            planKindKey: "performance",
+            planKindKey: draft.hasConfirmedSchedule ? "performance" : Plan.undatedTicketPlanKindKey,
             stateKey: "planned",
             startsAt: draft.startsAt,
             endsAt: draft.endsAt,
@@ -715,7 +768,7 @@ struct AddTicketPlanView: View {
             )
         )
         modelContext.insert(plan)
-        event.stateKey = "active"
+        event.stateKey = draft.hasConfirmedSchedule ? "active" : "interested"
         event.updatedAt = now
 
         var attemptForScheduling: TicketAttempt?
@@ -728,7 +781,11 @@ struct AddTicketPlanView: View {
 
         do {
             try modelContext.save()
-            syncNotifications(for: plan, attempt: attemptForScheduling, includesPlanReminder: true)
+            syncNotifications(
+                for: plan,
+                attempt: attemptForScheduling,
+                includesPlanReminder: plan.hasConfirmedSchedule
+            )
             onSave?()
             dismiss()
         } catch {
@@ -801,6 +858,7 @@ struct AddTicketPlanView: View {
 
         plan.title = draft.trimmedTitle
         plan.subtitle = draft.trimmedSubtitle
+        plan.planKindKey = draft.hasConfirmedSchedule ? "performance" : Plan.undatedTicketPlanKindKey
         plan.startsAt = draft.startsAt
         plan.endsAt = draft.endsAt
         plan.opensAt = usesOpeningTime ? draft.opensAt : Date.distantPast
@@ -816,7 +874,7 @@ struct AddTicketPlanView: View {
         plan.memo = draft.trimmedMemo
         plan.updatedAt = now
         plan.category = plan.event?.category ?? selectedCategory
-        plan.event?.stateKey = "active"
+        plan.event?.stateKey = draft.hasConfirmedSchedule ? "active" : "interested"
         plan.event?.updatedAt = now
 
         let attemptForScheduling: TicketAttempt?
@@ -842,10 +900,15 @@ struct AddTicketPlanView: View {
             if !editsPlanOnly, let existingAttempt, !draft.createsTicketAttempt {
                 TicketNotificationScheduler.cancel(plan: plan, attempt: existingAttempt)
             }
-            syncNotifications(for: plan, attempt: attemptForScheduling, includesPlanReminder: true)
+            syncNotifications(
+                for: plan,
+                attempt: attemptForScheduling,
+                includesPlanReminder: plan.hasConfirmedSchedule
+            )
             Task {
                 if purchaseManager.currentPlan.includesSync,
                    automaticallyUpdatesExternalCalendar,
+                   plan.hasConfirmedSchedule,
                    (ExternalCalendarLinkStore.hasLink(planID: plan.id) || !plan.externalCalendarEventIdentifier.isEmpty) {
                     _ = try? await ExternalCalendarSyncService.update(plan: plan)
                     try? modelContext.save()
@@ -893,7 +956,7 @@ struct AddTicketPlanView: View {
     }
 
     private func applyDraft(to attempt: TicketAttempt, plan: Plan, now: Date) {
-        attempt.statusKey = draft.statusKey
+        attempt.statusKey = draft.resolvedStatusKey
         attempt.entryRouteKey = draft.entryRouteKey
         attempt.ticketSite = draft.trimmedTicketSite
         attempt.holderName = draft.trimmedHolderName
@@ -936,7 +999,7 @@ struct DateToggleRow: View {
     }
 }
 
-private struct FiveMinuteDateTimeRow: View {
+struct FiveMinuteDateTimeRow: View {
     let title: String
     @Binding var selection: Date
     var showsLabel = true
@@ -1013,7 +1076,7 @@ private struct FiveMinuteTimePicker: UIViewRepresentable {
     }
 }
 
-private extension Date {
+extension Date {
     func roundedToNearestFiveMinutes() -> Date {
         let interval: TimeInterval = 5 * 60
         return Date(timeIntervalSinceReferenceDate: (timeIntervalSinceReferenceDate / interval).rounded() * interval)
@@ -1119,6 +1182,7 @@ private struct TicketPlanDraft {
     var longitude: Double = 0
     var publicPlaceSelection: PublicPlaceSelectionDraft?
     var officialURL = ""
+    var hasConfirmedSchedule = false
     var createsTicketAttempt = true
     var flowKey = "lotteryPlanned"
     var statusKey = "beforeApply"
@@ -1147,6 +1211,7 @@ private struct TicketPlanDraft {
 
     init(entryMode: AddTicketPlanView.EntryMode = .ticketSchedule) {
         createsTicketAttempt = entryMode == .ticketSchedule
+        hasConfirmedSchedule = entryMode != .ticketSchedule
     }
 
     init(inboxItem: InboxItem, categoryID: UUID) {
@@ -1155,6 +1220,7 @@ private struct TicketPlanDraft {
         officialURL = inboxItem.sourceURL
         memo = inboxItem.body
         createsTicketAttempt = false
+        hasConfirmedSchedule = true
     }
 
     init(event: ExperienceEvent, entryMode: AddTicketPlanView.EntryMode = .plan) {
@@ -1163,11 +1229,13 @@ private struct TicketPlanDraft {
         officialURL = event.officialURL
         memo = event.memo
         createsTicketAttempt = entryMode == .ticketSchedule
+        hasConfirmedSchedule = entryMode != .ticketSchedule
     }
 
     init(plan: Plan?, entryMode: AddTicketPlanView.EntryMode = .ticketSchedule) {
         guard let plan else {
             createsTicketAttempt = entryMode == .ticketSchedule
+            hasConfirmedSchedule = entryMode != .ticketSchedule
             return
         }
         let attempt = plan.ticketAttempts?
@@ -1178,6 +1246,7 @@ private struct TicketPlanDraft {
         categoryID = plan.category?.id
         title = plan.title
         subtitle = plan.subtitle
+        hasConfirmedSchedule = plan.hasConfirmedSchedule
         startsAt = plan.startsAt
         endsAt = plan.endsAt
         opensAt = plan.opensAt
@@ -1235,6 +1304,9 @@ private struct TicketPlanDraft {
     }
     var trimmedPurchaseURL: String { purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var resolvedStatusKey: String {
+        flowKey == "acquired" ? "issued" : statusKey
+    }
 
     var placeSnapshot: PlaceSnapshot {
         PlaceSnapshot(
@@ -1314,10 +1386,10 @@ private struct TicketPlanDraft {
     }
 
     func validationMessage(usesOpeningTime: Bool) -> String? {
-        if endsAt < startsAt {
+        if hasConfirmedSchedule && endsAt < startsAt {
             return "終了日時は開始日時以降にしてください。"
         }
-        if usesOpeningTime && opensAt > startsAt {
+        if hasConfirmedSchedule && usesOpeningTime && opensAt > startsAt {
             return "開場日時は開始日時以前にしてください。"
         }
         guard createsTicketAttempt else { return nil }
@@ -1333,16 +1405,20 @@ private struct TicketPlanDraft {
         return nil
     }
 
-    var showsDetailedStatus: Bool {
-        flowKey == "acquired"
+    var flowOptions: [TicketFlowDefinition] {
+        if flowKey == "interested",
+           let interested = TicketFlowDefinition.all.first(where: { $0.key == "interested" }) {
+            return [interested] + TicketFlowDefinition.registrationOptions
+        }
+        return TicketFlowDefinition.registrationOptions
     }
 
     var showsEntryRoute: Bool {
-        flowKey != "interested"
+        flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
     }
 
     var showsAccountFields: Bool {
-        flowKey != "interested"
+        flowKey == "lotteryPlanned"
     }
 
     var showsTicketGuide: Bool {
@@ -1362,11 +1438,11 @@ private struct TicketPlanDraft {
     }
 
     var showsPaymentDeadline: Bool {
-        flowKey == "lotteryPlanned" || flowKey == "acquired"
+        flowKey == "lotteryPlanned"
     }
 
     var showsIssueStart: Bool {
-        flowKey == "saleWaiting" || flowKey == "acquired"
+        flowKey == "saleWaiting"
     }
 
     var showsAnyTicketMilestone: Bool {
@@ -1381,23 +1457,20 @@ private struct TicketPlanDraft {
         flowKey == "saleWaiting" ? "発売開始" : "申込開始"
     }
 
-    var statusOptions: [TicketStatusDefinition] {
-        switch flowKey {
-        case "acquired":
-            return TicketStatusDefinition.all.filter { ["won", "waitingPayment", "waitingIssue", "issued", "attended"].contains($0.key) }
-        default:
-            return TicketStatusDefinition.all.filter { $0.key == TicketFlowDefinition.definition(for: flowKey).defaultStatusKey }
-        }
+    var entryRouteLabel: String {
+        flowKey == "lotteryPlanned" ? "申込枠" : "販売方法"
     }
 
     var entryRouteOptions: [TicketEntryRouteDefinition] {
         switch flowKey {
         case "lotteryPlanned":
-            return TicketEntryRouteDefinition.all.filter { ["fanClub", "lottery", "card", "other"].contains($0.key) }
+            return TicketEntryRouteDefinition.all.filter {
+                ["fanClub", "official", "lottery", "card", "generalLottery", "other"].contains($0.key)
+            }
         case "saleWaiting":
-            return TicketEntryRouteDefinition.all.filter { ["general", "sameDay", "resale", "other"].contains($0.key) }
-        case "acquired":
-            return TicketEntryRouteDefinition.all
+            return TicketEntryRouteDefinition.all.filter {
+                ["presale", "general", "resale", "other"].contains($0.key)
+            }
         default:
             return []
         }
@@ -1449,7 +1522,8 @@ private struct TicketPlanDraft {
         let flow = TicketFlowDefinition.definition(for: key)
         flowKey = flow.key
         statusKey = flow.defaultStatusKey
-        if entryRouteKey.isEmpty || !entryRouteOptions.contains(where: { $0.key == entryRouteKey }) {
+        if flow.key != "acquired",
+           (entryRouteKey.isEmpty || !entryRouteOptions.contains(where: { $0.key == entryRouteKey })) {
             entryRouteKey = flow.defaultEntryRouteKey
         }
 
@@ -1476,19 +1550,35 @@ private struct TicketPlanDraft {
         case "acquired":
             hasApplyDeadline = false
             hasResultAnnounce = false
-            hasIssueStart = true
         default:
             break
         }
     }
 
     mutating func applyTicketGuide(_ key: String) {
+        guard accountID == nil else { return }
         guard let guide = TicketGuideDefinition.guide(for: key) else {
             ticketGuideKey = TicketGuideDefinition.customKey
             return
         }
         ticketSite = guide.name
         purchaseURL = guide.urlString
+    }
+
+    mutating func applyAccount(_ account: TicketAccount?) {
+        guard let account else { return }
+        let serviceName = account.serviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let siteURL = account.siteURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        accountID = account.id
+        ticketSite = serviceName
+        holderName = account.accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        ticketGuideKey = TicketGuideDefinition.inferredKey(
+            siteName: serviceName,
+            urlString: siteURL
+        )
+        purchaseURL = !siteURL.isEmpty
+            ? siteURL
+            : (TicketGuideDefinition.guide(for: ticketGuideKey)?.urlString ?? "")
     }
 
     private func decimalText(_ value: Decimal) -> String {

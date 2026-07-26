@@ -13,6 +13,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.favorecoThemePalette) private var themePalette
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
@@ -22,52 +23,30 @@ struct HomeView: View {
     @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @AppStorage(AppStorageKeys.showsHomeAttention) private var showsAttention = true
-    @AppStorage(AppStorageKeys.showsHomeExperienceGallery) private var showsExperienceGallery = true
-    @AppStorage(AppStorageKeys.showsHomeInbox) private var showsInbox = true
-    @AppStorage(AppStorageKeys.showsHomeInterestingExpanded) private var isInterestingExpanded = true
-    @AppStorage(AppStorageKeys.showsHomeRecentRecords) private var showsRecentRecords = true
     @AppStorage(AppStorageKeys.showsHomeCategories) private var showsCategories = true
-    @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsStatsSummary = false
     @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var categoryLayoutModeRaw = HomeCategoryLayoutMode.horizontal.rawValue
-    @State private var selectedUpcomingPlanIndex = 0
-    @State private var interestLayoutMode: CategoryLibraryLayoutMode = .gallery
-    @State private var isShowingAllHomeUpcoming = false
     @State private var isShowingNextActionList = false
+    @State private var selectedQuickTicketAttempt: TicketAttempt?
+    @State private var admissionPreparationPlan: Plan?
     @State private var isShowingSampleDeletionConfirmation = false
     @State private var sampleDeletionError = ""
     @State private var swipeDestinationCategoryID: UUID?
+    @State private var pickupDetailTarget: HomePickupDetailTarget?
 
     private var categoryLayoutMode: HomeCategoryLayoutMode {
         HomeCategoryLayoutMode(rawValue: categoryLayoutModeRaw) ?? .horizontal
     }
 
-    private func nextActionItems(now: Date = Date()) -> [HomeAttentionItem] {
+    private func ticketScheduleItems(now: Date = Date()) -> [HomeAttentionItem] {
         let activeAttempts = ticketAttempts.filter { attempt in
             !attempt.isArchived
                 && attempt.plan?.isArchived != true
                 && !["lost", "attended", "skipped"].contains(attempt.statusKey)
         }
-        let warningLimit = Calendar.current.date(byAdding: .day, value: 45, to: now) ?? now
-        let expiringAccounts = ticketAccounts.filter { account in
-            !account.isArchived
-                && account.renewalNotify
-                && account.expiryDate != Date.distantPast
-                && account.expiryDate >= now
-                && account.expiryDate <= warningLimit
-        }
         let ticketItems = activeAttempts.compactMap { attempt in
             nextActionItem(for: attempt, now: now)
         }
-        let preparationItems = plans
-            .filter { !$0.isArchived && $0.isPreparationChecklistActive }
-            .flatMap { plan in
-                preparationAttentionItems(for: plan, now: now)
-            }
-        let items = ticketItems
-            + preparationItems
-            + membershipAttentionItems(for: expiringAccounts)
-
-        return items.sorted { lhs, rhs in
+        return ticketItems.sorted { lhs, rhs in
             if lhs.isOverdue != rhs.isOverdue {
                 return lhs.isOverdue
             }
@@ -121,13 +100,59 @@ struct HomeView: View {
     }
 
     private func nextActionItem(for attempt: TicketAttempt, now: Date) -> HomeAttentionItem? {
-        guard let action = TicketNextActionDefinition.nextAction(for: attempt, now: now) else {
-            return nil
-        }
-
         let plan = attempt.plan
-        let planTitle = plan?.title.isEmpty == false ? plan?.title ?? "予定" : "予定"
+        let planTitle: String = {
+            if let title = plan?.title, !title.isEmpty { return title }
+            if let title = plan?.event?.title, !title.isEmpty { return title }
+            return "予定"
+        }()
         let tint = themePalette.categoryColor(hex: plan?.category?.colorHex ?? "#147C88")
+        if ["waitingIssue", "issued"].contains(attempt.statusKey),
+           let plan,
+           !plan.hasConfirmedSchedule {
+            return HomeAttentionItem(
+                id: "ticket-\(attempt.id.uuidString)-schedule",
+                icon: "calendar.badge.plus",
+                title: "参加日を設定",
+                subtitle: "\(planTitle)・参加日未定",
+                contextTitle: planTitle,
+                dueDate: attempt.updatedAt,
+                plan: plan,
+                attempt: attempt,
+                tint: .orange,
+                priority: 0,
+                showsDueDate: false
+            )
+        }
+        guard let action = TicketNextActionDefinition.nextAction(for: attempt, now: now) else {
+            let fallbackTitle: String? = {
+                if let issue = TicketInputIssueDefinition.issue(for: attempt) {
+                    return issue.title
+                }
+                switch attempt.statusKey {
+                case "beforeApply": return "申込状況を更新"
+                case "onSaleSoon": return "購入状況を更新"
+                case "waitingResult": return "当落結果を入力"
+                case "won", "waitingPayment": return "支払・取得状況を更新"
+                case "waitingIssue": return "取得状況を更新"
+                default: return nil
+                }
+            }()
+            guard let fallbackTitle else { return nil }
+            return HomeAttentionItem(
+                id: "ticket-\(attempt.id.uuidString)-status",
+                icon: TicketInputIssueDefinition.issue(for: attempt)?.systemImage ?? "arrow.right.circle",
+                title: fallbackTitle,
+                subtitle: planTitle,
+                contextTitle: planTitle,
+                dueDate: attempt.updatedAt,
+                plan: plan,
+                attempt: attempt,
+                tint: tint,
+                priority: 20,
+                showsDueDate: false
+            )
+        }
         return HomeAttentionItem(
             id: "ticket-\(attempt.id.uuidString)-\(action.title)-\(action.date.timeIntervalSinceReferenceDate)",
             icon: action.systemImage,
@@ -136,6 +161,7 @@ struct HomeView: View {
             contextTitle: planTitle,
             dueDate: action.date,
             plan: plan,
+            attempt: attempt,
             tint: action.isOverdue ? .red : tint,
             priority: action.priority,
             isOverdue: action.isOverdue
@@ -152,8 +178,7 @@ struct HomeView: View {
             personLinks: personLinks
         )
         let visibleCategories = categories.filter { !$0.isArchived }
-        let ticketProgressItems = CategoryTicketProgressItem.activeItems(in: plans)
-        let homeNextActionItems = nextActionItems()
+        let homeNextActionItems = ticketScheduleItems()
         let hasSampleData = events.contains { event in
             event.officialURL.starts(with: SampleDataSeeder.sampleURLPrefix)
                 || event.officialURL.starts(with: "https://example.com/favoreco/")
@@ -161,7 +186,11 @@ struct HomeView: View {
 
         NavigationStack {
             VStack(spacing: 0) {
-                MainScreenHeader(title: "Favoreco", usesBrandFont: true)
+                MainScreenHeader(
+                    title: "Favoreco",
+                    usesBrandFont: true,
+                    showsTicketManagement: true
+                )
                     .padding(.horizontal, 20)
                     .padding(.top, -4)
                     .padding(.bottom, 6)
@@ -174,61 +203,42 @@ struct HomeView: View {
                 MainHeaderDivider()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        HomeHeroSection(items: snapshot.heroItems, selectedIndex: $selectedUpcomingPlanIndex)
-
-                        if hasSampleData {
-                            HomeSampleDataNotice {
-                                isShowingSampleDeletionConfirmation = true
-                            }
+                    GenreSwipeContainer(
+                        canMoveBackward: !visibleCategories.isEmpty,
+                        canMoveForward: !visibleCategories.isEmpty,
+                        onMove: { direction in
+                            let destination = direction > 0
+                                ? visibleCategories.first
+                                : visibleCategories.last
+                            swipeDestinationCategoryID = destination?.id
                         }
-
-                        GenreSwipeContainer(
-                            canMoveBackward: !visibleCategories.isEmpty,
-                            canMoveForward: !visibleCategories.isEmpty,
-                            onMove: { direction in
-                                let destination = direction > 0
-                                    ? visibleCategories.first
-                                    : visibleCategories.last
-                                swipeDestinationCategoryID = destination?.id
-                            }
-                        ) {
-                            VStack(alignment: .leading, spacing: 24) {
-                                if showsAttention {
-                                    HomeAttentionSection(items: homeNextActionItems) {
-                                        isShowingNextActionList = true
-                                    }
-                                    ticketScheduleSection(items: ticketProgressItems)
-                                }
-
-                                if showsInbox {
-                                    HomeInterestingSection(
-                                        interestedEvents: snapshot.interestedEvents,
-                                        unresolvedInboxItems: snapshot.unresolvedInboxItems,
-                                        isExpanded: $isInterestingExpanded,
-                                        layoutMode: $interestLayoutMode
-                                    )
-                                }
-
-                                HomeComingUpSection(
-                                    items: snapshot.upcomingItems,
-                                    isShowingAll: $isShowingAllHomeUpcoming
+                    ) {
+                        VStack(alignment: .leading, spacing: 24) {
+                            if showsAttention, !homeNextActionItems.isEmpty {
+                                HomeAttentionSection(
+                                    items: homeNextActionItems,
+                                    onShowAll: { isShowingNextActionList = true },
+                                    onSelectTicket: { selectedQuickTicketAttempt = $0 }
                                 )
-
-                                if showsExperienceGallery && !snapshot.recentVisits.isEmpty {
-                                    experienceGallerySection(visits: snapshot.recentVisits)
-                                }
-
-                                if showsRecentRecords && !snapshot.recentVisits.isEmpty {
-                                    recentSection(visits: snapshot.recentVisits)
-                                }
-
-                                if showsStatsSummary && snapshot.visibleVisitCount > 0 {
-                                    statsSummarySection(snapshot: snapshot)
-                                }
-
-                                crossGenreMiniStats(snapshot: snapshot)
                             }
+
+                            HomeHeroSection(
+                                interestedEvents: snapshot.interestedEvents,
+                                unresolvedInboxItems: snapshot.unresolvedInboxItems,
+                                upcomingItems: snapshot.upcomingItems,
+                                recordedVisits: snapshot.pickupRecordedVisits,
+                                onSelectInterest: { pickupDetailTarget = $0 },
+                                onSelectPlan: { pickupDetailTarget = .plan($0) },
+                                onSelectVisit: { pickupDetailTarget = .visit($0) }
+                            )
+
+                            if hasSampleData {
+                                HomeSampleDataNotice {
+                                    isShowingSampleDeletionConfirmation = true
+                                }
+                            }
+
+                            HomeReportSection(visits: snapshot.reportVisits)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -239,7 +249,23 @@ struct HomeView: View {
             .background(homeBackground)
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $isShowingNextActionList) {
-                HomeAttentionListView(items: homeNextActionItems)
+                NavigationStack {
+                    TicketOverviewView(showsCloseButton: true)
+                }
+            }
+            .sheet(item: $selectedQuickTicketAttempt) { attempt in
+                TicketQuickActionSheet(attempt: attempt)
+            }
+            .sheet(item: $admissionPreparationPlan) { plan in
+                AdmissionPreparationConfirmationSheet(plan: plan)
+                    .interactiveDismissDisabled()
+            }
+            .task(id: admissionPreparationCandidateID) {
+                presentAdmissionPreparationIfNeeded()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                presentAdmissionPreparationIfNeeded()
             }
             .confirmationDialog(
                 "サンプルデータを削除しますか？",
@@ -266,24 +292,42 @@ struct HomeView: View {
             } message: {
                 Text(sampleDeletionError)
             }
-            .navigationDestination(
-                isPresented: Binding(
-                    get: { swipeDestinationCategoryID != nil },
-                    set: { isPresented in
-                        if !isPresented {
-                            swipeDestinationCategoryID = nil
-                        }
-                    }
-                )
-            ) {
-                if let categoryID = swipeDestinationCategoryID {
-                    HomeCategoryDestination(categoryID: categoryID)
+            .navigationDestination(item: $swipeDestinationCategoryID) { categoryID in
+                HomeCategoryDestination(categoryID: categoryID)
+            }
+            .navigationDestination(item: $pickupDetailTarget) { target in
+                switch target {
+                case .event(let eventID):
+                    HomeEventDestination(eventID: eventID)
+                case .inbox(let itemID):
+                    HomeInboxDestination(itemID: itemID)
+                case .plan(let planID):
+                    HomePlanDestination(planID: planID)
+                case .visit(let visitID):
+                    HomeVisitDestination(visitID: visitID)
                 }
             }
             .task {
                 try? LegacyInboxMigrationService.migrateIfNeeded(in: modelContext)
             }
         }
+    }
+
+    private var admissionPreparationCandidate: Plan? {
+        plans
+            .filter { $0.shouldRequestAdmissionPreparationConfirmation() }
+            .sorted { $0.startsAt < $1.startsAt }
+            .first
+    }
+
+    private var admissionPreparationCandidateID: UUID? {
+        admissionPreparationCandidate?.id
+    }
+
+    private func presentAdmissionPreparationIfNeeded() {
+        guard admissionPreparationPlan == nil,
+              let candidate = admissionPreparationCandidate else { return }
+        admissionPreparationPlan = candidate
     }
 
     private func crossGenreMiniStats(snapshot: HomeSnapshot) -> some View {
@@ -380,36 +424,6 @@ struct HomeView: View {
             HomePaperGrainOverlay(isDark: colorScheme == .dark)
         }
         .ignoresSafeArea()
-    }
-
-    @ViewBuilder
-    private func ticketScheduleSection(items: [CategoryTicketProgressItem]) -> some View {
-        if items.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Ticket Schedule")
-                    .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
-                    .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
-
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle")
-                        .font(.title3)
-                        .foregroundStyle(Color.green)
-                    Text("進行中のチケット予定はありません")
-                        .font(FavorecoTypography.bodyStrong)
-                    Spacer(minLength: 0)
-                }
-                .padding(14)
-                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-        } else {
-            CategoryTicketProgressSection(
-                items: items,
-                title: "Ticket Schedule",
-                usesLatinTitle: true,
-                usesTheaterStyle: false,
-                showsCategoryInSelector: true
-            )
-        }
     }
 
     private func experienceGallerySection(visits: [HomeVisitSnapshot]) -> some View {
@@ -594,12 +608,61 @@ enum HomeInterestingItem: Identifiable {
         }
     }
 
+    var fillsEyecatchFrame: Bool {
+        switch self {
+        case .event(let event): event.fillsEyecatchFrame
+        case .inbox: true
+        }
+    }
+
     var detailText: String {
         switch self {
         case .event(let event): event.memo
         case .inbox(let item): item.body
         }
     }
+
+    var officialURLString: String {
+        switch self {
+        case .event(let event): event.officialURLString
+        case .inbox(let item): item.sourceURLString
+        }
+    }
+
+    var periodText: String {
+        switch self {
+        case .event(let event): event.periodText
+        case .inbox: ""
+        }
+    }
+
+    var venueName: String {
+        switch self {
+        case .event(let event): event.venueName
+        case .inbox: ""
+        }
+    }
+
+    var detailTarget: HomePickupDetailTarget {
+        switch self {
+        case .event(let event): .event(event.id)
+        case .inbox(let item): .inbox(item.id)
+        }
+    }
+
+    var sortDate: Date {
+        switch self {
+        case .event(let event): event.updatedAt
+        case .inbox(let item): item.createdAt
+        }
+    }
+}
+
+enum HomePickupDetailTarget: Hashable {
+    case event(UUID)
+    case inbox(UUID)
+    case plan(UUID)
+    case visit(UUID)
 }
 
 struct HomeInterestingCollection: View {
@@ -846,6 +909,7 @@ struct HomeComingUpLink: View {
                     categoryIcon: plan.categoryIcon,
                     colorHex: plan.categoryColorHex,
                     date: plan.startsAt,
+                    timeText: plan.comingUpTimeText,
                     place: plan.venueName,
                     thumbnailReference: plan.thumbnailReference
                 )
@@ -861,6 +925,7 @@ struct HomeComingUpLink: View {
                     categoryIcon: visit.categoryIcon,
                     colorHex: visit.categoryColorHex,
                     date: visit.visitedAt,
+                    timeText: visit.comingUpTimeText,
                     place: visit.venueName,
                     thumbnailReference: visit.thumbnailReference
                 )
@@ -876,6 +941,7 @@ private struct HomeComingUpRow: View {
     let categoryIcon: String
     let colorHex: String
     let date: Date
+    let timeText: String
     let place: String
     let thumbnailReference: ThumbnailReference?
 
@@ -883,6 +949,7 @@ private struct HomeComingUpRow: View {
         let tint = Color(hex: colorHex)
         FavorecoComingUpRow(
             date: date,
+            timeText: timeText,
             categoryName: categoryName,
             title: title,
             venue: place,
@@ -908,13 +975,20 @@ private struct HomeComingUpRow: View {
 
 struct HomeUpcomingPlanCard: View {
     let plan: HomePlanSnapshot
+    let isEmbedded: Bool
+    let onOpen: () -> Void
     @Query private var currentPlans: [Plan]
-    @State private var isShowingPlanDetail = false
     @State private var isShowingEditPlan = false
     @Environment(\.favorecoThemePalette) private var themePalette
 
-    init(plan: HomePlanSnapshot) {
+    init(
+        plan: HomePlanSnapshot,
+        isEmbedded: Bool = false,
+        onOpen: @escaping () -> Void
+    ) {
         self.plan = plan
+        self.isEmbedded = isEmbedded
+        self.onOpen = onOpen
         let planID = plan.id
         _currentPlans = Query(filter: #Predicate<Plan> { $0.id == planID })
     }
@@ -936,7 +1010,7 @@ struct HomeUpcomingPlanCard: View {
     }
 
     var body: some View {
-        HomeUpcomingHeroLayout(posterAspectRatio: CGFloat(plan.posterAspectRatio)) {
+        HomeUpcomingHeroLayout {
             HomeUpcomingPoster(
                 thumbnailReference: plan.thumbnailReference,
                 fallbackIcon: plan.categoryIcon,
@@ -944,9 +1018,7 @@ struct HomeUpcomingPlanCard: View {
                 fillsFrame: plan.fillsPosterFrame
             )
             .contentShape(Rectangle())
-            .onTapGesture {
-                isShowingPlanDetail = true
-            }
+            .onTapGesture(perform: onOpen)
 
             HomeUpcomingHeroDetails(
                 categoryName: plan.categoryName,
@@ -954,15 +1026,12 @@ struct HomeUpcomingPlanCard: View {
                 subtitle: plan.subtitle.isEmpty ? plan.organizerName : plan.subtitle,
                 dateText: dateText,
                 venueName: plan.venueName,
+                officialURLString: plan.officialURLString,
                 tint: tint,
-                onOpen: {
-                    isShowingPlanDetail = true
-                }
+                onOpen: onOpen
             ) {
                 HStack(spacing: 6) {
-                    Button {
-                        isShowingPlanDetail = true
-                    } label: {
+                    Button(action: onOpen) {
                         HomeUpcomingActionLabel(
                             title: "予定詳細",
                             systemImage: "book.pages",
@@ -970,7 +1039,7 @@ struct HomeUpcomingPlanCard: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity)
+                    .frame(width: 110)
 
                     Button {
                         isShowingEditPlan = true
@@ -978,27 +1047,28 @@ struct HomeUpcomingPlanCard: View {
                         HomeUpcomingActionLabel(
                             title: "編集",
                             systemImage: "pencil",
-                            tint: tint,
-                            isPrimary: false
+                            tint: tint
                         )
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 58)
+                    .frame(width: 64)
                     .disabled(currentPlans.isEmpty)
                 }
             }
         }
-        .frame(height: HomeUpcomingHeroMetrics.contentHeight, alignment: .top)
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(
+            height: isEmbedded
+                ? HomeUpcomingHeroMetrics.embeddedContentHeight
+                : HomeUpcomingHeroMetrics.contentHeight,
+            alignment: .top
+        )
+        .padding(isEmbedded ? HomeUpcomingHeroMetrics.embeddedPadding : 12)
+        .background(isEmbedded ? Color.clear : Color(.systemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(tint.opacity(0.18), lineWidth: 1)
+                .stroke(tint.opacity(isEmbedded ? 0 : 0.18), lineWidth: 1)
         }
         .accessibilityElement(children: .contain)
-        .navigationDestination(isPresented: $isShowingPlanDetail) {
-            HomePlanDestination(planID: plan.id)
-        }
         .sheet(isPresented: $isShowingEditPlan) {
             if let currentPlan = currentPlans.first {
                 AddTicketPlanView(plan: currentPlan, entryMode: .plan)
@@ -1012,13 +1082,20 @@ struct HomeUpcomingPlanCard: View {
 
 struct HomeUpcomingVisitCard: View {
     let visit: HomeVisitSnapshot
+    let isEmbedded: Bool
+    let onOpen: () -> Void
     @Query private var currentVisits: [Visit]
-    @State private var isShowingVisitDetail = false
     @State private var isShowingEditVisit = false
     @Environment(\.favorecoThemePalette) private var themePalette
 
-    init(visit: HomeVisitSnapshot) {
+    init(
+        visit: HomeVisitSnapshot,
+        isEmbedded: Bool = false,
+        onOpen: @escaping () -> Void
+    ) {
         self.visit = visit
+        self.isEmbedded = isEmbedded
+        self.onOpen = onOpen
         let visitID = visit.id
         _currentVisits = Query(filter: #Predicate<Visit> { $0.id == visitID })
     }
@@ -1040,7 +1117,7 @@ struct HomeUpcomingVisitCard: View {
     }
 
     var body: some View {
-        HomeUpcomingHeroLayout(posterAspectRatio: CGFloat(visit.eyecatchAspectRatio)) {
+        HomeUpcomingHeroLayout {
             HomeUpcomingPoster(
                 thumbnailReference: visit.thumbnailReference,
                 fallbackIcon: visit.categoryIcon,
@@ -1048,25 +1125,20 @@ struct HomeUpcomingVisitCard: View {
                 fillsFrame: visit.fillsEyecatchFrame
             )
             .contentShape(Rectangle())
-            .onTapGesture {
-                isShowingVisitDetail = true
-            }
+            .onTapGesture(perform: onOpen)
 
             HomeUpcomingHeroDetails(
                 categoryName: visit.categoryName,
                 title: visit.title,
-                subtitle: "",
+                subtitle: visit.peopleSummary,
                 dateText: dateText,
                 venueName: visit.venueName,
+                officialURLString: visit.officialURLString,
                 tint: tint,
-                onOpen: {
-                    isShowingVisitDetail = true
-                }
+                onOpen: onOpen
             ) {
                 HStack(spacing: 6) {
-                    Button {
-                        isShowingVisitDetail = true
-                    } label: {
+                    Button(action: onOpen) {
                         HomeUpcomingActionLabel(
                             title: "記録詳細",
                             systemImage: "book.pages",
@@ -1074,7 +1146,7 @@ struct HomeUpcomingVisitCard: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity)
+                    .frame(width: 110)
 
                     Button {
                         isShowingEditVisit = true
@@ -1082,27 +1154,28 @@ struct HomeUpcomingVisitCard: View {
                         HomeUpcomingActionLabel(
                             title: "編集",
                             systemImage: "pencil",
-                            tint: tint,
-                            isPrimary: false
+                            tint: tint
                         )
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 58)
+                    .frame(width: 64)
                     .disabled(currentVisits.isEmpty)
                 }
             }
         }
-        .frame(height: HomeUpcomingHeroMetrics.contentHeight, alignment: .top)
-        .padding(12)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .frame(
+            height: isEmbedded
+                ? HomeUpcomingHeroMetrics.embeddedContentHeight
+                : HomeUpcomingHeroMetrics.contentHeight,
+            alignment: .top
+        )
+        .padding(isEmbedded ? HomeUpcomingHeroMetrics.embeddedPadding : 12)
+        .background(isEmbedded ? Color.clear : Color(.systemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(tint.opacity(0.18), lineWidth: 1)
+                .stroke(tint.opacity(isEmbedded ? 0 : 0.18), lineWidth: 1)
         }
         .accessibilityElement(children: .contain)
-        .navigationDestination(isPresented: $isShowingVisitDetail) {
-            HomeVisitDestination(visitID: visit.id)
-        }
         .sheet(isPresented: $isShowingEditVisit) {
             if let currentVisit = currentVisits.first {
                 EditExperienceView(visit: currentVisit)
@@ -1117,14 +1190,15 @@ struct HomeUpcomingVisitCard: View {
 enum HomeUpcomingHeroMetrics {
     static let contentHeight: CGFloat = 224
     static let cardHeight: CGFloat = contentHeight + 24
+    static let posterWidth: CGFloat = 132
+    static let posterHeight: CGFloat = 196
+    static let spacing: CGFloat = 12
+    static let embeddedPadding: CGFloat = 2
+    static let embeddedContentHeight: CGFloat = posterHeight
+    static let embeddedCardHeight: CGFloat = embeddedContentHeight + (embeddedPadding * 2)
 }
 
-private struct HomeUpcomingHeroLayout: Layout {
-    let posterAspectRatio: CGFloat
-    private let posterFraction: CGFloat = 0.46
-    private let maximumPosterWidth: CGFloat = 148
-    private let spacing: CGFloat = 10
-
+struct HomeUpcomingHeroLayout: Layout {
     func sizeThatFits(
         proposal: ProposedViewSize,
         subviews: Subviews,
@@ -1132,15 +1206,17 @@ private struct HomeUpcomingHeroLayout: Layout {
     ) -> CGSize {
         guard subviews.count == 2 else { return .zero }
         let width = proposal.width ?? 340
-        let availableWidth = max(0, width - spacing)
-        let posterWidth = min(maximumPosterWidth, availableWidth * posterFraction)
-        let detailsWidth = availableWidth - posterWidth
-        let safeRatio = max(0.6, posterAspectRatio)
-        let posterHeight = posterWidth / safeRatio
-        let detailsSize = subviews[1].sizeThatFits(
-            ProposedViewSize(width: detailsWidth, height: posterHeight)
+        let detailsWidth = max(
+            0,
+            width - HomeUpcomingHeroMetrics.posterWidth - HomeUpcomingHeroMetrics.spacing
         )
-        return CGSize(width: width, height: max(posterHeight, detailsSize.height))
+        let detailsSize = subviews[1].sizeThatFits(
+            ProposedViewSize(width: detailsWidth, height: proposal.height)
+        )
+        return CGSize(
+            width: width,
+            height: max(HomeUpcomingHeroMetrics.posterHeight, detailsSize.height)
+        )
     }
 
     func placeSubviews(
@@ -1150,21 +1226,26 @@ private struct HomeUpcomingHeroLayout: Layout {
         cache: inout ()
     ) {
         guard subviews.count == 2 else { return }
-        let availableWidth = max(0, bounds.width - spacing)
-        let posterWidth = min(maximumPosterWidth, availableWidth * posterFraction)
-        let detailsWidth = availableWidth - posterWidth
-        let safeRatio = max(0.6, posterAspectRatio)
-        let posterHeight = posterWidth / safeRatio
+        let detailsWidth = max(
+            0,
+            bounds.width - HomeUpcomingHeroMetrics.posterWidth - HomeUpcomingHeroMetrics.spacing
+        )
 
         subviews[0].place(
             at: CGPoint(x: bounds.minX, y: bounds.minY),
             anchor: .topLeading,
-            proposal: ProposedViewSize(width: posterWidth, height: posterHeight)
+            proposal: ProposedViewSize(
+                width: HomeUpcomingHeroMetrics.posterWidth,
+                height: HomeUpcomingHeroMetrics.posterHeight
+            )
         )
         subviews[1].place(
-            at: CGPoint(x: bounds.minX + posterWidth + spacing, y: bounds.minY),
+            at: CGPoint(
+                x: bounds.minX + HomeUpcomingHeroMetrics.posterWidth + HomeUpcomingHeroMetrics.spacing,
+                y: bounds.minY
+            ),
             anchor: .topLeading,
-            proposal: ProposedViewSize(width: detailsWidth, height: max(posterHeight, bounds.height))
+            proposal: ProposedViewSize(width: detailsWidth, height: bounds.height)
         )
     }
 }
@@ -1197,15 +1278,24 @@ private struct HomeUpcomingPoster: View {
     }
 }
 
-private struct HomeUpcomingHeroDetails<Actions: View>: View {
+struct HomeUpcomingHeroDetails<Actions: View>: View {
     let categoryName: String
     let title: String
     let subtitle: String
     let dateText: String
     let venueName: String
+    let officialURLString: String
     let tint: Color
     let onOpen: () -> Void
     let actions: Actions
+
+    private var subtitleText: String {
+        displayText(for: subtitle)
+    }
+
+    private var venueText: String {
+        displayText(for: venueName)
+    }
 
     init(
         categoryName: String,
@@ -1213,6 +1303,7 @@ private struct HomeUpcomingHeroDetails<Actions: View>: View {
         subtitle: String,
         dateText: String,
         venueName: String,
+        officialURLString: String,
         tint: Color,
         onOpen: @escaping () -> Void,
         @ViewBuilder actions: () -> Actions
@@ -1222,6 +1313,7 @@ private struct HomeUpcomingHeroDetails<Actions: View>: View {
         self.subtitle = subtitle
         self.dateText = dateText
         self.venueName = venueName
+        self.officialURLString = officialURLString
         self.tint = tint
         self.onOpen = onOpen
         self.actions = actions()
@@ -1241,58 +1333,98 @@ private struct HomeUpcomingHeroDetails<Actions: View>: View {
                     .lineLimit(2, reservesSpace: true)
                     .truncationMode(.tail)
 
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                Text(subtitleText)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
 
                 Label(dateText, systemImage: "calendar")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                if !venueName.isEmpty {
-                    Label(venueName, systemImage: "mappin.and.ellipse")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                Label(venueText, systemImage: "mappin.and.ellipse")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
 
-            Spacer(minLength: 0)
+            HomePickupURLRow(urlString: officialURLString, tint: tint)
 
             actions
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+
+    private func displayText(for value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "ー" : trimmed
+    }
 }
 
-private struct HomeUpcomingActionLabel: View {
+struct HomeUpcomingActionLabel: View {
     let title: String
     let systemImage: String
     let tint: Color
-    var isPrimary: Bool = true
 
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: systemImage)
             Text(title)
         }
-            .font(FavorecoTypography.jpSans(isPrimary ? 12 : 10.5, weight: isPrimary ? .semibold : .medium, relativeTo: .caption))
+            .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
             .foregroundStyle(tint)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity)
-            .frame(height: 34)
+            .frame(height: 30)
             .overlay {
                 Capsule().stroke(tint.opacity(0.48), lineWidth: 1)
             }
             .contentShape(Capsule())
+    }
+}
+
+struct HomePickupURLRow: View {
+    @Environment(\.openURL) private var openURL
+
+    let urlString: String
+    let tint: Color
+
+    private var destination: URL? {
+        guard let url = URL(string: urlString),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            return nil
+        }
+        return url
+    }
+
+    var body: some View {
+        if let destination {
+            Button {
+                openURL(destination)
+            } label: {
+                label("公式サイト", color: tint)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("外部ブラウザで開きます")
+        } else {
+            label("ー", color: .secondary)
+                .accessibilityLabel("公式サイト、未設定")
+        }
+    }
+
+    private func label(_ title: String, color: Color) -> some View {
+        Label(title, systemImage: "safari")
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
+            .contentShape(Rectangle())
     }
 }
 
@@ -1345,57 +1477,508 @@ struct HomeAttentionItem: Identifiable {
     var contextTitle = ""
     let dueDate: Date
     var plan: Plan? = nil
+    var attempt: TicketAttempt? = nil
     let tint: Color
     let priority: Int
     var isOverdue = false
+    var showsDueDate = true
 }
 
-struct HomeNextActionCapsuleRow: View {
+nonisolated enum HomeTicketDeadlineUrgency: Equatable {
+    case undated
+    case normal
+    case tomorrow
+    case today
+    case overdue
+
+    static func resolve(
+        dueDate: Date,
+        showsDueDate: Bool,
+        isOverdue: Bool,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> HomeTicketDeadlineUrgency {
+        guard showsDueDate else { return .undated }
+        if isOverdue || dueDate < now { return .overdue }
+
+        let today = calendar.startOfDay(for: now)
+        let dueDay = calendar.startOfDay(for: dueDate)
+        let days = calendar.dateComponents([.day], from: today, to: dueDay).day ?? 0
+        if days == 0 { return .today }
+        if days == 1 { return .tomorrow }
+        return .normal
+    }
+}
+
+struct HomeTicketScheduleCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+
     let item: HomeAttentionItem
 
+    @State private var isTodayShadowEmphasized = false
+    @State private var todayShakeOffset: CGFloat = 0
+
+    private var plan: Plan? { item.plan }
+    private var attempt: TicketAttempt? { item.attempt }
+
+    private var eventTitle: String {
+        if let title = plan?.title, !title.isEmpty { return title }
+        if let title = plan?.event?.title, !title.isEmpty { return title }
+        return item.contextTitle.isEmpty ? "公演" : item.contextTitle
+    }
+
+    private var entryRouteTitle: String {
+        let values = [entryRouteBadgeTitle, ticketSiteBadgeTitle].compactMap { $0 }
+        return values.isEmpty ? "チケット" : values.joined(separator: "、")
+    }
+
+    private var entryRouteBadgeTitle: String? {
+        guard let attempt, !attempt.entryRouteKey.isEmpty else { return nil }
+        let title = TicketEntryRouteDefinition.name(for: attempt.entryRouteKey)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? nil : title
+    }
+
+    private var ticketSiteBadgeTitle: String? {
+        guard let attempt else { return nil }
+        let title = attempt.ticketSite.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return nil }
+        if let entryRouteBadgeTitle,
+           entryRouteBadgeTitle.compare(
+            title,
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]
+           ) == .orderedSame {
+            return nil
+        }
+        return title
+    }
+
+    private var deadlineLabel: String {
+        if isAttendanceScheduleAction { return "参加日" }
+        if item.title.contains("申込・発売") {
+            guard let attempt else { return "チケ発売" }
+            return TicketProgressTimeline.usesLotteryFlow(attempt) ? "抽選申込" : "チケ発売"
+        }
+        if item.title.contains("当落") { return "抽選当落" }
+        if item.title.contains("入金") || item.title.contains("支払") { return "チケ支払" }
+        if item.title.contains("受取") || item.title.contains("取得") { return "チケ取得" }
+        if item.title.contains("発売") { return "チケ発売" }
+        if item.title.contains("購入") { return "チケ発売" }
+        if item.title.contains("申込") { return "抽選申込" }
+        return item.title
+    }
+
+    private var isAttendanceScheduleAction: Bool {
+        item.title == "参加日を設定"
+    }
+
+    private var scheduleText: String {
+        guard let plan, plan.hasConfirmedSchedule else { return "参加日未定" }
+        return FavorecoDateText.compactDateTime(plan.startsAt)
+    }
+
+    private var thumbnailReference: ThumbnailReference? {
+        plan?.event.map { .event($0.id) }
+    }
+
+    private var categoryIcon: String {
+        (plan?.category ?? plan?.event?.category)?.iconSymbol ?? "ticket"
+    }
+
+    private var urgency: HomeTicketDeadlineUrgency {
+        HomeTicketDeadlineUrgency.resolve(
+            dueDate: item.dueDate,
+            showsDueDate: item.showsDueDate,
+            isOverdue: item.isOverdue
+        )
+    }
+
+    private var remainingDays: Int? {
+        guard item.showsDueDate else { return nil }
+        let calendar = Calendar.current
+        return calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: Date()),
+            to: calendar.startOfDay(for: item.dueDate)
+        ).day
+    }
+
+    private var urgencyColor: Color {
+        switch urgency {
+        case .undated, .normal:
+            return colorScheme == .dark
+                ? Color(hex: "#D7CFBE")
+                : Color(hex: "#243247")
+        case .tomorrow:
+            return Color(hex: "#D8555F")
+        case .today:
+            return Color(hex: "#E43D4C")
+        case .overdue:
+            return Color(hex: "#A91F32")
+        }
+    }
+
+    private var statusColor: Color {
+        switch deadlineLabel {
+        case "チケ発売":
+            return Color(hex: "#D47A36")
+        case "抽選申込":
+            return Color(hex: "#983650")
+        case "抽選当落":
+            return Color(hex: "#76528B")
+        case "チケ支払":
+            return Color(hex: "#247E85")
+        case "チケ取得":
+            return Color(hex: "#54745A")
+        case "参加日":
+            return Color(hex: "#B66A32")
+        default:
+            return item.tint
+        }
+    }
+
+    private var entryMethodColor: Color {
+        guard let attempt else { return item.tint }
+        switch attempt.entryRouteKey {
+        case "fanClub", "official", "lottery", "card", "generalLottery":
+            return Color(hex: "#8E3657")
+        case "presale", "general", "sameDay":
+            return Color(hex: "#247E85")
+        case "resale":
+            return Color(hex: "#B66A32")
+        default:
+            return item.tint
+        }
+    }
+
+    private var cardBorderWidth: CGFloat {
+        switch urgency {
+        case .today: return 1.8
+        case .tomorrow, .overdue: return 1.5
+        case .undated, .normal: return 0.9
+        }
+    }
+
+    private var cardShadowColor: Color {
+        switch urgency {
+        case .today:
+            return urgencyColor.opacity(0.28)
+        case .tomorrow:
+            return urgencyColor.opacity(0.16)
+        case .undated, .normal, .overdue:
+            return .clear
+        }
+    }
+
+    private var cardShadowRadius: CGFloat {
+        switch urgency {
+        case .today: return 7
+        case .tomorrow: return 4
+        case .undated, .normal, .overdue: return 0
+        }
+    }
+
+    private var displayedCardShadowColor: Color {
+        guard urgency == .today, isTodayShadowEmphasized else {
+            return cardShadowColor
+        }
+        return urgencyColor.opacity(colorScheme == .dark ? 0.62 : 0.52)
+    }
+
+    private var displayedCardShadowRadius: CGFloat {
+        urgency == .today && isTodayShadowEmphasized ? 14 : cardShadowRadius
+    }
+
+    private var deadlineSupplement: String {
+        guard item.showsDueDate else {
+            return isAttendanceScheduleAction ? "日程を入力" : "期限を入力"
+        }
+        if urgency == .overdue { return "期限超過" }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let dueDay = calendar.startOfDay(for: item.dueDate)
+        let days = calendar.dateComponents([.day], from: today, to: dueDay).day ?? 0
+        if days < 0 { return "期限超過" }
+        if days == 0 { return "今日" }
+        if days == 1 { return "明日" }
+        return "あと\(days)日"
+    }
+
     var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: item.icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(item.tint)
-                .frame(width: 18)
+        HStack(spacing: 4) {
+            VStack(spacing: 4) {
+                ticketHorizontalStatusBadge(
+                    deadlineLabel,
+                    backgroundColor: statusColor
+                )
 
-            Text(FavorecoDateText.compactDateWithHalfWidthWeekday(item.dueDate))
-                .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
-                .foregroundStyle(item.isOverdue ? Color.red : .secondary)
-                .fixedSize(horizontal: true, vertical: false)
+                ThumbnailImage(
+                    reference: thumbnailReference,
+                    displaySize: CGSize(width: 64, height: 64),
+                    contentMode: .fill
+                ) {
+                    ZStack {
+                        item.tint.opacity(0.10)
+                        Image(systemName: categoryIcon)
+                            .font(.title2)
+                            .foregroundStyle(item.tint)
+                    }
+                }
+                .frame(width: 64, height: 64)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
+            .frame(width: 64)
 
-            Text("|")
+            deadlineBlock
+                .frame(width: 70, alignment: .center)
+
+            Rectangle()
+                .fill(Color.primary.opacity(0.12))
+                .frame(width: 1, height: 86)
+                .padding(.trailing, 6)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    if let entryRouteBadgeTitle {
+                        ticketMetadataBadge(
+                            entryRouteBadgeTitle,
+                            backgroundColor: entryMethodColor
+                        )
+                        .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(2)
+                    }
+                    if let ticketSiteBadgeTitle {
+                        ticketMetadataBadge(
+                            ticketSiteBadgeTitle,
+                            backgroundColor: entryMethodColor
+                        )
+                        .layoutPriority(1)
+                    }
+                    if entryRouteBadgeTitle == nil, ticketSiteBadgeTitle == nil {
+                        ticketMetadataBadge(
+                            "チケット",
+                            backgroundColor: entryMethodColor
+                        )
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .offset(y: -2)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(eventTitle)
+                        .font(FavorecoTypography.jpSerif(16, weight: .semibold, relativeTo: .headline))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+
+                    Label(scheduleText, systemImage: plan?.hasConfirmedSchedule == true ? "calendar" : "calendar.badge.exclamationmark")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(plan?.hasConfirmedSchedule == true ? Color.primary.opacity(0.72) : .orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.tertiary)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, minHeight: 106, alignment: .leading)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(.systemBackground))
+                    .shadow(
+                        color: displayedCardShadowColor,
+                        radius: displayedCardShadowRadius,
+                        y: 2
+                    )
+                if urgency == .overdue {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(urgencyColor.opacity(colorScheme == .dark ? 0.22 : 0.10))
+                }
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(
+                    urgency == .normal || urgency == .undated
+                        ? urgencyColor.opacity(0.22)
+                        : urgencyColor,
+                    lineWidth: cardBorderWidth
+                )
+        }
+        .offset(x: todayShakeOffset)
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            item.showsDueDate
+                ? "\(deadlineLabel)、\(deadlineSupplement)、\(FavorecoDateText.compactDateTime(item.dueDate))、\(entryRouteTitle)、\(eventTitle)、\(scheduleText)"
+                : "\(deadlineLabel)、\(isAttendanceScheduleAction ? "未定" : "要確認")、\(entryRouteTitle)、\(eventTitle)、\(scheduleText)"
+        )
+        .task(id: scenePhase) {
+            await pulseTodayDeadlineShadowIfNeeded()
+        }
+    }
 
-            Text(item.title)
-                .font(FavorecoTypography.jpSans(12, weight: .bold, relativeTo: .caption))
+    private func pulseTodayDeadlineShadowIfNeeded() async {
+        isTodayShadowEmphasized = false
+        todayShakeOffset = 0
+        guard scenePhase == .active,
+              urgency == .today,
+              !accessibilityReduceMotion else { return }
+
+        do {
+            try await Task.sleep(for: .milliseconds(160))
+            for pulseIndex in 0..<2 {
+                withAnimation(.easeInOut(duration: 0.32)) {
+                    isTodayShadowEmphasized = true
+                }
+                try await shakeTodayDeadlineCard()
+                try await Task.sleep(for: .milliseconds(70))
+                withAnimation(.easeInOut(duration: 0.32)) {
+                    isTodayShadowEmphasized = false
+                }
+                try await Task.sleep(for: .milliseconds(320))
+                if pulseIndex == 0 {
+                    try await Task.sleep(for: .milliseconds(120))
+                }
+            }
+        } catch {
+            isTodayShadowEmphasized = false
+            todayShakeOffset = 0
+        }
+    }
+
+    private func shakeTodayDeadlineCard() async throws {
+        let offsets: [CGFloat] = [-2.5, 2.5, -1.6, 1.6, 0]
+        for offset in offsets {
+            withAnimation(.linear(duration: 0.05)) {
+                todayShakeOffset = offset
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    @ViewBuilder
+    private var deadlineBlock: some View {
+        VStack(spacing: -2) {
+            if item.showsDueDate {
+                if urgency == .normal, let remainingDays, remainingDays >= 2 {
+                    HStack(alignment: .center, spacing: 3) {
+                        VStack(spacing: -4) {
+                            Text("あ")
+                            Text("と")
+                        }
+                        .font(FavorecoTypography.jpSerif(14, weight: .semibold, relativeTo: .caption))
+                        .frame(height: 42, alignment: .center)
+
+                        HStack(alignment: .firstTextBaseline, spacing: 1) {
+                            Text("\(remainingDays)")
+                                .font(FavorecoTypography.latinDisplay(38, weight: .bold, relativeTo: .title))
+                                .monospacedDigit()
+                                .offset(y: -5)
+                            Text("日")
+                                .font(FavorecoTypography.jpSerif(15, weight: .semibold, relativeTo: .caption))
+                        }
+                        .frame(height: 42, alignment: .center)
+                    }
+                    .foregroundStyle(urgencyColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                } else {
+                    Text(deadlineSupplement)
+                        .font(FavorecoTypography.jpSerif(
+                            urgency == .overdue ? 14 : 19,
+                            weight: .bold,
+                            relativeTo: .title3
+                        ))
+                        .foregroundStyle(urgencyColor)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(urgency == .overdue ? 2 : 1)
+                        .minimumScaleFactor(0.72)
+                }
+
+                HStack(spacing: 0) {
+                    Text(FavorecoDateText.monthDay(item.dueDate))
+                        .font(FavorecoTypography.latinDisplay(14, weight: .bold, relativeTo: .caption))
+                        .monospacedDigit()
+                    Text("(\(shortWeekday))")
+                        .font(FavorecoTypography.jpSerif(11, weight: .bold, relativeTo: .caption2))
+                }
+                .foregroundStyle(.primary.opacity(0.78))
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
 
-            if !item.contextTitle.isEmpty {
-                Text("|")
-                    .foregroundStyle(.tertiary)
+                Text(FavorecoDateText.time(item.dueDate))
+                    .font(FavorecoTypography.latinDisplay(14, weight: .bold, relativeTo: .caption))
+                    .foregroundStyle(.primary.opacity(0.78))
+                    .monospacedDigit()
+                    .lineLimit(1)
+            } else {
+                Text(isAttendanceScheduleAction ? "未定" : "要確認")
+                    .font(FavorecoTypography.jpSerif(
+                        isAttendanceScheduleAction ? 20 : 15,
+                        weight: .semibold,
+                        relativeTo: .title3
+                    ))
+                    .foregroundStyle(.primary)
+                    .padding(.vertical, 5)
 
-                Text(item.contextTitle)
-                    .font(FavorecoTypography.jpSans(11, weight: .medium, relativeTo: .caption))
+                Text(deadlineSupplement)
+                    .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .truncationMode(.tail)
+                    .minimumScaleFactor(0.75)
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
 
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
-        .background(.background, in: Capsule())
-        .overlay {
-            Capsule()
-                .stroke(item.tint.opacity(item.isOverdue ? 0.42 : 0.18), lineWidth: 0.75)
-        }
-        .contentShape(Capsule())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(FavorecoDateText.compactDate(item.dueDate))、\(item.title)、\(item.contextTitle)")
+    private var shortWeekday: String {
+        FavorecoDateText.weekdayName(item.dueDate)
+            .replacingOccurrences(of: "曜", with: "")
+    }
+
+    private func ticketMetadataBadge(
+        _ title: String,
+        backgroundColor: Color
+    ) -> some View {
+        Text(title)
+            .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+            .foregroundStyle(TheaterCategoryStyle.ivory)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .allowsTightening(true)
+            .padding(.horizontal, 4)
+            .frame(height: 20)
+            .background(
+                backgroundColor,
+                in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            )
+    }
+
+    private func ticketHorizontalStatusBadge(
+        _ title: String,
+        backgroundColor: Color
+    ) -> some View {
+        Text(title)
+            .font(FavorecoTypography.jpSans(10, weight: .semibold, relativeTo: .caption2))
+            .foregroundStyle(TheaterCategoryStyle.ivory)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .frame(maxWidth: .infinity)
+            .frame(height: 22)
+            .background(
+                backgroundColor,
+                in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+            )
+            .accessibilityHidden(true)
     }
 }
 
@@ -1536,7 +2119,7 @@ struct AppNotificationCenterView: View {
                     ContentUnavailableView(
                         "お知らせはありません",
                         systemImage: "bell",
-                        description: Text("申込期限や入金、発券、会員期限などをここで確認できます。")
+                        description: Text("申込期限や入金、チケット受取、会員期限などをここで確認できます。")
                     )
                 } else {
                     List(items) { item in
@@ -1577,7 +2160,7 @@ struct AppNotificationCenterView: View {
         appendAttention(&result, if: attempt.applyDeadlineAt > now, attempt: attempt, suffix: "apply-deadline", icon: "hourglass", label: "申込締切", title: title, date: attempt.applyDeadlineAt, plan: plan, tint: .red, priority: 1)
         appendAttention(&result, if: attempt.resultAnnounceAt > now, attempt: attempt, suffix: "result", icon: "checkmark.seal", label: "当落発表", title: title, date: attempt.resultAnnounceAt, plan: plan, tint: .purple, priority: 5)
         appendAttention(&result, if: attempt.paymentDeadlineAt > now, attempt: attempt, suffix: "payment", icon: "yensign.circle", label: "入金締切", title: title, date: attempt.paymentDeadlineAt, plan: plan, tint: .orange, priority: 2)
-        appendAttention(&result, if: attempt.issueStartAt > now, attempt: attempt, suffix: "issue-start", icon: "ticket.fill", label: "発券開始", title: title, date: attempt.issueStartAt, plan: plan, tint: .teal, priority: 10)
+        appendAttention(&result, if: attempt.issueStartAt > now, attempt: attempt, suffix: "issue-start", icon: "ticket.fill", label: "チケット受取開始", title: title, date: attempt.issueStartAt, plan: plan, tint: .teal, priority: 10)
         return result
     }
 

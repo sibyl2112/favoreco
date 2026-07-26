@@ -16,18 +16,26 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
 
     var checklistModeKey: String = ChecklistMode.automatic.rawValue
     var tasks: [PlanPreparationTask] = []
+    var admissionPreparationConfirmedAt: Date?
+    var admissionPreparationSnoozedUntil: Date?
 
     init(
         checklistModeKey: String = ChecklistMode.automatic.rawValue,
-        tasks: [PlanPreparationTask] = []
+        tasks: [PlanPreparationTask] = [],
+        admissionPreparationConfirmedAt: Date? = nil,
+        admissionPreparationSnoozedUntil: Date? = nil
     ) {
         self.checklistModeKey = checklistModeKey
         self.tasks = tasks
+        self.admissionPreparationConfirmedAt = admissionPreparationConfirmedAt
+        self.admissionPreparationSnoozedUntil = admissionPreparationSnoozedUntil
     }
 
     private enum CodingKeys: String, CodingKey {
         case checklistModeKey
         case tasks
+        case admissionPreparationConfirmedAt
+        case admissionPreparationSnoozedUntil
     }
 
     init(from decoder: Decoder) throws {
@@ -35,6 +43,14 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
         checklistModeKey = try container.decodeIfPresent(String.self, forKey: .checklistModeKey)
             ?? ChecklistMode.automatic.rawValue
         tasks = try container.decodeIfPresent([PlanPreparationTask].self, forKey: .tasks) ?? []
+        admissionPreparationConfirmedAt = try container.decodeIfPresent(
+            Date.self,
+            forKey: .admissionPreparationConfirmedAt
+        )
+        admissionPreparationSnoozedUntil = try container.decodeIfPresent(
+            Date.self,
+            forKey: .admissionPreparationSnoozedUntil
+        )
     }
 
     init(rawValue: String) {
@@ -77,9 +93,14 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
         }
         let normalized = PlanPreparationFields(
             checklistModeKey: checklistModeKey,
-            tasks: normalizedTasks
+            tasks: normalizedTasks,
+            admissionPreparationConfirmedAt: admissionPreparationConfirmedAt,
+            admissionPreparationSnoozedUntil: admissionPreparationSnoozedUntil
         )
-        guard normalized.checklistMode != .automatic || !normalized.tasks.isEmpty,
+        guard normalized.checklistMode != .automatic
+                || !normalized.tasks.isEmpty
+                || normalized.admissionPreparationConfirmedAt != nil
+                || normalized.admissionPreparationSnoozedUntil != nil,
               let data = try? JSONEncoder().encode(normalized),
               let string = String(data: data, encoding: .utf8) else {
             return ""
@@ -243,7 +264,7 @@ enum PlanPreparationSuggestion {
         "休暇を申請",
         "同行者へ連絡",
         "グッズを準備",
-        "発券・座席を確認",
+        "チケット・座席を確認",
     ]
 }
 
@@ -295,8 +316,69 @@ enum PlanPreparationTicketPhase {
 }
 
 extension Plan {
+    static let undatedTicketPlanKindKey = "ticketUndated"
+
     var preparationFields: PlanPreparationFields {
         PlanPreparationFields(rawValue: unitFieldsRaw)
+    }
+
+    var hasConfirmedSchedule: Bool {
+        planKindKey != Self.undatedTicketPlanKindKey
+    }
+
+    var hasConfirmedAdmissionPreparation: Bool {
+        preparationFields.admissionPreparationConfirmedAt != nil
+    }
+
+    func shouldRequestAdmissionPreparationConfirmation(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard needsAdmissionPreparationConfirmation(now: now, calendar: calendar) else { return false }
+
+        if let snoozedUntil = preparationFields.admissionPreparationSnoozedUntil {
+            return now >= snoozedUntil
+        }
+        return true
+    }
+
+    func needsAdmissionPreparationConfirmation(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard hasConfirmedSchedule,
+              !isArchived,
+              !["attended", "skipped"].contains(stateKey),
+              visit == nil,
+              startsAt > now,
+              !hasConfirmedAdmissionPreparation,
+              supportsAdmissionPreparationConfirmation else {
+            return false
+        }
+
+        let startOfToday = calendar.startOfDay(for: now)
+        guard let promptDay = calendar.date(byAdding: .day, value: -2, to: calendar.startOfDay(for: startsAt)) else {
+            return false
+        }
+        return startOfToday >= promptDay
+    }
+
+    var supportsAdmissionPreparationConfirmation: Bool {
+        if (ticketAttempts ?? []).contains(where: { !$0.isArchived }) {
+            return true
+        }
+        guard let category else { return false }
+        return category.enabledUnitsRaw
+            .components(separatedBy: ",")
+            .contains("ticketPlan")
+    }
+
+    func nextAdmissionPreparationPromptDate(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Date {
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
     }
 
     var preparationTicketPhase: PlanPreparationTicketPhase {
@@ -332,6 +414,7 @@ extension Plan {
 
     var isPreparationChecklistActive: Bool {
         supportsPreparationChecklist
+            && hasConfirmedSchedule
             && preparationFields.isActive(automaticActivation: automaticallyActivatesPreparationChecklist)
     }
 }

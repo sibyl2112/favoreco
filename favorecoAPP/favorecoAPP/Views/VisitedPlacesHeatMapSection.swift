@@ -41,8 +41,11 @@ struct VisitedPlacesHeatMapSection: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(sectionTitle)
-                        .font(FavorecoTypography.sectionTitle)
+                    LayeredCategorySectionTitle(
+                        englishTitle: englishSectionTitle,
+                        japaneseTitle: sectionTitle,
+                        foregroundColor: .primary
+                    )
                     Text("色が濃いほど訪問回数が多い場所")
                         .font(FavorecoTypography.jpSans(9, weight: .medium, relativeTo: .caption2))
                         .foregroundStyle(.secondary)
@@ -112,6 +115,17 @@ struct VisitedPlacesHeatMapSection: View {
         case "nature_living": return "訪れた自然・いきものMAP"
         case "outing_facility": return "その他・未分類施設MAP"
         default: return "行った場所MAP"
+        }
+    }
+
+    private var englishSectionTitle: String {
+        switch category.templateKey {
+        case "museum": return "Museum Map"
+        case "live": return "Venue Map"
+        case "theme_park": return "Park Map"
+        case "nature_living": return "Nature Map"
+        case "outing_facility": return "Places Map"
+        default: return "Places Map"
         }
     }
 

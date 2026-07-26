@@ -20,6 +20,14 @@ enum TicketAttemptStatusUpdater {
         let now = Date()
         attempt.statusKey = statusKey
         attempt.updatedAt = now
+        if statusKey == "issued" {
+            if attempt.paidAt == Date.distantPast {
+                attempt.paidAt = now
+            }
+            if attempt.issuedAt == Date.distantPast {
+                attempt.issuedAt = now
+            }
+        }
 
         let isTerminal = TicketStatusDefinition.isTerminal(statusKey)
         if isTerminal {

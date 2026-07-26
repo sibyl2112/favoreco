@@ -326,6 +326,8 @@ struct TheaterEventMemoryGallerySection: View {
                     .buttonStyle(.plain)
                 }
             }
+            .padding(16)
+            .theaterEventCard(accentColor: accentColor)
         }
     }
 }
@@ -581,9 +583,13 @@ private struct TheaterEventSectionHeader: View {
     let count: Int?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(theaterSectionGold)
+                .frame(width: 22)
             Text(title)
-                .font(FavorecoTypography.sectionTitle)
+                .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                 .foregroundStyle(Color(red: 0.96, green: 0.93, blue: 0.88))
             Spacer(minLength: 8)
             if let count {
@@ -591,6 +597,15 @@ private struct TheaterEventSectionHeader: View {
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var systemImage: String {
+        switch title {
+        case "公演サマリー": "theatermasks"
+        case "参加した公演": "ticket"
+        case "思い出ギャラリー": "photo.on.rectangle.angled"
+        default: "sparkles"
         }
     }
 }
@@ -603,9 +618,13 @@ private struct TheaterEventCollapsibleHeader: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(theaterSectionGold)
+                    .frame(width: 22)
                 Text(title)
-                    .font(FavorecoTypography.sectionTitle)
+                    .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                     .foregroundStyle(Color(red: 0.96, green: 0.93, blue: 0.88))
                 Spacer(minLength: 8)
                 if let count {
@@ -623,6 +642,14 @@ private struct TheaterEventCollapsibleHeader: View {
         .buttonStyle(.plain)
         .accessibilityValue(isExpanded ? "展開中" : "折りたたみ中")
         .accessibilityHint(isExpanded ? "ダブルタップで閉じます" : "ダブルタップで開きます")
+    }
+
+    private var systemImage: String {
+        switch title {
+        case "あらすじ": "book.open"
+        case "キャスト・スタッフ": "person.3"
+        default: "sparkles"
+        }
     }
 }
 
@@ -657,15 +684,21 @@ extension View {
         self
             .background(
                 LinearGradient(
-                    colors: [Color.white.opacity(0.032), accentColor.opacity(0.022)],
+                    colors: [
+                        Color(red: 0.16, green: 0.012, blue: 0.035).opacity(0.92),
+                        Color.black.opacity(0.76)
+                    ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(accentColor.opacity(0.22), lineWidth: 0.6)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(accentColor.opacity(0.62), lineWidth: 0.8)
             }
+            .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
     }
 }
+
+private let theaterSectionGold = Color(red: 0.82, green: 0.62, blue: 0.30)

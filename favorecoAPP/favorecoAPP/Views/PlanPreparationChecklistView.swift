@@ -25,7 +25,8 @@ struct PlanPreparationChecklistView: View {
     }
 
     private var isActive: Bool {
-        fields.isActive(automaticActivation: plan.automaticallyActivatesPreparationChecklist)
+        plan.hasConfirmedSchedule
+            && fields.isActive(automaticActivation: plan.automaticallyActivatesPreparationChecklist)
     }
 
     private var ticketPhase: PlanPreparationTicketPhase {
@@ -44,7 +45,7 @@ struct PlanPreparationChecklistView: View {
     private var orderedSuggestionTitles: [String] {
         switch ticketPhase {
         case .secured:
-            return ["ホテルを予約", "新幹線を予約", "飛行機を予約", "現地交通を確認", "休暇を申請", "同行者へ連絡", "発券・座席を確認", "グッズを準備"]
+            return ["ホテルを予約", "新幹線を予約", "飛行機を予約", "現地交通を確認", "休暇を申請", "同行者へ連絡", "チケット・座席を確認", "グッズを準備"]
         case .noTicket, .applying, .closed:
             return PlanPreparationSuggestion.titles
         }
@@ -62,7 +63,11 @@ struct PlanPreparationChecklistView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("公演の準備・遠征")
                         .font(FavorecoTypography.sectionTitle)
-                    if fields.checklistMode == .automatic {
+                    if !plan.hasConfirmedSchedule {
+                        Text("参加日未定")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    } else if fields.checklistMode == .automatic {
                         Text(automaticStatusText)
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
@@ -74,9 +79,15 @@ struct PlanPreparationChecklistView: View {
                 Toggle("準備リストを使う", isOn: activeBinding)
                     .labelsHidden()
                     .accessibilityLabel("公演の準備リストを使う")
+                    .disabled(!plan.hasConfirmedSchedule)
             }
 
-            if isActive {
+            if !plan.hasConfirmedSchedule {
+                Label("参加日を確定すると、遠征ToDoを入力できます。", systemImage: "calendar.badge.exclamationmark")
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if isActive {
                 if case .secured = ticketPhase {
                     Label("チケット確保後の宿・交通と費用をまとめられます", systemImage: "checkmark.seal.fill")
                         .font(FavorecoTypography.captionStrong)
@@ -130,6 +141,9 @@ struct PlanPreparationChecklistView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .saturation(plan.hasConfirmedSchedule ? 1 : 0)
+        .opacity(plan.hasConfirmedSchedule ? 1 : 0.55)
+        .disabled(!plan.hasConfirmedSchedule)
         .planPreparationCard()
         .sheet(isPresented: $isShowingEditor) {
             PlanPreparationTaskEditor(
@@ -352,6 +366,7 @@ struct PlanPreparationChecklistView: View {
     }
 
     private func updateFields(_ update: (inout PlanPreparationFields) -> Void) {
+        guard plan.hasConfirmedSchedule else { return }
         let previousValue = plan.unitFieldsRaw
         var fields = plan.preparationFields
         update(&fields)

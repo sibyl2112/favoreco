@@ -22,11 +22,14 @@ struct MainTabView: View {
     @AppStorage(AppStorageKeys.pendingNotificationAttemptID) private var pendingNotificationAttemptID = ""
     @AppStorage(AppStorageKeys.pendingNotificationPreparationTaskID) private var pendingNotificationPreparationTaskID = ""
     @State private var selectedTab: MainTab = .home
+    @State private var activeCreateContextCategoryID: UUID?
     @State private var isShowingCreateMenu = false
     @State private var isShowingRecordTargetSelection = false
     @State private var isShowingAddPlan = false
     @State private var isShowingAddTicketSchedule = false
+    @State private var isShowingTheaterPlanChoice = false
     @State private var isShowingQuickRegistration = false
+    @State private var theaterRegistrationCategory: RecordCategory?
     @State private var pendingCreateAction: CreateAction?
     @State private var pendingRecordDestination: RecordEntryDestination?
     @State private var recordDestination: RecordEntryDestination?
@@ -42,6 +45,11 @@ struct MainTabView: View {
             ? homeSelectedCategoryTemplateKey
             : lastUsedCategoryTemplateKey
         return visibleCategories.first(where: { $0.templateKey == preferredKey }) ?? visibleCategories.first
+    }
+
+    private var createContextCategory: RecordCategory? {
+        guard let activeCreateContextCategoryID else { return nil }
+        return visibleCategories.first(where: { $0.id == activeCreateContextCategoryID })
     }
 
     private var createMenuCategories: [RecordCategory] {
@@ -108,12 +116,17 @@ struct MainTabView: View {
         .sheet(isPresented: $isShowingCreateMenu, onDismiss: openPendingCreateAction) {
             CreateEntryMenuView(
                 canCreateRecord: !visibleCategories.isEmpty,
+                isTheaterPreferred: createContextCategory?.templateKey == "theater",
                 onSelect: { action in
                     pendingCreateAction = action
                     isShowingCreateMenu = false
                 }
             )
-            .presentationDetents([.height(400)])
+            .presentationDetents([
+                .height(CreateEntryMenuView.preferredSheetHeight(
+                    isTheaterPreferred: createContextCategory?.templateKey == "theater"
+                ))
+            ])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $isShowingRecordTargetSelection, onDismiss: openPendingRecordDestination) {
@@ -133,7 +146,16 @@ struct MainTabView: View {
             selectedTab = .calendar
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoPlanCreation)) { _ in
-            isShowingAddPlan = true
+            openPlanCreation()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .favorecoCreateContextDidEnterCategory)) { notification in
+            let categoryID = notification.object as? UUID
+            guard activeCreateContextCategoryID != categoryID else { return }
+            activeCreateContextCategoryID = categoryID
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .favorecoCreateContextDidLeaveCategory)) { _ in
+            guard activeCreateContextCategoryID != nil else { return }
+            activeCreateContextCategoryID = nil
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoPlan)) { _ in
             selectedTab = .calendar
@@ -191,6 +213,24 @@ struct MainTabView: View {
         .sheet(isPresented: $isShowingAddTicketSchedule) {
             AddTicketPlanView(entryMode: .ticketSchedule)
         }
+        .sheet(item: $theaterRegistrationCategory) { category in
+            TheaterPerformanceRegistrationView(category: category)
+        }
+        .confirmationDialog(
+            "予定の登録方法",
+            isPresented: $isShowingTheaterPlanChoice,
+            titleVisibility: .visible
+        ) {
+            Button("日程を決めて予定を登録") {
+                isShowingAddPlan = true
+            }
+            Button("チケット取得から始める") {
+                isShowingAddTicketSchedule = true
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("チケット取得から始める場合は、参加日が未定のまま抽選・発売スケジュールを登録できます。")
+        }
     }
 
     private func openPendingCreateAction() {
@@ -204,8 +244,19 @@ struct MainTabView: View {
             isShowingRecordTargetSelection = true
         case .quick:
             isShowingQuickRegistration = true
+        case .theaterPerformance:
+            guard createContextCategory?.templateKey == "theater" else { return }
+            theaterRegistrationCategory = createContextCategory
         case .ticketSchedule:
             isShowingAddTicketSchedule = true
+        }
+    }
+
+    private func openPlanCreation() {
+        if createContextCategory?.templateKey == "theater" {
+            isShowingTheaterPlanChoice = true
+        } else {
+            isShowingAddPlan = true
         }
     }
 
@@ -245,9 +296,21 @@ struct MainScreenHeader: View {
     var headerForegroundColor: Color? = nil
     var onLeadingTap: (() -> Void)? = nil
     var onCenteredTitleTap: (() -> Void)? = nil
+    var showsTicketManagement = false
 
     var body: some View {
-        ZStack {
+        HStack(alignment: .center, spacing: 8) {
+            if let onLeadingTap {
+                Button(action: onLeadingTap) {
+                    leadingTitle
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Homeへ戻る")
+            } else {
+                leadingTitle
+                    .accessibilityAddTraits(.isHeader)
+            }
+
             if let centeredTitle {
                 if let onCenteredTitleTap {
                     Button(action: onCenteredTitleTap) {
@@ -259,23 +322,16 @@ struct MainScreenHeader: View {
                     centeredTitleLabel(centeredTitle, showsChevron: false)
                         .accessibilityAddTraits(.isHeader)
                 }
-            }
-
-            HStack(alignment: .center, spacing: 12) {
-                if let onLeadingTap {
-                    Button(action: onLeadingTap) {
-                        leadingTitle
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Homeへ戻る")
-                } else {
-                    leadingTitle
-                        .accessibilityAddTraits(.isHeader)
-                }
-
+            } else {
                 Spacer(minLength: 8)
-                MainToolbarActions(tint: headerForegroundColor)
             }
+
+            MainToolbarActions(
+                tint: headerForegroundColor,
+                showsTicketManagement: showsTicketManagement
+            )
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(2)
         }
         .frame(maxWidth: .infinity, minHeight: 48)
     }
@@ -283,7 +339,7 @@ struct MainScreenHeader: View {
     private func centeredTitleLabel(_ title: String, showsChevron: Bool) -> some View {
         HStack(spacing: 5) {
             Text(title)
-                .tracking(5)
+                .tracking(title.count <= 3 ? 5 : 0)
             if showsChevron {
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
@@ -292,8 +348,9 @@ struct MainScreenHeader: View {
         .font(FavorecoTypography.jpSerif(20, weight: .bold, relativeTo: .title3))
         .foregroundStyle(headerForegroundColor ?? .primary)
         .lineLimit(1)
-        .minimumScaleFactor(0.72)
-        .padding(.horizontal, 112)
+        .minimumScaleFactor(0.62)
+        .frame(maxWidth: .infinity)
+        .layoutPriority(1)
     }
 
     private var leadingTitle: some View {
@@ -353,11 +410,27 @@ struct MainToolbarActions: View {
     @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
     @State private var isShowingNotifications = false
     @State private var isShowingSettings = false
+    @State private var isShowingTicketManagement = false
 
     var tint: Color? = nil
+    var showsTicketManagement = false
 
     var body: some View {
         HStack(spacing: 2) {
+            if showsTicketManagement {
+                Button {
+                    isShowingTicketManagement = true
+                } label: {
+                    Image(systemName: "ticket")
+                        .font(.system(size: 22, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(tint ?? .primary)
+                .accessibilityLabel("チケット管理")
+            }
+
             Button {
                 isShowingNotifications = true
             } label: {
@@ -398,6 +471,11 @@ struct MainToolbarActions: View {
         .foregroundStyle(tint ?? .primary)
         .sheet(isPresented: $isShowingNotifications) {
             AppNotificationCenterView()
+        }
+        .sheet(isPresented: $isShowingTicketManagement) {
+            NavigationStack {
+                TicketOverviewView(showsCloseButton: true)
+            }
         }
         .sheet(isPresented: $isShowingSettings) {
             SettingsView()
@@ -589,6 +667,7 @@ private enum CreateAction: String, Identifiable {
     case plan
     case record
     case quick
+    case theaterPerformance
     case ticketSchedule
 
     var id: String { rawValue }
@@ -597,46 +676,85 @@ private enum CreateAction: String, Identifiable {
 private struct CreateEntryMenuView: View {
     @Environment(\.dismiss) private var dismiss
     let canCreateRecord: Bool
+    let isTheaterPreferred: Bool
     let onSelect: (CreateAction) -> Void
+
+    static func preferredSheetHeight(isTheaterPreferred: Bool) -> CGFloat {
+        let itemCount = isTheaterPreferred ? 3 : 4
+        let buttonHeight: CGFloat = 64
+        let buttonSpacing: CGFloat = 10
+        let sheetChromeAndInsets: CGFloat = 120
+        return sheetChromeAndInsets
+            + (CGFloat(itemCount) * buttonHeight)
+            + (CGFloat(itemCount - 1) * buttonSpacing)
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 8) {
-                CreateEntryButton(
-                    title: "予定を立てる",
-                    detail: "これから体験する予定を登録",
-                    systemImage: "calendar.badge.plus"
-                ) {
-                    onSelect(.plan)
-                }
+            VStack(spacing: 10) {
+                if isTheaterPreferred {
+                    CreateEntryButton(
+                        title: "公演を登録",
+                        detail: "新しい公演を「気になる」に追加",
+                        systemImage: "theatermasks"
+                    ) {
+                        onSelect(.theaterPerformance)
+                    }
 
-                CreateEntryButton(
-                    title: "体験済みを記録",
-                    detail: "観た・行った・体験した思い出を残す",
-                    systemImage: "square.and.pencil",
-                    isEnabled: canCreateRecord
-                ) {
-                    onSelect(.record)
-                }
+                    CreateEntryButton(
+                        title: "予定を立てる",
+                        detail: "登録済みの公演に参加予定を追加",
+                        systemImage: "calendar.badge.plus"
+                    ) {
+                        onSelect(.plan)
+                    }
 
-                CreateEntryButton(
-                    title: "クイック登録",
-                    detail: "気になるものを最低限で一時保存",
-                    systemImage: "bolt.fill"
-                ) {
-                    onSelect(.quick)
-                }
+                    CreateEntryButton(
+                        title: "チケットを手配する",
+                        detail: "抽選・発売・受取の期限を登録",
+                        systemImage: "ticket"
+                    ) {
+                        onSelect(.ticketSchedule)
+                    }
+                } else {
+                    CreateEntryButton(
+                        title: "予定を立てる",
+                        detail: "これから体験する予定を登録",
+                        systemImage: "calendar.badge.plus"
+                    ) {
+                        onSelect(.plan)
+                    }
 
-                CreateEntryButton(
-                    title: "チケットスケジュールを追加",
-                    detail: "抽選・発売・発券の予定を登録",
-                    systemImage: "ticket"
-                ) {
-                    onSelect(.ticketSchedule)
+                    CreateEntryButton(
+                        title: "体験済みを記録",
+                        detail: "観た・行った・体験した思い出を残す",
+                        systemImage: "square.and.pencil",
+                        isEnabled: canCreateRecord
+                    ) {
+                        onSelect(.record)
+                    }
+
+                    CreateEntryButton(
+                        title: "クイック登録",
+                        detail: "気になるものを最低限で一時保存",
+                        systemImage: "bolt.fill"
+                    ) {
+                        onSelect(.quick)
+                    }
+
+                    CreateEntryButton(
+                        title: "チケットスケジュールを追加",
+                        detail: "抽選・発売・チケット受取の予定を登録",
+                        systemImage: "ticket"
+                    ) {
+                        onSelect(.ticketSchedule)
+                    }
                 }
             }
             .padding(.horizontal, 20)
+            .padding(.top, 12)
             .padding(.bottom, 16)
+            .frame(maxHeight: .infinity, alignment: .top)
             .navigationTitle("追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -667,18 +785,33 @@ private struct CreateEntryButton: View {
                     Text(title)
                         .font(FavorecoTypography.bodyStrong)
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .allowsTightening(true)
                     Text(detail)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .allowsTightening(true)
                 }
+                .layoutPriority(1)
 
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
-            .frame(maxWidth: .infinity, minHeight: 58)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.32), lineWidth: 1)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

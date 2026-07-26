@@ -11,7 +11,7 @@ enum FavorecoDateText {
     static func fullDate(_ date: Date, includesWeekday: Bool = true) -> String {
         let values = components(for: date)
         let base = "\(values.year)年\(values.month)月\(values.day)日"
-        return includesWeekday ? "\(base)（\(values.weekday)）" : base
+        return includesWeekday ? "\(base)(\(values.weekday))" : base
     }
 
     static func fullDateTime(_ date: Date, includesWeekday: Bool = true) -> String {
@@ -20,17 +20,16 @@ enum FavorecoDateText {
 
     static func compactDateTime(_ date: Date) -> String {
         let values = components(for: date)
-        return "\(values.month)/\(values.day)（\(values.weekday)） \(time(date))"
+        return "\(values.month)/\(values.day)(\(values.weekday)) \(time(date))"
     }
 
     static func compactDate(_ date: Date) -> String {
         let values = components(for: date)
-        return "\(values.month)/\(values.day)（\(values.weekday)）"
+        return "\(values.month)/\(values.day)(\(values.weekday))"
     }
 
     static func compactDateWithHalfWidthWeekday(_ date: Date) -> String {
-        let values = components(for: date)
-        return "\(values.month)/\(values.day)(\(values.weekday))"
+        compactDate(date)
     }
 
     static func monthDay(_ date: Date) -> String {

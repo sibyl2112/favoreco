@@ -23,7 +23,7 @@ struct TheaterEventScheduleSnapshot {
                     : lhs.startsAt > rhs.startsAt
             }
 
-        let upcomingPlans = plans.filter { $0.startsAt >= now }
+        let upcomingPlans = plans.filter { $0.hasConfirmedSchedule && $0.startsAt >= now }
         let ticketReferences = plans.flatMap { plan in
             TicketAttemptPresentationOrder.sorted(
                 (plan.ticketAttempts ?? []).filter { !$0.isArchived },

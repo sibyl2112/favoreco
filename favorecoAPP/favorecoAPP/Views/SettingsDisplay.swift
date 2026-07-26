@@ -4,11 +4,7 @@ import SwiftData
 struct DisplaySettingsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.showsHomeAttention) private var showsHomeAttention = true
-    @AppStorage(AppStorageKeys.showsHomeExperienceGallery) private var showsHomeExperienceGallery = true
-    @AppStorage(AppStorageKeys.showsHomeInbox) private var showsHomeInbox = true
-    @AppStorage(AppStorageKeys.showsHomeRecentRecords) private var showsHomeRecentRecords = true
     @AppStorage(AppStorageKeys.showsHomeCategories) private var showsHomeCategories = true
-    @AppStorage(AppStorageKeys.showsHomeStatsSummary) private var showsHomeStatsSummary = false
     @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
     @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
     @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
@@ -19,12 +15,10 @@ struct DisplaySettingsView: View {
     var body: some View {
         Form {
             Section("Home表示") {
-                Toggle("次にやること・チケット", isOn: $showsHomeAttention)
-                Toggle("最近の思い出", isOn: $showsHomeExperienceGallery)
-                Toggle("気になる", isOn: $showsHomeInbox)
-                Toggle("最近の記録", isOn: $showsHomeRecentRecords)
+                Toggle("チケットスケジュール", isOn: $showsHomeAttention)
                 Toggle("ジャンル一覧", isOn: $showsHomeCategories)
-                Toggle("統計サマリ", isOn: $showsHomeStatsSummary)
+                LabeledContent("PICK UP", value: "常に表示")
+                LabeledContent("Favoreco Report", value: "常に表示")
             }
 
             Section("外観") {

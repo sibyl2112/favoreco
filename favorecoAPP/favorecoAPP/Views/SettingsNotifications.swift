@@ -63,17 +63,17 @@ struct NotificationSettingsView: View {
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
 
-                Toggle("申込開始", isOn: $applicationStartEnabled)
+                Toggle("申込・発売開始", isOn: $applicationStartEnabled)
                 Toggle("申込締切", isOn: $applicationDeadlineEnabled)
                 Toggle("当落発表", isOn: $lotteryResultEnabled)
                 Toggle("入金締切", isOn: $paymentDeadlineEnabled)
-                Toggle("発券開始", isOn: $ticketIssueEnabled)
+                Toggle("チケット受取開始", isOn: $ticketIssueEnabled)
                 Toggle("公演前日/当日", isOn: $performanceReminderEnabled)
                 Toggle("公演準備の期限", isOn: $preparationDeadlineEnabled)
 
                 DisclosureGroup("通知時刻を変更", isExpanded: $isShowingTicketTiming) {
                     if applicationStartEnabled {
-                        pointTimingPicker("申込開始", selection: $applicationStartTiming)
+                        pointTimingPicker("申込・発売開始", selection: $applicationStartTiming)
                     }
                     if applicationDeadlineEnabled {
                         deadlineTimingPicker("申込締切", selection: $applicationDeadlineTiming)
@@ -85,7 +85,7 @@ struct NotificationSettingsView: View {
                         deadlineTimingPicker("入金締切", selection: $paymentDeadlineTiming)
                     }
                     if ticketIssueEnabled {
-                        pointTimingPicker("発券開始", selection: $ticketIssueTiming)
+                        pointTimingPicker("チケット受取開始", selection: $ticketIssueTiming)
                     }
                     if performanceReminderEnabled {
                         Picker("公演", selection: $performanceTiming) {
@@ -342,7 +342,7 @@ private enum TicketNotificationPreset: String, CaseIterable, Identifiable {
         case .minimal:
             "申込締切・入金締切・公演前日/当日"
         case .recommended:
-            "締切・当落・入金・発券・公演・公演準備"
+            "締切・当落・入金・チケット受取・公演・公演準備"
         case .thorough:
             "申込開始を含む予定・チケット通知をすべて使用"
         }

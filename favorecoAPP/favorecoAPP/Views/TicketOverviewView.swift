@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct TicketOverviewView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var attempts: [TicketAttempt]
     @State private var selectedFilter: TicketOverviewFilter = .needsAction
@@ -16,7 +17,15 @@ struct TicketOverviewView: View {
     @State private var searchText = ""
     @State private var isShowingAddTicketPlan = false
     @State private var editingAttempt: TicketAttempt?
+    @State private var quickActionAttempt: TicketAttempt?
     @State private var attemptPendingArchive: TicketAttempt?
+    @State private var statusActionAttempt: TicketAttempt?
+    @State private var schedulePlan: Plan?
+    let showsCloseButton: Bool
+
+    init(showsCloseButton: Bool = false) {
+        self.showsCloseButton = showsCloseButton
+    }
 
     private var activeAttempts: [TicketAttempt] {
         attempts.filter { !$0.isArchived && $0.plan?.isArchived != true }
@@ -110,29 +119,39 @@ struct TicketOverviewView: View {
                                 }
                                 .tint(.green)
                             }
-                        } else if let plan = attempt.plan {
-                            NavigationLink {
-                                PlanDetailView(plan: plan)
+                        } else if attempt.plan != nil {
+                            Button {
+                                quickActionAttempt = attempt
                             } label: {
                                 TicketOverviewRow(attempt: attempt)
                             }
+                            .buttonStyle(.plain)
                             .contextMenu {
                                 statusTransitionMenu(for: attempt)
                             }
                             .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                Button {
+                                    statusActionAttempt = attempt
+                                } label: {
+                                    Label("進める", systemImage: "arrow.right.circle")
+                                }
+                                .tint(.green)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    close(attempt)
+                                } label: {
+                                    Label(
+                                        attempt.statusKey == "waitingResult" ? "落選" : "見送り",
+                                        systemImage: "xmark.circle"
+                                    )
+                                }
                                 Button {
                                     editingAttempt = attempt
                                 } label: {
                                     Label("編集", systemImage: "pencil")
                                 }
                                 .tint(.accentColor)
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    attemptPendingArchive = attempt
-                                } label: {
-                                    Label("非表示", systemImage: "archivebox")
-                                }
                             }
                         } else {
                             TicketOverviewRow(attempt: attempt)
@@ -141,10 +160,15 @@ struct TicketOverviewView: View {
                 }
             }
         }
-        .navigationTitle("チケット")
+        .navigationTitle("チケット管理")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "予定名・会場・プレイガイド・名義")
         .toolbar {
+            if showsCloseButton {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     isShowingAddTicketPlan = true
@@ -160,6 +184,32 @@ struct TicketOverviewView: View {
         .sheet(item: $editingAttempt) { attempt in
             if let plan = attempt.plan {
                 EditTicketAttemptView(plan: plan, attempt: attempt)
+            }
+        }
+        .sheet(item: $quickActionAttempt) { attempt in
+            TicketQuickActionSheet(attempt: attempt)
+        }
+        .sheet(item: $schedulePlan) { plan in
+            TicketAttendanceScheduleSheet(plan: plan)
+        }
+        .confirmationDialog(
+            "チケットの状態を更新",
+            isPresented: Binding(
+                get: { statusActionAttempt != nil },
+                set: { if !$0 { statusActionAttempt = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let attempt = statusActionAttempt {
+                ForEach(TicketStatusTransitionDefinition.transitions(for: attempt)) { transition in
+                    Button(transition.title) {
+                        updateStatus(attempt, to: transition.targetStatusKey)
+                        statusActionAttempt = nil
+                    }
+                }
+            }
+            Button("キャンセル", role: .cancel) {
+                statusActionAttempt = nil
             }
         }
         .confirmationDialog(
@@ -212,9 +262,24 @@ struct TicketOverviewView: View {
                 to: statusKey,
                 in: modelContext
             )
+            if TicketAttendanceScheduleRequirement.shouldPrompt(
+                afterTransitionTo: statusKey,
+                plan: attempt.plan
+            ), let plan = attempt.plan {
+                DispatchQueue.main.async {
+                    schedulePlan = plan
+                }
+            }
         } catch {
             statusUpdateError = error.localizedDescription
         }
+    }
+
+    private func close(_ attempt: TicketAttempt) {
+        updateStatus(
+            attempt,
+            to: attempt.statusKey == "waitingResult" ? "lost" : "skipped"
+        )
     }
 
     private func archivePendingAttempt() {
@@ -258,7 +323,7 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: "すべて"
         case .needsAction: "要対応"
-        case .planning: "検討・申込"
+        case .planning: "進行中"
         case .acquired: "取得済み"
         case .completed: "終了"
         case .archived: "非表示"
@@ -280,7 +345,7 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: "チケット情報はありません"
         case .needsAction: "対応が必要なチケットはありません"
-        case .planning: "検討・申込中のチケットはありません"
+        case .planning: "進行中のチケットはありません"
         case .acquired: "取得済みのチケットはありません"
         case .completed: "終了したチケットはありません"
         case .archived: "非表示のチケットはありません"
@@ -290,7 +355,7 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
     var emptyMessage: String {
         switch self {
         case .needsAction:
-            "申込締切、当落発表、入金締切、発券開始が近づくとここに表示されます。"
+            "申込締切、当落発表、入金締切、チケット受取開始が近づくとここに表示されます。"
         case .archived:
             "個別に非表示にした申込を、ここから再表示できます。"
         default:
@@ -305,10 +370,15 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         case .needsAction:
             return TicketNextActionDefinition.nextAction(for: attempt) != nil
                 || TicketInputIssueDefinition.issue(for: attempt) != nil
+                || (["waitingIssue", "issued"].contains(attempt.statusKey)
+                    && attempt.plan?.hasConfirmedSchedule == false)
         case .planning:
-            return ["interested", "beforeApply", "onSaleSoon", "waitingResult"].contains(attempt.statusKey)
+            return [
+                "interested", "beforeApply", "onSaleSoon",
+                "waitingResult", "won", "waitingPayment",
+            ].contains(attempt.statusKey)
         case .acquired:
-            return ["won", "waitingPayment", "waitingIssue", "issued"].contains(attempt.statusKey)
+            return ["waitingIssue", "issued"].contains(attempt.statusKey)
         case .completed:
             return ["lost", "attended", "skipped"].contains(attempt.statusKey)
         case .archived:
@@ -324,11 +394,13 @@ private struct TicketOverviewCounts: View {
         attempts.filter {
             TicketNextActionDefinition.nextAction(for: $0) != nil
                 || TicketInputIssueDefinition.issue(for: $0) != nil
+                || (["waitingIssue", "issued"].contains($0.statusKey)
+                    && $0.plan?.hasConfirmedSchedule == false)
         }.count
     }
 
     private var acquiredCount: Int {
-        attempts.filter { ["won", "waitingPayment", "waitingIssue", "issued"].contains($0.statusKey) }.count
+        attempts.filter { ["waitingIssue", "issued"].contains($0.statusKey) }.count
     }
 
     var body: some View {
@@ -392,7 +464,12 @@ private struct TicketOverviewRow: View {
                 }
 
                 if let plan {
-                    Label(FavorecoDateText.compactDateTime(plan.startsAt), systemImage: "calendar")
+                    Label(
+                        plan.hasConfirmedSchedule
+                            ? FavorecoDateText.compactDateTime(plan.startsAt)
+                            : "参加日未定",
+                        systemImage: "calendar"
+                    )
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -421,6 +498,24 @@ private struct TicketOverviewRow: View {
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.orange)
                         .lineLimit(1)
+                }
+
+                if let plan, !plan.hasConfirmedSchedule {
+                    Label("日程を入力", systemImage: "calendar.badge.plus")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.orange)
+                }
+
+                if let plan {
+                    let item = CategoryTicketProgressItem(plan: plan, attempt: attempt)
+                    TicketProgressTimelineView(
+                        stages: item.stages,
+                        currentIndex: item.currentStageIndex,
+                        tint: categoryColor,
+                        nodeBackground: Color(.secondarySystemGroupedBackground),
+                        secondaryTextColor: .secondary
+                    )
+                    .padding(.top, 3)
                 }
             }
         }

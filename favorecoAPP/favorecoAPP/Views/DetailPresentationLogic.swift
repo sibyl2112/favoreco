@@ -148,24 +148,62 @@ enum EventDetailPresentation {
 
     static func theaterLinks(event: ExperienceEvent, fields: VisitUnitFields) -> [TheaterPublicLink] {
         var result: [TheaterPublicLink] = []
-        if let url = URL(string: event.officialURL), !event.officialURL.isEmpty {
+        if let url = theaterOfficialURL(event: event) {
             result.append(TheaterPublicLink(title: "公式", systemImage: "link", url: url))
         }
+        if let url = theaterTicketURL(event: event) {
+            result.append(TheaterPublicLink(title: "チケット", systemImage: "ticket", url: url))
+        }
+        for platform in TheaterSocialPlatform.allCases {
+            if let url = theaterSocialURL(platform: platform, fields: fields) {
+                result.append(
+                    TheaterPublicLink(
+                        title: platform.displayName,
+                        systemImage: "bubble.left.and.bubble.right",
+                        url: url
+                    )
+                )
+            }
+        }
+        return result
+    }
+
+    static func theaterOfficialURL(event: ExperienceEvent) -> URL? {
+        publicURL(from: event.officialURL)
+    }
+
+    static func theaterTicketURL(event: ExperienceEvent) -> URL? {
         let ticketURLText = (event.plans ?? [])
             .filter { !$0.isArchived }
             .flatMap { $0.ticketAttempts ?? [] }
             .map(\.purchaseURL)
             .first { !$0.isEmpty }
             ?? (event.plans ?? []).map(\.sourceURL).first { !$0.isEmpty }
-        if let ticketURLText, let url = URL(string: ticketURLText) {
-            result.append(TheaterPublicLink(title: "チケット", systemImage: "ticket", url: url))
+        guard let ticketURLText else { return nil }
+        return publicURL(from: ticketURLText)
+    }
+
+    static func theaterSocialURL(
+        platform: TheaterSocialPlatform,
+        fields: VisitUnitFields
+    ) -> URL? {
+        guard let value = fields.socialLinks.first(where: {
+            TheaterSocialPlatform.platform(for: $0) == platform
+        }) else {
+            return nil
         }
-        for (index, value) in fields.socialLinks.enumerated() {
-            if let url = URL(string: value) {
-                result.append(TheaterPublicLink(title: "SNS \(index + 1)", systemImage: "bubble.left.and.bubble.right", url: url))
-            }
+        return publicURL(from: value)
+    }
+
+    private static func publicURL(from value: String) -> URL? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else {
+            return nil
         }
-        return result
+        return url
     }
 
     private static func deduplicatedVenues(_ venues: [TheaterPublicVenue]) -> [TheaterPublicVenue] {

@@ -6,12 +6,13 @@ struct HomeAttentionSection: View {
 
     let items: [HomeAttentionItem]
     let onShowAll: () -> Void
+    let onSelectTicket: (TicketAttempt) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("次にやること")
-                    .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
+                Text("Ticket Schedule")
+                    .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
                     .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
                 if !items.isEmpty {
                     Text("\(items.count)")
@@ -19,6 +20,17 @@ struct HomeAttentionSection: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
+
+                Button(action: onShowAll) {
+                    HStack(spacing: 3) {
+                        Text("すべて見る")
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(themePalette.globalTint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("チケット管理を開く")
             }
 
             if items.isEmpty {
@@ -36,31 +48,23 @@ struct HomeAttentionSection: View {
                 .background(.background, in: Capsule())
             } else {
                 ForEach(items.prefix(3)) { item in
-                    if let plan = item.plan {
+                    if let attempt = item.attempt {
+                        Button {
+                            onSelectTicket(attempt)
+                        } label: {
+                            HomeTicketScheduleCard(item: item)
+                        }
+                        .buttonStyle(.plain)
+                    } else if let plan = item.plan {
                         NavigationLink {
                             HomePlanDestination(planID: plan.id)
                         } label: {
-                            HomeNextActionCapsuleRow(item: item)
+                            HomeTicketScheduleCard(item: item)
                         }
                         .buttonStyle(.plain)
                     } else {
-                        HomeNextActionCapsuleRow(item: item)
+                        HomeTicketScheduleCard(item: item)
                     }
-                }
-
-                if items.count > 3 {
-                    Button(action: onShowAll) {
-                        HStack(spacing: 8) {
-                            Text("ほか\(items.count - 3)件を見る")
-                            Image(systemName: "chevron.right")
-                        }
-                        .font(FavorecoTypography.captionStrong)
-                        .foregroundStyle(themePalette.globalTint)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("次にやることをすべて見る、ほか\(items.count - 3)件")
                 }
             }
         }

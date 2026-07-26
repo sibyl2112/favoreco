@@ -18,6 +18,8 @@ enum AppStorageKeys {
     static let showsHomeCategories = "showsHomeCategories"
     static let showsHomeStatsSummary = "showsHomeStatsSummary"
     static let showsHomeFavorites = "showsHomeFavorites"
+    static let homePickupMode = "homePickupMode"
+    static let homeReportPeriod = "homeReportPeriod"
     static let debugHomeCategoryLayout = "debugHomeCategoryLayout"
     static let followsSystemTextSize = "followsSystemTextSize"
     static let appTextSize = "appTextSize"

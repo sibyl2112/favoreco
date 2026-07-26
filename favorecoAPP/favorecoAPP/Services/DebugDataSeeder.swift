@@ -481,7 +481,7 @@ enum SampleDataSeeder {
         switch category.templateKey {
         case "theater":
             titles = ["月影のアトリエ", "雨音の王国", "星屑の航路"]
-            seriesName = "2026年公演"
+            seriesName = "シリーズ名"
             organizer = "灯台座"
         case "museum":
             titles = ["透明な記憶", "風を採集する", "深海の光譜"]

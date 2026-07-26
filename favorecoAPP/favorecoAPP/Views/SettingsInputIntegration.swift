@@ -242,7 +242,7 @@ private struct TicketAccountRow: View {
                 .frame(width: 12, height: 12)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(account.serviceName.isEmpty ? "未名称" : account.serviceName)
+                Text(selectionLabel)
                     .font(FavorecoTypography.bodyStrong)
                     .foregroundStyle(.primary)
                 Text(subtitle)
@@ -260,10 +260,15 @@ private struct TicketAccountRow: View {
         .padding(.vertical, 4)
     }
 
+    private var selectionLabel: String {
+        let service = account.serviceName.isEmpty ? "未名称" : account.serviceName
+        let holder = account.accountName.isEmpty ? "名義未設定" : account.accountName
+        return "\(service)｜\(holder)"
+    }
+
     private var subtitle: String {
         let typeName = TicketAccountTypeDefinition.name(for: account.accountTypeKey)
-        let holder = account.accountName.isEmpty ? "名義未設定" : account.accountName
-        return "\(typeName) ・ \(holder)"
+        return typeName
     }
 }
 
@@ -302,7 +307,7 @@ private struct EditTicketAccountView: View {
                     }
                 }
 
-                TextField("名義", text: $accountName)
+                TextField("名義（任意）", text: $accountName)
                 TextField("会員番号", text: $memberNumber)
                 TextField("会員種別・ランク", text: $membershipRank)
             }

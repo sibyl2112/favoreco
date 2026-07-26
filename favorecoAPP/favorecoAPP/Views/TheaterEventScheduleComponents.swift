@@ -7,6 +7,7 @@ struct TheaterEventUpcomingPlansSection: View {
     let representativePhoto: PhotoBlob?
     let accentColor: Color
     let onAddPlan: () -> Void
+    let onOpenPlan: (UUID) -> Void
 
     @State private var showsAll = false
 
@@ -16,9 +17,13 @@ struct TheaterEventUpcomingPlansSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(accentColor)
+                    .frame(width: 22)
                 Text("次の予定")
-                    .font(FavorecoTypography.sectionTitle)
+                    .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                 Spacer(minLength: 8)
                 Text("\(plans.count)")
                     .font(FavorecoTypography.captionStrong)
@@ -47,8 +52,8 @@ struct TheaterEventUpcomingPlansSection: View {
                 .buttonStyle(.plain)
             } else {
                 ForEach(displayedPlans) { plan in
-                    NavigationLink {
-                        PlanDetailView(plan: plan)
+                    Button {
+                        onOpenPlan(plan.id)
                     } label: {
                         FavorecoComingUpRow(
                             date: plan.startsAt,
@@ -66,6 +71,7 @@ struct TheaterEventUpcomingPlansSection: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityHint("予定詳細を開きます")
                 }
 
                 if plans.count > 1 {
@@ -86,6 +92,8 @@ struct TheaterEventUpcomingPlansSection: View {
                 }
             }
         }
+        .padding(16)
+        .theaterEventCard(accentColor: accentColor)
     }
 
     private func resolvedVenue(for plan: Plan) -> String {
@@ -97,12 +105,19 @@ struct TheaterEventUpcomingPlansSection: View {
 struct TheaterEventTicketProgressSection: View {
     let references: [TheaterEventTicketReference]
     let accentColor: Color
+    let onOpenPlan: (UUID) -> Void
 
     @State private var selectedAttemptID: UUID?
+    @State private var editingAttempt: TicketAttempt?
 
-    init(references: [TheaterEventTicketReference], accentColor: Color) {
+    init(
+        references: [TheaterEventTicketReference],
+        accentColor: Color,
+        onOpenPlan: @escaping (UUID) -> Void
+    ) {
         self.references = references
         self.accentColor = accentColor
+        self.onOpenPlan = onOpenPlan
         _selectedAttemptID = State(initialValue: references.first?.id)
     }
 
@@ -112,10 +127,25 @@ struct TheaterEventTicketProgressSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Ticket Progress")
-                    .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "ticket")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(accentColor)
+                    .frame(width: 22)
+                Text("チケット管理")
+                    .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                 Spacer(minLength: 8)
+                if let selectedReference {
+                    Button {
+                        editingAttempt = selectedReference.attempt
+                    } label: {
+                        Label("日付編集", systemImage: "pencil")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("申込日、当落日、入金期限、取得日を編集します")
+                }
                 Text("\(references.count)")
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
@@ -172,8 +202,8 @@ struct TheaterEventTicketProgressSection: View {
                             .padding(.vertical, 4)
                             .background(accentColor.opacity(0.10), in: Capsule())
 
-                        NavigationLink {
-                            PlanDetailView(plan: selectedReference.plan)
+                        Button {
+                            onOpenPlan(selectedReference.plan.id)
                         } label: {
                             CategoryTicketProgressCard(
                                 item: CategoryTicketProgressItem(
@@ -186,15 +216,25 @@ struct TheaterEventTicketProgressSection: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityHint("予定詳細を開きます")
                     }
                     .id(selectedReference.id)
                     .transition(.opacity)
                 }
             }
         }
+        .padding(16)
+        .theaterEventCard(accentColor: accentColor)
         .onChange(of: references.map(\.id)) { _, ids in
             if let selectedAttemptID, ids.contains(selectedAttemptID) { return }
             self.selectedAttemptID = ids.first
+        }
+        .sheet(item: $editingAttempt) { attempt in
+            if let plan = attempt.plan {
+                EditTicketAttemptView(plan: plan, attempt: attempt, prioritizesDates: true)
+            } else {
+                ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+            }
         }
     }
 

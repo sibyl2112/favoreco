@@ -10,6 +10,106 @@ import SwiftData
 import UIKit
 import PhotosUI
 
+struct TheaterExperiencePage<Hero: View, Content: View>: View {
+    let genreColor: Color
+    let scrollTargetID: UUID?
+    let showsScrollingFrame: Bool
+    private let hero: () -> Hero
+    private let content: () -> Content
+
+    init(
+        genreColor: Color,
+        scrollTargetID: UUID? = nil,
+        showsScrollingFrame: Bool = false,
+        @ViewBuilder hero: @escaping () -> Hero,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.genreColor = genreColor
+        self.scrollTargetID = scrollTargetID
+        self.showsScrollingFrame = showsScrollingFrame
+        self.hero = hero
+        self.content = content
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    pageHeader
+
+                    LazyVStack(alignment: .leading, spacing: 20) {
+                        content()
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 24)
+                .modifier(
+                    TheaterScrollingPageFrameModifier(
+                        isEnabled: showsScrollingFrame
+                    )
+                )
+            }
+            .scrollIndicators(showsScrollingFrame ? .hidden : .automatic)
+            .task(id: scrollTargetID) {
+                guard let scrollTargetID else { return }
+                await Task.yield()
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    proxy.scrollTo(scrollTargetID, anchor: .center)
+                }
+            }
+        }
+        .ignoresSafeArea(edges: .top)
+        .background {
+            ZStack {
+                Color.black
+                LinearGradient(
+                    colors: [genreColor, genreColor.opacity(0.72), Color.black.opacity(0.94)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .ignoresSafeArea()
+        }
+        .environment(\.colorScheme, .dark)
+    }
+
+    @ViewBuilder
+    private var pageHeader: some View {
+        hero()
+            .padding(.horizontal, -20)
+            .padding(.top, -24)
+
+        LinearGradient(
+            colors: [genreColor, genreColor.opacity(0.56), .clear],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: 12)
+        .padding(.horizontal, -20)
+    }
+}
+
+private struct TheaterScrollingPageFrameModifier: ViewModifier {
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(
+                        Color(red: 0.82, green: 0.62, blue: 0.30).opacity(0.72),
+                        lineWidth: 0.8
+                    )
+                    .allowsHitTesting(false)
+            }
+        } else {
+            content
+        }
+    }
+}
+
 private struct DetailBackSwipeExclusionPreferenceKey: PreferenceKey {
     static var defaultValue: [CGRect] = []
 
@@ -67,19 +167,20 @@ struct ExperienceDetailView: View {
         let eyecatchPhoto = detailEyecatchPhoto(in: snapshot)
         let backgroundPhoto = detailBackgroundPhoto(in: snapshot)
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                recordHero(
-                    snapshot: snapshot,
-                    accentColor: accentColor,
+        Group {
+            if isTheater {
+                TheaterExperiencePage(
                     genreColor: genreColor,
-                    eyecatchPhoto: eyecatchPhoto,
-                    backgroundPhoto: backgroundPhoto
-                )
-                .padding(.horizontal, -20)
-                .padding(.top, -24)
-
-                if isTheater {
+                    showsScrollingFrame: onBack != nil
+                ) {
+                    recordHero(
+                        snapshot: snapshot,
+                        accentColor: accentColor,
+                        genreColor: genreColor,
+                        eyecatchPhoto: eyecatchPhoto,
+                        backgroundPhoto: backgroundPhoto
+                    )
+                } content: {
                     officialLinksSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                     nextActionsSection(snapshot: snapshot, plan: activePlan, accentColor: accentColor)
                     venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
@@ -99,36 +200,50 @@ struct ExperienceDetailView: View {
                     )
                     peopleSection(snapshot: snapshot, accentColor: accentColor)
                     ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
-                } else {
-                    officialLinksSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
-                    venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
-                    memoSection(template: template, accentColor: accentColor, isTheater: false)
-                    photoSection(
-                        snapshot: snapshot,
-                        excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
-                        accentColor: accentColor,
-                        isTheater: false
-                    )
-                    classifiedPhotoSection(snapshot: snapshot, purpose: .ticket, accentColor: accentColor, isTheater: false)
-                    classifiedPhotoSection(snapshot: snapshot, purpose: .goods, accentColor: accentColor, isTheater: false)
-                    expenseAndTicketSection(
-                        snapshot: snapshot,
-                        plan: activePlan,
-                        accentColor: accentColor,
-                        showsActions: true
-                    )
-                    goshuinBookSection(snapshot: snapshot)
-                    peopleSection(snapshot: snapshot, accentColor: accentColor)
-                    ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
-                    basicInfo(snapshot: snapshot, template: template)
-                    advancedSection(snapshot: snapshot)
                 }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        recordHero(
+                            snapshot: snapshot,
+                            accentColor: accentColor,
+                            genreColor: genreColor,
+                            eyecatchPhoto: eyecatchPhoto,
+                            backgroundPhoto: backgroundPhoto
+                        )
+                        .padding(.horizontal, -20)
+                        .padding(.top, -24)
+
+                        officialLinksSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                        venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                        memoSection(template: template, accentColor: accentColor, isTheater: false)
+                        photoSection(
+                            snapshot: snapshot,
+                            excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
+                            accentColor: accentColor,
+                            isTheater: false
+                        )
+                        classifiedPhotoSection(snapshot: snapshot, purpose: .ticket, accentColor: accentColor, isTheater: false)
+                        classifiedPhotoSection(snapshot: snapshot, purpose: .goods, accentColor: accentColor, isTheater: false)
+                        expenseAndTicketSection(
+                            snapshot: snapshot,
+                            plan: activePlan,
+                            accentColor: accentColor,
+                            showsActions: true
+                        )
+                        goshuinBookSection(snapshot: snapshot)
+                        peopleSection(snapshot: snapshot, accentColor: accentColor)
+                        ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                        basicInfo(snapshot: snapshot, template: template)
+                        advancedSection(snapshot: snapshot)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 24)
+                }
+                .ignoresSafeArea(edges: .top)
+                .background(detailPageBackground(genreColor: genreColor))
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 24)
         }
-        .ignoresSafeArea(edges: .top)
-        .background(detailPageBackground(genreColor: genreColor))
         .environment(\.colorScheme, .dark)
         .toolbar(.hidden, for: .navigationBar)
         .simultaneousGesture(edgeBackGesture)
@@ -228,22 +343,29 @@ struct ExperienceDetailView: View {
             )
 
             VStack(alignment: .leading, spacing: 12) {
-                if let seriesName = snapshot.event?.seriesName, !seriesName.isEmpty {
-                    HStack(spacing: 8) {
-                        Text(seriesName)
-                            .lineLimit(1)
-                        if snapshot.category?.templateKey == "theater" {
-                            Text("•")
+                if snapshot.category?.templateKey == "theater" {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        HStack(spacing: 8) {
+                            if let seriesName = snapshot.event?.seriesName, !seriesName.isEmpty {
+                                Text(seriesName)
+                                    .lineLimit(1)
+                                Text("•")
+                            }
                             Text(ExperienceDetailPresentation.theaterVisitOrdinal(for: visit))
                         }
-                    }
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.white.opacity(0.76))
-                    .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
-                } else if snapshot.category?.templateKey == "theater" {
-                    Text(ExperienceDetailPresentation.theaterVisitOrdinal(for: visit))
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.white.opacity(0.76))
+                        .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
+
+                        Spacer(minLength: 8)
+                        heroWeather(snapshot: snapshot)
+                    }
+                } else if let seriesName = snapshot.event?.seriesName, !seriesName.isEmpty {
+                    Text(seriesName)
+                        .lineLimit(1)
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.white.opacity(0.76))
+                        .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
                 }
 
                 if let event = snapshot.event {
@@ -290,9 +412,9 @@ struct ExperienceDetailView: View {
                         tint: accentColor,
                         usesGoldFrame: snapshot.category?.templateKey == "theater"
                     )
-                    .frame(width: snapshot.category?.templateKey == "theater" ? 134 : 112)
+                    .frame(width: snapshot.category?.templateKey == "theater" ? 140 : 112)
 
-                    VStack(alignment: .leading, spacing: 11) {
+                    VStack(alignment: .leading, spacing: 6) {
                         heroDateRow(snapshot: snapshot)
 
                         recordMetadataRow(
@@ -301,29 +423,23 @@ struct ExperienceDetailView: View {
                             accentColor: .white.opacity(0.86)
                         )
 
-                        if !snapshot.unitFields.styleNames.isEmpty {
-                            recordMetadataRow(
-                                icon: "tag.fill",
-                                text: snapshot.unitFields.styleNames.joined(separator: "・"),
-                                accentColor: accentColor
-                            )
-                        }
+                        recordMetadataRow(
+                            icon: "tag.fill",
+                            text: heroDisplayText(snapshot.unitFields.styleNames.joined(separator: "・")),
+                            accentColor: .white.opacity(0.86)
+                        )
 
-                        if !visit.venueNameSnapshot.isEmpty {
-                            recordMetadataRow(
-                                icon: "mappin.and.ellipse",
-                                text: visit.venueNameSnapshot,
-                                accentColor: .white.opacity(0.86)
-                            )
-                        }
+                        recordMetadataRow(
+                            icon: "mappin.and.ellipse",
+                            text: heroDisplayText(visit.venueNameSnapshot),
+                            accentColor: .white.opacity(0.86)
+                        )
 
-                        if !heroSeatText.isEmpty {
-                            recordMetadataRow(
-                                icon: "chair",
-                                text: heroSeatText,
-                                accentColor: .white.opacity(0.86)
-                            )
-                        }
+                        recordMetadataRow(
+                            icon: "chair",
+                            text: heroDisplayText(heroSeatText),
+                            accentColor: .white.opacity(0.86)
+                        )
 
                         recordRating(accentColor: .white.opacity(0.90))
                     }
@@ -419,17 +535,33 @@ struct ExperienceDetailView: View {
             Button {
                 closeDetail()
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 23, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 50, height: 50)
-                    .background(.black.opacity(0.48), in: Circle())
-                    .overlay {
-                        Circle().stroke(.white.opacity(0.20), lineWidth: 0.7)
+                if onBack != nil {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("閉じる")
                     }
+                    .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 15)
+                    .frame(height: 50)
+                    .background(.black.opacity(0.48), in: Capsule())
+                    .overlay {
+                        Capsule().stroke(.white.opacity(0.24), lineWidth: 0.8)
+                    }
+                } else {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 23, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 50, height: 50)
+                        .background(.black.opacity(0.48), in: Circle())
+                        .overlay {
+                            Circle().stroke(.white.opacity(0.20), lineWidth: 0.7)
+                        }
+                }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("戻る")
+            .accessibilityLabel(onBack != nil ? "閉じる" : "戻る")
 
             Spacer()
 
@@ -464,6 +596,7 @@ struct ExperienceDetailView: View {
     private var edgeBackGesture: some Gesture {
         DragGesture(minimumDistance: 18, coordinateSpace: .global)
             .onEnded { value in
+                guard onBack == nil else { return }
                 guard DetailBackSwipePolicy.shouldClose(
                     startLocation: value.startLocation,
                     translation: value.translation,
@@ -485,32 +618,45 @@ struct ExperienceDetailView: View {
     private func heroDateRow(snapshot: ExperienceDetailSnapshot) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: "calendar")
-                .foregroundStyle(.white.opacity(0.86))
-                .frame(width: 18)
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(width: 20)
             Text(FavorecoDateText.fullDate(visit.visitedAt))
                 .lineLimit(1)
-            if !snapshot.unitFields.weatherSymbolName.isEmpty {
-                Image(systemName: snapshot.unitFields.weatherSymbolName)
-                    .foregroundStyle(.white.opacity(0.90))
-                Text(ExperienceDetailPresentation.compactWeatherText(fields: snapshot.unitFields))
-                    .lineLimit(1)
-            }
+                .minimumScaleFactor(0.82)
         }
-        .font(FavorecoTypography.caption)
-        .foregroundStyle(.white.opacity(0.84))
+        .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+        .foregroundStyle(.white.opacity(0.96))
+    }
+
+    private func heroWeather(snapshot: ExperienceDetailSnapshot) -> some View {
+        HStack(spacing: 4) {
+            Image(
+                systemName: snapshot.unitFields.weatherSymbolName.isEmpty
+                    ? "cloud.sun"
+                    : snapshot.unitFields.weatherSymbolName
+            )
+            Text(
+                heroDisplayText(
+                    ExperienceDetailPresentation.compactWeatherText(fields: snapshot.unitFields)
+                )
+            )
+        }
+        .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+        .foregroundStyle(.white.opacity(0.92))
+        .fixedSize()
     }
 
     private func recordMetadataRow(icon: String, text: String, accentColor: Color) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: icon)
                 .foregroundStyle(accentColor)
-                .frame(width: 18)
+                .frame(width: 20)
             Text(text)
-                .foregroundStyle(.white.opacity(0.84))
+                .foregroundStyle(.white.opacity(0.96))
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
         }
-        .font(FavorecoTypography.caption)
+        .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
     }
 
     private func recordRating(accentColor: Color) -> some View {
@@ -519,13 +665,18 @@ struct ExperienceDetailView: View {
                 Image(systemName: ExperienceDetailPresentation.ratingSymbol(rating: visit.overallRating, index: index))
                     .foregroundStyle(visit.overallRating > 0 ? accentColor : Color.secondary.opacity(0.34))
             }
-            Text(visit.overallRating > 0 ? String(format: "%.1f", visit.overallRating) : "未評価")
-                .foregroundStyle(.white.opacity(0.68))
+            Text(visit.overallRating > 0 ? String(format: "%.1f", visit.overallRating) : "—")
+                .foregroundStyle(.white.opacity(0.96))
                 .padding(.leading, 4)
         }
-        .font(FavorecoTypography.caption)
+        .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(visit.overallRating > 0 ? "評価 \(String(format: "%.1f", visit.overallRating))" : "未評価")
+    }
+
+    private func heroDisplayText(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "—" : trimmed
     }
 
     private func detailEyecatchPhoto(in snapshot: ExperienceDetailSnapshot) -> PhotoBlob? {
@@ -595,11 +746,11 @@ struct ExperienceDetailView: View {
                 if isTheater, !organizations.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(organizations, id: \.label) { item in
-                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text(item.label)
                                     .font(FavorecoTypography.caption)
                                     .foregroundStyle(.secondary)
-                                    .frame(width: 76, alignment: .leading)
+                                    .fixedSize(horizontal: true, vertical: false)
                                 Text(item.value)
                                     .font(FavorecoTypography.captionStrong)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -1020,7 +1171,7 @@ struct ExperienceDetailView: View {
                         guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
                         ticketPlanForEditor = plan
                     } label: {
-                        Label("申込を追加", systemImage: "ticket")
+                        Label("チケットを追加", systemImage: "ticket")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -1081,7 +1232,11 @@ struct ExperienceDetailView: View {
                         ticketPlanForEditor = plan
                     } label: {
                         Label("チケット申込", systemImage: "ticket")
+                            .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                             .frame(maxWidth: .infinity)
+                            .frame(height: 24)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(accentColor)
@@ -1091,13 +1246,17 @@ struct ExperienceDetailView: View {
                         navigatingPlan = plan
                     } label: {
                         Label("遠征ToDo", systemImage: "suitcase.rolling")
+                            .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                             .frame(maxWidth: .infinity)
+                            .frame(height: 24)
                     }
                     .buttonStyle(.bordered)
                     .tint(accentColor)
                 }
 
-                Text("申込・入金・発券と、移動／宿泊などの準備をここから確認できます。")
+                Text("チケット取得のスケジュール設定と、旅程のコスト管理ができます。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1786,19 +1945,31 @@ private struct RecordDetailEyecatch: View {
         .frame(maxWidth: .infinity)
         .clipped()
         .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .stroke(usesGoldFrame ? tint.opacity(0.92) : tint.opacity(0.42), lineWidth: usesGoldFrame ? 1.7 : 0.8)
-                .padding(usesGoldFrame ? 2 : 0)
+        .modifier(
+            RecordDetailEyecatchFrameModifier(
+                tint: tint,
+                usesTheaterFrame: usesGoldFrame
+            )
+        )
+    }
+}
+
+private struct RecordDetailEyecatchFrameModifier: ViewModifier {
+    let tint: Color
+    let usesTheaterFrame: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if usesTheaterFrame {
+            content.theaterPosterFrame(tint: tint)
+        } else {
+            content
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(tint.opacity(0.42), lineWidth: 0.8)
+                }
         }
-        .overlay {
-            if usesGoldFrame {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .stroke(tint.opacity(0.42), lineWidth: 0.7)
-            }
-        }
-        .shadow(color: usesGoldFrame ? tint.opacity(0.24) : .clear, radius: 5, y: 2)
     }
 }
 

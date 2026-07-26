@@ -125,8 +125,11 @@ struct CollectibleCategorySeriesGrid: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("シリーズ")
-                        .font(.title3.bold())
+                    LayeredCategorySectionTitle(
+                        englishTitle: "Series",
+                        japaneseTitle: "シリーズ",
+                        foregroundColor: .primary
+                    )
                     Text("集めた種類とダブりをシリーズごとに確認できます")
                         .font(.caption)
                         .foregroundStyle(.secondary)

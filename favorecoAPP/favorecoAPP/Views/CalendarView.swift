@@ -50,7 +50,7 @@ struct CalendarView: View {
     }
 
     private var plansByDay: [Date: [Plan]] {
-        Dictionary(grouping: plans.filter { !$0.isArchived }) { plan in
+        Dictionary(grouping: plans.filter { !$0.isArchived && $0.hasConfirmedSchedule }) { plan in
             calendar.startOfDay(for: plan.startsAt)
         }
     }
@@ -84,7 +84,7 @@ struct CalendarView: View {
     private var upcomingPlans: [Plan] {
         let now = Date()
         return plans
-            .filter { !$0.isArchived && $0.endsAt >= now }
+            .filter { !$0.isArchived && $0.hasConfirmedSchedule && $0.endsAt >= now }
             .prefix(5)
             .map { $0 }
     }
@@ -92,7 +92,7 @@ struct CalendarView: View {
     private var allUpcomingPlans: [Plan] {
         let now = Date()
         return plans
-            .filter { !$0.isArchived && $0.endsAt >= now }
+            .filter { !$0.isArchived && $0.hasConfirmedSchedule && $0.endsAt >= now }
             .sorted { $0.startsAt < $1.startsAt }
     }
 
@@ -614,10 +614,7 @@ struct CalendarView: View {
     }
 
     private func japaneseFullDate(_ date: Date) -> String {
-        let components = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
-        let weekdayNames = ["日", "月", "火", "水", "木", "金", "土"]
-        let weekdayIndex = max(0, min((components.weekday ?? 1) - 1, weekdayNames.count - 1))
-        return "\(components.year ?? 0)年\(components.month ?? 0)月\(components.day ?? 0)日（\(weekdayNames[weekdayIndex])）"
+        FavorecoDateText.fullDate(date)
     }
 }
 

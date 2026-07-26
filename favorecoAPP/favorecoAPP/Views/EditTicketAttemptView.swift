@@ -15,31 +15,61 @@ struct EditTicketAttemptView: View {
 
     let plan: Plan
     private let editingAttempt: TicketAttempt?
+    private let prioritizesDates: Bool
     @State private var draft: TicketAttemptDraft
     @State private var validationError = ""
     @State private var operationError = ""
     @State private var isShowingArchiveConfirmation = false
 
-    init(plan: Plan, attempt: TicketAttempt? = nil) {
+    init(plan: Plan, attempt: TicketAttempt? = nil, prioritizesDates: Bool = false) {
         self.plan = plan
         self.editingAttempt = attempt
+        self.prioritizesDates = prioritizesDates
         _draft = State(initialValue: TicketAttemptDraft(attempt: attempt))
     }
 
     private var activeAccounts: [TicketAccount] {
-        accounts.filter { !$0.isArchived }
+        accounts
+            .filter { !$0.isArchived }
+            .sorted {
+                if $0.serviceName != $1.serviceName {
+                    return $0.serviceName.localizedStandardCompare($1.serviceName) == .orderedAscending
+                }
+                return $0.accountName.localizedStandardCompare($1.accountName) == .orderedAscending
+            }
     }
 
     private var selectedAccount: TicketAccount? {
-        activeAccounts.first { $0.id == draft.accountID }
+        accounts.first { $0.id == draft.accountID }
+    }
+
+    private var editorTitle: String {
+        editingAttempt == nil ? "チケットを追加" : "チケットを編集"
+    }
+
+    private var saveAccentColor: Color {
+        if plan.category?.templateKey == "theater" {
+            return TheaterCategoryStyle.gold
+        }
+        return plan.category.map { Color(hex: $0.colorHex) } ?? Color.accentColor
+    }
+
+    private var saveForegroundColor: Color {
+        plan.category?.templateKey == "theater"
+            ? TheaterCategoryStyle.black
+            : .white
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("申込") {
-                    Picker("今の状態", selection: $draft.flowKey) {
-                        ForEach(TicketFlowDefinition.all) { flow in
+                if prioritizesDates {
+                    dateFieldsSection
+                }
+
+                Section("チケット情報") {
+                    Picker("登録内容", selection: $draft.flowKey) {
+                        ForEach(draft.flowOptions) { flow in
                             Text(flow.name).tag(flow.key)
                         }
                     }
@@ -51,16 +81,8 @@ struct EditTicketAttemptView: View {
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
 
-                    if draft.showsDetailedStatus {
-                        Picker("詳細状態", selection: $draft.statusKey) {
-                            ForEach(draft.statusOptions) { status in
-                                Text(status.name).tag(status.key)
-                            }
-                        }
-                    }
-
                     if draft.showsEntryRoute {
-                        Picker("区分", selection: $draft.entryRouteKey) {
+                        Picker(draft.entryRouteLabel, selection: $draft.entryRouteKey) {
                             Text("未設定").tag("")
                             ForEach(draft.entryRouteOptions) { route in
                                 Text(route.name).tag(route.key)
@@ -69,18 +91,21 @@ struct EditTicketAttemptView: View {
                     }
 
                     if draft.showsAccountFields {
-                        Picker("名義・アカウント", selection: $draft.accountID) {
+                        Picker("申込アカウント（任意）", selection: $draft.accountID) {
                             Text("未設定").tag(Optional<UUID>.none)
                             ForEach(activeAccounts) { account in
                                 Text(accountLabel(account)).tag(Optional(account.id))
                             }
                         }
+                        .onChange(of: draft.accountID) { _, newValue in
+                            draft.applyAccount(activeAccounts.first { $0.id == newValue })
+                        }
 
-                        TextField("名義メモ", text: $draft.holderName)
+                        TextField("名義（任意）", text: $draft.holderName)
                     }
 
                     if draft.showsTicketGuide {
-                        Picker("プレイガイド", selection: $draft.ticketGuideKey) {
+                        Picker("購入先", selection: $draft.ticketGuideKey) {
                             ForEach(TicketGuideDefinition.all) { guide in
                                 Text(guide.name).tag(guide.key)
                             }
@@ -88,9 +113,10 @@ struct EditTicketAttemptView: View {
                         .onChange(of: draft.ticketGuideKey) { _, newValue in
                             draft.applyTicketGuide(newValue)
                         }
+                        .disabled(draft.accountID != nil)
 
                         if draft.ticketGuideKey == TicketGuideDefinition.customKey {
-                            TextField("購入先・サイト名", text: $draft.ticketSite)
+                            TextField("FC・公式サイトなど", text: $draft.ticketSite)
                             TextField("申込・購入URL", text: $draft.purchaseURL)
                                 .keyboardType(.URL)
                                 .textInputAutocapitalization(.never)
@@ -101,24 +127,8 @@ struct EditTicketAttemptView: View {
                     }
                 }
 
-                if draft.showsDateSection {
-                    Section("日付") {
-                        if draft.showsSaleStart {
-                            DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
-                        }
-                        if draft.showsApplyDeadline {
-                            DateToggleRow(title: "申込締切", isOn: $draft.hasApplyDeadline, date: $draft.applyDeadlineAt)
-                        }
-                        if draft.showsResultAnnounce {
-                            DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
-                        }
-                        if draft.showsPaymentDeadline {
-                            DateToggleRow(title: "入金締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
-                        }
-                        if draft.showsIssueStart {
-                            DateToggleRow(title: "発券開始", isOn: $draft.hasIssueStart, date: $draft.issueStartAt)
-                        }
-                    }
+                if !prioritizesDates {
+                    dateFieldsSection
                 }
 
                 if draft.showsTicketDetails {
@@ -147,19 +157,46 @@ struct EditTicketAttemptView: View {
                         Button(role: .destructive) {
                             isShowingArchiveConfirmation = true
                         } label: {
-                            Label("この申込を非表示", systemImage: "archivebox")
+                            Label("このチケット情報を非表示", systemImage: "archivebox")
                         }
                     }
                 }
             }
-            .navigationTitle(editingAttempt == nil ? "申込を追加" : "申込を編集")
+            .navigationTitle(editorTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 34, height: 34)
+                            .background(Color.secondary.opacity(0.14), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("キャンセル")
+                }
+                ToolbarItem(placement: .principal) {
+                    Text(editorTitle)
+                        .font(FavorecoTypography.jpSerif(17, weight: .semibold, relativeTo: .headline))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.86)
+                        .layoutPriority(1)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }
+                    Button {
+                        save()
+                    } label: {
+                        Text("保存")
+                            .font(FavorecoTypography.bodyStrong)
+                            .foregroundStyle(saveForegroundColor)
+                            .padding(.horizontal, 13)
+                            .frame(height: 34)
+                            .background(saveAccentColor, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .alert("日付を確認してください", isPresented: Binding(
@@ -171,16 +208,16 @@ struct EditTicketAttemptView: View {
                 Text(validationError)
             }
             .confirmationDialog(
-                "この申込を非表示にしますか？",
+                "このチケット情報を非表示にしますか？",
                 isPresented: $isShowingArchiveConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("申込を非表示", role: .destructive) {
+                Button("チケット情報を非表示", role: .destructive) {
                     archiveAttempt()
                 }
                 Button("キャンセル", role: .cancel) {}
             } message: {
-                Text("予定本体と他の申込は残り、この申込の予約済み通知だけを解除します。")
+                Text("予定本体と他のチケット情報は残り、この項目の予約済み通知だけを解除します。")
             }
             .alert("操作を完了できませんでした", isPresented: Binding(
                 get: { !operationError.isEmpty },
@@ -193,9 +230,36 @@ struct EditTicketAttemptView: View {
         }
     }
 
+    @ViewBuilder
+    private var dateFieldsSection: some View {
+        if draft.showsDateSection {
+            Section("工程日") {
+                if draft.showsSaleStart {
+                    DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
+                }
+                if draft.showsApplyDeadline {
+                    DateToggleRow(title: "申込締切", isOn: $draft.hasApplyDeadline, date: $draft.applyDeadlineAt)
+                }
+                if draft.showsResultAnnounce {
+                    DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
+                }
+                if draft.showsPaymentDeadline {
+                    DateToggleRow(title: "入金締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
+                }
+                if draft.showsIssueStart {
+                    DateToggleRow(
+                        title: "チケット受取開始（任意）",
+                        isOn: $draft.hasIssueStart,
+                        date: $draft.issueStartAt
+                    )
+                }
+            }
+        }
+    }
+
     private func accountLabel(_ account: TicketAccount) -> String {
         let holder = account.accountName.isEmpty ? "名義未設定" : account.accountName
-        return "\(account.serviceName) / \(holder)"
+        return "\(account.serviceName)｜\(holder)"
     }
 
     private func save() {
@@ -252,7 +316,7 @@ struct EditTicketAttemptView: View {
     }
 
     private func applyDraft(to attempt: TicketAttempt, now: Date) {
-        attempt.statusKey = draft.statusKey
+        attempt.statusKey = draft.resolvedStatusKey
         attempt.entryRouteKey = draft.entryRouteKey
         attempt.ticketSite = draft.trimmedTicketSite
         attempt.holderName = draft.trimmedHolderName
@@ -345,6 +409,9 @@ private struct TicketAttemptDraft {
     }
     var trimmedPurchaseURL: String { purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var resolvedStatusKey: String {
+        flowKey == "acquired" ? "issued" : statusKey
+    }
 
     var validationMessage: String? {
         if hasSaleStart && hasApplyDeadline && saleStartAt > applyDeadlineAt {
@@ -359,16 +426,20 @@ private struct TicketAttemptDraft {
         return nil
     }
 
-    var showsDetailedStatus: Bool {
-        flowKey == "acquired"
+    var flowOptions: [TicketFlowDefinition] {
+        if flowKey == "interested",
+           let interested = TicketFlowDefinition.all.first(where: { $0.key == "interested" }) {
+            return [interested] + TicketFlowDefinition.registrationOptions
+        }
+        return TicketFlowDefinition.registrationOptions
     }
 
     var showsEntryRoute: Bool {
-        flowKey != "interested"
+        flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
     }
 
     var showsAccountFields: Bool {
-        flowKey != "interested"
+        flowKey == "lotteryPlanned"
     }
 
     var showsTicketGuide: Bool {
@@ -388,11 +459,11 @@ private struct TicketAttemptDraft {
     }
 
     var showsPaymentDeadline: Bool {
-        flowKey == "lotteryPlanned" || flowKey == "acquired"
+        flowKey == "lotteryPlanned"
     }
 
     var showsIssueStart: Bool {
-        flowKey == "saleWaiting" || flowKey == "acquired"
+        flowKey == "saleWaiting"
     }
 
     var showsDateSection: Bool {
@@ -407,23 +478,20 @@ private struct TicketAttemptDraft {
         flowKey == "saleWaiting" ? "発売開始" : "申込開始"
     }
 
-    var statusOptions: [TicketStatusDefinition] {
-        switch flowKey {
-        case "acquired":
-            return TicketStatusDefinition.all.filter { ["won", "waitingPayment", "waitingIssue", "issued", "attended"].contains($0.key) }
-        default:
-            return TicketStatusDefinition.all.filter { $0.key == TicketFlowDefinition.definition(for: flowKey).defaultStatusKey }
-        }
+    var entryRouteLabel: String {
+        flowKey == "lotteryPlanned" ? "申込枠" : "販売方法"
     }
 
     var entryRouteOptions: [TicketEntryRouteDefinition] {
         switch flowKey {
         case "lotteryPlanned":
-            return TicketEntryRouteDefinition.all.filter { ["fanClub", "lottery", "card", "other"].contains($0.key) }
+            return TicketEntryRouteDefinition.all.filter {
+                ["fanClub", "official", "lottery", "card", "generalLottery", "other"].contains($0.key)
+            }
         case "saleWaiting":
-            return TicketEntryRouteDefinition.all.filter { ["general", "sameDay", "resale", "other"].contains($0.key) }
-        case "acquired":
-            return TicketEntryRouteDefinition.all
+            return TicketEntryRouteDefinition.all.filter {
+                ["presale", "general", "resale", "other"].contains($0.key)
+            }
         default:
             return []
         }
@@ -433,7 +501,8 @@ private struct TicketAttemptDraft {
         let flow = TicketFlowDefinition.definition(for: key)
         flowKey = flow.key
         statusKey = flow.defaultStatusKey
-        if entryRouteKey.isEmpty || !entryRouteOptions.contains(where: { $0.key == entryRouteKey }) {
+        if flow.key != "acquired",
+           (entryRouteKey.isEmpty || !entryRouteOptions.contains(where: { $0.key == entryRouteKey })) {
             entryRouteKey = flow.defaultEntryRouteKey
         }
 
@@ -460,19 +529,35 @@ private struct TicketAttemptDraft {
         case "acquired":
             hasApplyDeadline = false
             hasResultAnnounce = false
-            hasIssueStart = true
         default:
             break
         }
     }
 
     mutating func applyTicketGuide(_ key: String) {
+        guard accountID == nil else { return }
         guard let guide = TicketGuideDefinition.guide(for: key) else {
             ticketGuideKey = TicketGuideDefinition.customKey
             return
         }
         ticketSite = guide.name
         purchaseURL = guide.urlString
+    }
+
+    mutating func applyAccount(_ account: TicketAccount?) {
+        guard let account else { return }
+        let serviceName = account.serviceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let siteURL = account.siteURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        accountID = account.id
+        ticketSite = serviceName
+        holderName = account.accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        ticketGuideKey = TicketGuideDefinition.inferredKey(
+            siteName: serviceName,
+            urlString: siteURL
+        )
+        purchaseURL = !siteURL.isEmpty
+            ? siteURL
+            : (TicketGuideDefinition.guide(for: ticketGuideKey)?.urlString ?? "")
     }
 
     private func decimalText(_ value: Decimal) -> String {

@@ -134,6 +134,48 @@ struct TheaterVisitRow: View {
 
     private var event: ExperienceEvent? { visit.event }
 
+    private var performancePeriodTitle: String {
+        isMatinee ? "マチネ" : "ソワレ"
+    }
+
+    private var isMatinee: Bool {
+        Calendar.autoupdatingCurrent.component(.hour, from: visit.visitedAt) < 17
+    }
+
+    private var performancePeriodColor: Color {
+        isMatinee
+            ? TheaterCategoryStyle.lightGold
+            : Color(red: 0.70, green: 0.74, blue: 0.90)
+    }
+
+    private var performancePeriodIcon: String {
+        isMatinee ? "sun.max.fill" : "moon.stars.fill"
+    }
+
+    private var performanceTimeText: String {
+        let endDate = visit.endedAt > visit.visitedAt ? visit.endedAt : visit.visitedAt
+        return "\(FavorecoDateText.time(visit.visitedAt))-\(FavorecoDateText.time(endDate))"
+    }
+
+    private var performancePeriodBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: performancePeriodIcon)
+                .font(.system(size: 7.5, weight: .semibold))
+            Text(performancePeriodTitle)
+                .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+        }
+        .foregroundStyle(performancePeriodColor)
+        .padding(.horizontal, 6)
+        .frame(height: 18)
+        .background(
+            performancePeriodColor.opacity(0.12),
+            in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+        )
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(performancePeriodTitle)
+    }
+
     var body: some View {
         HStack(spacing: 13) {
             TheaterPosterView(event: event, width: 58)
@@ -143,17 +185,30 @@ struct TheaterVisitRow: View {
                     .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
                     .foregroundStyle(TheaterCategoryStyle.ivory)
                     .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                Label(FavorecoDateText.compactDate(visit.visitedAt), systemImage: "calendar")
+                HStack(spacing: 8) {
+                    Label(
+                        "\(FavorecoDateText.compactDate(visit.visitedAt))  \(performanceTimeText)",
+                        systemImage: "calendar"
+                    )
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .layoutPriority(1)
+
+                    Spacer(minLength: 0)
+
+                    performancePeriodBadge
+                }
                 if !visit.venueNameSnapshot.isEmpty {
                     Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
                         .lineLimit(1)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .font(FavorecoTypography.caption)
             .foregroundStyle(TheaterCategoryStyle.ivory.opacity(0.62))
 
-            Spacer(minLength: 4)
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(TheaterCategoryStyle.gold.opacity(0.76))

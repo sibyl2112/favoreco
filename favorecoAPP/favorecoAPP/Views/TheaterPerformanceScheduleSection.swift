@@ -16,9 +16,13 @@ struct TheaterPerformanceScheduleSection: View {
     var body: some View {
         if !schedules.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(accentColor)
+                        .frame(width: 22)
                     Text("公演スケジュール")
-                        .font(FavorecoTypography.sectionTitle)
+                        .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                         .foregroundStyle(Color(red: 0.96, green: 0.93, blue: 0.88))
                     Spacer(minLength: 8)
                     Text("全\(schedules.count)公演地")
@@ -155,22 +159,50 @@ struct TheaterScheduleEntryEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField("公演名（例：東京公演）", text: performanceLabel)
-            TextField("会場名", text: $entry.name)
-            TextField("住所（任意）", text: $entry.address)
+        VStack(alignment: .leading, spacing: 7) {
+            ExplicitFormTextField(
+                title: "公演名",
+                prompt: "例：東京公演",
+                text: performanceLabel,
+                labelStyle: .horizontal
+            )
+            scheduleDivider
+            ExplicitFormTextField(
+                title: "会場",
+                prompt: "例：東京ドーム",
+                text: $entry.name,
+                labelStyle: .horizontal
+            )
+            scheduleDivider
+            ExplicitFormTextField(
+                title: "住所",
+                prompt: "例：東京都文京区後楽1丁目（任意）",
+                text: $entry.address,
+                labelStyle: .horizontal
+            )
+            scheduleDivider
             Toggle("この公演地の会期を登録", isOn: hasPeriod)
+                .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
 
             if hasPeriod.wrappedValue {
+                scheduleDivider
                 DatePicker("開始日", selection: startsAt, displayedComponents: .date)
+                    .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+                scheduleDivider
                 DatePicker(
                     "終了日",
                     selection: endsAt,
                     in: startsAt.wrappedValue...,
                     displayedComponents: .date
                 )
+                .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 1)
+    }
+
+    private var scheduleDivider: some View {
+        Divider()
+            .overlay(Color.secondary.opacity(0.35))
     }
 }

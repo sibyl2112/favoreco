@@ -21,23 +21,32 @@ struct CategoryTopSnapshot {
             .filter { !$0.isArchived }
             .sorted { $0.updatedAt > $1.updatedAt }
         let eventIDs = Set(categoryEvents.map(\.id))
-        let visits = allVisits.filter { visit in
-            guard let eventID = visit.event?.id else { return false }
-            return eventIDs.contains(eventID)
+        var visitIDs: [UUID] = []
+        var visitStatsByEventID: [UUID: (count: Int, latestDate: Date?)] = [:]
+        for visit in allVisits {
+            guard let eventID = visit.event?.id,
+                  eventIDs.contains(eventID) else { continue }
+            visitIDs.append(visit.id)
+            var stats = visitStatsByEventID[eventID] ?? (count: 0, latestDate: nil)
+            stats.count += 1
+            if stats.latestDate == nil || visit.visitedAt > stats.latestDate! {
+                stats.latestDate = visit.visitedAt
+            }
+            visitStatsByEventID[eventID] = stats
         }
         let eventSnapshots = categoryEvents.map { event in
-            let eventVisits = event.visits ?? []
+            let stats = visitStatsByEventID[event.id]
             return CategoryEventSnapshot(
                 event: event,
-                visitCount: eventVisits.count,
-                latestVisitDate: eventVisits.map(\.visitedAt).max()
+                visitCount: stats?.count ?? 0,
+                latestVisitDate: stats?.latestDate
             )
         }
 
         return CategoryTopSnapshot(
             visibleCategoryIDs: visibleCategories.map(\.id),
             events: eventSnapshots,
-            visitIDs: visits.map(\.id)
+            visitIDs: visitIDs
         )
     }
 }

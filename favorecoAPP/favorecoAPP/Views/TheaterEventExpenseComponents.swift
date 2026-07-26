@@ -6,10 +6,15 @@ struct TheaterEventExpenseSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "wallet.pass")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(accentColor)
+                    .frame(width: 22)
+
                 VStack(alignment: .leading, spacing: 3) {
                     Text("金額総計")
-                        .font(FavorecoTypography.sectionTitle)
+                        .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                     Text("観劇記録\(snapshot.visitCount)件・予定\(snapshot.planCount)件")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)

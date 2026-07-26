@@ -4,10 +4,12 @@ struct HomeSnapshot {
     let visibleCategoryCount: Int
     let visibleVisitCount: Int
     let recentVisits: [HomeVisitSnapshot]
+    let reportVisits: [HomeVisitSnapshot]
     let interestedEvents: [HomeInterestedEventSnapshot]
     let unresolvedInboxItems: [HomeInboxItemSnapshot]
     let heroItems: [HomeUpcomingItem]
     let upcomingItems: [HomeUpcomingItem]
+    let pickupRecordedVisits: [HomeVisitSnapshot]
     let upcomingItemCount: Int
     let currentYearVisitCount: Int
 
@@ -23,19 +25,31 @@ struct HomeSnapshot {
         calendar: Calendar = .current
     ) -> HomeSnapshot {
         let visibleCategories = categories.filter { !$0.isArchived }
-        let visibleVisits = visits.filter { $0.event?.isArchived != true }
+        let visibleVisits = visits
+            .filter { $0.event?.isArchived != true }
+            .sorted { $0.visitedAt > $1.visitedAt }
         let upcomingPlans = plans
-            .filter { !$0.isArchived && $0.endsAt >= now }
+            .filter { !$0.isArchived && $0.hasConfirmedSchedule && $0.endsAt >= now }
             .sorted { $0.startsAt < $1.startsAt }
+        let eventIDsWithActivePlans = Set(plans.compactMap { plan -> UUID? in
+            guard !plan.isArchived, let eventID = plan.event?.id else { return nil }
+            let hasUpcomingSchedule = plan.hasConfirmedSchedule && plan.endsAt >= now
+            let hasActiveTicket = (plan.ticketAttempts ?? []).contains { attempt in
+                !attempt.isArchived
+                    && !["lost", "attended", "skipped"].contains(attempt.statusKey)
+            }
+            return hasUpcomingSchedule || hasActiveTicket ? eventID : nil
+        })
         let today = calendar.startOfDay(for: now)
         let linkedVisitIDs = Set(upcomingPlans.compactMap { $0.visit?.id })
         let futureVisits = visibleVisits.filter { visit in
             calendar.startOfDay(for: visit.visitedAt) >= today
                 && !linkedVisitIDs.contains(visit.id)
         }
-        let visitSnapshots = visibleVisits.prefix(8).map {
+        let allVisitSnapshots = visibleVisits.map {
             HomeVisitSnapshot(visit: $0, peopleSummary: peopleSummary(for: $0, links: personLinks))
         }
+        let visitSnapshots = Array(allVisitSnapshots.prefix(8))
         let futureVisitSnapshots = futureVisits.map {
             HomeVisitSnapshot(visit: $0, peopleSummary: peopleSummary(for: $0, links: personLinks))
         }
@@ -44,25 +58,40 @@ struct HomeSnapshot {
                 + futureVisitSnapshots.map(HomeUpcomingItem.visit)
         )
         .sorted { $0.startsAt < $1.startsAt }
-        let recentHeroVisits = visitSnapshots
+        let recentHeroVisits = allVisitSnapshots
             .filter { calendar.startOfDay(for: $0.visitedAt) < today }
             .prefix(5)
             .map(HomeUpcomingItem.visit)
         let heroItems = Array(upcomingItems.prefix(5)) + recentHeroVisits
+        let pickupRecordedVisits = Array(
+            allVisitSnapshots
+                .filter { $0.visitedAt <= now }
+                .prefix(10)
+        )
         let currentYear = calendar.component(.year, from: now)
 
         return HomeSnapshot(
             visibleCategoryCount: visibleCategories.count,
             visibleVisitCount: visibleVisits.count,
             recentVisits: visitSnapshots,
+            reportVisits: allVisitSnapshots,
             interestedEvents: events
-                .filter { !$0.isArchived && $0.stateKey == "interested" }
+                .filter {
+                    !$0.isArchived
+                        && $0.stateKey == "interested"
+                        && !eventIDsWithActivePlans.contains($0.id)
+                }
+                .sorted { $0.updatedAt > $1.updatedAt }
+                .prefix(10)
                 .map(HomeInterestedEventSnapshot.init),
             unresolvedInboxItems: inboxItems
                 .filter { $0.state == "unresolved" }
+                .sorted { $0.createdAt > $1.createdAt }
+                .prefix(10)
                 .map { HomeInboxItemSnapshot(item: $0, categories: visibleCategories) },
             heroItems: heroItems,
-            upcomingItems: upcomingItems,
+            upcomingItems: Array(upcomingItems.prefix(10)),
+            pickupRecordedVisits: pickupRecordedVisits,
             upcomingItemCount: upcomingItems.count,
             currentYearVisitCount: visibleVisits.filter {
                 calendar.component(.year, from: $0.visitedAt) == currentYear
@@ -104,6 +133,8 @@ struct HomeVisitSnapshot: Identifiable {
     let fillsEyecatchFrame: Bool
     let peopleSummary: String
     let thumbnailReference: ThumbnailReference?
+    let comingUpTimeText: String
+    let officialURLString: String
 
     init(visit: Visit, peopleSummary: String) {
         let category = visit.event?.category
@@ -137,6 +168,10 @@ struct HomeVisitSnapshot: Identifiable {
         fillsEyecatchFrame = EyecatchAspectRatio.usesEyecatchFill(for: category)
         self.peopleSummary = peopleSummary
         thumbnailReference = selectedPhoto.map { .photo($0.id) }
+        comingUpTimeText = category?.usesOpeningTime == true
+            ? "開演 \(FavorecoDateText.time(visit.visitedAt))"
+            : ""
+        officialURLString = visit.event?.officialURL.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 }
 
@@ -153,6 +188,8 @@ struct HomePlanSnapshot: Identifiable {
     let thumbnailReference: ThumbnailReference?
     let posterAspectRatio: Double
     let fillsPosterFrame: Bool
+    let comingUpTimeText: String
+    let officialURLString: String
 
     init(plan: Plan) {
         let category = plan.category ?? plan.event?.category
@@ -171,6 +208,23 @@ struct HomePlanSnapshot: Identifiable {
         posterAspectRatio = plan.event.map { EyecatchAspectRatio.resolved(for: $0).value }
             ?? EyecatchAspectRatio.recommended(for: category).value
         fillsPosterFrame = EyecatchAspectRatio.usesEyecatchFill(for: category)
+        officialURLString = [
+            plan.officialURL,
+            plan.event?.officialURL ?? "",
+            plan.sourceURL,
+        ]
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .first(where: { !$0.isEmpty }) ?? ""
+        if category?.usesOpeningTime == true {
+            let hasValidOpeningTime = plan.opensAt != Date.distantPast
+                && plan.opensAt <= plan.startsAt
+                && Calendar.current.isDate(plan.opensAt, inSameDayAs: plan.startsAt)
+            comingUpTimeText = hasValidOpeningTime
+                ? "開場 \(FavorecoDateText.time(plan.opensAt))"
+                : "開演 \(FavorecoDateText.time(plan.startsAt))"
+        } else {
+            comingUpTimeText = ""
+        }
     }
 }
 
@@ -180,23 +234,52 @@ struct HomeInterestedEventSnapshot: Identifiable {
     let categoryName: String?
     let categoryIcon: String?
     let categoryColorHex: String
+    let periodText: String
+    let venueName: String
     let hasOfficialURL: Bool
+    let officialURLString: String
     let memo: String
     let thumbnailReference: ThumbnailReference
     let eyecatchAspectRatio: Double
     let fillsEyecatchFrame: Bool
+    let updatedAt: Date
 
     init(event: ExperienceEvent) {
+        let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
         id = event.id
         title = event.title.isEmpty ? "無題" : event.title
         categoryName = event.category?.name
         categoryIcon = event.category?.iconSymbol
         categoryColorHex = event.category?.colorHex ?? "#147C88"
+        periodText = Self.periodText(fields: fields)
+        venueName = fields.eventVenues
+            .map(\.trimmedName)
+            .filter { !$0.isEmpty }
+            .prefix(2)
+            .joined(separator: " / ")
         hasOfficialURL = !event.officialURL.isEmpty
+        officialURLString = event.officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
         memo = event.memo
         thumbnailReference = .event(event.id)
         eyecatchAspectRatio = EyecatchAspectRatio.resolved(for: event).value
         fillsEyecatchFrame = EyecatchAspectRatio.usesEyecatchFill(for: event.category)
+        updatedAt = event.updatedAt
+    }
+
+    private static func periodText(fields: VisitUnitFields) -> String {
+        let explicitStarts = fields.eventVenues.compactMap(\.startsAt)
+        let explicitEnds = fields.eventVenues.compactMap { $0.endsAt ?? $0.startsAt }
+        let start = explicitStarts.min() ?? fields.eventPeriodStartsAt
+        let end = explicitEnds.max() ?? fields.eventPeriodEndsAt
+
+        guard let start else {
+            guard let end else { return "" }
+            return "〜\(FavorecoDateText.compactDateWithHalfWidthWeekday(end))"
+        }
+        guard let end, !Calendar.current.isDate(start, inSameDayAs: end) else {
+            return FavorecoDateText.compactDateWithHalfWidthWeekday(start)
+        }
+        return "\(FavorecoDateText.compactDate(start))–\(FavorecoDateText.compactDateWithHalfWidthWeekday(end))"
     }
 }
 
@@ -205,6 +288,7 @@ struct HomeInboxItemSnapshot: Identifiable {
     let title: String
     let body: String
     let hasSourceURL: Bool
+    let sourceURLString: String
     let categoryName: String?
     let categoryIcon: String?
     let categoryColorHex: String
@@ -216,6 +300,7 @@ struct HomeInboxItemSnapshot: Identifiable {
         title = item.title.isEmpty ? "無題" : item.title
         body = item.body
         hasSourceURL = !item.sourceURL.isEmpty
+        sourceURLString = item.sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let category = categories.first(where: { $0.templateKey == item.targetTemplateKey })
         categoryName = category?.name
         categoryIcon = category?.iconSymbol

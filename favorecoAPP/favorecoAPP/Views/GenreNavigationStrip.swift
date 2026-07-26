@@ -60,8 +60,6 @@ struct GenreNavigationStrip: View {
             }
         }
         .frame(height: 46)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("ジャンルを選ぶ")
     }
 
     private func allLabel(isSelected: Bool, showsLeadingDivider: Bool) -> some View {
