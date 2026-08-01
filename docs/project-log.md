@@ -23863,3 +23863,30 @@ SwiftUIのTabViewが透明な追加用プレースホルダーへの選択を処
 ### 既知のリスク・残課題
 - 実機で`総合→観劇→追加`を直後・連続開閉で確認し、白いフラッシュがなく専用2項目が出ることを確認する
 - 総合Homeの通常4項目、他ジャンル、素早い連続タップで重複シートが生成されないことを確認する
+
+## 2026-08-01: 追加文脈ルーターのPublisher管理を修正
+
+### 変更概要
+- 手動保持していた`ObservableObjectPublisher`を廃止し、選択中ジャンル文脈を`@Published`で管理するようにした
+- ジャンル切替・Home復帰・追加メニュ表示リクエストの既存ロジックは維持した
+
+### 変更意図
+手動PublisherではSwiftUIへ状態変更が通知されないため、Combineの標準ライフサイクルへ揃える。併せて、Xcode 26のMainActor同期XCTest終了時にルーターの破棄で不正解放するテストランナー経路を避け、対象テストをMainActorの非同期ライフサイクルで実行する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/MainTabView.swift`: `CreateEntryContextRouter.activeContext`を`@Published`化
+- `favorecoAPP/favorecoAPPTests/CreateEntryContextRouterTests.swift`: MainActorのルーターテスト3件を非同期ライフサイクルへ統一
+- `docs/00-開発状況と残課題.md`: 現在地と実機確認対象を追記
+
+### 影響する画面・機能
+- Homeのジャンル切替と下部`追加`メニュ
+- 観劇専用2項目と他ジャンルの通常メニュの切替
+
+### 確認結果（実機 / ビルド）
+- iOS Simulator向けDebug全体ビルド成功
+- `CreateEntryContextRouterTests` 6件成功
+- 全ユニットテスト成功
+- 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
+
+### 既知のリスク・残課題
+- 実機で高速なジャンル往復と`追加`の連続開閉を確認する

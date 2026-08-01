@@ -11,14 +11,13 @@ import UIKit
 import Charts
 import Combine
 
+@MainActor
 final class CreateEntryContextRouter: ObservableObject {
-    let objectWillChange = ObservableObjectPublisher()
-
     struct Context: Equatable {
         let categoryID: UUID
     }
 
-    private(set) var activeContext: Context?
+    @Published private(set) var activeContext: Context?
 
     func activate(categoryID: UUID) {
         activeContext = Context(categoryID: categoryID)

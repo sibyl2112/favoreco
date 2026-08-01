@@ -17,7 +17,7 @@ final class CreateEntryContextRouterTests: XCTestCase {
         XCTAssertNil(router.activeContext)
     }
 
-    func testCategorySwitchReplacesContextSynchronously() {
+    func testCategorySwitchReplacesContextSynchronously() async {
         let router = CreateEntryContextRouter()
         let museumCategoryID = UUID()
         let theaterCategoryID = UUID()
@@ -28,7 +28,7 @@ final class CreateEntryContextRouterTests: XCTestCase {
         XCTAssertEqual(router.activeContext?.categoryID, theaterCategoryID)
     }
 
-    func testCreateMenuUsesStoredCategoryOnlyWhileHomeTabIsActive() {
+    func testCreateMenuUsesStoredCategoryOnlyWhileHomeTabIsActive() async {
         let router = CreateEntryContextRouter()
         let theaterCategoryID = UUID()
 
@@ -57,7 +57,7 @@ final class CreateEntryContextRouterTests: XCTestCase {
         )
     }
 
-    func testCreateMenuRequestCapturesCategoryAtomically() {
+    func testCreateMenuRequestCapturesCategoryAtomically() async {
         let router = CreateEntryContextRouter()
         let theaterCategoryID = UUID()
 
