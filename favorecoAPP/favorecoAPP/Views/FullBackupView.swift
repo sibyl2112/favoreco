@@ -57,7 +57,7 @@ struct FullBackupView: View {
                 Button {
                     createBackup()
                 } label: {
-                    Label("写真付きバックアップを作成", systemImage: "archivebox")
+                    FavorecoIconLabel("写真付きバックアップを作成", systemImage: "archivebox")
                 }
                 .disabled(isWorking || totalModelCount == 0)
             }

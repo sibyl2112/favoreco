@@ -107,7 +107,10 @@ struct InboxDetailView: View {
                         Button {
                             selectedEventForVisit = selectedExistingEvent
                         } label: {
-                            Label("登録済み対象に体験済みを記録", systemImage: "plus.square.on.square")
+                            FavorecoIconLabel(
+                                "登録済み対象に体験済みを記録",
+                                systemImage: "plus.square.on.square"
+                            )
                         }
                         .disabled(selectedExistingEvent == nil || item.state == "resolved")
                     }
@@ -115,7 +118,7 @@ struct InboxDetailView: View {
                     Button {
                         isShowingTicketPlanForm = true
                     } label: {
-                        Label("この対象で予定を立てる", systemImage: "calendar.badge.plus")
+                        FavorecoIconLabel("この対象で予定を立てる", systemImage: "calendar.badge.plus")
                     }
                     .disabled(item.state == "resolved")
                 }
@@ -123,7 +126,7 @@ struct InboxDetailView: View {
                 Button(role: .destructive) {
                     deleteItem()
                 } label: {
-                    Label("Inboxから削除", systemImage: "trash")
+                    FavorecoIconLabel("Inboxから削除", systemImage: "trash")
                 }
             }
         }

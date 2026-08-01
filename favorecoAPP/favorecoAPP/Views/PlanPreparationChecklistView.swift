@@ -83,13 +83,19 @@ struct PlanPreparationChecklistView: View {
             }
 
             if !plan.hasConfirmedSchedule {
-                Label("参加日を確定すると、遠征ToDoを入力できます。", systemImage: "calendar.badge.exclamationmark")
+                FavorecoIconLabel(
+                    "参加日を確定すると、遠征ToDoを入力できます。",
+                    systemImage: "calendar.badge.exclamationmark"
+                )
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else if isActive {
                 if case .secured = ticketPhase {
-                    Label("チケット確保後の宿・交通と費用をまとめられます", systemImage: "checkmark.seal.fill")
+                    FavorecoIconLabel(
+                        "チケット確保後の宿・交通と費用をまとめられます",
+                        systemImage: "checkmark.seal.fill"
+                    )
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(tint)
                         .padding(.horizontal, 10)
@@ -130,7 +136,7 @@ struct PlanPreparationChecklistView: View {
                     editingTask = nil
                     isShowingEditor = true
                 } label: {
-                    Label("準備・遠征項目を追加", systemImage: "plus")
+                    FavorecoIconLabel("準備・遠征項目を追加", systemImage: "plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -208,7 +214,7 @@ struct PlanPreparationChecklistView: View {
         let button = Button {
             addSuggestion(title)
         } label: {
-            Label(title, systemImage: "plus")
+            FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
                 .font(FavorecoTypography.captionStrong)
                 .padding(.horizontal, 10)
                 .frame(minHeight: 34)
@@ -267,17 +273,25 @@ struct PlanPreparationChecklistView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     if let dueAt = task.dueAt {
-                        Label(FavorecoDateText.compactDateTime(dueAt), systemImage: "clock")
+                        FavorecoIconLabel(
+                            FavorecoDateText.compactDateTime(dueAt),
+                            systemImage: "clock",
+                            iconSize: 13
+                        )
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(!task.isCompleted && dueAt < Date() ? Color.red : .secondary)
                     }
 
                     if let startsAt = task.startsAt {
-                        Label(scheduleText(for: task, startsAt: startsAt), systemImage: task.kind.systemImage)
+                        FavorecoIconLabel(
+                            scheduleText(for: task, startsAt: startsAt),
+                            systemImage: task.kind.systemImage,
+                            iconSize: 13
+                        )
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                     } else if task.kind.isTravel {
-                        Label(task.kind.title, systemImage: task.kind.systemImage)
+                        FavorecoIconLabel(task.kind.title, systemImage: task.kind.systemImage, iconSize: 13)
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -297,12 +311,12 @@ struct PlanPreparationChecklistView: View {
                     editingTask = task
                     isShowingEditor = true
                 } label: {
-                    Label("編集", systemImage: "pencil")
+                    FavorecoIconLabel("編集", systemImage: "pencil")
                 }
                 Button(role: .destructive) {
                     delete(task)
                 } label: {
-                    Label("削除", systemImage: "trash")
+                    FavorecoIconLabel("削除", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -456,7 +470,7 @@ private struct PlanPreparationTaskEditor: View {
 
                     Picker("種類", selection: $kind) {
                         ForEach(PlanPreparationKind.allCases) { kind in
-                            Label(kind.title, systemImage: kind.systemImage)
+                            FavorecoIconLabel(kind.title, systemImage: kind.systemImage)
                                 .tag(kind)
                         }
                     }
@@ -518,7 +532,10 @@ private struct PlanPreparationTaskEditor: View {
                         Button {
                             kind = inferredKind
                         } label: {
-                            Label("種類候補「\(inferredKind.title)」を反映", systemImage: inferredKind.systemImage)
+                            FavorecoIconLabel(
+                                "種類候補「\(inferredKind.title)」を反映",
+                                systemImage: inferredKind.systemImage
+                            )
                         }
                         .buttonStyle(.bordered)
                     }

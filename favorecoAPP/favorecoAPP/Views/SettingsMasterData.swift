@@ -64,10 +64,10 @@ struct RecordFacetMasterManagementView: View {
     var body: some View {
         List {
             if values.isEmpty {
-                ContentUnavailableView(
+                FavorecoContentUnavailableView(
                     searchText.isEmpty ? "\(kind.title)はまだありません" : "条件に一致する\(kind.title)がありません",
                     systemImage: kind.systemImage,
-                    description: Text("記録へ保存した\(kind.title)がここへ自動的にまとまります。")
+                    description: "記録へ保存した\(kind.title)がここへ自動的にまとまります。"
                 )
             } else {
                 ForEach(values) { value in
@@ -76,7 +76,7 @@ struct RecordFacetMasterManagementView: View {
                         draftName = value.name
                     } label: {
                         HStack {
-                            Label(value.name, systemImage: kind.systemImage)
+                            FavorecoIconLabel(value.name, systemImage: kind.systemImage)
                                 .foregroundStyle(.primary)
                             Spacer()
                             Text("\(value.usageCount)件の記録")
@@ -258,10 +258,10 @@ struct CompanionMasterManagementView: View {
     var body: some View {
         List {
             if filteredValues.isEmpty {
-                ContentUnavailableView(
+                FavorecoContentUnavailableView(
                     searchText.isEmpty ? "同行者はまだありません" : "条件に一致する同行者がありません",
                     systemImage: "person.2",
-                    description: Text("記録へ保存した同行者は自動的にまとまります。ここから先に登録することもできます。")
+                    description: "記録へ保存した同行者は自動的にまとまります。ここから先に登録することもできます。"
                 )
             } else {
                 ForEach(filteredValues) { value in
@@ -269,8 +269,7 @@ struct CompanionMasterManagementView: View {
                         beginEditing(value)
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: value.iconSymbol)
-                                .font(.body.weight(.semibold))
+                            FavorecoIcon(systemName: value.iconSymbol, size: 17, fallbackWeight: .semibold)
                                 .foregroundStyle(Color.accentColor)
                                 .frame(width: 30, height: 30)
                                 .background(Color.accentColor.opacity(0.12), in: Circle())
@@ -310,7 +309,7 @@ struct CompanionMasterManagementView: View {
                     draftIcon = CompanionIconCatalog.defaultSymbol
                     isShowingCreate = true
                 } label: {
-                    Image(systemName: "plus")
+                    FavorecoIcon(systemName: "plus", size: 16)
                 }
                 .accessibilityLabel("同行者を追加")
             }
@@ -466,8 +465,10 @@ private struct CompanionMasterEditor: View {
             Form {
                 Section("同行者") {
                     HStack(spacing: 12) {
-                        Image(systemName: CompanionIconCatalog.validated(iconSymbol))
-                            .font(.title2.weight(.semibold))
+                        FavorecoIcon(
+                            systemName: CompanionIconCatalog.validated(iconSymbol),
+                            size: 22
+                        )
                             .foregroundStyle(Color.accentColor)
                             .frame(width: 44, height: 44)
                             .background(Color.accentColor.opacity(0.12), in: Circle())
@@ -481,8 +482,7 @@ private struct CompanionMasterEditor: View {
                             Button {
                                 iconSymbol = symbol
                             } label: {
-                                Image(systemName: symbol)
-                                    .font(.title3)
+                                FavorecoIcon(systemName: symbol, size: 20)
                                     .frame(width: 44, height: 44)
                                     .foregroundStyle(iconSymbol == symbol ? Color.white : Color.accentColor)
                                     .background(iconSymbol == symbol ? Color.accentColor : Color.accentColor.opacity(0.1), in: Circle())

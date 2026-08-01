@@ -26,6 +26,7 @@ enum AppStorageKeys {
     static let fontStyle = "fontStyle"
     static let fontWeight = "fontWeight"
     static let appearanceMode = "appearanceMode"
+    static let baseTheme = "baseTheme"
     static let themeMode = "themeMode"
     static let unifiedThemeColorHex = "unifiedThemeColorHex"
     static let profileDisplayName = "profileDisplayName"
@@ -51,6 +52,7 @@ enum AppStorageKeys {
     static let lastUsedCategoryTemplateKey = "lastUsedCategoryTemplateKey"
     static let homeSelectedCategoryTemplateKey = "homeSelectedCategoryTemplateKey"
     static let categoryLibraryLayoutModePrefix = "categoryLibraryLayoutMode."
+    static let theaterPerformanceLogLayoutMode = "theaterPerformanceLogLayoutMode"
     static let recordsLayoutMode = "recordsLayoutMode"
     static let hasMigratedLegacyFavoritesToFavoPins = "hasMigratedLegacyFavoritesToFavoPins"
     static let personStarterPresetSeedVersion = "personStarterPresetSeedVersion"
@@ -62,6 +64,7 @@ enum AppStorageKeys {
     static let usesMapSearchAssist = "usesMapSearchAssist"
     static let usesWeatherAutoFill = "usesWeatherAutoFill"
     static let usesInputSuggestionDictionary = "usesInputSuggestionDictionary"
+    static let calendarSplitPreset = "calendarSplitPreset"
     static let showsExternalCalendarEvents = "showsExternalCalendarEvents"
     static let selectedExternalCalendarIdentifiers = "selectedExternalCalendarIdentifiers"
     static let automaticallyUpdatesExternalCalendar = "automaticallyUpdatesExternalCalendar"
@@ -86,6 +89,7 @@ enum AppStorageKeys {
     static let pendingNotificationPlanID = "pendingNotificationPlanID"
     static let pendingNotificationAttemptID = "pendingNotificationAttemptID"
     static let pendingNotificationPreparationTaskID = "pendingNotificationPreparationTaskID"
+    static let ticketNotificationCopyVersion = "ticketNotificationCopyVersion"
     static let opensPreviousMonthlyReport = "opensPreviousMonthlyReport"
     static let opensPreviousYearlyReport = "opensPreviousYearlyReport"
 }
@@ -157,6 +161,27 @@ enum CategoryLibraryLayoutMode: String, CaseIterable, Identifiable {
 
     func store(for templateKey: String) {
         UserDefaults.standard.set(rawValue, forKey: AppStorageKeys.categoryLibraryLayoutModePrefix + templateKey)
+    }
+}
+
+enum TheaterPerformanceLogLayoutMode: String, CaseIterable, Identifiable {
+    case compact
+    case banner
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .compact: "2列"
+        case .banner: "横長"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .compact: "rectangle.grid.2x2"
+        case .banner: "rectangle.grid.1x2"
+        }
     }
 }
 

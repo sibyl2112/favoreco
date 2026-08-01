@@ -13,6 +13,7 @@ struct ExperienceOfficialInfoUnitEditor: View {
     @Binding var pendingPeople: [PendingPersonLink]
     @Binding var advancedEntries: [AdvancedFieldEntry]
     var allowsContributorCandidates = true
+    var usesExplicitTheaterLayout = false
 
     @AppStorage(AppStorageKeys.usesURLImportAssist) private var usesURLImportAssist = true
     @State private var candidate: URLMetadataCandidate?
@@ -21,25 +22,59 @@ struct ExperienceOfficialInfoUnitEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("サブタイトル（任意）", text: $eventSubtitle)
+            if usesExplicitTheaterLayout {
+                ExplicitFormTextField(
+                    title: "サブタイトル（任意）",
+                    prompt: "サブタイトルを入力",
+                    text: $eventSubtitle,
+                    labelStyle: .horizontal
+                )
+            } else {
+                TextField("サブタイトル（任意）", text: $eventSubtitle)
+            }
 
-            TextField("公式URL（任意）", text: $officialURL)
+            Group {
+                if usesExplicitTheaterLayout {
+                    ExplicitFormTextField(
+                        title: "公式URL（任意）",
+                        prompt: "URLを入力",
+                        text: $officialURL,
+                        labelStyle: .horizontal
+                    )
+                } else {
+                    TextField("公式URL（任意）", text: $officialURL)
+                }
+            }
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
 
-            TextField("SNSリンク（1行1件・任意）", text: $socialLinksText, axis: .vertical)
+            Group {
+                if usesExplicitTheaterLayout {
+                    ExplicitFormTextField(
+                        title: "SNSリンク（任意）",
+                        prompt: "1行に1件",
+                        text: $socialLinksText,
+                        axis: .vertical,
+                        minimumLines: 2,
+                        maximumLines: 5,
+                        labelStyle: .horizontal
+                    )
+                } else {
+                    TextField("SNSリンク（1行1件・任意）", text: $socialLinksText, axis: .vertical)
+                        .lineLimit(2...5)
+                }
+            }
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
-                .lineLimit(2...5)
 
             if usesURLImportAssist {
                 Button {
                     Task { await fetchMetadata() }
                 } label: {
                     if isLoading {
-                        Label("候補を取得中", systemImage: "hourglass")
+                        FavorecoIconLabel("候補を取得中", systemImage: "hourglass")
                     } else {
-                        Label("URLから候補を取得", systemImage: "link.badge.plus")
+                        FavorecoIconLabel("URLから候補を取得", systemImage: "link.badge.plus")
                     }
                 }
                 .disabled(isLoading || officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -66,7 +101,7 @@ struct ExperienceOfficialInfoUnitEditor: View {
                         if purchaseManager.currentPlan.includesLocalFullFeatures {
                             structuredCandidates(candidate)
                         } else {
-                            Label("日時・会場・人物候補はPro以上", systemImage: "lock.fill")
+                            FavorecoIconLabel("日時・会場・人物候補はPro以上", systemImage: "lock.fill")
                                 .font(FavorecoTypography.captionStrong)
                                 .foregroundStyle(.secondary)
                         }
@@ -122,7 +157,10 @@ struct ExperienceOfficialInfoUnitEditor: View {
                         if !candidate.venueAddress.isEmpty { venueAddress = candidate.venueAddress }
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
-                            Label(candidate.venueName.isEmpty ? "住所を反映" : candidate.venueName, systemImage: "mappin.and.ellipse")
+                            FavorecoIconLabel(
+                                candidate.venueName.isEmpty ? "住所を反映" : candidate.venueName,
+                                systemImage: "mappin.and.ellipse"
+                            )
                             if !candidate.venueAddress.isEmpty {
                                 Text(candidate.venueAddress)
                                     .font(FavorecoTypography.caption)
@@ -139,7 +177,10 @@ struct ExperienceOfficialInfoUnitEditor: View {
                         Button {
                             appendContributor(contributor)
                         } label: {
-                            Label("\(contributor.roleName): \(contributor.name)", systemImage: "person.badge.plus")
+                            FavorecoIconLabel(
+                                "\(contributor.roleName): \(contributor.name)",
+                                systemImage: "person.badge.plus"
+                            )
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.bordered)

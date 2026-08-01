@@ -156,6 +156,7 @@ struct PeopleUnitEditor: View {
     var addButtonTitle = "人物・団体を追加"
     var relationshipTagOptions: [TheaterFocusReaction] = []
     var existingRelationshipTagKeys: Binding<[UUID: Set<String>]> = .constant([:])
+    var usesExplicitTheaterLayout = false
 
     @State private var name = ""
     @State private var selectedRole = PersonRoleOption.defaultOption
@@ -193,7 +194,16 @@ struct PeopleUnitEditor: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                TextField(namePlaceholder, text: $name)
+                if usesExplicitTheaterLayout {
+                    ExplicitFormTextField(
+                        title: "人物名（任意）",
+                        prompt: namePlaceholder,
+                        text: $name,
+                        labelStyle: .horizontal
+                    )
+                } else {
+                    TextField(namePlaceholder, text: $name)
+                }
                 if showsRolePicker {
                     Picker("役割", selection: $selectedRole) {
                         ForEach(roleOptions) { role in
@@ -244,7 +254,10 @@ struct PeopleUnitEditor: View {
                                 parentOrganizationID = person.parentOrganizationID
                             } label: {
                                 HStack(spacing: 10) {
-                                    Image(systemName: PersonActivityTags.icon(for: person.roleTagsRaw))
+                                    FavorecoIcon(
+                                        systemName: PersonActivityTags.icon(for: person.roleTagsRaw),
+                                        size: 16
+                                    )
                                         .foregroundStyle(.secondary)
                                         .frame(width: 24)
                                     VStack(alignment: .leading, spacing: 2) {
@@ -254,7 +267,7 @@ struct PeopleUnitEditor: View {
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Image(systemName: "checkmark.circle")
+                                    FavorecoIcon(systemName: "checkmark.circle")
                                         .foregroundStyle(.secondary)
                                 }
                                 .contentShape(Rectangle())
@@ -267,7 +280,7 @@ struct PeopleUnitEditor: View {
                 Button {
                     appendPerson()
                 } label: {
-                    Label(addButtonTitle, systemImage: "person.badge.plus")
+                    FavorecoIconLabel(addButtonTitle, systemImage: "person.badge.plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)

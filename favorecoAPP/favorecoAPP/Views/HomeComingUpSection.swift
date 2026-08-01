@@ -19,7 +19,7 @@ struct HomeComingUpSection: View {
                     NotificationCenter.default.post(name: .openFavorecoPlanCreation, object: nil)
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: "calendar.badge.plus")
+                        FavorecoIcon(systemName: "calendar.badge.plus", size: 18)
                             .foregroundStyle(themePalette.globalTint)
                             .frame(width: 34, height: 34)
                             .background(themePalette.globalTint.opacity(0.10), in: Circle())

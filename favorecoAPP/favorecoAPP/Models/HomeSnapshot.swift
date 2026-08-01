@@ -46,12 +46,13 @@ struct HomeSnapshot {
             calendar.startOfDay(for: visit.visitedAt) >= today
                 && !linkedVisitIDs.contains(visit.id)
         }
+        let peopleIndex = HomePeopleSummaryIndex(links: personLinks)
         let allVisitSnapshots = visibleVisits.map {
-            HomeVisitSnapshot(visit: $0, peopleSummary: peopleSummary(for: $0, links: personLinks))
+            HomeVisitSnapshot(visit: $0, peopleSummary: peopleIndex.summary(for: $0))
         }
         let visitSnapshots = Array(allVisitSnapshots.prefix(8))
         let futureVisitSnapshots = futureVisits.map {
-            HomeVisitSnapshot(visit: $0, peopleSummary: peopleSummary(for: $0, links: personLinks))
+            HomeVisitSnapshot(visit: $0, peopleSummary: peopleIndex.summary(for: $0))
         }
         let upcomingItems = (
             upcomingPlans.map { HomeUpcomingItem.plan(HomePlanSnapshot(plan: $0)) }
@@ -99,20 +100,6 @@ struct HomeSnapshot {
         )
     }
 
-    @MainActor
-    private static func peopleSummary(for visit: Visit, links: [EventPersonLink]) -> String {
-        links
-            .filter { link in
-                !link.isArchived && (link.event?.id == visit.event?.id || link.visit?.id == visit.id)
-            }
-            .sorted { $0.sortOrder < $1.sortOrder }
-            .prefix(2)
-            .map { link in
-                link.nameSnapshot.isEmpty ? link.person?.displayName ?? "" : link.nameSnapshot
-            }
-            .filter { !$0.isEmpty }
-            .joined(separator: " / ")
-    }
 }
 
 struct HomeVisitSnapshot: Identifiable {
@@ -120,6 +107,7 @@ struct HomeVisitSnapshot: Identifiable {
     let title: String
     let categoryName: String
     let categoryIcon: String
+    let categoryTemplateKey: String
     let categoryColorHex: String
     let visitedAt: Date
     let venueName: String
@@ -139,19 +127,11 @@ struct HomeVisitSnapshot: Identifiable {
     init(visit: Visit, peopleSummary: String) {
         let category = visit.event?.category
         let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
-        let photos = (visit.photos ?? []).filter { $0.mediaKind == "photo" }
-        let selectedPhoto: PhotoBlob?
-        if !visit.eyecatchPath.isEmpty,
-           let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
-            selectedPhoto = cover
-        } else {
-            selectedPhoto = photos.min { $0.createdAt < $1.createdAt }
-        }
-
         id = visit.id
         title = visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
         categoryName = category?.name ?? "記録"
         categoryIcon = category?.iconSymbol ?? "sparkles.rectangle.stack"
+        categoryTemplateKey = category?.templateKey ?? ""
         categoryColorHex = category?.colorHex ?? "#147C88"
         visitedAt = visit.visitedAt
         venueName = visit.venueNameSnapshot
@@ -167,7 +147,7 @@ struct HomeVisitSnapshot: Identifiable {
         ).value
         fillsEyecatchFrame = EyecatchAspectRatio.usesEyecatchFill(for: category)
         self.peopleSummary = peopleSummary
-        thumbnailReference = selectedPhoto.map { .photo($0.id) }
+        thumbnailReference = visit.event.map { .event($0.id) }
         comingUpTimeText = category?.usesOpeningTime == true
             ? "開演 \(FavorecoDateText.time(visit.visitedAt))"
             : ""
@@ -181,6 +161,7 @@ struct HomePlanSnapshot: Identifiable {
     let subtitle: String
     let categoryName: String
     let categoryIcon: String
+    let categoryTemplateKey: String
     let categoryColorHex: String
     let startsAt: Date
     let venueName: String
@@ -198,6 +179,7 @@ struct HomePlanSnapshot: Identifiable {
         subtitle = plan.subtitle
         categoryName = category?.name ?? "予定"
         categoryIcon = category?.iconSymbol ?? "calendar"
+        categoryTemplateKey = category?.templateKey ?? ""
         categoryColorHex = category?.colorHex ?? "#147C88"
         startsAt = plan.startsAt
         venueName = plan.venueNameSnapshot
@@ -233,6 +215,7 @@ struct HomeInterestedEventSnapshot: Identifiable {
     let title: String
     let categoryName: String?
     let categoryIcon: String?
+    let categoryTemplateKey: String
     let categoryColorHex: String
     let periodText: String
     let venueName: String
@@ -250,6 +233,7 @@ struct HomeInterestedEventSnapshot: Identifiable {
         title = event.title.isEmpty ? "無題" : event.title
         categoryName = event.category?.name
         categoryIcon = event.category?.iconSymbol
+        categoryTemplateKey = event.category?.templateKey ?? ""
         categoryColorHex = event.category?.colorHex ?? "#147C88"
         periodText = Self.periodText(fields: fields)
         venueName = fields.eventVenues
@@ -291,6 +275,7 @@ struct HomeInboxItemSnapshot: Identifiable {
     let sourceURLString: String
     let categoryName: String?
     let categoryIcon: String?
+    let categoryTemplateKey: String
     let categoryColorHex: String
     let createdAt: Date
     let thumbnailReference: ThumbnailReference
@@ -304,9 +289,50 @@ struct HomeInboxItemSnapshot: Identifiable {
         let category = categories.first(where: { $0.templateKey == item.targetTemplateKey })
         categoryName = category?.name
         categoryIcon = category?.iconSymbol
+        categoryTemplateKey = category?.templateKey ?? item.targetTemplateKey
         categoryColorHex = category?.colorHex ?? "#147C88"
         createdAt = item.createdAt
         thumbnailReference = .inbox(item.id)
+    }
+}
+
+@MainActor
+private struct HomePeopleSummaryIndex {
+    private let eventLinks: [UUID: [EventPersonLink]]
+    private let visitLinks: [UUID: [EventPersonLink]]
+
+    init(links: [EventPersonLink]) {
+        var byEvent: [UUID: [EventPersonLink]] = [:]
+        var byVisit: [UUID: [EventPersonLink]] = [:]
+        for link in links where !link.isArchived {
+            if let eventID = link.event?.id {
+                byEvent[eventID, default: []].append(link)
+            }
+            if let visitID = link.visit?.id {
+                byVisit[visitID, default: []].append(link)
+            }
+        }
+        eventLinks = byEvent
+        visitLinks = byVisit
+    }
+
+    func summary(for visit: Visit) -> String {
+        let linkedEventPeople: [EventPersonLink]
+        if let eventID = visit.event?.id {
+            linkedEventPeople = eventLinks[eventID] ?? []
+        } else {
+            linkedEventPeople = []
+        }
+        let linkedVisitPeople = visitLinks[visit.id] ?? []
+        let links = linkedEventPeople + linkedVisitPeople
+        return links
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .prefix(2)
+            .map { link in
+                link.nameSnapshot.isEmpty ? link.person?.displayName ?? "" : link.nameSnapshot
+            }
+            .filter { !$0.isEmpty }
+            .joined(separator: " / ")
     }
 }
 

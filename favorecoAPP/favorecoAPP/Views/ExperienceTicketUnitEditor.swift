@@ -8,8 +8,51 @@ import SwiftUI
 struct ExperienceTicketUnitEditor: View {
     @Binding var outcomeKey: String
     @Binding var seatText: String
+    var usesExplicitTheaterLayout = false
 
     var body: some View {
+        Group {
+            if usesExplicitTheaterLayout {
+                explicitTheaterContent
+            } else {
+                standardContent
+            }
+        }
+    }
+
+    private var explicitTheaterContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ExplicitFormControlRow(title: "状態", isOptional: true) {
+                Picker("状態", selection: $outcomeKey) {
+                    ForEach(ExperienceTicketPlanOption.all) { option in
+                        Text(option.name).tag(option.key)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+            }
+
+            Divider()
+                .overlay(ExplicitFormMetrics.rowSeparatorColor)
+
+            ExplicitFormTextField(
+                title: "座席・整理番号（任意）",
+                prompt: "例：S席・1階A列12番",
+                text: $seatText,
+                axis: .vertical,
+                minimumLines: 1,
+                maximumLines: 2,
+                labelStyle: .horizontal
+            )
+
+            Text("この記録には状態と座席メモだけを残します。申込、当落、入金、チケット受取期限などは「予定・チケット」で管理します。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var standardContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             Picker("状態", selection: $outcomeKey) {
                 ForEach(ExperienceTicketPlanOption.all) { option in

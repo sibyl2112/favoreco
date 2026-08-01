@@ -16,6 +16,7 @@ struct AddExperienceView: View {
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
     @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
@@ -61,6 +62,11 @@ struct AddExperienceView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if category.templateKey == "theater" {
+                    Section {
+                        TheaterUnifiedFormIntroduction(entry: .visitCreation)
+                    }
+                }
                 Section("入力ユニット") {
                     ForEach(activeUnitDefinitions(for: category)) { unit in
                         RecordUnitAccordion(
@@ -73,7 +79,11 @@ struct AddExperienceView: View {
                     }
                 }
             }
-            .navigationTitle("記録を追加")
+            .navigationTitle(
+                category.templateKey == "theater"
+                    ? TheaterUnifiedFormEntry.visitCreation.navigationTitle
+                    : "記録を追加"
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -165,6 +175,7 @@ struct AddExperienceView: View {
                     usesMapSearchAssist: usesMapSearchAssist,
                     supportsPerformanceTime: category.usesOpeningTime,
                     supportsStyles: category.templateKey == "theater",
+                    usesExplicitTheaterLayout: category.templateKey == "theater",
                     ratingText: draft.ratingLabel,
                     onSelectPlace: { draft.apply(placeMaster: $0) },
                     onSelectPublicPlace: { draft.apply(publicPlace: $0) },
@@ -196,7 +207,8 @@ struct AddExperienceView: View {
                 venueAddress: venueAddressBinding,
                 pendingPeople: $pendingPeople,
                 advancedEntries: $draft.advancedEntries,
-                allowsContributorCandidates: category.templateKey != "theater"
+                allowsContributorCandidates: category.templateKey != "theater",
+                usesExplicitTheaterLayout: category.templateKey == "theater"
             )
         case "people":
             if category.templateKey == "theater" {
@@ -221,7 +233,8 @@ struct AddExperienceView: View {
         case "ticketPlan":
             ExperienceTicketUnitEditor(
                 outcomeKey: $draft.outcomeKey,
-                seatText: $draft.seatText
+                seatText: $draft.seatText,
+                usesExplicitTheaterLayout: category.templateKey == "theater"
             )
         case "photos":
             PhotoUnitEditor(
@@ -242,7 +255,11 @@ struct AddExperienceView: View {
                 aspectRatioKey: $draft.eyecatchAspectRatioKey
             )
         case "importOCR":
-            OCRUnitEditor(ocrText: $draft.ocrText, selectedItems: $selectedOCRItems) { suggestion in
+            OCRUnitEditor(
+                ocrText: $draft.ocrText,
+                selectedItems: $selectedOCRItems,
+                usesExplicitTheaterLayout: category.templateKey == "theater"
+            ) { suggestion in
                 switch suggestion.kind {
                 case .title: draft.title = suggestion.value
                 case .date: if let date = suggestion.dateValue { draft.visitedAt = date }
@@ -253,11 +270,15 @@ struct AddExperienceView: View {
                 }
             }
         case "money":
-            ExperienceMoneyUnitEditor(amountText: $draft.amountText)
+            ExperienceMoneyUnitEditor(
+                amountText: $draft.amountText,
+                usesExplicitTheaterLayout: category.templateKey == "theater"
+            )
         case "memo":
             ExperienceMemoUnitEditor(
                 text: $draft.note,
-                placeholder: template.memoPlaceholder
+                placeholder: template.memoPlaceholder,
+                usesExplicitTheaterLayout: category.templateKey == "theater"
             )
         case "advanced":
             ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
@@ -295,16 +316,40 @@ struct AddExperienceView: View {
             resolvedCategory?.isArchived = false
             resolvedCategory?.updatedAt = now
         }
-        let event = ExperienceEvent(
+        let existingEvent: ExperienceEvent? = if resolvedCategory?.templateKey == "theater" {
+            ExperienceEvent.matchingProduction(
+                title: draft.trimmedTitle,
+                categoryID: resolvedCategory?.id,
+                in: events
+            )
+        } else {
+            nil
+        }
+        let event = existingEvent ?? ExperienceEvent(
             title: draft.trimmedTitle,
-            seriesName: draft.trimmedSeriesName,
-            subTypeKey: draft.subTypeKey,
-            officialURL: draft.trimmedOfficialURL,
-            unitFieldsRaw: draft.eventUnitFieldsRaw(for: category),
             createdAt: now,
             updatedAt: now,
             category: resolvedCategory
         )
+        if existingEvent == nil {
+            modelContext.insert(event)
+        }
+        event.title = draft.trimmedTitle
+        if !draft.trimmedSeriesName.isEmpty {
+            event.seriesName = draft.trimmedSeriesName
+        }
+        if !draft.subTypeKey.isEmpty {
+            event.subTypeKey = draft.subTypeKey
+        }
+        if !draft.trimmedOfficialURL.isEmpty {
+            event.officialURL = draft.trimmedOfficialURL
+        }
+        let eventUnitFieldsRaw = draft.eventUnitFieldsRaw(for: category)
+        if event.unitFieldsRaw.isEmpty || existingEvent == nil {
+            event.unitFieldsRaw = eventUnitFieldsRaw
+        }
+        event.stateKey = "active"
+        event.updatedAt = now
         let visit = Visit(
             visitedAt: draft.visitedAt,
             endedAt: max(draft.endedAt, draft.visitedAt),
@@ -335,8 +380,10 @@ struct AddExperienceView: View {
             )
         )
 
-        modelContext.insert(event)
-        event.representativeEyecatchPath = coverPhotoPath
+        if !coverPhotoPath.isEmpty {
+            event.representativeEyecatchPath = coverPhotoPath
+            ThumbnailLoader.purge()
+        }
         modelContext.insert(visit)
         insertPendingPeople(
             for: category.templateKey == "theater" ? nil : event,
@@ -392,7 +439,7 @@ struct EditExperienceView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var draft: AddExperienceDraft
-    @State private var expandedUnitIDs: Set<String> = ["basic", "people", "photos", "officialInfo", "memo"]
+    @State private var expandedUnitIDs: Set<String>
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedOCRItems: [PhotosPickerItem] = []
     @State private var pendingPhotos: [PendingPhoto] = []
@@ -437,6 +484,17 @@ struct EditExperienceView: View {
     init(visit: Visit) {
         self.visit = visit
         _draft = State(initialValue: AddExperienceDraft(visit: visit))
+        let isTheater = visit.event?.category?.templateKey == "theater"
+        var initialUnits: Set<String> = isTheater
+            ? ["basic", "ticketPlan", "people", "photos"]
+            : ["basic", "people", "photos", "officialInfo", "memo"]
+        if isTheater, !visit.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            initialUnits.insert("memo")
+        }
+        if isTheater, visit.amount != 0 {
+            initialUnits.insert("money")
+        }
+        _expandedUnitIDs = State(initialValue: initialUnits)
         _coverPhotoPath = State(initialValue: visit.eyecatchPath)
         let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
         _heroBackgroundPath = State(initialValue: unitFields.heroBackgroundPath)
@@ -454,6 +512,11 @@ struct EditExperienceView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if isTheaterVisit {
+                    Section {
+                        TheaterUnifiedFormIntroduction(entry: .visitEditing)
+                    }
+                }
                 Section("入力ユニット") {
                     ForEach(activeUnitDefinitions(for: category)) { unit in
                         RecordUnitAccordion(
@@ -466,7 +529,11 @@ struct EditExperienceView: View {
                     }
                 }
             }
-            .navigationTitle(isTheaterVisit ? "観劇回を編集" : "記録を編集")
+            .navigationTitle(
+                isTheaterVisit
+                    ? TheaterUnifiedFormEntry.visitEditing.navigationTitle
+                    : "記録を編集"
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -570,6 +637,7 @@ struct EditExperienceView: View {
                         usesMapSearchAssist: usesMapSearchAssist,
                         supportsPerformanceTime: category?.usesOpeningTime == true,
                         supportsStyles: true,
+                        usesExplicitTheaterLayout: true,
                         ratingText: draft.ratingLabel,
                         onSelectPlace: { draft.apply(placeMaster: $0) },
                         onSelectPublicPlace: { draft.apply(publicPlace: $0) },
@@ -645,7 +713,8 @@ struct EditExperienceView: View {
         case "ticketPlan":
             ExperienceTicketUnitEditor(
                 outcomeKey: $draft.outcomeKey,
-                seatText: $draft.seatText
+                seatText: $draft.seatText,
+                usesExplicitTheaterLayout: isTheaterVisit
             )
         case "photos":
             PhotoUnitEditor(
@@ -669,7 +738,8 @@ struct EditExperienceView: View {
             OCRUnitEditor(
                 ocrText: $draft.ocrText,
                 selectedItems: $selectedOCRItems,
-                supportsTitleSuggestion: !isTheaterVisit
+                supportsTitleSuggestion: !isTheaterVisit,
+                usesExplicitTheaterLayout: isTheaterVisit
             ) { suggestion in
                 switch suggestion.kind {
                 case .title:
@@ -682,11 +752,15 @@ struct EditExperienceView: View {
                 }
             }
         case "money":
-            ExperienceMoneyUnitEditor(amountText: $draft.amountText)
+            ExperienceMoneyUnitEditor(
+                amountText: $draft.amountText,
+                usesExplicitTheaterLayout: isTheaterVisit
+            )
         case "memo":
             ExperienceMemoUnitEditor(
                 text: $draft.note,
-                placeholder: template.memoPlaceholder
+                placeholder: template.memoPlaceholder,
+                usesExplicitTheaterLayout: isTheaterVisit
             )
         case "advanced":
             ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
@@ -910,6 +984,11 @@ struct AddVisitView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if event.category?.templateKey == "theater" {
+                    Section {
+                        TheaterUnifiedFormIntroduction(entry: .visitCreation)
+                    }
+                }
                 Section("入力ユニット") {
                     ForEach(activeUnitDefinitions(for: event.category)) { unit in
                         RecordUnitAccordion(
@@ -922,7 +1001,11 @@ struct AddVisitView: View {
                     }
                 }
             }
-            .navigationTitle("記録を追加")
+            .navigationTitle(
+                event.category?.templateKey == "theater"
+                    ? TheaterUnifiedFormEntry.visitCreation.navigationTitle
+                    : "記録を追加"
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1026,6 +1109,7 @@ struct AddVisitView: View {
                     usesMapSearchAssist: usesMapSearchAssist,
                     supportsPerformanceTime: event.category?.usesOpeningTime == true,
                     supportsStyles: event.category?.templateKey == "theater",
+                    usesExplicitTheaterLayout: event.category?.templateKey == "theater",
                     ratingText: draft.ratingLabel,
                     onSelectPlace: { draft.apply(placeMaster: $0) },
                     onSelectPublicPlace: { draft.apply(publicPlace: $0) },
@@ -1039,7 +1123,8 @@ struct AddVisitView: View {
         case "memo":
             ExperienceMemoUnitEditor(
                 text: $draft.note,
-                placeholder: template.memoPlaceholder
+                placeholder: template.memoPlaceholder,
+                usesExplicitTheaterLayout: event.category?.templateKey == "theater"
             )
         case "photos":
             PhotoUnitEditor(
@@ -1063,7 +1148,8 @@ struct AddVisitView: View {
             OCRUnitEditor(
                 ocrText: $draft.ocrText,
                 selectedItems: $selectedOCRItems,
-                supportsTitleSuggestion: false
+                supportsTitleSuggestion: false,
+                usesExplicitTheaterLayout: event.category?.templateKey == "theater"
             ) { suggestion in
                 switch suggestion.kind {
                 case .title: break
@@ -1093,10 +1179,14 @@ struct AddVisitView: View {
         case "ticketPlan":
             ExperienceTicketUnitEditor(
                 outcomeKey: $draft.outcomeKey,
-                seatText: $draft.seatText
+                seatText: $draft.seatText,
+                usesExplicitTheaterLayout: event.category?.templateKey == "theater"
             )
         case "money":
-            ExperienceMoneyUnitEditor(amountText: $draft.amountText)
+            ExperienceMoneyUnitEditor(
+                amountText: $draft.amountText,
+                usesExplicitTheaterLayout: event.category?.templateKey == "theater"
+            )
         case "advanced":
             ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         case "officialInfo":
@@ -1789,6 +1879,31 @@ func normalizedPlaceText(_ value: String) -> String {
         .replacingOccurrences(of: "　", with: "")
 }
 
+func deduplicatedPlaceSuggestions(_ places: [PlaceMaster]) -> [PlaceMaster] {
+    var seenPlaces = Set<String>()
+    return places.filter { place in
+        let normalizedName = normalizedPlaceText(place.name)
+        let normalizedAddress = normalizedPlaceSuggestionAddress(place.address)
+        let locationKey: String
+        if !normalizedAddress.isEmpty {
+            locationKey = normalizedAddress
+        } else if place.latitude != 0 || place.longitude != 0 {
+            locationKey = String(format: "%.5f,%.5f", place.latitude, place.longitude)
+        } else {
+            locationKey = place.id.uuidString
+        }
+        return seenPlaces.insert("\(normalizedName)|\(locationKey)").inserted
+    }
+}
+
+private func normalizedPlaceSuggestionAddress(_ value: String) -> String {
+    value
+        .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+        .replacingOccurrences(of: #"〒?\s*\d{3}[-ー‐‑‒–—―]?\d{4}"#, with: "", options: .regularExpression)
+        .replacingOccurrences(of: #"[-ー‐‑‒–—―]"#, with: "-", options: .regularExpression)
+        .replacingOccurrences(of: #"[\s,，、。]"#, with: "", options: .regularExpression)
+}
+
 private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnitDefinition] {
     let definitions = RecordUnitDefinition.definitions(for: category?.enabledUnitsRaw ?? "")
     let fallbackDefinitions = RecordUnitDefinition.definitions(for: "basic,officialInfo,memo")
@@ -1796,10 +1911,98 @@ private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnit
     let requiredDefinitions = RecordUnitDefinition.all.filter { RecordUnitDefinition.requiredIDs.contains($0.id) }
     let mergedDefinitions = baseDefinitions + requiredDefinitions
     var seenIDs = Set<String>()
-    return mergedDefinitions.filter { definition in
+    let uniqueDefinitions = mergedDefinitions.filter { definition in
         guard !seenIDs.contains(definition.id) else { return false }
         seenIDs.insert(definition.id)
         return true
+    }
+    guard category?.templateKey == "theater" else {
+        return uniqueDefinitions
+    }
+
+    let theaterOrder = [
+        "basic",
+        "ticketPlan",
+        "people",
+        "photos",
+        "memo",
+        "money",
+        "importOCR",
+        "officialInfo",
+        "advanced",
+    ]
+    let orderIndex = Dictionary(
+        uniqueKeysWithValues: theaterOrder.enumerated().map { ($1, $0) }
+    )
+    return uniqueDefinitions
+        .sorted {
+            (orderIndex[$0.id] ?? Int.max) < (orderIndex[$1.id] ?? Int.max)
+        }
+        .map(theaterRecordUnitDefinition)
+}
+
+private func theaterRecordUnitDefinition(
+    _ definition: RecordUnitDefinition
+) -> RecordUnitDefinition {
+    switch definition.id {
+    case "basic":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "体験日程",
+            description: "鑑賞日・開演・終演・会場",
+            isRequired: definition.isRequired
+        )
+    case "ticketPlan":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "鑑賞記録",
+            description: "鑑賞方法・座席",
+            isRequired: definition.isRequired
+        )
+    case "people":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "お目当て・注目した人",
+            description: "出演者・スタッフから記録",
+            isRequired: definition.isRequired
+        )
+    case "photos":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "写真",
+            description: "ポスター・資料・観劇の写真",
+            isRequired: definition.isRequired
+        )
+    case "memo":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "感想記録",
+            description: "評価・感情タグ・自由メモ",
+            isRequired: definition.isRequired
+        )
+    case "money":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "集計記録",
+            description: "金額",
+            isRequired: definition.isRequired
+        )
+    case "importOCR":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "読み取り情報",
+            description: "OCRで取得した原文",
+            isRequired: definition.isRequired
+        )
+    case "officialInfo":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "公演公式情報",
+            description: "公式URL・SNS・参考リンク",
+            isRequired: definition.isRequired
+        )
+    default:
+        return definition
     }
 }
 

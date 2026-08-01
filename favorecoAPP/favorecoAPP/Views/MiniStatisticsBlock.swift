@@ -83,8 +83,7 @@ struct MiniStatisticsBlock: View {
                 }
 
                 HStack(alignment: .center, spacing: 5) {
-                    Image(systemName: item.icon)
-                        .font(.system(size: format.iconSize, weight: .medium))
+                    FavorecoIcon(systemName: item.icon, size: format.iconSize, fallbackWeight: .medium)
                         .foregroundStyle(tint)
                         .frame(width: format.iconFrameWidth)
 

@@ -30,7 +30,7 @@ struct GenreManagementView: View {
         List {
             if !warningMessage.isEmpty {
                 Section {
-                    Label(warningMessage, systemImage: "exclamationmark.circle")
+                    FavorecoIconLabel(warningMessage, systemImage: "exclamationmark.circle")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -84,7 +84,10 @@ struct GenreManagementView: View {
                         isShowingPlans = true
                     }
                 } label: {
-                    Image(systemName: purchaseManager.currentPlan.canCreateCustomGenres ? "plus" : "lock.fill")
+                    FavorecoIcon(
+                        systemName: purchaseManager.currentPlan.canCreateCustomGenres ? "plus" : "lock.fill",
+                        size: 16
+                    )
                 }
                 .accessibilityLabel(
                     purchaseManager.currentPlan.canCreateCustomGenres
@@ -149,7 +152,13 @@ private struct GenreManagementRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: category.iconSymbol)
+            FavorecoIcon(
+                systemName: PhosphorIconGlyph.categorySystemName(
+                    templateKey: category.templateKey,
+                    storedSystemName: category.iconSymbol
+                ),
+                size: 20
+            )
                 .foregroundStyle(Color(hex: category.colorHex))
                 .frame(width: 28)
 
@@ -241,7 +250,10 @@ struct GenreDetailSettingsView: View {
                 } else {
                     ForEach(linkedSocialAccounts) { account in
                         let platform = SocialPlatform.platform(for: account.platformKey)
-                        Label(account.label.isEmpty ? account.accountInput : account.label, systemImage: platform.symbolName)
+                        FavorecoIconLabel(
+                            account.label.isEmpty ? account.accountInput : account.label,
+                            systemImage: platform.symbolName
+                        )
                     }
                 }
             }
@@ -289,7 +301,10 @@ struct GenreDetailSettingsView: View {
                     Button(role: .destructive) {
                         isShowingRemoveConfirmation = true
                     } label: {
-                        Label(removalActionName, systemImage: linkedRecordCount == 0 ? "trash" : "archivebox")
+                        FavorecoIconLabel(
+                            removalActionName,
+                            systemImage: linkedRecordCount == 0 ? "trash" : "archivebox"
+                        )
                     }
 
                     if linkedRecordCount > 0 {

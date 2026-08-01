@@ -9,17 +9,26 @@ meta:
 
 # ---- 共通スケルトン（全ジャンル不変・app chrome） ----
 skeleton:
-  canvas_light: "#f5f6f9"
-  canvas_dark: "#14161b"
+  canvas_light: "#f7f7f3"
+  canvas_dark: "#14191d"
   surface_light: "rgba(255,255,255,0.85)"   # Liquid Glass（blur 20）
   surface_dark: "rgba(30,34,42,0.70)"
-  ink_light: "#232833"
-  ink_dark: "#eef1f6"
-  sub: "#8b93a3"
+  ink_light: "#293640"
+  ink_dark: "#dce4e9"
+  sub: "#68737d"
   hairline_light: "rgba(180,190,210,0.40)"
   hairline_dark: "rgba(120,132,150,0.30)"
-  app_accent: "#3a6df0"     # ニュートラル面のリンク/選択（ホーム・設定・通知）
+  app_accent: "#3474a3"     # 既定Sky Blueのリンク/選択（ホーム・設定・通知）
   semantic: { red: "#e0533a", amber: "#e0a12a", blue: "#3a6df0", green: "#1f8a5a" }
+
+base_themes:
+  sky_blue:
+    light: { canvas: "#f7f7f3", accent: "#3474a3", tint: "#e3eff7", heading: "#192735", body: "#293640", secondary: "#68737d", tertiary: "#8a949c" }
+    dark:  { canvas: "#14191d", heading: "#eff4f7", body: "#dce4e9", secondary: "#aebac2", tertiary: "#89979f" }
+  red_magenta:
+    light: { canvas: "#f7f7f3", accent: "#b04464", tint: "#f5e2e7", heading: "#38232b", body: "#443039", secondary: "#77656c", tertiary: "#998a90" }
+    dark:  { canvas: "#1b1517", heading: "#f7f0f2", body: "#e9dde1", secondary: "#c0adb4", tertiary: "#9f8d94" }
+  rule: "両テーマとも真っ黒は使わず、見出し／本文／補助／非活性の墨階調をテーマ色相へ合わせる。背景は共通オフホワイトを基準に、accentは操作、tintは淡い背景だけに使う。"
 
 radius: { card: 16, tile: 12, chip: 11, pill: 999, sheet: 26 }
 space:  { xs: 4, s: 8, m: 12, l: 16, xl: 24 }     # 8pxグリッド
@@ -157,20 +166,24 @@ favorecoは1アプリで多ジャンルを抱える。**バラバラに見せな
 1. **骨格は全ジャンル共通**：ステータスバー／ナビ（ホーム・暦・ライブラリ・マイ）／カード素材（Liquid Glass）／タイポ／余白（8pxグリッド）／角丸は**不変**。
 2. **テーマ色はアクセントだけ**：ヘッダーのタイトル・セクション見出し・状態バッジ・active タブ・フィルタON。ジャンルごとにテーマを選べるが、**面を塗りつぶさない**。
 3. **ジャンル固有レイアウトはコンテンツエリア内だけ**：棚の並べ方・カードの形（映画=ポスターウォール／酒=ボトル2列／観劇=縦長3列）は中身の話。枠は共通。
-4. **app chrome はニュートラル**：ホーム・設定・通知・登録情報ハブは**白ベース＋app_accent(青)**。色世界は**ライブラリの中だけ**にまとう。
+4. **app chrome は2つのベーステーマ**：ホーム・設定・通知・登録情報ハブは、共通オフホワイトを基準に **Sky Blue / Red Magenta** を選べる。アクセントだけでなく、見出し／本文／補助文字の墨色も同じ色相へ揃える。ジャンル固有の色世界はライブラリの中だけにまとう。
 5. **写真が主役**：色やアイコンは脇役。実装アイコンは絵文字でなく **SF Symbols**（モックの絵文字は仮）。
 
 ## 3. 色（Colors）
 
-### 共通スケルトン
-| 用途 | Light | Dark |
+### app chromeのベーステーマ
+| 用途 | Sky Blue Light | Red Magenta Light |
 |---|---|---|
-| キャンバス | `#f5f6f9` | `#14161b` |
-| サーフェス（Glass） | `rgba(255,255,255,.85)` +blur | `rgba(30,34,42,.70)` +blur |
-| インク（本文） | `#232833` | `#eef1f6` |
-| サブ（補助） | `#8b93a3` | `#8b93a3` |
-| ヘアライン | `rgba(180,190,210,.4)` | `rgba(120,132,150,.3)` |
-| appアクセント | `#3a6df0` | `#5b86f5` |
+| キャンバス | `#f7f7f3` | `#f7f7f3` |
+| サーフェス（Glass） | `rgba(255,255,255,.85)` +blur | `rgba(255,255,255,.85)` +blur |
+| appアクセント | `#3474a3` | `#b04464` |
+| 淡色面 | `#e3eff7` | `#f5e2e7` |
+| 見出し | `#192735` | `#38232b` |
+| 本文 | `#293640` | `#443039` |
+| 補助 | `#68737d` | `#77656c` |
+| 非活性 | `#8a949c` | `#998a90` |
+
+DarkはSky Blueを`canvas #14191d / heading #eff4f7 / body #dce4e9 / secondary #aebac2`、Red Magentaを`canvas #1b1517 / heading #f7f0f2 / body #e9dde1 / secondary #c0adb4`とする。文字色に純黒`#000000`は使わない。
 
 意味色：赤 `#e0533a`（緊急・締切）／琥珀 `#e0a12a`（注意・機会損失）／青 `#3a6df0`（情報）／緑 `#1f8a5a`（完了）。
 

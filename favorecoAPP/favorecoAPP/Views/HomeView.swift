@@ -9,7 +9,26 @@ import SwiftUI
 import SwiftData
 import UIKit
 
+enum HomeCategoryContextTransition: Equatable {
+    case activate(UUID)
+    case resetToHome
+    case none
+
+    static func resolve(previous: UUID?, current: UUID?) -> Self {
+        if let current {
+            return .activate(current)
+        }
+        if previous != nil {
+            return .resetToHome
+        }
+        return .none
+    }
+}
+
 struct HomeView: View {
+    let onCategoryReturnToRoot: () -> Void
+    let onCategoryNavigate: (UUID) -> Void
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.favorecoThemePalette) private var themePalette
     @Environment(\.colorScheme) private var colorScheme
@@ -30,8 +49,16 @@ struct HomeView: View {
     @State private var admissionPreparationPlan: Plan?
     @State private var isShowingSampleDeletionConfirmation = false
     @State private var sampleDeletionError = ""
-    @State private var swipeDestinationCategoryID: UUID?
+    @State private var categoryDestinationID: UUID?
     @State private var pickupDetailTarget: HomePickupDetailTarget?
+
+    init(
+        onCategoryReturnToRoot: @escaping () -> Void = {},
+        onCategoryNavigate: @escaping (UUID) -> Void = { _ in }
+    ) {
+        self.onCategoryReturnToRoot = onCategoryReturnToRoot
+        self.onCategoryNavigate = onCategoryNavigate
+    }
 
     private var categoryLayoutMode: HomeCategoryLayoutMode {
         HomeCategoryLayoutMode(rawValue: categoryLayoutModeRaw) ?? .horizontal
@@ -196,7 +223,10 @@ struct HomeView: View {
                     .padding(.bottom, 6)
 
                 if showsCategories, !visibleCategories.isEmpty {
-                    GenreNavigationStrip(categories: visibleCategories)
+                    GenreNavigationStrip(
+                        categories: visibleCategories,
+                        onSelectCategory: navigateToCategory
+                    )
                         .padding(.horizontal, 18)
                 }
 
@@ -210,7 +240,8 @@ struct HomeView: View {
                             let destination = direction > 0
                                 ? visibleCategories.first
                                 : visibleCategories.last
-                            swipeDestinationCategoryID = destination?.id
+                            selectedQuickTicketAttempt = nil
+                            categoryDestinationID = destination?.id
                         }
                     ) {
                         VStack(alignment: .leading, spacing: 24) {
@@ -218,7 +249,10 @@ struct HomeView: View {
                                 HomeAttentionSection(
                                     items: homeNextActionItems,
                                     onShowAll: { isShowingNextActionList = true },
-                                    onSelectTicket: { selectedQuickTicketAttempt = $0 }
+                                    onSelectTicket: { attempt in
+                                        guard categoryDestinationID == nil else { return }
+                                        selectedQuickTicketAttempt = attempt
+                                    }
                                 )
                             }
 
@@ -246,8 +280,27 @@ struct HomeView: View {
                     .padding(.bottom, 24)
                 }
             }
+            .foregroundStyle(
+                themePalette.bodyText(for: colorScheme),
+                themePalette.secondaryText(for: colorScheme),
+                themePalette.tertiaryText(for: colorScheme)
+            )
             .background(homeBackground)
             .toolbar(.hidden, for: .navigationBar)
+            .onChange(of: categoryDestinationID) { previous, current in
+                switch HomeCategoryContextTransition.resolve(
+                    previous: previous,
+                    current: current
+                ) {
+                case .activate(let categoryID):
+                    selectedQuickTicketAttempt = nil
+                    onCategoryNavigate(categoryID)
+                case .resetToHome:
+                    onCategoryReturnToRoot()
+                case .none:
+                    break
+                }
+            }
             .sheet(isPresented: $isShowingNextActionList) {
                 NavigationStack {
                     TicketOverviewView(showsCloseButton: true)
@@ -292,7 +345,7 @@ struct HomeView: View {
             } message: {
                 Text(sampleDeletionError)
             }
-            .navigationDestination(item: $swipeDestinationCategoryID) { categoryID in
+            .navigationDestination(item: $categoryDestinationID) { categoryID in
                 HomeCategoryDestination(categoryID: categoryID)
             }
             .navigationDestination(item: $pickupDetailTarget) { target in
@@ -363,7 +416,10 @@ struct HomeView: View {
                     message: "設定からジャンルを選び直すと、記録の入口が表示されます。"
                 )
             } else if categoryLayoutMode == .horizontal {
-                GenreNavigationStrip(categories: categories)
+                GenreNavigationStrip(
+                    categories: categories,
+                    onSelectCategory: navigateToCategory
+                )
             } else {
                 gridCategoryLayout(categories: categories)
             }
@@ -386,8 +442,8 @@ struct HomeView: View {
     @ViewBuilder
     private func categoryLinks(categories: [RecordCategory]) -> some View {
         ForEach(categories) { category in
-            NavigationLink {
-                CategoryTopView(category: category)
+            Button {
+                navigateToCategory(category)
             } label: {
                 HomeCategoryShortcut(category: category)
             }
@@ -395,26 +451,28 @@ struct HomeView: View {
         }
     }
 
+    private func navigateToCategory(_ category: RecordCategory) {
+        categoryDestinationID = category.id
+    }
+
     private var homeBackground: some View {
         ZStack {
-            Color(colorScheme == .dark ? .systemGroupedBackground : .init(red: 0.988, green: 0.972, blue: 0.945, alpha: 1))
+            themePalette.canvas(for: colorScheme)
 
-            LinearGradient(
-                stops: [
-                    .init(color: Color(hex: "#F1D8D2").opacity(colorScheme == .dark ? 0.08 : 0.34), location: 0),
-                    .init(color: Color(hex: "#F8F3E8").opacity(colorScheme == .dark ? 0.03 : 0.18), location: 0.25),
-                    .init(color: Color(hex: "#D6E3DF").opacity(colorScheme == .dark ? 0.06 : 0.18), location: 0.56),
-                    .init(color: Color(hex: "#E9D4C9").opacity(colorScheme == .dark ? 0.08 : 0.30), location: 0.80),
-                    .init(color: Color(hex: "#F4DAD6").opacity(colorScheme == .dark ? 0.07 : 0.28), location: 1),
+            RadialGradient(
+                colors: [
+                    themePalette.softTint.opacity(colorScheme == .dark ? 0.09 : 0.58),
+                    Color.clear,
                 ],
-                startPoint: .topTrailing,
-                endPoint: .bottomLeading
+                center: .topTrailing,
+                startRadius: 0,
+                endRadius: 460
             )
 
             LinearGradient(
                 colors: [
                     Color.clear,
-                    themePalette.globalTint.opacity(colorScheme == .dark ? 0.025 : 0.035),
+                    themePalette.softTint.opacity(colorScheme == .dark ? 0.035 : 0.20),
                     Color.clear,
                 ],
                 startPoint: .topLeading,
@@ -496,7 +554,7 @@ struct HomeView: View {
         HStack {
             Text(title)
                 .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
-                .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
+                .foregroundStyle(themePalette.headingText(for: colorScheme))
             Spacer()
             Text("\(count)")
                 .font(FavorecoTypography.captionStrong)
@@ -514,7 +572,10 @@ private struct InterestedEventRow: View {
                 displaySize: CGSize(width: 64, height: interestedEyecatchHeight),
                 contentMode: event.fillsEyecatchFrame ? .fill : .fit
             ) {
-                Color(.secondarySystemFill)
+                CategoryDefaultArtworkImage(
+                    templateKey: event.categoryTemplateKey,
+                    displaySize: CGSize(width: 64, height: interestedEyecatchHeight)
+                )
             }
             .frame(width: 64, height: interestedEyecatchHeight)
             .clipped()
@@ -527,10 +588,10 @@ private struct InterestedEventRow: View {
 
                 HStack(spacing: 10) {
                     if let categoryName = event.categoryName {
-                        Label(categoryName, systemImage: event.categoryIcon ?? "square.grid.2x2")
+                        FavorecoIconLabel(categoryName, systemImage: event.categoryIcon ?? "square.grid.2x2", iconSize: 13)
                     }
                     if event.hasOfficialURL {
-                        Label("URL", systemImage: "link")
+                        FavorecoIconLabel("URL", systemImage: "link", iconSize: 13)
                     }
                 }
                 .font(FavorecoTypography.caption)
@@ -584,6 +645,13 @@ enum HomeInterestingItem: Identifiable {
         switch self {
         case .event(let event): event.categoryIcon ?? "bookmark"
         case .inbox(let item): item.categoryIcon ?? "tray"
+        }
+    }
+
+    var categoryTemplateKey: String {
+        switch self {
+        case .event(let event): event.categoryTemplateKey
+        case .inbox(let item): item.categoryTemplateKey
         }
     }
 
@@ -745,8 +813,8 @@ struct HomeInterestingCollection: View {
     private static func pageSize(for layout: CategoryLibraryLayoutMode) -> Int {
         switch layout {
         case .gallery: 9
-        case .compact: 8
-        case .banner: 6
+        case .compact: 6
+        case .banner: 5
         }
     }
 }
@@ -781,12 +849,10 @@ private struct HomeInterestingArtwork: View {
                 displaySize: geometry.size,
                 contentMode: .fill
             ) {
-                ZStack {
-                    Color(.secondarySystemFill)
-                    Image(systemName: item.categoryIcon)
-                        .font(.title2)
-                        .foregroundStyle(Color(hex: item.colorHex))
-                }
+                CategoryDefaultArtworkImage(
+                    templateKey: item.categoryTemplateKey,
+                    displaySize: geometry.size
+                )
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipped()
@@ -907,6 +973,7 @@ struct HomeComingUpLink: View {
                     title: plan.title,
                     categoryName: plan.categoryName,
                     categoryIcon: plan.categoryIcon,
+                    categoryTemplateKey: plan.categoryTemplateKey,
                     colorHex: plan.categoryColorHex,
                     date: plan.startsAt,
                     timeText: plan.comingUpTimeText,
@@ -923,6 +990,7 @@ struct HomeComingUpLink: View {
                     title: visit.title,
                     categoryName: visit.categoryName,
                     categoryIcon: visit.categoryIcon,
+                    categoryTemplateKey: visit.categoryTemplateKey,
                     colorHex: visit.categoryColorHex,
                     date: visit.visitedAt,
                     timeText: visit.comingUpTimeText,
@@ -939,6 +1007,7 @@ private struct HomeComingUpRow: View {
     let title: String
     let categoryName: String
     let categoryIcon: String
+    let categoryTemplateKey: String
     let colorHex: String
     let date: Date
     let timeText: String
@@ -961,12 +1030,10 @@ private struct HomeComingUpRow: View {
                 displaySize: CGSize(width: 72, height: 88),
                 contentMode: .fill
             ) {
-                ZStack {
-                    Color(.secondarySystemFill)
-                    Image(systemName: categoryIcon)
-                        .font(.title2)
-                        .foregroundStyle(tint)
-                }
+                CategoryDefaultArtworkImage(
+                    templateKey: categoryTemplateKey,
+                    displaySize: CGSize(width: 72, height: 88)
+                )
             }
             .clipped()
         }
@@ -1010,12 +1077,13 @@ struct HomeUpcomingPlanCard: View {
     }
 
     var body: some View {
-        HomeUpcomingHeroLayout {
+        HomeUpcomingHeroLayout(isEmbedded: isEmbedded) {
             HomeUpcomingPoster(
                 thumbnailReference: plan.thumbnailReference,
+                categoryTemplateKey: plan.categoryTemplateKey,
                 fallbackIcon: plan.categoryIcon,
                 tint: tint,
-                fillsFrame: plan.fillsPosterFrame
+                fillsFrame: isEmbedded ? false : plan.fillsPosterFrame
             )
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
@@ -1028,6 +1096,7 @@ struct HomeUpcomingPlanCard: View {
                 venueName: plan.venueName,
                 officialURLString: plan.officialURLString,
                 tint: tint,
+                isEmbedded: isEmbedded,
                 onOpen: onOpen
             ) {
                 HStack(spacing: 6) {
@@ -1039,7 +1108,7 @@ struct HomeUpcomingPlanCard: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 110)
+                    .frame(maxWidth: .infinity)
 
                     Button {
                         isShowingEditPlan = true
@@ -1073,7 +1142,7 @@ struct HomeUpcomingPlanCard: View {
             if let currentPlan = currentPlans.first {
                 AddTicketPlanView(plan: currentPlan, entryMode: .plan)
             } else {
-                ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+                FavorecoContentUnavailableView("予定が見つかりません", systemImage: "trash")
             }
         }
     }
@@ -1117,12 +1186,13 @@ struct HomeUpcomingVisitCard: View {
     }
 
     var body: some View {
-        HomeUpcomingHeroLayout {
+        HomeUpcomingHeroLayout(isEmbedded: isEmbedded) {
             HomeUpcomingPoster(
                 thumbnailReference: visit.thumbnailReference,
+                categoryTemplateKey: visit.categoryTemplateKey,
                 fallbackIcon: visit.categoryIcon,
                 tint: tint,
-                fillsFrame: visit.fillsEyecatchFrame
+                fillsFrame: isEmbedded ? false : visit.fillsEyecatchFrame
             )
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
@@ -1135,6 +1205,7 @@ struct HomeUpcomingVisitCard: View {
                 venueName: visit.venueName,
                 officialURLString: visit.officialURLString,
                 tint: tint,
+                isEmbedded: isEmbedded,
                 onOpen: onOpen
             ) {
                 HStack(spacing: 6) {
@@ -1146,7 +1217,7 @@ struct HomeUpcomingVisitCard: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 110)
+                    .frame(maxWidth: .infinity)
 
                     Button {
                         isShowingEditVisit = true
@@ -1180,7 +1251,7 @@ struct HomeUpcomingVisitCard: View {
             if let currentVisit = currentVisits.first {
                 EditExperienceView(visit: currentVisit)
             } else {
-                ContentUnavailableView("記録が見つかりません", systemImage: "trash")
+                FavorecoContentUnavailableView("記録が見つかりません", systemImage: "trash")
             }
         }
     }
@@ -1193,12 +1264,27 @@ enum HomeUpcomingHeroMetrics {
     static let posterWidth: CGFloat = 132
     static let posterHeight: CGFloat = 196
     static let spacing: CGFloat = 12
+    static let actionHeight: CGFloat = 30
     static let embeddedPadding: CGFloat = 2
-    static let embeddedContentHeight: CGFloat = posterHeight
+    static let embeddedTrailingInset: CGFloat = 4
+    static let embeddedContentHeight: CGFloat = 204
+    static let embeddedPosterHeight: CGFloat = embeddedContentHeight - actionHeight
     static let embeddedCardHeight: CGFloat = embeddedContentHeight + (embeddedPadding * 2)
 }
 
 struct HomeUpcomingHeroLayout: Layout {
+    let isEmbedded: Bool
+
+    init(isEmbedded: Bool = false) {
+        self.isEmbedded = isEmbedded
+    }
+
+    private var posterHeight: CGFloat {
+        isEmbedded
+            ? HomeUpcomingHeroMetrics.embeddedPosterHeight
+            : HomeUpcomingHeroMetrics.posterHeight
+    }
+
     func sizeThatFits(
         proposal: ProposedViewSize,
         subviews: Subviews,
@@ -1206,16 +1292,22 @@ struct HomeUpcomingHeroLayout: Layout {
     ) -> CGSize {
         guard subviews.count == 2 else { return .zero }
         let width = proposal.width ?? 340
+        let trailingInset = isEmbedded
+            ? HomeUpcomingHeroMetrics.embeddedTrailingInset
+            : 0
         let detailsWidth = max(
             0,
-            width - HomeUpcomingHeroMetrics.posterWidth - HomeUpcomingHeroMetrics.spacing
+            width
+                - HomeUpcomingHeroMetrics.posterWidth
+                - HomeUpcomingHeroMetrics.spacing
+                - trailingInset
         )
         let detailsSize = subviews[1].sizeThatFits(
             ProposedViewSize(width: detailsWidth, height: proposal.height)
         )
         return CGSize(
             width: width,
-            height: max(HomeUpcomingHeroMetrics.posterHeight, detailsSize.height)
+            height: max(posterHeight, detailsSize.height)
         )
     }
 
@@ -1226,9 +1318,15 @@ struct HomeUpcomingHeroLayout: Layout {
         cache: inout ()
     ) {
         guard subviews.count == 2 else { return }
+        let trailingInset = isEmbedded
+            ? HomeUpcomingHeroMetrics.embeddedTrailingInset
+            : 0
         let detailsWidth = max(
             0,
-            bounds.width - HomeUpcomingHeroMetrics.posterWidth - HomeUpcomingHeroMetrics.spacing
+            bounds.width
+                - HomeUpcomingHeroMetrics.posterWidth
+                - HomeUpcomingHeroMetrics.spacing
+                - trailingInset
         )
 
         subviews[0].place(
@@ -1236,7 +1334,7 @@ struct HomeUpcomingHeroLayout: Layout {
             anchor: .topLeading,
             proposal: ProposedViewSize(
                 width: HomeUpcomingHeroMetrics.posterWidth,
-                height: HomeUpcomingHeroMetrics.posterHeight
+                height: posterHeight
             )
         )
         subviews[1].place(
@@ -1250,8 +1348,9 @@ struct HomeUpcomingHeroLayout: Layout {
     }
 }
 
-private struct HomeUpcomingPoster: View {
+struct HomeUpcomingPoster: View {
     let thumbnailReference: ThumbnailReference?
+    let categoryTemplateKey: String
     let fallbackIcon: String
     let tint: Color
     let fillsFrame: Bool
@@ -1263,12 +1362,10 @@ private struct HomeUpcomingPoster: View {
                 displaySize: geometry.size,
                 contentMode: fillsFrame ? .fill : .fit
             ) {
-                ZStack {
-                    tint.opacity(0.14)
-                    Image(systemName: fallbackIcon)
-                        .font(.system(size: 34, weight: .medium))
-                        .foregroundStyle(tint)
-                }
+                CategoryDefaultArtworkImage(
+                    templateKey: categoryTemplateKey,
+                    displaySize: geometry.size
+                )
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .clipped()
@@ -1286,6 +1383,7 @@ struct HomeUpcomingHeroDetails<Actions: View>: View {
     let venueName: String
     let officialURLString: String
     let tint: Color
+    let isEmbedded: Bool
     let onOpen: () -> Void
     let actions: Actions
 
@@ -1305,6 +1403,7 @@ struct HomeUpcomingHeroDetails<Actions: View>: View {
         venueName: String,
         officialURLString: String,
         tint: Color,
+        isEmbedded: Bool = false,
         onOpen: @escaping () -> Void,
         @ViewBuilder actions: () -> Actions
     ) {
@@ -1315,13 +1414,14 @@ struct HomeUpcomingHeroDetails<Actions: View>: View {
         self.venueName = venueName
         self.officialURLString = officialURLString
         self.tint = tint
+        self.isEmbedded = isEmbedded
         self.onOpen = onOpen
         self.actions = actions()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: isEmbedded ? 2 : 4) {
+            VStack(alignment: .leading, spacing: isEmbedded ? 2 : 4) {
                 Text(categoryName)
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(tint)
@@ -1338,12 +1438,12 @@ struct HomeUpcomingHeroDetails<Actions: View>: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                Label(dateText, systemImage: "calendar")
+                FavorecoIconLabel(dateText, systemImage: "calendar", iconSize: 13)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                Label(venueText, systemImage: "mappin.and.ellipse")
+                FavorecoIconLabel(venueText, systemImage: "mappin.and.ellipse", iconSize: 13)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1372,7 +1472,7 @@ struct HomeUpcomingActionLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: systemImage)
+            FavorecoIcon(systemName: systemImage, size: 13)
             Text(title)
         }
             .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
@@ -1419,7 +1519,7 @@ struct HomePickupURLRow: View {
     }
 
     private func label(_ title: String, color: Color) -> some View {
-        Label(title, systemImage: "safari")
+        FavorecoIconLabel(title, systemImage: "safari", iconSize: 13)
             .font(FavorecoTypography.caption)
             .foregroundStyle(color)
             .lineLimit(1)
@@ -1433,8 +1533,7 @@ struct HomeUpcomingEmptyCard: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 28, weight: .medium))
+            FavorecoIcon(systemName: "calendar.badge.plus", size: 28)
                 .foregroundStyle(themePalette.globalTint)
 
             VStack(spacing: 5) {
@@ -1447,7 +1546,7 @@ struct HomeUpcomingEmptyCard: View {
                     .multilineTextAlignment(.center)
             }
 
-            Label("予定を立てる", systemImage: "plus")
+            FavorecoIconLabel("予定を立てる", systemImage: "plus", iconSize: 17)
                 .font(FavorecoTypography.bodyStrong)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -1587,6 +1686,10 @@ struct HomeTicketScheduleCard: View {
         (plan?.category ?? plan?.event?.category)?.iconSymbol ?? "ticket"
     }
 
+    private var categoryTemplateKey: String {
+        (plan?.category ?? plan?.event?.category)?.templateKey ?? ""
+    }
+
     private var urgency: HomeTicketDeadlineUrgency {
         HomeTicketDeadlineUrgency.resolve(
             dueDate: item.dueDate,
@@ -1605,6 +1708,23 @@ struct HomeTicketScheduleCard: View {
         ).day
     }
 
+    private func remainingDaysTypography(for days: Int) -> (
+        leadSize: CGFloat,
+        numberSize: CGFloat,
+        unitSize: CGFloat
+    ) {
+        switch String(days).count {
+        case 1:
+            return (leadSize: 11, numberSize: 40, unitSize: 11)
+        case 2:
+            return (leadSize: 11, numberSize: 40, unitSize: 11)
+        case 3:
+            return (leadSize: 9, numberSize: 26, unitSize: 9)
+        default:
+            return (leadSize: 8, numberSize: 21, unitSize: 8)
+        }
+    }
+
     private var urgencyColor: Color {
         switch urgency {
         case .undated, .normal:
@@ -1621,22 +1741,10 @@ struct HomeTicketScheduleCard: View {
     }
 
     private var statusColor: Color {
-        switch deadlineLabel {
-        case "チケ発売":
-            return Color(hex: "#D47A36")
-        case "抽選申込":
-            return Color(hex: "#983650")
-        case "抽選当落":
-            return Color(hex: "#76528B")
-        case "チケ支払":
-            return Color(hex: "#247E85")
-        case "チケ取得":
-            return Color(hex: "#54745A")
-        case "参加日":
-            return Color(hex: "#B66A32")
-        default:
-            return item.tint
-        }
+        TicketProgressColorPalette.color(
+            forDeadlineLabel: deadlineLabel,
+            fallback: item.tint
+        )
     }
 
     private var entryMethodColor: Color {
@@ -1706,6 +1814,13 @@ struct HomeTicketScheduleCard: View {
         return "あと\(days)日"
     }
 
+    private var undatedSupplementColor: Color {
+        guard !isAttendanceScheduleAction else { return .secondary }
+        return colorScheme == .dark
+            ? Color(hex: "#FF7584")
+            : Color(hex: "#C9364F")
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             VStack(spacing: 4) {
@@ -1719,12 +1834,10 @@ struct HomeTicketScheduleCard: View {
                     displaySize: CGSize(width: 64, height: 64),
                     contentMode: .fill
                 ) {
-                    ZStack {
-                        item.tint.opacity(0.10)
-                        Image(systemName: categoryIcon)
-                            .font(.title2)
-                            .foregroundStyle(item.tint)
-                    }
+                    CategoryDefaultArtworkImage(
+                        templateKey: categoryTemplateKey,
+                        displaySize: CGSize(width: 64, height: 64)
+                    )
                 }
                 .frame(width: 64, height: 64)
                 .clipped()
@@ -1773,8 +1886,13 @@ struct HomeTicketScheduleCard: View {
                         .font(FavorecoTypography.jpSerif(16, weight: .semibold, relativeTo: .headline))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
+                        .offset(y: 1)
 
-                    Label(scheduleText, systemImage: plan?.hasConfirmedSchedule == true ? "calendar" : "calendar.badge.exclamationmark")
+                    FavorecoIconLabel(
+                        scheduleText,
+                        systemImage: "calendar",
+                        iconSize: 13
+                    )
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(plan?.hasConfirmedSchedule == true ? Color.primary.opacity(0.72) : .orange)
                         .lineLimit(1)
@@ -1871,27 +1989,43 @@ struct HomeTicketScheduleCard: View {
         VStack(spacing: -2) {
             if item.showsDueDate {
                 if urgency == .normal, let remainingDays, remainingDays >= 2 {
-                    HStack(alignment: .center, spacing: 3) {
+                    let typography = remainingDaysTypography(for: remainingDays)
+
+                    HStack(alignment: .center, spacing: 1) {
                         VStack(spacing: -4) {
                             Text("あ")
                             Text("と")
                         }
-                        .font(FavorecoTypography.jpSerif(14, weight: .semibold, relativeTo: .caption))
+                        .font(FavorecoTypography.jpSerif(
+                            typography.leadSize,
+                            weight: .semibold,
+                            relativeTo: .caption
+                        ))
                         .frame(height: 42, alignment: .center)
+                        .fixedSize(horizontal: true, vertical: false)
 
-                        HStack(alignment: .firstTextBaseline, spacing: 1) {
+                        HStack(alignment: .firstTextBaseline, spacing: 0) {
                             Text("\(remainingDays)")
-                                .font(FavorecoTypography.latinDisplay(38, weight: .bold, relativeTo: .title))
+                                .font(FavorecoTypography.latinDisplay(
+                                    typography.numberSize,
+                                    weight: .bold,
+                                    relativeTo: .title
+                                ))
                                 .monospacedDigit()
                                 .offset(y: -5)
+                                .fixedSize(horizontal: true, vertical: false)
                             Text("日")
-                                .font(FavorecoTypography.jpSerif(15, weight: .semibold, relativeTo: .caption))
+                                .font(FavorecoTypography.jpSerif(
+                                    typography.unitSize,
+                                    weight: .semibold,
+                                    relativeTo: .caption
+                                ))
+                                .fixedSize(horizontal: true, vertical: false)
                         }
                         .frame(height: 42, alignment: .center)
                     }
                     .foregroundStyle(urgencyColor)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.72)
                 } else {
                     Text(deadlineSupplement)
                         .font(FavorecoTypography.jpSerif(
@@ -1932,7 +2066,7 @@ struct HomeTicketScheduleCard: View {
 
                 Text(deadlineSupplement)
                     .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(undatedSupplementColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
@@ -1990,8 +2124,7 @@ private struct HomeMiniStatCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.caption)
+            FavorecoIcon(systemName: icon, size: 12)
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 24)
                 .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -2013,13 +2146,27 @@ private struct HomeMiniStatCell: View {
     }
 }
 
+private struct AttentionPlanRoute: Identifiable, Hashable {
+    let planID: UUID
+    let highlightedTicketAttemptID: UUID?
+    let showsRecordedPlanDetail: Bool
+
+    var id: String {
+        [
+            planID.uuidString,
+            highlightedTicketAttemptID?.uuidString ?? "none",
+            showsRecordedPlanDetail ? "recorded" : "planned",
+        ].joined(separator: "-")
+    }
+}
+
 private struct AttentionRow: View {
     let item: HomeAttentionItem
+    var showsDisclosureIndicator = false
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: item.icon)
-                .font(.title3)
+            FavorecoIcon(systemName: item.icon, size: 20)
                 .foregroundStyle(item.tint)
                 .frame(width: 28)
 
@@ -2033,43 +2180,75 @@ private struct AttentionRow: View {
             }
 
             Spacer()
+
+            if showsDisclosureIndicator {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(
+            Color(.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
     }
 }
 
 struct HomeAttentionListView: View {
     @Environment(\.dismiss) private var dismiss
     let items: [HomeAttentionItem]
+    @State private var selectedRoute: AttentionPlanRoute?
 
     var body: some View {
         NavigationStack {
             List(items) { item in
                 if let plan = item.plan {
-                    NavigationLink {
-                        HomePlanDestination(planID: plan.id)
+                    Button {
+                        selectedRoute = AttentionPlanRoute(
+                            planID: plan.id,
+                            highlightedTicketAttemptID: item.attempt?.id,
+                            showsRecordedPlanDetail: item.attempt != nil
+                        )
                     } label: {
-                        AttentionRow(item: item)
+                        AttentionRow(item: item, showsDisclosureIndicator: true)
                     }
-                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                 } else {
                     AttentionRow(item: item)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("次にやること")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { dismiss() }
                 }
             }
+            .navigationDestination(item: $selectedRoute) { route in
+                HomePlanDestination(
+                    planID: route.planID,
+                    highlightedTicketAttemptID: route.highlightedTicketAttemptID,
+                    showsRecordedPlanDetail: route.showsRecordedPlanDetail
+                )
+            }
         }
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
     }
 }
 
@@ -2078,6 +2257,7 @@ struct AppNotificationCenterView: View {
     @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
     @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
+    @State private var selectedRoute: AttentionPlanRoute?
 
     private var items: [HomeAttentionItem] {
         let now = Date()
@@ -2116,38 +2296,59 @@ struct AppNotificationCenterView: View {
         NavigationStack {
             Group {
                 if items.isEmpty {
-                    ContentUnavailableView(
+                    FavorecoContentUnavailableView(
                         "お知らせはありません",
                         systemImage: "bell",
-                        description: Text("申込期限や入金、チケット受取、会員期限などをここで確認できます。")
+                        description: "申込期限や入金、チケット受取、会員期限などをここで確認できます。"
                     )
                 } else {
                     List(items) { item in
                         if let plan = item.plan {
-                            NavigationLink {
-                                HomePlanDestination(planID: plan.id)
+                            Button {
+                                selectedRoute = AttentionPlanRoute(
+                                    planID: plan.id,
+                                    highlightedTicketAttemptID: item.attempt?.id,
+                                    showsRecordedPlanDetail: item.attempt != nil
+                                )
                             } label: {
-                                AttentionRow(item: item)
+                                AttentionRow(item: item, showsDisclosureIndicator: true)
                             }
-                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .buttonStyle(.plain)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                         } else {
                             AttentionRow(item: item)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .listRowSeparator(.hidden)
                                 .listRowBackground(Color.clear)
                         }
                     }
                     .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(Color(.systemGroupedBackground))
                 }
             }
             .navigationTitle("お知らせ")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { dismiss() }
                 }
             }
+            .navigationDestination(item: $selectedRoute) { route in
+                HomePlanDestination(
+                    planID: route.planID,
+                    highlightedTicketAttemptID: route.highlightedTicketAttemptID,
+                    showsRecordedPlanDetail: route.showsRecordedPlanDetail
+                )
+            }
         }
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
     }
 
     private func attentionItems(for attempt: TicketAttempt, now: Date) -> [HomeAttentionItem] {
@@ -2185,6 +2386,7 @@ struct AppNotificationCenterView: View {
             subtitle: "\(label) \(dateText(date))",
             dueDate: date,
             plan: plan,
+            attempt: attempt,
             tint: tint,
             priority: priority
         ))
@@ -2228,12 +2430,10 @@ private struct ExperienceGalleryCard: View {
                         displaySize: geometry.size,
                         contentMode: visit.fillsEyecatchFrame ? .fill : .fit
                     ) {
-                        ZStack {
-                            Rectangle().fill(categoryColor.opacity(0.18))
-                            Image(systemName: visit.eyecatchPath.isEmpty ? "sparkles" : "photo.fill")
-                                .font(.largeTitle)
-                                .foregroundStyle(categoryColor)
-                        }
+                        CategoryDefaultArtworkImage(
+                            templateKey: visit.categoryTemplateKey,
+                            displaySize: geometry.size
+                        )
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .clipped()
@@ -2268,19 +2468,19 @@ private struct ExperienceGalleryCard: View {
                     .font(FavorecoTypography.cardTitle)
                     .lineLimit(2)
 
-                Label(FavorecoDateText.compactDate(visit.visitedAt), systemImage: "calendar")
+                FavorecoIconLabel(FavorecoDateText.compactDate(visit.visitedAt), systemImage: "calendar", iconSize: 13)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
 
                 if !visit.venueName.isEmpty {
-                    Label(visit.venueName, systemImage: "mappin.and.ellipse")
+                    FavorecoIconLabel(visit.venueName, systemImage: "mappin.and.ellipse", iconSize: 13)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
                 if !visit.peopleSummary.isEmpty {
-                    Label(visit.peopleSummary, systemImage: "person.2")
+                    FavorecoIconLabel(visit.peopleSummary, systemImage: "person.2", iconSize: 13)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -2342,10 +2542,14 @@ private struct HomeVisitSummaryRow: View {
                 }
 
                 HStack(spacing: 10) {
-                    Label(FavorecoDateText.compactDate(visit.visitedAt), systemImage: unitFields.weatherSymbolName.isEmpty ? "calendar" : unitFields.weatherSymbolName)
-                    Label(visit.categoryName, systemImage: visit.categoryIcon)
+                    FavorecoIconLabel(
+                        FavorecoDateText.compactDate(visit.visitedAt),
+                        systemImage: unitFields.weatherSymbolName.isEmpty ? "calendar" : unitFields.weatherSymbolName,
+                        iconSize: 13
+                    )
+                    FavorecoIconLabel(visit.categoryName, systemImage: visit.categoryIcon, iconSize: 13)
                     if !visit.venueName.isEmpty {
-                        Label(visit.venueName, systemImage: "mappin.and.ellipse")
+                        FavorecoIconLabel(visit.venueName, systemImage: "mappin.and.ellipse", iconSize: 13)
                     }
                     if visit.overallRating > 0 {
                         Label(String(format: "%.1f", visit.overallRating), systemImage: "star.fill")
@@ -2356,7 +2560,7 @@ private struct HomeVisitSummaryRow: View {
                 .lineLimit(1)
 
                 if !visit.peopleSummary.isEmpty {
-                    Label(visit.peopleSummary, systemImage: "person.2")
+                    FavorecoIconLabel(visit.peopleSummary, systemImage: "person.2", iconSize: 13)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -2396,11 +2600,10 @@ private struct HomeVisitSummaryRow: View {
             displaySize: CGSize(width: 64, height: thumbnailHeight),
             contentMode: visit.fillsEyecatchFrame ? .fill : .fit
         ) {
-            Image(systemName: visit.categoryIcon)
-                .font(.title3)
-                .foregroundStyle(categoryColor)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(categoryColor.opacity(0.12))
+            CategoryDefaultArtworkImage(
+                templateKey: visit.categoryTemplateKey,
+                displaySize: CGSize(width: 64, height: thumbnailHeight)
+            )
         }
         .frame(width: 64, height: thumbnailHeight)
         .clipped()
@@ -2417,16 +2620,28 @@ private struct HomeVisitSummaryRow: View {
 
 struct HomePlanDestination: View {
     @Query private var plans: [Plan]
+    let highlightedTicketAttemptID: UUID?
+    let showsRecordedPlanDetail: Bool
 
-    init(planID: UUID) {
+    init(
+        planID: UUID,
+        highlightedTicketAttemptID: UUID? = nil,
+        showsRecordedPlanDetail: Bool = false
+    ) {
+        self.highlightedTicketAttemptID = highlightedTicketAttemptID
+        self.showsRecordedPlanDetail = showsRecordedPlanDetail
         _plans = Query(filter: #Predicate<Plan> { $0.id == planID })
     }
 
     var body: some View {
         if let plan = plans.first {
-            PlanDetailView(plan: plan)
+            PlanDetailView(
+                plan: plan,
+                highlightedTicketAttemptID: highlightedTicketAttemptID,
+                showsRecordedPlanDetail: showsRecordedPlanDetail
+            )
         } else {
-            ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+            FavorecoContentUnavailableView("予定が見つかりません", systemImage: "trash")
         }
     }
 }
@@ -2442,7 +2657,7 @@ private struct HomeCategoryDestination: View {
         if let category = categories.first {
             CategoryTopView(category: category)
         } else {
-            ContentUnavailableView("ジャンルが見つかりません", systemImage: "trash")
+            FavorecoContentUnavailableView("ジャンルが見つかりません", systemImage: "trash")
         }
     }
 }
@@ -2458,7 +2673,7 @@ private struct HomeVisitDestination: View {
         if let visit = visits.first {
             ExperienceDetailView(visit: visit)
         } else {
-            ContentUnavailableView("記録が見つかりません", systemImage: "trash")
+            FavorecoContentUnavailableView("記録が見つかりません", systemImage: "trash")
         }
     }
 }
@@ -2474,7 +2689,7 @@ private struct HomeEventDestination: View {
         if let event = events.first {
             EventDetailView(event: event)
         } else {
-            ContentUnavailableView("対象が見つかりません", systemImage: "trash")
+            FavorecoContentUnavailableView("対象が見つかりません", systemImage: "trash")
         }
     }
 }
@@ -2490,7 +2705,7 @@ private struct HomeInboxDestination: View {
         if let item = items.first {
             InboxDetailView(item: item)
         } else {
-            ContentUnavailableView("受信項目が見つかりません", systemImage: "trash")
+            FavorecoContentUnavailableView("受信項目が見つかりません", systemImage: "trash")
         }
     }
 }
@@ -2502,7 +2717,7 @@ private struct SummaryMetricCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
@@ -2528,7 +2743,10 @@ private struct InboxItemRow: View {
                 displaySize: CGSize(width: 64, height: 78),
                 contentMode: .fill
             ) {
-                Color(.secondarySystemFill)
+                CategoryDefaultArtworkImage(
+                    templateKey: item.categoryTemplateKey,
+                    displaySize: CGSize(width: 64, height: 78)
+                )
             }
             .frame(width: 64, height: 78)
             .clipped()
@@ -2541,12 +2759,12 @@ private struct InboxItemRow: View {
 
                 HStack(spacing: 10) {
                     if let categoryName = item.categoryName {
-                        Label(categoryName, systemImage: "square.grid.2x2")
+                        FavorecoIconLabel(categoryName, systemImage: "square.grid.2x2", iconSize: 13)
                     }
                     if item.hasSourceURL {
-                        Label("URL", systemImage: "link")
+                        FavorecoIconLabel("URL", systemImage: "link", iconSize: 13)
                     }
-                    Label(FavorecoDateText.compactDate(item.createdAt), systemImage: "calendar")
+                    FavorecoIconLabel(FavorecoDateText.compactDate(item.createdAt), systemImage: "calendar", iconSize: 13)
                 }
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
@@ -2575,8 +2793,13 @@ private struct HomeCategoryShortcut: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Image(systemName: category.iconSymbol)
-                .font(.system(size: 21, weight: .medium))
+            FavorecoIcon(
+                systemName: PhosphorIconGlyph.categorySystemName(
+                    templateKey: category.templateKey,
+                    storedSystemName: category.iconSymbol
+                ),
+                size: 21
+            )
                 .foregroundStyle(tint)
                 .frame(width: 38, height: 38)
                 .background(tint.opacity(0.12), in: Circle())
@@ -2601,7 +2824,7 @@ private struct HomeVisitBadge: View {
     let icon: String
 
     var body: some View {
-        Label(text, systemImage: icon)
+        FavorecoIconLabel(text, systemImage: icon, iconSize: 11)
             .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption2))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
@@ -2638,8 +2861,7 @@ struct EmptyStateRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
+            FavorecoIcon(systemName: icon, size: 20)
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
@@ -2662,8 +2884,7 @@ private struct HomeSampleDataNotice: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "sparkles.rectangle.stack.fill")
-                .font(.title3)
+            FavorecoIcon(systemName: "sparkles.rectangle.stack.fill", size: 20)
                 .foregroundStyle(Color(hex: "#B8792F"))
                 .frame(width: 28)
 

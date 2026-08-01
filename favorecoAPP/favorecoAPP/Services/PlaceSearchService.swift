@@ -21,7 +21,7 @@ enum PlaceSearchService {
         request.resultTypes = [.pointOfInterest, .address]
         let response = try await MKLocalSearch(request: request).start()
 
-        return response.mapItems.prefix(20).map { item in
+        let candidates = response.mapItems.prefix(20).map { item in
             let coordinate = coordinate(for: item)
             let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines)
             let address = formattedAddress(for: item)
@@ -35,6 +35,54 @@ enum PlaceSearchService {
             )
         }
         .filter { !$0.name.isEmpty }
+
+        return prioritizedCandidates(candidates, for: trimmedQuery)
+    }
+
+    nonisolated static func prioritizedCandidates(
+        _ candidates: [PlaceSearchCandidate],
+        for query: String
+    ) -> [PlaceSearchCandidate] {
+        let normalizedQuery = normalizedSearchText(query)
+        guard !normalizedQuery.isEmpty else { return candidates }
+
+        let scored = candidates.enumerated().map { index, candidate in
+            (
+                candidate: candidate,
+                originalIndex: index,
+                score: matchScore(
+                    normalizedSearchText(candidate.name),
+                    query: normalizedQuery
+                )
+            )
+        }
+        let matching = scored.filter { $0.score < 3 }
+        guard !matching.isEmpty else { return candidates }
+
+        return matching
+            .sorted {
+                if $0.score != $1.score { return $0.score < $1.score }
+                return $0.originalIndex < $1.originalIndex
+            }
+            .map(\.candidate)
+    }
+
+    nonisolated private static func matchScore(_ name: String, query: String) -> Int {
+        if name == query { return 0 }
+        if name.hasPrefix(query) || query.hasPrefix(name) { return 1 }
+        if name.contains(query) || query.contains(name) { return 2 }
+        return 3
+    }
+
+    nonisolated private static func normalizedSearchText(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(
+                options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                locale: Locale(identifier: "ja_JP")
+            )
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
     }
 
     private static func coordinate(for item: MKMapItem) -> CLLocationCoordinate2D {

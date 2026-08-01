@@ -38,8 +38,7 @@ struct CalendarDisplayToolbar: View {
             NavigationLink {
                 TicketOverviewView()
             } label: {
-                Image(systemName: "ticket")
-                    .font(.title3)
+                FavorecoIcon(systemName: "ticket", size: 20)
                     .frame(width: 42, height: 32)
             }
             .accessibilityLabel("予定・チケット")

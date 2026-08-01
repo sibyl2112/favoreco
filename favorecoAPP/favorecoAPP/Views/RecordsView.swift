@@ -235,7 +235,7 @@ struct RecordsView: View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
+                    FavorecoIcon(systemName: "magnifyingglass", size: 16)
                         .foregroundStyle(.secondary)
                     TextField("タイトル・人物・会場などを検索", text: $searchText)
                         .textInputAutocapitalization(.never)

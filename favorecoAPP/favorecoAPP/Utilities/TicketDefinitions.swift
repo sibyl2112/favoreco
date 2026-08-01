@@ -309,6 +309,100 @@ struct TicketAttemptUnitFields: Codable, Equatable {
     }
 }
 
+enum TicketApplicationCollectionNaming {
+    static func scheduleName(for plan: Plan) -> String {
+        let title = eventTitle(for: plan)
+        let schedule: String
+        if plan.hasConfirmedSchedule {
+            let components = Calendar.current.dateComponents([.month, .day], from: plan.startsAt)
+            let date = "\(components.month ?? 0)/\(components.day ?? 0)"
+            let venue = plan.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+            schedule = venue.isEmpty ? date : "\(date) \(venue)"
+        } else {
+            schedule = "参加日未定"
+        }
+        return "\(title)｜\(schedule)"
+    }
+
+    static func tourName(eventTitle: String) -> String {
+        let title = eventTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(title.isEmpty ? "チケット" : title)｜ツアー申込"
+    }
+
+    static func tourName(for plan: Plan) -> String {
+        tourName(eventTitle: eventTitle(for: plan))
+    }
+
+    static func displayName(
+        storedName: String?,
+        attempts: [TicketAttempt]
+    ) -> String? {
+        let name = storedName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard let firstPlan = attempts.compactMap(\.plan).first else {
+            return name.isEmpty ? nil : name
+        }
+
+        let plans = attempts.compactMap(\.plan)
+        let planIDs = Set(plans.map(\.id))
+        let eventIDs = Set(plans.compactMap { $0.event?.id })
+        let sharesOneEvent = eventIDs.count == 1
+            || Set(plans.map { eventTitle(for: $0) }).count == 1
+
+        if name.isEmpty || isLegacyReceptionName(name, attempts: attempts) {
+            if planIDs.count > 1, sharesOneEvent {
+                return tourName(for: firstPlan)
+            }
+            return scheduleName(for: firstPlan)
+        }
+        return name
+    }
+
+    static func shouldReplaceWithTourName(
+        _ name: String,
+        attempts: [TicketAttempt]
+    ) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return true }
+        if isLegacyReceptionName(trimmed, attempts: attempts) {
+            return true
+        }
+        return attempts.compactMap(\.plan).contains {
+            scheduleName(for: $0) == trimmed
+        }
+    }
+
+    static func legacyReceptionName(for attempt: TicketAttempt) -> String {
+        var parts: [String] = []
+        let routeName = TicketEntryRouteDefinition.name(for: attempt.entryRouteKey)
+        if !routeName.isEmpty,
+           routeName != attempt.entryRouteKey || !attempt.entryRouteKey.isEmpty {
+            parts.append(routeName)
+        }
+        let site = attempt.ticketSite.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !site.isEmpty,
+           !parts.contains(where: { $0.localizedCaseInsensitiveCompare(site) == .orderedSame }) {
+            parts.append(site)
+        }
+        return parts.isEmpty ? "先行・受付" : parts.joined(separator: "・")
+    }
+
+    private static func isLegacyReceptionName(
+        _ name: String,
+        attempts: [TicketAttempt]
+    ) -> Bool {
+        attempts.contains {
+            legacyReceptionName(for: $0).localizedCaseInsensitiveCompare(name) == .orderedSame
+        }
+    }
+
+    private static func eventTitle(for plan: Plan) -> String {
+        let eventTitle = plan.event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !eventTitle.isEmpty { return eventTitle }
+        let planTitle = plan.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return planTitle.isEmpty ? "チケット" : planTitle
+    }
+}
+
 struct TicketProgressStage: Identifiable, Equatable {
     enum Kind: String {
         case entry
@@ -349,8 +443,8 @@ enum TicketProgressTimeline {
             stages.append(
                 TicketProgressStage(
                     kind: .payment,
-                    title: "入金",
-                    date: firstAvailableDate(attempt.paidAt, attempt.paymentDeadlineAt)
+                    title: "支払",
+                    date: availableDate(attempt.paymentDeadlineAt)
                 )
             )
         }
@@ -359,7 +453,7 @@ enum TicketProgressTimeline {
             TicketProgressStage(
                 kind: .acquired,
                 title: "取得",
-                date: firstAvailableDate(attempt.issuedAt, attempt.paidAt)
+                date: availableDate(attempt.issueStartAt)
             )
         )
         return stages
@@ -391,6 +485,43 @@ enum TicketProgressTimeline {
         return stages.firstIndex(where: { rank(of: $0.kind) > targetRank }) ?? max(0, stages.count - 1)
     }
 
+    static func reconciledStatusAfterScheduleEdit(
+        currentStatusKey: String,
+        attempt: TicketAttempt,
+        now: Date = Date()
+    ) -> String {
+        guard !["interested", "lost", "issued", "attended", "skipped"].contains(currentStatusKey) else {
+            return currentStatusKey
+        }
+
+        let candidate: String?
+        if usesLotteryFlow(attempt) {
+            if isFuture(attempt.applyDeadlineAt, now: now) {
+                candidate = "beforeApply"
+            } else if isFuture(attempt.resultAnnounceAt, now: now) {
+                candidate = "waitingResult"
+            } else if isFuture(attempt.paymentDeadlineAt, now: now) {
+                candidate = "waitingPayment"
+            } else if isFuture(attempt.issueStartAt, now: now) {
+                candidate = "waitingIssue"
+            } else {
+                candidate = nil
+            }
+        } else if isFuture(attempt.saleStartAt, now: now) {
+            candidate = "onSaleSoon"
+        } else if isFuture(attempt.issueStartAt, now: now) {
+            candidate = "waitingIssue"
+        } else {
+            candidate = nil
+        }
+
+        guard let candidate,
+              workflowRank(candidate) < workflowRank(currentStatusKey) else {
+            return currentStatusKey
+        }
+        return candidate
+    }
+
     static func usesLotteryFlow(_ attempt: TicketAttempt) -> Bool {
         ["fanClub", "official", "lottery", "card", "generalLottery"].contains(attempt.entryRouteKey)
             || attempt.resultAnnounceAt != Date.distantPast
@@ -409,6 +540,21 @@ enum TicketProgressTimeline {
 
     private static func firstAvailableDate(_ preferred: Date, _ fallback: Date) -> Date? {
         availableDate(preferred) ?? availableDate(fallback)
+    }
+
+    private static func isFuture(_ date: Date, now: Date) -> Bool {
+        date != Date.distantPast && date > now
+    }
+
+    private static func workflowRank(_ statusKey: String) -> Int {
+        switch statusKey {
+        case "beforeApply", "onSaleSoon": 0
+        case "waitingResult": 1
+        case "won", "waitingPayment": 2
+        case "waitingIssue": 3
+        case "issued", "attended": 4
+        default: 5
+        }
     }
 
     private static func rank(of kind: TicketProgressStage.Kind) -> Int {
@@ -451,7 +597,7 @@ struct TicketNextActionDefinition {
             TicketNextActionDefinition(title: "申込・発売開始", date: attempt.saleStartAt, systemImage: "ticket", priority: 4),
             TicketNextActionDefinition(title: "申込締切", date: attempt.applyDeadlineAt, systemImage: "hourglass", priority: 0),
             TicketNextActionDefinition(title: "当落発表", date: attempt.resultAnnounceAt, systemImage: "checkmark.seal", priority: 2),
-            TicketNextActionDefinition(title: "入金締切", date: attempt.paymentDeadlineAt, systemImage: "yensign.circle", priority: 1),
+            TicketNextActionDefinition(title: "支払締切", date: attempt.paymentDeadlineAt, systemImage: "yensign.circle", priority: 1),
             TicketNextActionDefinition(title: "チケット受取開始", date: attempt.issueStartAt, systemImage: "ticket.fill", priority: 3),
         ]
         let candidates: [TicketNextActionDefinition]
@@ -522,7 +668,7 @@ struct TicketNextActionDefinition {
             )
         case "waitingPayment", "won":
             action = overdueCandidate(
-                title: "入金期限超過",
+                title: "支払期限超過",
                 date: attempt.paymentDeadlineAt,
                 systemImage: "exclamationmark.circle",
                 priority: 1,
@@ -581,7 +727,7 @@ struct TicketInputIssueDefinition {
         case "waitingResult" where attempt.resultAnnounceAt == Date.distantPast:
             TicketInputIssueDefinition(title: "当落発表日を設定", systemImage: "calendar.badge.exclamationmark", priority: 2)
         case "waitingPayment" where attempt.paymentDeadlineAt == Date.distantPast:
-            TicketInputIssueDefinition(title: "入金締切を設定", systemImage: "calendar.badge.exclamationmark", priority: 3)
+            TicketInputIssueDefinition(title: "支払締切を設定", systemImage: "calendar.badge.exclamationmark", priority: 3)
         case "waitingIssue" where attempt.issueStartAt == Date.distantPast:
             nil
         default:
@@ -621,12 +767,12 @@ struct TicketStatusTransitionDefinition: Identifiable, Hashable {
             ]
         case "won":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "waitingPayment", title: "入金待ちにする", systemImage: "yensign.circle"),
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingPayment", title: "支払待ちにする", systemImage: "yensign.circle"),
                 TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "支払済み・取得済みにする", systemImage: "checkmark.circle.fill"),
             ]
         case "waitingPayment":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "入金済み・取得済みにする", systemImage: "checkmark.circle.fill"),
+                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "支払済み・取得済みにする", systemImage: "checkmark.circle.fill"),
             ]
         case "waitingIssue":
             return [

@@ -10,7 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    nonisolated static let schemaVersion = 13
+    nonisolated static let schemaVersion = 14
 
     nonisolated static func makeBackupJSON(
         categories: [RecordCategory],
@@ -755,6 +755,8 @@ nonisolated struct BackupTicketAttempt: Codable {
     var quantity: Int
     var purchaseURL: String
     var seatText: String
+    var applicationGroupIDRaw: String?
+    var applicationGroupName: String?
     var notificationSettingsRaw: String
     var unitFieldsRaw: String
     var memo: String
@@ -782,6 +784,8 @@ nonisolated struct BackupTicketAttempt: Codable {
         quantity = attempt.quantity
         purchaseURL = attempt.purchaseURL
         seatText = attempt.seatText
+        applicationGroupIDRaw = attempt.applicationGroupIDRaw
+        applicationGroupName = attempt.applicationGroupName
         notificationSettingsRaw = attempt.notificationSettingsRaw
         unitFieldsRaw = attempt.unitFieldsRaw
         memo = attempt.memo

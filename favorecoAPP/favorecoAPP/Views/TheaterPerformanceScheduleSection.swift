@@ -17,8 +17,7 @@ struct TheaterPerformanceScheduleSection: View {
         if !schedules.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 10) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 17, weight: .medium))
+                    FavorecoIcon(systemName: "calendar", size: 17, fallbackWeight: .medium)
                         .foregroundStyle(accentColor)
                         .frame(width: 22)
                     Text("公演スケジュール")
@@ -81,7 +80,7 @@ struct TheaterPerformanceScheduleSection: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Label(schedule.venueName, systemImage: "mappin.and.ellipse")
+                FavorecoIconLabel(schedule.venueName, systemImage: "mappin.and.ellipse")
                     .font(FavorecoTypography.bodyStrong)
                     .foregroundStyle(.white.opacity(0.9))
                     .multilineTextAlignment(.leading)
@@ -117,6 +116,18 @@ struct TheaterScheduleEntryEditor: View {
     @Binding var entry: EventVenueEntry
     let fallbackStart: Date
     let fallbackEnd: Date
+
+    @State private var venueSuggestions: [PlaceSearchCandidate] = []
+    @State private var selectedVenueCandidate: PlaceSearchCandidate?
+
+    private var selectedVenueCoordinate: PlaceSearchCandidate? {
+        guard let candidate = selectedVenueCandidate,
+              candidate.name.trimmingCharacters(in: .whitespacesAndNewlines) == entry.trimmedName,
+              candidate.address.trimmingCharacters(in: .whitespacesAndNewlines) == entry.trimmedAddress else {
+            return nil
+        }
+        return candidate
+    }
 
     private var hasPeriod: Binding<Bool> {
         Binding(
@@ -159,9 +170,9 @@ struct TheaterScheduleEntryEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 0) {
             ExplicitFormTextField(
-                title: "公演名",
+                title: "公演地名",
                 prompt: "例：東京公演",
                 text: performanceLabel,
                 labelStyle: .horizontal
@@ -173,6 +184,65 @@ struct TheaterScheduleEntryEditor: View {
                 text: $entry.name,
                 labelStyle: .horizontal
             )
+            if !venueSuggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(venueSuggestions.prefix(3)) { candidate in
+                        Button {
+                            entry.name = candidate.name
+                            entry.address = candidate.address
+                            selectedVenueCandidate = candidate
+                            venueSuggestions = []
+                        } label: {
+                            HStack(alignment: .top, spacing: 9) {
+                                FavorecoIcon(
+                                    systemName: "mappin.and.ellipse",
+                                    size: 15,
+                                    fallbackWeight: .medium
+                                )
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 20, height: 22)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(candidate.name)
+                                        .font(
+                                            FavorecoTypography.jpSans(
+                                                13,
+                                                weight: .semibold,
+                                                relativeTo: .body
+                                            )
+                                        )
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    if !candidate.address.isEmpty {
+                                        Text(candidate.address)
+                                            .font(
+                                                FavorecoTypography.jpSans(
+                                                    11,
+                                                    weight: .regular,
+                                                    relativeTo: .caption
+                                                )
+                                            )
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if candidate.id != venueSuggestions.prefix(3).last?.id {
+                            Divider()
+                                .padding(.leading, 45)
+                        }
+                    }
+                }
+                .background(Color.secondary.opacity(0.06))
+            }
             scheduleDivider
             ExplicitFormTextField(
                 title: "住所",
@@ -181,28 +251,88 @@ struct TheaterScheduleEntryEditor: View {
                 labelStyle: .horizontal
             )
             scheduleDivider
-            Toggle("この公演地の会期を登録", isOn: hasPeriod)
-                .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+            ExplicitFormControlRow(title: "会期") {
+                Toggle("この公演地の会期を登録", isOn: hasPeriod)
+                    .labelsHidden()
+                    .accessibilityLabel("この公演地の会期を登録")
+            }
 
             if hasPeriod.wrappedValue {
                 scheduleDivider
-                DatePicker("開始日", selection: startsAt, displayedComponents: .date)
-                    .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+                ExplicitFormControlRow(title: "開始日") {
+                    DatePicker("開始日", selection: startsAt, displayedComponents: .date)
+                        .labelsHidden()
+                        .scaleEffect(
+                            ExplicitFormMetrics.dateControlScale,
+                            anchor: .trailing
+                        )
+                }
                 scheduleDivider
-                DatePicker(
-                    "終了日",
-                    selection: endsAt,
-                    in: startsAt.wrappedValue...,
-                    displayedComponents: .date
-                )
-                .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+                ExplicitFormControlRow(title: "終了日") {
+                    DatePicker(
+                        "終了日",
+                        selection: endsAt,
+                        in: startsAt.wrappedValue...,
+                        displayedComponents: .date
+                    )
+                    .labelsHidden()
+                    .scaleEffect(
+                        ExplicitFormMetrics.dateControlScale,
+                        anchor: .trailing
+                    )
+                }
+            }
+
+            if !entry.trimmedName.isEmpty, !entry.trimmedAddress.isEmpty {
+                scheduleDivider
+                VStack(alignment: .leading, spacing: 7) {
+                    ExplicitFormFieldTitle(
+                        title: "会場マップ",
+                        isOptional: false,
+                        isRequired: false
+                    )
+
+                    PlaceMapPreview(
+                        venueName: entry.trimmedName,
+                        address: entry.trimmedAddress,
+                        latitude: selectedVenueCoordinate?.latitude ?? 0,
+                        longitude: selectedVenueCoordinate?.longitude ?? 0
+                    )
+                }
+                .padding(.vertical, 8)
             }
         }
         .padding(.vertical, 1)
+        .task(id: entry.name) {
+            await refreshVenueSuggestions()
+        }
+    }
+
+    @MainActor
+    private func refreshVenueSuggestions() async {
+        let query = entry.trimmedName
+        guard query.count >= 2, query != selectedVenueCandidate?.name else {
+            venueSuggestions = []
+            return
+        }
+
+        try? await Task.sleep(for: .milliseconds(450))
+        guard !Task.isCancelled, query == entry.trimmedName else { return }
+
+        do {
+            venueSuggestions = Array(
+                try await PlaceSearchService.search(query: query)
+                    .prefix(3)
+            )
+        } catch {
+            venueSuggestions = []
+        }
     }
 
     private var scheduleDivider: some View {
-        Divider()
-            .overlay(Color.secondary.opacity(0.35))
+        Rectangle()
+            .fill(ExplicitFormMetrics.rowSeparatorColor)
+            .frame(height: 1)
+            .accessibilityHidden(true)
     }
 }

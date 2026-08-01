@@ -15,8 +15,22 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        configureSegmentedControlTypography()
         UNUserNotificationCenter.current().delegate = self
         return true
+    }
+
+    private func configureSegmentedControlTypography() {
+        let metrics = UIFontMetrics(forTextStyle: .subheadline)
+        let regularFont = metrics.scaledFont(
+            for: UIFont.systemFont(ofSize: 13, weight: .regular)
+        )
+        let selectedFont = metrics.scaledFont(
+            for: UIFont.systemFont(ofSize: 13, weight: .semibold)
+        )
+        let appearance = UISegmentedControl.appearance()
+        appearance.setTitleTextAttributes([.font: regularFont], for: .normal)
+        appearance.setTitleTextAttributes([.font: selectedFont], for: .selected)
     }
 
     /// アプリが前面表示中に通知が届いたときの表示方法。

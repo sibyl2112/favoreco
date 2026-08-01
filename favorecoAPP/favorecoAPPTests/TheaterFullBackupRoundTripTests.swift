@@ -123,6 +123,8 @@ final class TheaterFullBackupRoundTripTests: XCTestCase {
         XCTAssertEqual(restoredAttempt.account?.id, fixture.ticketAccount.id)
         XCTAssertEqual(restoredAttempt.statusKey, "issued")
         XCTAssertEqual(restoredAttempt.entryRouteKey, "fanClub")
+        XCTAssertEqual(restoredAttempt.applicationGroupIDRaw, "group-fc-first")
+        XCTAssertEqual(restoredAttempt.applicationGroupName, "星空歌劇団FC先行 第1次")
         XCTAssertEqual(restoredAttempt.price, Decimal(13_500))
         XCTAssertEqual(restoredAttempt.fee, Decimal(880))
         XCTAssertEqual(restoredAttempt.quantity, 1)
@@ -562,6 +564,8 @@ final class TheaterFullBackupRoundTripTests: XCTestCase {
             quantity: 1,
             purchaseURL: "https://tickets.example.com/moonlight/order",
             seatText: "S席 1階10列12番",
+            applicationGroupIDRaw: "group-fc-first",
+            applicationGroupName: "星空歌劇団FC先行 第1次",
             notificationSettingsRaw: #"{"paymentDeadline":"notification-id"}"#,
             unitFieldsRaw: TicketAttemptUnitFields(
                 tagNames: ["FC先行", "第1希望"]

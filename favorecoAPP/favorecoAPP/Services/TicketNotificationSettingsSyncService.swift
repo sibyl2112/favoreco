@@ -3,6 +3,24 @@ import SwiftData
 
 @MainActor
 enum TicketNotificationSettingsSyncService {
+    // v2 removes pending milestones that are already complete for the current ticket status.
+    private static let currentCopyVersion = 2
+
+    static func synchronizeCopyIfNeeded(
+        plans: [Plan],
+        attempts: [TicketAttempt],
+        in context: ModelContext
+    ) async throws {
+        let defaults = UserDefaults.standard
+        guard defaults.integer(forKey: AppStorageKeys.ticketNotificationCopyVersion)
+                < currentCopyVersion else {
+            return
+        }
+
+        try await synchronize(plans: plans, attempts: attempts, in: context)
+        defaults.set(currentCopyVersion, forKey: AppStorageKeys.ticketNotificationCopyVersion)
+    }
+
     static func synchronize(
         plans: [Plan],
         attempts: [TicketAttempt],

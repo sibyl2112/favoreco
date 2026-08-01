@@ -10,6 +10,7 @@ struct TicketQuickActionSheet: View {
 
     @State private var updateError = ""
     @State private var isShowingSchedule = false
+    @State private var editingAttempt: TicketAttempt?
 
     private var plan: Plan? { attempt.plan }
 
@@ -22,68 +23,173 @@ struct TicketQuickActionSheet: View {
         themePalette.categoryColor(hex: plan?.category?.colorHex ?? "#147C88")
     }
 
+    private var entryRouteBadgeTitle: String? {
+        guard !attempt.entryRouteKey.isEmpty else { return nil }
+        let title = TicketEntryRouteDefinition.name(for: attempt.entryRouteKey)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? nil : title
+    }
+
+    private var ticketSiteBadgeTitle: String? {
+        let title = attempt.ticketSite.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return nil }
+        if let entryRouteBadgeTitle,
+           entryRouteBadgeTitle.compare(
+            title,
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]
+           ) == .orderedSame {
+            return nil
+        }
+        return title
+    }
+
+    private var entryMethodColor: Color {
+        switch attempt.entryRouteKey {
+        case "fanClub", "official", "lottery", "card", "generalLottery":
+            return Color(hex: "#8E3657")
+        case "presale", "general", "sameDay":
+            return Color(hex: "#247E85")
+        case "resale":
+            return Color(hex: "#B66A32")
+        default:
+            return tint
+        }
+    }
+
+    private var visibleActionCount: Int {
+        guard let plan else { return 0 }
+        return TicketStatusTransitionDefinition.transitions(for: attempt).count
+            + (plan.hasConfirmedSchedule ? 0 : 1)
+            + 1
+    }
+
+    private var initialSheetFraction: CGFloat {
+        switch visibleActionCount {
+        case ...2:
+            return 0.58
+        case 3:
+            return 0.64
+        default:
+            return 0.70
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 18) {
-                if let plan {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(TicketEntryRouteDefinition.name(for: attempt.entryRouteKey))
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                        Text(plan.title.isEmpty ? plan.event?.title ?? "公演" : plan.title)
-                            .font(FavorecoTypography.cardTitle)
-                        Text(
-                            plan.hasConfirmedSchedule
-                                ? FavorecoDateText.compactDateTime(plan.startsAt)
-                                : "参加日未定"
-                        )
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                    }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let plan {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 5) {
+                                if let entryRouteBadgeTitle {
+                                    ticketMetadataBadge(
+                                        entryRouteBadgeTitle,
+                                        systemImage: "ticket",
+                                        backgroundColor: entryMethodColor
+                                    )
+                                }
+                                if let ticketSiteBadgeTitle {
+                                    ticketMetadataBadge(
+                                        ticketSiteBadgeTitle,
+                                        systemImage: "safari",
+                                        backgroundColor: entryMethodColor
+                                    )
+                                }
+                                if entryRouteBadgeTitle == nil, ticketSiteBadgeTitle == nil {
+                                    ticketMetadataBadge(
+                                        "チケット",
+                                        systemImage: "ticket",
+                                        backgroundColor: entryMethodColor
+                                    )
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if let item {
-                        TicketProgressTimelineView(
-                            stages: item.stages,
-                            currentIndex: item.currentStageIndex,
-                            tint: tint,
-                            nodeBackground: Color(.secondarySystemGroupedBackground),
-                            secondaryTextColor: .secondary
-                        )
-                    }
+                            Text(plan.title.isEmpty ? plan.event?.title ?? "公演" : plan.title)
+                                .font(FavorecoTypography.cardTitle)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.88)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                    nextActionBlock
+                            HStack(spacing: 10) {
+                                FavorecoIconLabel(
+                                    plan.hasConfirmedSchedule
+                                        ? FavorecoDateText.compactDateTime(plan.startsAt)
+                                        : "参加日未定",
+                                    systemImage: plan.hasConfirmedSchedule
+                                        ? "calendar"
+                                        : "calendar.badge.exclamationmark",
+                                    iconSize: 13
+                                )
+                                .font(FavorecoTypography.captionStrong)
+                                .foregroundStyle(
+                                    plan.hasConfirmedSchedule
+                                        ? Color.primary.opacity(0.72)
+                                        : .orange
+                                )
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
 
-                    transitionButtons
+                                Spacer(minLength: 0)
 
-                    if !plan.hasConfirmedSchedule {
-                        Button {
-                            isShowingSchedule = true
-                        } label: {
-                            Label("参加日を設定", systemImage: "calendar.badge.plus")
-                                .frame(maxWidth: .infinity)
+                                Button {
+                                    editingAttempt = attempt
+                                } label: {
+                                    FavorecoIcon(systemName: "pencil", size: 14)
+                                        .frame(width: 34, height: 30)
+                                        .background(tint.opacity(0.10), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(tint)
+                                .accessibilityLabel("チケットスケジュールの日付を編集")
+                                .accessibilityHint("申込、当落、支払、受取の日付を編集します")
+                            }
                         }
-                        .buttonStyle(.borderedProminent)
-                    }
 
-                    NavigationLink {
-                        PlanDetailView(plan: plan)
-                    } label: {
-                        Text("チケットの詳細を見る")
-                            .frame(maxWidth: .infinity)
+                        if let item {
+                            TicketProgressTimelineView(
+                                stages: item.stages,
+                                currentIndex: item.currentStageIndex,
+                                nodeBackground: Color(.secondarySystemGroupedBackground),
+                                secondaryTextColor: .secondary
+                            )
+                        }
+
+                        nextActionBlock
+
+                        transitionButtons
+
+                        if !plan.hasConfirmedSchedule {
+                            Button {
+                                isShowingSchedule = true
+                            } label: {
+                                compactButtonLabel("参加日を設定", systemImage: "calendar.badge.plus")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+
+                        NavigationLink {
+                            PlanDetailView(plan: plan)
+                        } label: {
+                            compactTextButtonLabel("チケットの詳細を見る")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    } else {
+                        FavorecoContentUnavailableView(
+                            "予定が見つかりません",
+                            systemImage: "ticket",
+                            description: "このチケットに紐づく予定を確認できません。"
+                        )
                     }
-                    .buttonStyle(.bordered)
-                } else {
-                    ContentUnavailableView(
-                        "予定が見つかりません",
-                        systemImage: "ticket",
-                        description: Text("このチケットに紐づく予定を確認できません。")
-                    )
                 }
-
-                Spacer(minLength: 0)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
             }
-            .padding(20)
-            .navigationTitle("チケット管理")
+            .scrollBounceBehavior(.basedOnSize)
+            .navigationTitle("進捗管理")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -95,6 +201,20 @@ struct TicketQuickActionSheet: View {
                     TicketAttendanceScheduleSheet(plan: plan)
                 }
             }
+            .sheet(item: $editingAttempt) { editingAttempt in
+                if let plan = editingAttempt.plan {
+                    EditTicketAttemptView(
+                        plan: plan,
+                        attempt: editingAttempt,
+                        prioritizesDates: true
+                    )
+                } else {
+                    FavorecoContentUnavailableView(
+                        "予定が見つかりません",
+                        systemImage: "ticket"
+                    )
+                }
+            }
             .alert("状態を更新できませんでした", isPresented: Binding(
                 get: { !updateError.isEmpty },
                 set: { if !$0 { updateError = "" } }
@@ -104,7 +224,26 @@ struct TicketQuickActionSheet: View {
                 Text(updateError)
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(initialSheetFraction), .large])
+    }
+
+    private func ticketMetadataBadge(
+        _ title: String,
+        systemImage: String,
+        backgroundColor: Color
+    ) -> some View {
+        FavorecoIconLabel(title, systemImage: systemImage, iconSize: 10)
+            .font(FavorecoTypography.jpSans(10, weight: .semibold, relativeTo: .caption2))
+            .foregroundStyle(TheaterCategoryStyle.ivory)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .allowsTightening(true)
+            .padding(.horizontal, 6)
+            .frame(height: 22)
+            .background(
+                backgroundColor,
+                in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            )
     }
 
     @ViewBuilder
@@ -113,8 +252,10 @@ struct TicketQuickActionSheet: View {
             afterTransitionTo: attempt.statusKey,
             plan: plan
         ) {
-            Label("次にやること：参加日を設定", systemImage: "calendar.badge.plus")
-                .font(FavorecoTypography.bodyStrong)
+            FavorecoIconLabel("次にやること：参加日を設定", systemImage: "calendar.badge.plus", iconSize: 16)
+                .font(FavorecoTypography.jpSans(16, weight: .bold, relativeTo: .headline))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
                 .foregroundStyle(.orange)
         } else if let action = TicketNextActionDefinition.nextAction(for: attempt) {
             VStack(alignment: .leading, spacing: 4) {
@@ -125,7 +266,9 @@ struct TicketQuickActionSheet: View {
                     "\(action.title)  \(FavorecoDateText.compactDateTime(action.date))",
                     systemImage: action.systemImage
                 )
-                .font(FavorecoTypography.bodyStrong)
+                .font(FavorecoTypography.jpSans(16, weight: .bold, relativeTo: .headline))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
                 .foregroundStyle(action.isOverdue ? .red : .primary)
             }
         }
@@ -139,21 +282,46 @@ struct TicketQuickActionSheet: View {
                     Button {
                         update(to: transition.targetStatusKey)
                     } label: {
-                        Label(transition.title, systemImage: transition.systemImage)
-                            .frame(maxWidth: .infinity)
+                        compactButtonLabel(
+                            transition.title,
+                            systemImage: transition.systemImage
+                        )
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                 } else {
                     Button {
                         update(to: transition.targetStatusKey)
                     } label: {
-                        Label(transition.title, systemImage: transition.systemImage)
-                            .frame(maxWidth: .infinity)
+                        compactButtonLabel(
+                            transition.title,
+                            systemImage: transition.systemImage
+                        )
                     }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                 }
             }
         }
+    }
+
+    private func compactButtonLabel(
+        _ title: String,
+        systemImage: String
+    ) -> some View {
+        FavorecoIconLabel(title, systemImage: systemImage, iconSize: 14)
+            .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+            .frame(maxWidth: .infinity, minHeight: 26)
+    }
+
+    private func compactTextButtonLabel(_ title: String) -> some View {
+        Text(title)
+            .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+            .frame(maxWidth: .infinity, minHeight: 26)
     }
 
     private func update(to statusKey: String) {

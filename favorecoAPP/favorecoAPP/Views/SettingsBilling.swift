@@ -178,7 +178,7 @@ struct BillingPlanSettingsView: View {
                 NavigationLink {
                     SettingsDocumentView(title: "DBパック管理", bodyText: "DBパックは商品として未確定です。寺社、会場、劇場、施設、辞書プリセットなど、権利と更新コストを確認できるものだけ検討します。")
                 } label: {
-                    Label("DBパック管理", systemImage: "shippingbox")
+                    FavorecoIconLabel("DBパック管理", systemImage: "shippingbox")
                 }
             }
         }
@@ -247,8 +247,7 @@ private struct PlanFeatureRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.body)
+            FavorecoIcon(systemName: systemImage, size: 17)
                 .foregroundStyle(.blue)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 4) {

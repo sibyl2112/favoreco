@@ -6,21 +6,71 @@ import Vision
 struct QuickCaptureOCRResult: Sendable {
     let fullText: String
     let lines: [String]
+    let titleCandidates: [String]
     let suggestedTitle: String
     let isTitleSuggestionReliable: Bool
+    let venueCandidates: [String]
+    let eventDateRange: QuickCaptureDateRange?
 
     nonisolated static var empty: QuickCaptureOCRResult {
         QuickCaptureOCRResult(
             fullText: "",
             lines: [],
+            titleCandidates: [],
             suggestedTitle: "",
-            isTitleSuggestionReliable: false
+            isTitleSuggestionReliable: false,
+            venueCandidates: [],
+            eventDateRange: nil
         )
     }
 }
 
+struct QuickCaptureDateRange: Sendable {
+    let startsAt: Date
+    let endsAt: Date
+}
+
 enum QuickCaptureImageService {
+    nonisolated static func inferredFieldsForTesting(
+        lines: [(text: String, width: Double, height: Double)],
+        referenceDate: Date
+    ) -> (
+        titleCandidates: [String],
+        venueCandidates: [String],
+        eventDateRange: QuickCaptureDateRange?
+    ) {
+        let recognized = lines.enumerated().map { index, line in
+            RecognizedLine(
+                text: line.text,
+                confidence: 0.9,
+                width: line.width,
+                height: line.height,
+                order: index,
+                alternatives: [
+                    RecognizedAlternative(text: line.text, confidence: 0.9)
+                ]
+            )
+        }
+        let ranking = rankedTitleCandidates(from: recognized)
+        return (
+            inferredTitleCandidates(
+                from: recognized,
+                ranking: ranking,
+                isReliable: false
+            ),
+            inferredVenueCandidates(from: recognized),
+            inferredEventDateRange(from: recognized, referenceDate: referenceDate)
+        )
+    }
+
     nonisolated static func compressedJPEG(from data: Data) -> Data? {
+        compressedJPEG(from: data, centeredToAspectRatio: nil)
+    }
+
+    nonisolated static func compressedJPEG(
+        from data: Data,
+        centeredToAspectRatio targetAspectRatio: CGFloat?
+    ) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -31,7 +81,47 @@ enum QuickCaptureImageService {
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
             return nil
         }
-        return UIImage(cgImage: image).jpegData(compressionQuality: 0.85)
+        let decoded = UIImage(cgImage: image)
+        guard let targetAspectRatio, targetAspectRatio > 0 else {
+            return decoded.jpegData(compressionQuality: 0.85)
+        }
+
+        let sourceSize = decoded.size
+        guard sourceSize.width > 0, sourceSize.height > 0 else { return nil }
+        let sourceAspectRatio = sourceSize.width / sourceSize.height
+        let cropRect: CGRect
+        if sourceAspectRatio > targetAspectRatio {
+            let cropWidth = sourceSize.height * targetAspectRatio
+            cropRect = CGRect(
+                x: (sourceSize.width - cropWidth) / 2,
+                y: 0,
+                width: cropWidth,
+                height: sourceSize.height
+            )
+        } else {
+            let cropHeight = sourceSize.width / targetAspectRatio
+            cropRect = CGRect(
+                x: 0,
+                y: (sourceSize.height - cropHeight) / 2,
+                width: sourceSize.width,
+                height: cropHeight
+            )
+        }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let rendered = UIGraphicsImageRenderer(size: cropRect.size, format: format).image { _ in
+            decoded.draw(
+                in: CGRect(
+                    x: -cropRect.minX,
+                    y: -cropRect.minY,
+                    width: sourceSize.width,
+                    height: sourceSize.height
+                )
+            )
+        }
+        return rendered.jpegData(compressionQuality: 0.85)
     }
 
     nonisolated static func recognizedText(from data: Data) -> String {
@@ -54,7 +144,7 @@ enum QuickCaptureImageService {
         do {
             try handler.perform([request])
             let observations = request.results ?? []
-            let recognizedLines = observations.compactMap { observation -> RecognizedLine? in
+            let recognizedLines = observations.enumerated().compactMap { index, observation -> RecognizedLine? in
                 let candidates = observation.topCandidates(5)
                 guard let candidate = candidates.first else { return nil }
                 let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -69,21 +159,30 @@ enum QuickCaptureImageService {
                     confidence: candidate.confidence,
                     width: Double(observation.boundingBox.width),
                     height: Double(observation.boundingBox.height),
+                    order: index,
                     alternatives: alternatives
                 )
             }
             guard !recognizedLines.isEmpty else { return .empty }
 
             let titleRanking = rankedTitleCandidates(from: recognizedLines)
-            let suggestedTitle = titleRanking.first?.line.text ?? ""
             let isReliable = isReliableTitleSuggestion(titleRanking)
+            let titleCandidates = inferredTitleCandidates(
+                from: recognizedLines,
+                ranking: titleRanking,
+                isReliable: isReliable
+            )
+            let suggestedTitle = titleCandidates.first ?? titleRanking.first?.line.text ?? ""
             let titleAlternatives = titleRanking.first?.line.alternatives.map(\.text) ?? []
 
             return QuickCaptureOCRResult(
                 fullText: recognizedLines.map(\.text).joined(separator: "\n"),
                 lines: uniqueLines(titleAlternatives + recognizedLines.map(\.text)),
+                titleCandidates: titleCandidates,
                 suggestedTitle: suggestedTitle,
-                isTitleSuggestionReliable: isReliable
+                isTitleSuggestionReliable: isReliable,
+                venueCandidates: inferredVenueCandidates(from: recognizedLines),
+                eventDateRange: inferredEventDateRange(from: recognizedLines)
             )
         } catch {
             return .empty
@@ -134,6 +233,153 @@ enum QuickCaptureImageService {
             || first.line.height >= second.line.height * 1.55
     }
 
+    private nonisolated static func inferredTitleCandidates(
+        from lines: [RecognizedLine],
+        ranking: [ScoredRecognizedLine],
+        isReliable: Bool
+    ) -> [String] {
+        guard let first = ranking.first else { return [] }
+        if isReliable {
+            return uniqueLines([first.line.text] + first.line.alternatives.map(\.text))
+        }
+
+        let prominent = ranking
+            .filter {
+                $0.score >= first.score * 0.42
+                    && $0.line.width >= 0.1
+                    && $0.line.text.count <= 24
+                    && !isLikelyVenueOrDate($0.line.text)
+            }
+            .prefix(6)
+            .map(\.line)
+        let prominentOrders = Set(prominent.map(\.order))
+        let pieces = lines
+            .filter { prominentOrders.contains($0.order) }
+            .sorted { $0.order < $1.order }
+            .map(\.text)
+
+        var candidates: [String] = []
+        if pieces.count >= 2 {
+            let leading = pieces.dropLast().joined()
+            let trailing = pieces.last ?? ""
+            candidates.append("\(leading)　\(trailing)")
+            candidates.append(pieces.joined())
+        }
+        candidates.append(contentsOf: ranking.prefix(8).map(\.line.text))
+        return uniqueLines(candidates)
+    }
+
+    private nonisolated static func inferredVenueCandidates(
+        from lines: [RecognizedLine]
+    ) -> [String] {
+        let labels = ["会場", "劇場", "場所"]
+        var candidates: [String] = []
+
+        for (index, line) in lines.enumerated() {
+            let compact = line.text.replacingOccurrences(of: " ", with: "")
+            if let label = labels.first(where: { compact.hasPrefix($0) }) {
+                let value = String(compact.dropFirst(label.count))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "：:｜|・ "))
+                if !value.isEmpty {
+                    candidates.append(value)
+                } else if lines.indices.contains(index + 1) {
+                    candidates.append(lines[index + 1].text)
+                }
+            } else if isLikelyVenueName(compact) {
+                candidates.append(line.text)
+            }
+        }
+        return uniqueLines(candidates)
+    }
+
+    private nonisolated static func inferredEventDateRange(
+        from lines: [RecognizedLine],
+        referenceDate: Date = Date()
+    ) -> QuickCaptureDateRange? {
+        let dateLabels = ["開催日時", "開催期間", "会期", "日程", "公演期間"]
+        let candidateTexts = lines.enumerated().compactMap { index, line -> String? in
+            let compact = line.text.replacingOccurrences(of: " ", with: "")
+            guard dateLabels.contains(where: { compact.contains($0) }) else { return nil }
+            if lines.indices.contains(index + 1) {
+                return "\(line.text) \(lines[index + 1].text)"
+            }
+            return line.text
+        }
+        let text = candidateTexts.joined(separator: " ")
+        guard !text.isEmpty else { return nil }
+
+        let pattern = #"(?:(\d{1,2})月)?\s*(\d{1,2})日"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let matches = expression.matches(
+            in: text,
+            range: NSRange(text.startIndex..., in: text)
+        )
+
+        var currentMonth: Int?
+        var components: [(month: Int, day: Int)] = []
+        for match in matches {
+            if match.range(at: 1).location != NSNotFound,
+               let range = Range(match.range(at: 1), in: text) {
+                currentMonth = Int(text[range])
+            }
+            guard let month = currentMonth,
+                  let dayRange = Range(match.range(at: 2), in: text),
+                  let day = Int(text[dayRange]) else { continue }
+            components.append((month, day))
+        }
+        guard !components.isEmpty else { return nil }
+
+        let calendar = Calendar(identifier: .gregorian)
+        let referenceYear = calendar.component(.year, from: referenceDate)
+        let referenceDay = calendar.startOfDay(for: referenceDate)
+        let firstThisYear = calendar.date(
+            from: DateComponents(
+                calendar: calendar,
+                year: referenceYear,
+                month: components[0].month,
+                day: components[0].day
+            )
+        )
+        let year = if let firstThisYear,
+                      let rolloverThreshold = calendar.date(byAdding: .month, value: -6, to: referenceDay),
+                      firstThisYear < rolloverThreshold {
+            referenceYear + 1
+        } else {
+            referenceYear
+        }
+        let dates = components.compactMap {
+            calendar.date(
+                from: DateComponents(
+                    calendar: calendar,
+                    year: year,
+                    month: $0.month,
+                    day: $0.day
+                )
+            )
+        }
+        guard let start = dates.min(), let end = dates.max() else { return nil }
+        return QuickCaptureDateRange(startsAt: start, endsAt: end)
+    }
+
+    private nonisolated static func isLikelyVenueOrDate(_ text: String) -> Bool {
+        let compact = text.replacingOccurrences(of: " ", with: "")
+        return ["会場", "劇場", "場所", "開催日時", "開催期間", "会期", "日程"]
+            .contains { compact.hasPrefix($0) }
+            || inferredDateTokenExists(in: compact)
+    }
+
+    private nonisolated static func inferredDateTokenExists(in text: String) -> Bool {
+        text.range(of: #"\d{1,2}月\s*\d{1,2}日"#, options: .regularExpression) != nil
+    }
+
+    private nonisolated static func isLikelyVenueName(_ text: String) -> Bool {
+        let suffixes = [
+            "劇場", "ホール", "会館", "ドーム", "アリーナ", "スタジアム",
+            "中学校", "高等学校", "大学", "文化センター"
+        ]
+        return suffixes.contains { text.hasSuffix($0) }
+    }
+
     private nonisolated static func hasUnambiguousRecognition(_ line: RecognizedLine) -> Bool {
         guard line.alternatives.count > 1 else { return true }
         let secondConfidence = line.alternatives[1].confidence
@@ -169,6 +415,7 @@ private struct RecognizedLine: Sendable {
     let confidence: Float
     let width: Double
     let height: Double
+    let order: Int
     let alternatives: [RecognizedAlternative]
 }
 

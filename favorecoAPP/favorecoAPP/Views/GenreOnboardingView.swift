@@ -137,7 +137,7 @@ struct GenreOnboardingView: View {
                     }
 
                     if !hasSelection {
-                        Label("何もありません。ひとつ選ぶと開始できます。", systemImage: "exclamationmark.circle")
+                        FavorecoIconLabel("何もありません。ひとつ選ぶと開始できます。", systemImage: "exclamationmark.circle")
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -296,7 +296,13 @@ private struct GenreSelectionRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: category.iconSymbol)
+                FavorecoIcon(
+                    systemName: PhosphorIconGlyph.categorySystemName(
+                        templateKey: category.templateKey,
+                        storedSystemName: category.iconSymbol
+                    ),
+                    size: 20
+                )
                     .foregroundStyle(Color(hex: category.colorHex))
                     .frame(width: 28)
 
@@ -323,8 +329,7 @@ private struct OnboardingMessagePanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Image(systemName: symbol)
-                .font(.system(size: 42, weight: .semibold))
+            FavorecoIcon(systemName: symbol, size: 42, fallbackWeight: .semibold)
                 .foregroundStyle(accentColor)
                 .frame(width: 74, height: 74)
                 .background(accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -378,8 +383,7 @@ private struct OnboardingGenreBubble: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.title2)
+            FavorecoIcon(systemName: icon, size: 22)
                 .foregroundStyle(color)
                 .frame(width: 54, height: 54)
                 .background(color.opacity(0.13), in: Circle())
@@ -399,7 +403,7 @@ private struct OnboardingInfoCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(Color(hex: "#9F2F4D"))
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
@@ -424,8 +428,7 @@ private struct OnboardingEmptyStateRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
+            FavorecoIcon(systemName: icon, size: 20)
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {

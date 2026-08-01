@@ -9,6 +9,41 @@ import SwiftUI
 import SwiftData
 import UIKit
 import Charts
+import Combine
+
+final class CreateEntryContextRouter: ObservableObject {
+    let objectWillChange = ObservableObjectPublisher()
+
+    struct Context: Equatable {
+        let categoryID: UUID
+    }
+
+    private(set) var activeContext: Context?
+
+    func activate(categoryID: UUID) {
+        activeContext = Context(categoryID: categoryID)
+    }
+
+    func resetToHome() {
+        activeContext = nil
+    }
+
+    func categoryIDForCreateMenu(isHomeTabActive: Bool) -> UUID? {
+        guard isHomeTabActive else { return nil }
+        return activeContext?.categoryID
+    }
+
+    func createMenuRequest(isHomeTabActive: Bool) -> CreateEntryMenuRequest {
+        CreateEntryMenuRequest(
+            categoryID: categoryIDForCreateMenu(isHomeTabActive: isHomeTabActive)
+        )
+    }
+}
+
+struct CreateEntryMenuRequest: Identifiable, Equatable {
+    let id = UUID()
+    let categoryID: UUID?
+}
 
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
@@ -21,12 +56,15 @@ struct MainTabView: View {
     @AppStorage(AppStorageKeys.pendingNotificationPlanID) private var pendingNotificationPlanID = ""
     @AppStorage(AppStorageKeys.pendingNotificationAttemptID) private var pendingNotificationAttemptID = ""
     @AppStorage(AppStorageKeys.pendingNotificationPreparationTaskID) private var pendingNotificationPreparationTaskID = ""
+    @StateObject private var createEntryContextRouter = CreateEntryContextRouter()
     @State private var selectedTab: MainTab = .home
-    @State private var activeCreateContextCategoryID: UUID?
-    @State private var isShowingCreateMenu = false
+    @State private var presentedCreateContextCategoryID: UUID?
+    @State private var presentedCreateMenuRequest: CreateEntryMenuRequest?
     @State private var isShowingRecordTargetSelection = false
+    @State private var isShowingTheaterMemorySelection = false
     @State private var isShowingAddPlan = false
     @State private var isShowingAddTicketSchedule = false
+    @State private var isShowingUnifiedTheaterRegistration = false
     @State private var isShowingTheaterPlanChoice = false
     @State private var isShowingQuickRegistration = false
     @State private var theaterRegistrationCategory: RecordCategory?
@@ -47,14 +85,22 @@ struct MainTabView: View {
         return visibleCategories.first(where: { $0.templateKey == preferredKey }) ?? visibleCategories.first
     }
 
-    private var createContextCategory: RecordCategory? {
-        guard let activeCreateContextCategoryID else { return nil }
-        return visibleCategories.first(where: { $0.id == activeCreateContextCategoryID })
+    private var activeCreateContextCategory: RecordCategory? {
+        guard let categoryID = createEntryContextRouter.categoryIDForCreateMenu(
+            isHomeTabActive: selectedTab == .home
+        ) else { return nil }
+        return visibleCategories.first(where: { $0.id == categoryID })
+    }
+
+    private var presentedCreateContextCategory: RecordCategory? {
+        guard let presentedCreateContextCategoryID else { return nil }
+        return visibleCategories.first(where: { $0.id == presentedCreateContextCategoryID })
     }
 
     private var createMenuCategories: [RecordCategory] {
-        guard let preferredCategory else { return visibleCategories }
-        return [preferredCategory] + visibleCategories.filter { $0.id != preferredCategory.id }
+        let firstCategory = presentedCreateContextCategory ?? preferredCategory
+        guard let firstCategory else { return visibleCategories }
+        return [firstCategory] + visibleCategories.filter { $0.id != firstCategory.id }
     }
 
     private var tabSelection: Binding<MainTab> {
@@ -62,7 +108,14 @@ struct MainTabView: View {
             get: { selectedTab },
             set: { newValue in
                 if newValue == .create {
-                    isShowingCreateMenu = true
+                    let request = createEntryContextRouter.createMenuRequest(
+                        isHomeTabActive: selectedTab == .home
+                    )
+                    presentedCreateContextCategoryID = request.categoryID
+                    presentCreateMenuAfterRetainingCurrentTab(
+                        request,
+                        sourceTab: selectedTab
+                    )
                 } else {
                     selectedTab = newValue
                 }
@@ -70,25 +123,58 @@ struct MainTabView: View {
         )
     }
 
+    private func presentCreateMenuAfterRetainingCurrentTab(
+        _ request: CreateEntryMenuRequest,
+        sourceTab: MainTab
+    ) {
+        Task { @MainActor in
+            // The center item is an action, not a destination. Let TabView finish
+            // rejecting the attempted selection before creating the sheet host.
+            await Task.yield()
+            guard selectedTab == sourceTab else { return }
+            guard presentedCreateMenuRequest == nil else { return }
+            presentedCreateMenuRequest = request
+        }
+    }
+
     var body: some View {
         TabView(selection: tabSelection) {
-            HomeView()
+            HomeView(
+                onCategoryReturnToRoot: {
+                    createEntryContextRouter.resetToHome()
+                },
+                onCategoryNavigate: { categoryID in
+                    createEntryContextRouter.activate(categoryID: categoryID)
+                }
+            )
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
-                    Label("Home", systemImage: "house.fill")
+                    Label {
+                        Text("Home")
+                    } icon: {
+                        FavorecoTabIcon(systemName: "house.fill")
+                    }
                 }
                 .tag(MainTab.home)
 
             FavoView()
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
-                    Label("FAVO", systemImage: "heart.text.square.fill")
+                    Label {
+                        Text("FAVO")
+                    } icon: {
+                        FavorecoTabIcon(systemName: "heart.text.square.fill")
+                    }
                 }
                 .tag(MainTab.records)
 
             Color.clear
                 .tabItem {
-                    Label("追加", systemImage: "plus")
+                    Label {
+                        Text("追加")
+                    } icon: {
+                        FavorecoTabIcon(systemName: "plus")
+                    }
                 }
                 .tag(MainTab.create)
 
@@ -100,31 +186,47 @@ struct MainTabView: View {
             )
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
-                    Label("カレンダー", systemImage: "calendar")
+                    Label {
+                        Text("カレンダー")
+                    } icon: {
+                        FavorecoTabIcon(systemName: "calendar")
+                    }
                 }
                 .tag(MainTab.calendar)
 
             StatsView(isActive: selectedTab == .stats)
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
-                    Label("統計", systemImage: "chart.bar.fill")
+                    Label {
+                        Text("統計")
+                    } icon: {
+                        FavorecoTabIcon(systemName: "chart.bar.fill")
+                    }
                 }
                 .tag(MainTab.stats)
         }
+        .environmentObject(createEntryContextRouter)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
-        .sheet(isPresented: $isShowingCreateMenu, onDismiss: openPendingCreateAction) {
+        .sheet(item: $presentedCreateMenuRequest, onDismiss: openPendingCreateAction) { request in
+            let category = request.categoryID.flatMap { categoryID in
+                visibleCategories.first(where: { $0.id == categoryID })
+            }
+            let definition = CreateEntryMenuDefinition.resolve(
+                templateKey: category?.templateKey
+            )
             CreateEntryMenuView(
                 canCreateRecord: !visibleCategories.isEmpty,
-                isTheaterPreferred: createContextCategory?.templateKey == "theater",
+                definition: definition,
                 onSelect: { action in
+                    presentedCreateContextCategoryID = request.categoryID
                     pendingCreateAction = action
-                    isShowingCreateMenu = false
+                    presentedCreateMenuRequest = nil
                 }
             )
             .presentationDetents([
                 .height(CreateEntryMenuView.preferredSheetHeight(
-                    isTheaterPreferred: createContextCategory?.templateKey == "theater"
+                    itemCount: definition.items.count
                 ))
             ])
             .presentationDragIndicator(.visible)
@@ -138,6 +240,15 @@ struct MainTabView: View {
                 isShowingRecordTargetSelection = false
             }
         }
+        .sheet(isPresented: $isShowingTheaterMemorySelection, onDismiss: openPendingRecordDestination) {
+            if let theaterCategory = presentedCreateContextCategory,
+               theaterCategory.templateKey == "theater" {
+                TheaterMemoryTargetSelectionView(category: theaterCategory) { destination in
+                    pendingRecordDestination = destination
+                    isShowingTheaterMemorySelection = false
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoStats)) { _ in
             selectedTab = .stats
         }
@@ -147,15 +258,6 @@ struct MainTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoPlanCreation)) { _ in
             openPlanCreation()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .favorecoCreateContextDidEnterCategory)) { notification in
-            let categoryID = notification.object as? UUID
-            guard activeCreateContextCategoryID != categoryID else { return }
-            activeCreateContextCategoryID = categoryID
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .favorecoCreateContextDidLeaveCategory)) { _ in
-            guard activeCreateContextCategoryID != nil else { return }
-            activeCreateContextCategoryID = nil
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoPlan)) { _ in
             selectedTab = .calendar
@@ -202,6 +304,16 @@ struct MainTabView: View {
                 } else {
                     AddVisitView(event: event)
                 }
+            case .plan(let plan):
+                if let event = plan.event {
+                    AddVisitView(
+                        event: event,
+                        initialDraft: VisitDraft(plan: plan),
+                        sourcePlan: plan
+                    )
+                }
+            case .edit(let visit):
+                EditExperienceView(visit: visit)
             }
         }
         .sheet(isPresented: $isShowingAddPlan) {
@@ -212,6 +324,9 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $isShowingAddTicketSchedule) {
             AddTicketPlanView(entryMode: .ticketSchedule)
+        }
+        .sheet(isPresented: $isShowingUnifiedTheaterRegistration) {
+            AddTicketPlanView(entryMode: .unified)
         }
         .sheet(item: $theaterRegistrationCategory) { category in
             TheaterPerformanceRegistrationView(category: category)
@@ -242,18 +357,19 @@ struct MainTabView: View {
             isShowingAddPlan = true
         case .record:
             isShowingRecordTargetSelection = true
+        case .theaterMemory:
+            isShowingTheaterMemorySelection = true
         case .quick:
             isShowingQuickRegistration = true
-        case .theaterPerformance:
-            guard createContextCategory?.templateKey == "theater" else { return }
-            theaterRegistrationCategory = createContextCategory
+        case .theaterRegistration:
+            isShowingUnifiedTheaterRegistration = true
         case .ticketSchedule:
             isShowingAddTicketSchedule = true
         }
     }
 
     private func openPlanCreation() {
-        if createContextCategory?.templateKey == "theater" {
+        if activeCreateContextCategory?.templateKey == "theater" {
             isShowingTheaterPlanChoice = true
         } else {
             isShowingAddPlan = true
@@ -287,6 +403,7 @@ struct MainTabView: View {
 }
 struct MainScreenHeader: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.favorecoThemePalette) private var themePalette
 
     let title: String
     var usesBrandFont = false
@@ -341,8 +458,7 @@ struct MainScreenHeader: View {
             Text(title)
                 .tracking(title.count <= 3 ? 5 : 0)
             if showsChevron {
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
+                FavorecoIcon(systemName: "chevron.down", size: 10)
             }
         }
         .font(FavorecoTypography.jpSerif(20, weight: .bold, relativeTo: .title3))
@@ -379,7 +495,7 @@ struct MainScreenHeader: View {
         }
         return AnyShapeStyle(
             usesBrandFont
-                ? FavorecoTypography.brandColor(for: colorScheme).opacity(usesCompactBrand ? 0.78 : 1)
+                ? themePalette.headingText(for: colorScheme).opacity(usesCompactBrand ? 0.78 : 1)
                 : Color.primary
         )
     }
@@ -421,8 +537,7 @@ struct MainToolbarActions: View {
                 Button {
                     isShowingTicketManagement = true
                 } label: {
-                    Image(systemName: "ticket")
-                        .font(.system(size: 22, weight: .semibold))
+                    FavorecoIcon(systemName: "ticket", size: 23)
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
@@ -436,8 +551,7 @@ struct MainToolbarActions: View {
             } label: {
                 TimelineView(.periodic(from: .now, by: 60)) { context in
                     ZStack(alignment: .topTrailing) {
-                        Image(systemName: "bell")
-                            .font(.system(size: 22, weight: .semibold))
+                        FavorecoIcon(systemName: "bell", size: 23)
 
                         if hasReachedAction(at: context.date) {
                             Circle()
@@ -510,12 +624,148 @@ struct MainToolbarActions: View {
 private enum RecordEntryDestination: Identifiable {
     case new(RecordCategory)
     case existing(ExperienceEvent)
+    case plan(Plan)
+    case edit(Visit)
 
     var id: String {
         switch self {
         case .new(let category): "new-\(category.id.uuidString)"
         case .existing(let event): "existing-\(event.id.uuidString)"
+        case .plan(let plan): "plan-\(plan.id.uuidString)"
+        case .edit(let visit): "edit-\(visit.id.uuidString)"
         }
+    }
+}
+
+private struct TheaterMemoryTargetSelectionView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Plan.startsAt, order: .reverse) private var allPlans: [Plan]
+
+    let category: RecordCategory
+    let onSelect: (RecordEntryDestination) -> Void
+
+    private var eligiblePlans: [Plan] {
+        let endOfToday = Calendar.current.date(
+            bySettingHour: 23,
+            minute: 59,
+            second: 59,
+            of: Date()
+        ) ?? Date()
+        return allPlans.filter {
+            !$0.isArchived
+                && $0.category?.id == category.id
+                && $0.hasConfirmedSchedule
+                && $0.startsAt <= endOfToday
+        }
+    }
+
+    private var unrecordedPlans: [Plan] {
+        eligiblePlans.filter { $0.visit == nil }
+    }
+
+    private var recordedPlans: [Plan] {
+        eligiblePlans.filter { $0.visit != nil }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        onSelect(.new(category))
+                    } label: {
+                        FavorecoIconLabel(
+                            "予定なしで過去の観劇を記録",
+                            systemImage: "plus.circle"
+                        )
+                        .font(FavorecoTypography.bodyStrong)
+                    }
+                } footer: {
+                    Text("事前に予定を登録していなかった公演も、ここから直接記録できます。")
+                }
+
+                Section("記録できる観劇予定") {
+                    if unrecordedPlans.isEmpty {
+                        FavorecoContentUnavailableView(
+                            "記録待ちの観劇予定はありません",
+                            systemImage: "calendar.badge.checkmark",
+                            description: "参加日を登録した公演がここに表示されます。"
+                        )
+                    } else {
+                        ForEach(unrecordedPlans) { plan in
+                            Button {
+                                onSelect(.plan(plan))
+                            } label: {
+                                theaterMemoryPlanRow(plan, isRecorded: false)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                if !recordedPlans.isEmpty {
+                    Section("記録済み") {
+                        ForEach(recordedPlans) { plan in
+                            if let visit = plan.visit {
+                                Button {
+                                    onSelect(.edit(visit))
+                                } label: {
+                                    theaterMemoryPlanRow(plan, isRecorded: true)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("観劇の思い出を記録")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func theaterMemoryPlanRow(
+        _ plan: Plan,
+        isRecorded: Bool
+    ) -> some View {
+        HStack(spacing: 12) {
+            FavorecoIcon(
+                systemName: isRecorded ? "checkmark.circle.fill" : "calendar",
+                size: 19
+            )
+            .foregroundStyle(isRecorded ? Color.green : Color.accentColor)
+            .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(plan.event?.title.isEmpty == false ? plan.event?.title ?? plan.title : plan.title)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                Text(memoryPlanDescription(plan))
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 4)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+    }
+
+    private func memoryPlanDescription(_ plan: Plan) -> String {
+        let date = FavorecoDateText.compactDateTime(plan.startsAt)
+        let venue = plan.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+        return venue.isEmpty ? date : "\(date)｜\(venue)"
     }
 }
 
@@ -558,12 +808,30 @@ private struct RecordTargetSelectionView: View {
                                 selectedCategoryID = category.id
                                 searchText = ""
                             } label: {
-                                Label(category.name, systemImage: category.iconSymbol)
+                                Label {
+                                    Text(category.name)
+                                } icon: {
+                                    FavorecoIcon(
+                                        systemName: PhosphorIconGlyph.categorySystemName(
+                                            templateKey: category.templateKey,
+                                            storedSystemName: category.iconSymbol
+                                        ),
+                                        size: 17
+                                    )
+                                }
                             }
                         }
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: selectedCategory?.iconSymbol ?? "square.grid.2x2")
+                            FavorecoIcon(
+                                systemName: selectedCategory.map {
+                                    PhosphorIconGlyph.categorySystemName(
+                                        templateKey: $0.templateKey,
+                                        storedSystemName: $0.iconSymbol
+                                    )
+                                } ?? "square.grid.2x2",
+                                size: 19
+                            )
                                 .frame(width: 28)
                             Text(selectedCategory?.name ?? "ジャンルを選択")
                                 .font(FavorecoTypography.bodyStrong)
@@ -584,7 +852,7 @@ private struct RecordTargetSelectionView: View {
                         guard let selectedCategory else { return }
                         onSelect(.new(selectedCategory))
                     } label: {
-                        Label("新しい作品・対象を登録", systemImage: "plus.circle.fill")
+                        FavorecoIconLabel("新しい作品・対象を登録", systemImage: "plus.circle.fill")
                             .font(FavorecoTypography.bodyStrong)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -596,10 +864,10 @@ private struct RecordTargetSelectionView: View {
                         .textInputAutocapitalization(.never)
 
                     if matchingEvents.isEmpty {
-                        ContentUnavailableView(
+                        FavorecoContentUnavailableView(
                             searchText.isEmpty ? "登録済みの対象はありません" : "一致する対象はありません",
                             systemImage: searchText.isEmpty ? "rectangle.stack" : "magnifyingglass",
-                            description: Text(searchText.isEmpty ? "上のボタンから新しい対象を登録できます。" : "タイトルやシリーズ名を変えて検索してください。")
+                            description: searchText.isEmpty ? "上のボタンから新しい対象を登録できます。" : "タイトルやシリーズ名を変えて検索してください。"
                         )
                     } else {
                         ScrollView(.vertical, showsIndicators: true) {
@@ -609,7 +877,15 @@ private struct RecordTargetSelectionView: View {
                                         onSelect(.existing(event))
                                     } label: {
                                         HStack(spacing: 12) {
-                                            Image(systemName: event.category?.iconSymbol ?? "rectangle.stack")
+                                            FavorecoIcon(
+                                                systemName: event.category.map {
+                                                    PhosphorIconGlyph.categorySystemName(
+                                                        templateKey: $0.templateKey,
+                                                        storedSystemName: $0.iconSymbol
+                                                    )
+                                                } ?? "rectangle.stack",
+                                                size: 18
+                                            )
                                                 .foregroundStyle(.secondary)
                                                 .frame(width: 28)
                                             VStack(alignment: .leading, spacing: 3) {
@@ -666,21 +942,90 @@ private struct RecordTargetSelectionView: View {
 private enum CreateAction: String, Identifiable {
     case plan
     case record
+    case theaterMemory
     case quick
-    case theaterPerformance
+    case theaterRegistration
     case ticketSchedule
 
     var id: String { rawValue }
 }
 
+private struct CreateEntryMenuItem: Identifiable {
+    let action: CreateAction
+    let title: String
+    let detail: String
+    let systemImage: String
+    var requiresExistingRecord = false
+
+    var id: CreateAction { action }
+}
+
+private struct CreateEntryMenuDefinition {
+    let templateKey: String?
+    let items: [CreateEntryMenuItem]
+
+    static func resolve(templateKey: String?) -> CreateEntryMenuDefinition {
+        switch templateKey {
+        case "theater":
+            CreateEntryMenuDefinition(
+                templateKey: templateKey,
+                items: [
+                    CreateEntryMenuItem(
+                        action: .theaterRegistration,
+                        title: "公演・チケットを登録",
+                        detail: "気になる・予定・申込・取得済みを追加",
+                        systemImage: "ticket"
+                    ),
+                    CreateEntryMenuItem(
+                        action: .theaterMemory,
+                        title: "観劇の思い出を記録",
+                        detail: "参加した公演を選んで記録を残す",
+                        systemImage: "square.and.pencil"
+                    ),
+                ]
+            )
+        default:
+            CreateEntryMenuDefinition(
+                templateKey: templateKey,
+                items: [
+                    CreateEntryMenuItem(
+                        action: .plan,
+                        title: "予定を立てる",
+                        detail: "これから体験する予定を登録",
+                        systemImage: "calendar.badge.plus"
+                    ),
+                    CreateEntryMenuItem(
+                        action: .record,
+                        title: "体験済みを記録",
+                        detail: "観た・行った・体験した思い出を残す",
+                        systemImage: "square.and.pencil",
+                        requiresExistingRecord: true
+                    ),
+                    CreateEntryMenuItem(
+                        action: .quick,
+                        title: "クイック登録",
+                        detail: "気になるものを最低限で一時保存",
+                        systemImage: "bolt.fill"
+                    ),
+                    CreateEntryMenuItem(
+                        action: .ticketSchedule,
+                        title: "申込・発売を登録",
+                        detail: "抽選・先着・取得済みのチケットを管理",
+                        systemImage: "ticket"
+                    ),
+                ]
+            )
+        }
+    }
+}
+
 private struct CreateEntryMenuView: View {
     @Environment(\.dismiss) private var dismiss
     let canCreateRecord: Bool
-    let isTheaterPreferred: Bool
+    let definition: CreateEntryMenuDefinition
     let onSelect: (CreateAction) -> Void
 
-    static func preferredSheetHeight(isTheaterPreferred: Bool) -> CGFloat {
-        let itemCount = isTheaterPreferred ? 3 : 4
+    static func preferredSheetHeight(itemCount: Int) -> CGFloat {
         let buttonHeight: CGFloat = 64
         let buttonSpacing: CGFloat = 10
         let sheetChromeAndInsets: CGFloat = 120
@@ -692,62 +1037,14 @@ private struct CreateEntryMenuView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 10) {
-                if isTheaterPreferred {
+                ForEach(definition.items) { item in
                     CreateEntryButton(
-                        title: "公演を登録",
-                        detail: "新しい公演を「気になる」に追加",
-                        systemImage: "theatermasks"
+                        title: item.title,
+                        detail: item.detail,
+                        systemImage: item.systemImage,
+                        isEnabled: !item.requiresExistingRecord || canCreateRecord
                     ) {
-                        onSelect(.theaterPerformance)
-                    }
-
-                    CreateEntryButton(
-                        title: "予定を立てる",
-                        detail: "登録済みの公演に参加予定を追加",
-                        systemImage: "calendar.badge.plus"
-                    ) {
-                        onSelect(.plan)
-                    }
-
-                    CreateEntryButton(
-                        title: "チケットを手配する",
-                        detail: "抽選・発売・受取の期限を登録",
-                        systemImage: "ticket"
-                    ) {
-                        onSelect(.ticketSchedule)
-                    }
-                } else {
-                    CreateEntryButton(
-                        title: "予定を立てる",
-                        detail: "これから体験する予定を登録",
-                        systemImage: "calendar.badge.plus"
-                    ) {
-                        onSelect(.plan)
-                    }
-
-                    CreateEntryButton(
-                        title: "体験済みを記録",
-                        detail: "観た・行った・体験した思い出を残す",
-                        systemImage: "square.and.pencil",
-                        isEnabled: canCreateRecord
-                    ) {
-                        onSelect(.record)
-                    }
-
-                    CreateEntryButton(
-                        title: "クイック登録",
-                        detail: "気になるものを最低限で一時保存",
-                        systemImage: "bolt.fill"
-                    ) {
-                        onSelect(.quick)
-                    }
-
-                    CreateEntryButton(
-                        title: "チケットスケジュールを追加",
-                        detail: "抽選・発売・チケット受取の予定を登録",
-                        systemImage: "ticket"
-                    ) {
-                        onSelect(.ticketSchedule)
+                        onSelect(item.action)
                     }
                 }
             }
@@ -776,7 +1073,7 @@ private struct CreateEntryButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: systemImage)
+                FavorecoIcon(systemName: systemImage, size: 20)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                     .frame(width: 36, height: 36)
@@ -835,8 +1132,7 @@ struct PlaceholderRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
+            FavorecoIcon(systemName: icon, size: 20)
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
 

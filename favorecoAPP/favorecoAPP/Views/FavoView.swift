@@ -92,7 +92,7 @@ struct FavoView: View {
                                             displaySize: CGSize(width: 64, height: 64),
                                             contentMode: .fill
                                         ) {
-                                            Image(systemName: "person.fill")
+                                            FavorecoIcon(systemName: "person.fill", size: 24)
                                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                                 .background(Color(hex: favorite.colorHex).opacity(0.12))
                                         }
@@ -114,7 +114,7 @@ struct FavoView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("自分で選んだFAVOはまだありません", systemImage: "heart")
+                    FavorecoIconLabel("自分で選んだFAVOはまだありません", systemImage: "heart", iconSize: 17)
                         .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
                     Text("推しを登録しなくても、下のSTORIESとコレクションから思い出を振り返れます。")
                         .font(FavorecoTypography.body)
@@ -122,7 +122,7 @@ struct FavoView: View {
                     NavigationLink {
                         FavoPinManagementView()
                     } label: {
-                        Label("人物・作品・場所から選ぶ", systemImage: "heart.circle")
+                        FavorecoIconLabel("人物・作品・場所から選ぶ", systemImage: "heart.circle", iconSize: 17)
                             .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .subheadline))
                             .frame(maxWidth: .infinity, minHeight: 42)
                     }
@@ -144,7 +144,7 @@ struct FavoView: View {
                     displaySize: CGSize(width: 82, height: 82),
                     contentMode: .fill
                 ) {
-                    Image(systemName: "person.fill")
+                    FavorecoIcon(systemName: "person.fill", size: 28)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color(hex: favorite.colorHex).opacity(0.12))
                 }
@@ -273,7 +273,7 @@ struct FavoView: View {
             RecordsView(embedsInNavigationStack: false, screenTitle: "すべての記録")
         } label: {
             HStack {
-                Image(systemName: "magnifyingglass")
+                FavorecoIcon(systemName: "magnifyingglass", size: 17)
                 Text("すべての記録を検索")
                     .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
                 Spacer()
@@ -301,7 +301,7 @@ private struct FavoVisitDestination: View {
         if let visit = visits.first {
             ExperienceDetailView(visit: visit)
         } else {
-            ContentUnavailableView("記録が見つかりません", systemImage: "trash")
+            FavorecoContentUnavailableView("記録が見つかりません", systemImage: "trash")
         }
     }
 }
@@ -317,7 +317,7 @@ private struct FavoPlanDestination: View {
         if let plan = plans.first {
             PlanDetailView(plan: plan)
         } else {
-            ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+            FavorecoContentUnavailableView("予定が見つかりません", systemImage: "trash")
         }
     }
 }
@@ -351,7 +351,7 @@ private struct FavoPersonDestination: View {
                 pin: pins.first
             )
         } else {
-            ContentUnavailableView("FAVOが見つかりません", systemImage: "trash")
+            FavorecoContentUnavailableView("FAVOが見つかりません", systemImage: "trash")
         }
     }
 
@@ -395,7 +395,7 @@ private struct FavoPinnedTargetDestination: View {
                 upcomingPlans: resolvedPlans
             )
         } else {
-            ContentUnavailableView("FAVOが見つかりません", systemImage: "trash")
+            FavorecoContentUnavailableView("FAVOが見つかりません", systemImage: "trash")
         }
     }
 
@@ -488,7 +488,7 @@ private struct FavoPinManagementView: View {
                 Button {
                     showsNewPerson = true
                 } label: {
-                    Label("新しい人物・団体を登録", systemImage: "person.badge.plus")
+                    FavorecoIconLabel("新しい人物・団体を登録", systemImage: "person.badge.plus", iconSize: 17)
                 }
                 .disabled(visiblePins.count >= 4)
 
@@ -617,8 +617,7 @@ private struct FavoPinManagementView: View {
                 NavigationLink {
                     FavoProfileEditorView(pin: existingPin)
                 } label: {
-                    Image(systemName: "pencil")
-                        .font(.body.weight(.semibold))
+                    FavorecoIcon(systemName: "pencil", size: 17)
                         .frame(width: 38, height: 38)
                 }
                 .buttonStyle(.borderless)
@@ -899,7 +898,7 @@ private struct FavoPinnedTargetDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink { FavoProfileEditorView(pin: pin) } label: {
-                    Label("推しを編集", systemImage: "pencil")
+                    FavorecoIconLabel("推しを編集", systemImage: "pencil", iconSize: 17)
                 }
             }
         }
@@ -945,8 +944,7 @@ private struct FavoCollectionDetailView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Image(systemName: collection.iconSymbol)
-                        .font(.system(size: 24, weight: .semibold))
+                    FavorecoIcon(systemName: collection.iconSymbol, size: 24)
                         .foregroundStyle(Color(hex: collection.colorHex))
                         .frame(width: 48, height: 48)
                         .background(Color(hex: collection.colorHex).opacity(0.12), in: Circle())
@@ -1091,7 +1089,7 @@ private struct FavoPersonDetailView: View {
             if let pin {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink { FavoProfileEditorView(pin: pin) } label: {
-                        Label("推しを編集", systemImage: "pencil")
+                        FavorecoIconLabel("推しを編集", systemImage: "pencil", iconSize: 17)
                     }
                 }
             }
@@ -1249,7 +1247,7 @@ private struct FavoStoryCard: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
             HStack(spacing: 5) {
-                Image(systemName: story.categoryIcon)
+                FavorecoIcon(systemName: story.categoryIcon, size: 13)
                 Text(FavorecoDateText.compactDate(story.visitedAt))
             }
             .font(FavorecoTypography.caption)
@@ -1292,8 +1290,7 @@ private struct FavoPinnedTargetCard: View {
                     displaySize: CGSize(width: 38, height: 38),
                     contentMode: .fill
                 ) {
-                    Image(systemName: target.iconSymbol)
-                        .font(.system(size: 19, weight: .semibold))
+                    FavorecoIcon(systemName: target.iconSymbol, size: 19)
                         .foregroundStyle(Color(hex: target.colorHex))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color(hex: target.colorHex).opacity(0.12))
@@ -1369,7 +1366,7 @@ private struct FavoPinRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(Color(hex: colorHex))
                 .frame(width: 34, height: 34)
                 .background(Color(hex: colorHex).opacity(0.1), in: Circle())
@@ -1395,7 +1392,7 @@ private struct FavoPinCandidateRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(Color(hex: colorHex))
                 .frame(width: 34, height: 34)
                 .background(Color(hex: colorHex).opacity(0.1), in: Circle())
@@ -1456,8 +1453,7 @@ private struct FavoCollectionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Image(systemName: collection.iconSymbol)
-                    .font(.system(size: 18, weight: .semibold))
+                FavorecoIcon(systemName: collection.iconSymbol, size: 18)
                     .foregroundStyle(Color(hex: collection.colorHex))
                     .frame(width: 36, height: 36)
                     .background(Color(hex: collection.colorHex).opacity(0.1), in: Circle())
@@ -1530,8 +1526,7 @@ private struct FavoInsightMetric: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 17, weight: .semibold))
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(Color(hex: colorHex))
             Text(value)
                 .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .title3))
@@ -1603,8 +1598,7 @@ private struct FavoSpendingSliceRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 10) {
-                Image(systemName: slice.iconSymbol)
-                    .font(.system(size: 13, weight: .semibold))
+                FavorecoIcon(systemName: slice.iconSymbol, size: 13)
                     .foregroundStyle(Color(hex: colorHex))
                     .frame(width: 28, height: 28)
                     .background(Color(hex: colorHex).opacity(0.1), in: Circle())
@@ -1659,8 +1653,7 @@ private struct FavoCategorySummaryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: summary.iconSymbol)
-                .font(.system(size: 14, weight: .semibold))
+            FavorecoIcon(systemName: summary.iconSymbol, size: 14)
                 .foregroundStyle(Color(hex: summary.colorHex))
                 .frame(width: 30, height: 30)
                 .background(Color(hex: summary.colorHex).opacity(0.1), in: Circle())
@@ -1707,7 +1700,7 @@ private struct FavoFrequentPlaceRow: View {
                 .font(FavorecoTypography.jpSerif(16, weight: .bold, relativeTo: .headline))
                 .foregroundStyle(Color(hex: colorHex))
                 .frame(width: 26)
-            Image(systemName: "mappin.and.ellipse")
+            FavorecoIcon(systemName: "mappin.and.ellipse", size: 17)
                 .foregroundStyle(Color(hex: colorHex))
             Text(place.name)
                 .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .subheadline))
@@ -1744,8 +1737,10 @@ private struct FavoAvatar: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                    Image(systemName: PersonActivityTags.icon(for: person.roleTagsRaw, isFavorite: true))
-                        .font(.system(size: size * 0.36, weight: .semibold))
+                    FavorecoIcon(
+                        systemName: PersonActivityTags.icon(for: person.roleTagsRaw, isFavorite: true),
+                        size: size * 0.36
+                    )
                         .foregroundStyle(.white)
                 }
             }
@@ -1828,8 +1823,7 @@ private struct FavoProfileHero: View {
                 endPoint: .bottomTrailing
             )
             .overlay {
-                Image(systemName: fallbackSymbol)
-                    .font(.system(size: 76, weight: .semibold))
+                FavorecoIcon(systemName: fallbackSymbol, size: 76)
                     .foregroundStyle(.white.opacity(0.2))
             }
         }
@@ -1845,8 +1839,7 @@ private struct FavoProfileHero: View {
             } else {
                 ZStack {
                     Color(hex: colorHex)
-                    Image(systemName: fallbackSymbol)
-                        .font(.system(size: 24, weight: .semibold))
+                    FavorecoIcon(systemName: fallbackSymbol, size: 24)
                         .foregroundStyle(.white)
                 }
             }
@@ -1900,8 +1893,7 @@ private struct FavoEntranceCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 21, weight: .medium))
+            FavorecoIcon(systemName: icon, size: 21)
                 .foregroundStyle(Color.accentColor)
             HStack {
                 Text(title)
@@ -1964,8 +1956,7 @@ private struct FavoVisitRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: visit.event?.category?.iconSymbol ?? "sparkles")
-                .font(.system(size: 17, weight: .semibold))
+            FavorecoIcon(systemName: visit.event?.category?.iconSymbol ?? "sparkles", size: 17)
                 .foregroundStyle(Color(hex: visit.event?.category?.colorHex ?? "#147C88"))
                 .frame(width: 34, height: 34)
                 .background(Color(hex: visit.event?.category?.colorHex ?? "#147C88").opacity(0.1), in: Circle())

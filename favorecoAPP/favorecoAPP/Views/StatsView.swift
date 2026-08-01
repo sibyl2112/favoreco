@@ -289,7 +289,7 @@ struct StatsView: View {
                         VStack(spacing: 10) {
                             ForEach(theaterOrganizationStats.prefix(8)) { stat in
                                 HStack(spacing: 12) {
-                                    Image(systemName: "theatermasks.circle")
+                                    FavorecoIcon(systemName: "theatermasks.circle", size: 17)
                                         .foregroundStyle(Color.accentColor)
                                         .frame(width: 28)
                                     VStack(alignment: .leading, spacing: 3) {
@@ -338,7 +338,7 @@ struct StatsView: View {
                         VStack(spacing: 10) {
                             ForEach(theaterFocusPersonStats.prefix(8)) { stat in
                                 HStack(spacing: 12) {
-                                    Image(systemName: "person.crop.circle")
+                                    FavorecoIcon(systemName: "person.crop.circle", size: 17)
                                         .foregroundStyle(Color.accentColor)
                                         .frame(width: 28)
                                     VStack(alignment: .leading, spacing: 3) {
@@ -627,8 +627,7 @@ private struct StatsLockedFeatureCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.title3)
+            FavorecoIcon(systemName: systemImage, size: 20)
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 28)
 
@@ -903,8 +902,10 @@ private struct StatsReportDraftView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Image(systemName: kind == .monthly ? "sparkles" : "calendar.badge.star")
-                        .font(.title2)
+                    FavorecoIcon(
+                        systemName: kind == .monthly ? "sparkles" : "calendar.badge.star",
+                        size: 22
+                    )
                         .foregroundStyle(Color.accentColor)
                 }
 
@@ -917,10 +918,14 @@ private struct StatsReportDraftView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Label(topCategoryName, systemImage: "square.grid.2x2")
-                    Label(topVenueName, systemImage: "mappin.and.ellipse")
+                    FavorecoIconLabel(topCategoryName, systemImage: "square.grid.2x2", iconSize: 13)
+                    FavorecoIconLabel(topVenueName, systemImage: "mappin.and.ellipse", iconSize: 13)
                     if let firstVisit = sortedVisits.first {
-                        Label(firstVisit.event?.title ?? "無題", systemImage: "sparkles")
+                        FavorecoIconLabel(
+                            firstVisit.event?.title ?? "無題",
+                            systemImage: "sparkles",
+                            iconSize: 13
+                        )
                     }
                 }
                 .font(FavorecoTypography.captionStrong)
@@ -1188,8 +1193,8 @@ private struct StatsReportShareCard: View {
                     .font(FavorecoTypography.jpSerif(24, weight: .bold, relativeTo: .title2))
                     .lineLimit(2)
                     .minimumScaleFactor(0.75)
-                Label(snapshot.topCategory, systemImage: "square.grid.2x2")
-                Label(snapshot.topVenue, systemImage: "mappin.and.ellipse")
+                FavorecoIconLabel(snapshot.topCategory, systemImage: "square.grid.2x2", iconSize: 12)
+                FavorecoIconLabel(snapshot.topVenue, systemImage: "mappin.and.ellipse", iconSize: 12)
             }
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
@@ -1304,8 +1309,7 @@ private struct StatsMetricCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
+            FavorecoIcon(systemName: icon, size: 20)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
@@ -1334,7 +1338,7 @@ private struct CategoryStatRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label(stat.category.name, systemImage: stat.category.iconSymbol)
+                FavorecoIconLabel(stat.category.name, systemImage: stat.category.iconSymbol, iconSize: 17)
                     .font(FavorecoTypography.bodyStrong)
                     .foregroundStyle(themePalette.categoryColor(hex: stat.category.colorHex))
                 Spacer()
@@ -1366,8 +1370,7 @@ private struct StatsWideCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title3)
+            FavorecoIcon(systemName: icon, size: 20)
                 .foregroundStyle(.secondary)
                 .frame(width: 32)
 
@@ -1402,8 +1405,7 @@ private struct StatsPrivateAmountCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title3)
+            FavorecoIcon(systemName: icon, size: 20)
                 .foregroundStyle(.secondary)
                 .frame(width: 32)
 
@@ -1447,8 +1449,7 @@ private struct StatsReportPreviewCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: systemImage)
-                .font(.title3)
+            FavorecoIcon(systemName: systemImage, size: 20)
                 .foregroundStyle(.white)
                 .frame(width: 38, height: 38)
                 .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))

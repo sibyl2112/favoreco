@@ -1,6 +1,34 @@
 import SwiftUI
 import SwiftData
 
+private enum CalendarSplitPreset: String, CaseIterable {
+    case calendarFocused
+    case balanced
+    case informationFocused
+
+    var calendarFraction: CGFloat {
+        switch self {
+        case .calendarFocused: 0.75
+        case .balanced: 0.5
+        case .informationFocused: 0.25
+        }
+    }
+
+    var accessibilityValue: String {
+        switch self {
+        case .calendarFocused: "カレンダー4分の3、情報4分の1"
+        case .balanced: "カレンダーと情報を半分ずつ"
+        case .informationFocused: "カレンダー4分の1、情報4分の3"
+        }
+    }
+
+    static func nearest(to fraction: CGFloat) -> CalendarSplitPreset {
+        allCases.min {
+            abs($0.calendarFraction - fraction) < abs($1.calendarFraction - fraction)
+        } ?? .calendarFocused
+    }
+}
+
 private struct CalendarNotificationDestination: Identifiable, Hashable {
     let plan: Plan
     let preparationTaskID: UUID?
@@ -28,10 +56,13 @@ struct CalendarView: View {
     @Query private var ticketAttempts: [TicketAttempt]
     @AppStorage(AppStorageKeys.showsExternalCalendarEvents) private var showsExternalCalendarEvents = true
     @AppStorage(AppStorageKeys.selectedExternalCalendarIdentifiers) private var selectedExternalCalendarIdentifiers = ""
+    @AppStorage(AppStorageKeys.calendarSplitPreset) private var calendarSplitPresetRaw = CalendarSplitPreset.calendarFocused.rawValue
     @StateObject private var externalCalendarStore = ExternalCalendarOverlayStore()
     @State private var displayedMonth = Date().startOfMonth
     @State private var selectedDate = Date()
     @State private var notificationDestination: CalendarNotificationDestination?
+    @State private var calendarSplitDragStartFraction: CGFloat?
+    @State private var calendarSplitDragFraction: CGFloat?
 
     private let calendar = Calendar.current
 
@@ -311,17 +342,37 @@ struct CalendarView: View {
 
             MainHeaderDivider()
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
-                        displayedCalendarContent
-                    }
+            pinnedPeriodNavigation
+
+            calendarContentArea
+        }
+    }
+
+    @ViewBuilder
+    private var calendarContentArea: some View {
+        if displayMode == .planList {
+            ScrollView {
+                planListSection
                     .padding(20)
-                }
-                .task(id: timelineInitialScrollKey) {
-                    await scrollToCurrentTimelineTimeIfNeeded(using: proxy)
-                }
             }
+        } else {
+            splitCalendarContent
+        }
+    }
+
+    @ViewBuilder
+    private var pinnedPeriodNavigation: some View {
+        switch displayMode {
+        case .month:
+            monthHeader
+                .padding(.horizontal, 20)
+                .padding(.vertical, 4)
+        case .week, .day:
+            timelineNavigationHeader
+                .padding(.horizontal, 20)
+                .padding(.vertical, 4)
+        case .planList:
+            EmptyView()
         }
     }
 
@@ -345,41 +396,135 @@ struct CalendarView: View {
         proxy.scrollTo(CalendarTimelineScrollTarget.hour(contextHour), anchor: .top)
     }
 
+    private var splitCalendarPreset: CalendarSplitPreset {
+        CalendarSplitPreset(rawValue: calendarSplitPresetRaw) ?? .calendarFocused
+    }
+
+    private var activeCalendarSplitFraction: CGFloat {
+        calendarSplitDragFraction ?? splitCalendarPreset.calendarFraction
+    }
+
+    private var splitCalendarContent: some View {
+        GeometryReader { proxy in
+            let availableHeight = max(proxy.size.height, 0)
+            let informationHeight = availableHeight * (1 - activeCalendarSplitFraction)
+
+            ZStack(alignment: .bottom) {
+                activeCalendarViewport
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                calendarInformationSheet(
+                    height: informationHeight,
+                    availableHeight: availableHeight
+                )
+            }
+        }
+    }
+
     @ViewBuilder
-    private var displayedCalendarContent: some View {
+    private var activeCalendarViewport: some View {
         switch displayMode {
         case .month:
-            monthCalendarContent
+            ScrollView(.vertical) {
+                monthGrid
+            }
         case .week:
-            weekCalendarContent
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    weekTimeline
+                }
+                .task(id: timelineInitialScrollKey) {
+                    await scrollToCurrentTimelineTimeIfNeeded(using: proxy)
+                }
+            }
         case .day:
-            dayCalendarContent
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    dayTimeline
+                }
+                .task(id: timelineInitialScrollKey) {
+                    await scrollToCurrentTimelineTimeIfNeeded(using: proxy)
+                }
+            }
         case .planList:
-            planListSection
+            EmptyView()
         }
     }
 
-    private var monthCalendarContent: some View {
-        Group {
-            monthHeader
-            monthGrid
-            calendarAgendaSection
+    private func calendarInformationSheet(
+        height: CGFloat,
+        availableHeight: CGFloat
+    ) -> some View {
+        VStack(spacing: 0) {
+            calendarInformationSheetHandle(availableHeight: availableHeight)
+
+            ScrollView(.vertical) {
+                calendarAgendaSection
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+            }
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        .background(.regularMaterial)
+        .clipShape(.rect(topLeadingRadius: 18, topTrailingRadius: 18))
+        .shadow(color: Color.black.opacity(0.16), radius: 12, y: -4)
     }
 
-    private var weekCalendarContent: some View {
-        Group {
-            timelineNavigationHeader
-            weekTimeline
-            calendarAgendaSection
+    private func calendarInformationSheetHandle(availableHeight: CGFloat) -> some View {
+        ZStack {
+            Color.clear
+
+            Capsule()
+                .fill(Color.secondary.opacity(0.55))
+                .frame(width: 44, height: 5)
         }
+        .frame(height: 44)
+        .contentShape(Rectangle())
+        .gesture(calendarSheetDragGesture(availableHeight: availableHeight))
+        .accessibilityElement()
+        .accessibilityLabel("カレンダー情報パネルの高さ")
+        .accessibilityValue(splitCalendarPreset.accessibilityValue)
+        .accessibilityAdjustableAction(adjustCalendarSplit)
     }
 
-    private var dayCalendarContent: some View {
-        Group {
-            timelineNavigationHeader
-            dayTimeline
-            calendarAgendaSection
+    private func calendarSheetDragGesture(availableHeight: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard availableHeight > 0 else { return }
+                if calendarSplitDragStartFraction == nil {
+                    calendarSplitDragStartFraction = splitCalendarPreset.calendarFraction
+                }
+                let startFraction = calendarSplitDragStartFraction ?? splitCalendarPreset.calendarFraction
+                let proposedFraction = startFraction + (value.translation.height / availableHeight)
+                calendarSplitDragFraction = min(max(proposedFraction, 0.25), 0.75)
+            }
+            .onEnded { _ in
+                let preset = CalendarSplitPreset.nearest(to: activeCalendarSplitFraction)
+                withAnimation(.easeOut(duration: 0.2)) {
+                    calendarSplitPresetRaw = preset.rawValue
+                    calendarSplitDragFraction = nil
+                    calendarSplitDragStartFraction = nil
+                }
+            }
+    }
+
+    private func adjustCalendarSplit(_ direction: AccessibilityAdjustmentDirection) {
+        let preset: CalendarSplitPreset
+        switch (splitCalendarPreset, direction) {
+        case (.calendarFocused, .increment):
+            preset = .balanced
+        case (.balanced, .increment):
+            preset = .informationFocused
+        case (.informationFocused, .decrement):
+            preset = .balanced
+        case (.balanced, .decrement):
+            preset = .calendarFocused
+        default:
+            return
+        }
+        withAnimation(.easeOut(duration: 0.2)) {
+            calendarSplitPresetRaw = preset.rawValue
         }
     }
 
@@ -523,7 +668,6 @@ struct CalendarView: View {
                 displayedMonth = day.date.startOfMonth
             }
         }
-        .padding(.horizontal, -20)
         .simultaneousGesture(
             calendarPeriodSwipeGesture(
                 onPrevious: { moveDisplayedMonth(by: -1) },
@@ -542,7 +686,6 @@ struct CalendarView: View {
             selectedDate = date
             displayedMonth = date.startOfMonth
         }
-        .padding(.horizontal, -20)
         .simultaneousGesture(
             calendarPeriodSwipeGesture(
                 onPrevious: { moveTimeline(by: -1) },
@@ -557,7 +700,6 @@ struct CalendarView: View {
             snapshot: timelineSnapshot,
             calendar: calendar
         )
-        .padding(.horizontal, -20)
         .simultaneousGesture(
             calendarPeriodSwipeGesture(
                 onPrevious: { moveTimeline(by: -1) },

@@ -12,6 +12,7 @@ struct ContentView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
+    @AppStorage(AppStorageKeys.baseTheme) private var baseThemeRaw = FavorecoBaseTheme.skyBlue.rawValue
     @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
     @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#147C88"
     @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
@@ -74,11 +75,20 @@ struct ContentView: View {
     }
 
     private var effectiveThemePalette: FavorecoThemePalette {
+        let baseTheme = FavorecoBaseTheme(rawValue: baseThemeRaw) ?? .skyBlue
         let mode = FavorecoThemeMode(rawValue: themeModeRaw) ?? .categoryAccent
         guard purchaseManager.currentPlan.includesLocalFullFeatures, mode == .unified else {
-            return .standard
+            return FavorecoThemePalette(
+                baseTheme: baseTheme,
+                mode: .categoryAccent,
+                unifiedColorHex: unifiedThemeColorHex
+            )
         }
-        return FavorecoThemePalette(mode: .unified, unifiedColorHex: unifiedThemeColorHex)
+        return FavorecoThemePalette(
+            baseTheme: baseTheme,
+            mode: .unified,
+            unifiedColorHex: unifiedThemeColorHex
+        )
     }
 
     private func prepareReleaseUpdateIfNeeded() {

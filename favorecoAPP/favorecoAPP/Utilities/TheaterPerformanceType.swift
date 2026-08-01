@@ -1,5 +1,16 @@
 import SwiftUI
 
+enum ExplicitFormMetrics {
+    static let rowMinimumHeight: CGFloat = 66
+    static let labelFontSize: CGFloat = 16
+    static let inputFontSize: CGFloat = 16
+    static let dateControlScale: CGFloat = 15.0 / 17.0
+    static let rowTopPadding: CGFloat = 9
+    static let rowBottomPadding: CGFloat = 8
+    static let controlTrailingPadding: CGFloat = 4
+    static let rowSeparatorColor = Color.secondary.opacity(0.46)
+}
+
 enum TheaterPerformanceType: String, CaseIterable, Identifiable {
     case play = "theater_play"
     case twoPointFiveD = "theater_2_5d"
@@ -55,18 +66,10 @@ struct TheaterPerformanceTypePicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: usesCompactLabelStyle ? 3 : 8) {
             if usesCompactLabelStyle {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("公演種別")
-                        .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
-                        .foregroundStyle(Color.secondary.opacity(0.92))
-                        .frame(width: 72, alignment: .leading)
-
-                    Divider()
-                        .frame(height: 22)
-
+                ExplicitFormControlRow(title: "公演種別") {
                     performanceTypePicker
                         .labelsHidden()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             } else {
                 performanceTypePicker
@@ -88,9 +91,10 @@ struct TheaterPerformanceTypePicker: View {
         }
         .listRowInsets(
             usesCompactLabelStyle
-                ? EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16)
+                ? EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
                 : nil
         )
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
     }
 
     private var isLegacySelection: Bool {
@@ -98,22 +102,79 @@ struct TheaterPerformanceTypePicker: View {
     }
 
     private var performanceTypePicker: some View {
-        Picker("公演種別", selection: $selection) {
-            Text("未設定").tag("")
-            ForEach(TheaterPerformanceType.allCases) { type in
-                Text(type.displayName).tag(type.rawValue)
-            }
-            if isLegacySelection {
-                Text(TheaterPerformanceType.displayName(for: selection, customName: customName))
-                    .tag(selection)
+        Group {
+            if usesCompactLabelStyle {
+                Menu {
+                    compactSelectionButton(title: "未設定", key: "")
+                    ForEach(TheaterPerformanceType.allCases) { type in
+                        compactSelectionButton(title: type.displayName, key: type.rawValue)
+                    }
+                    if isLegacySelection {
+                        compactSelectionButton(
+                            title: TheaterPerformanceType.displayName(
+                                for: selection,
+                                customName: customName
+                            ),
+                            key: selection
+                        )
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Spacer(minLength: 0)
+                        Text(
+                            selection.isEmpty
+                                ? "未設定"
+                                : TheaterPerformanceType.displayName(
+                                    for: selection,
+                                    customName: customName
+                                )
+                        )
+                        .font(
+                            FavorecoTypography.jpSans(
+                                ExplicitFormMetrics.inputFontSize,
+                                weight: .regular,
+                                relativeTo: .body
+                            )
+                        )
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .allowsTightening(true)
+
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 27, alignment: .trailing)
+                    .contentShape(Rectangle())
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("公演種別")
+            } else {
+                Picker("公演種別", selection: $selection) {
+                    Text("未設定").tag("")
+                    ForEach(TheaterPerformanceType.allCases) { type in
+                        Text(type.displayName).tag(type.rawValue)
+                    }
+                    if isLegacySelection {
+                        Text(TheaterPerformanceType.displayName(for: selection, customName: customName))
+                            .tag(selection)
+                    }
+                }
+                .pickerStyle(.menu)
+                .font(FavorecoTypography.body)
             }
         }
-        .pickerStyle(.menu)
-        .font(
-            usesCompactLabelStyle
-                ? FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body)
-                : FavorecoTypography.body
-        )
+    }
+
+    private func compactSelectionButton(title: String, key: String) -> some View {
+        Button {
+            selection = key
+        } label: {
+            if selection == key {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
     }
 }
 
@@ -130,66 +191,221 @@ struct ExplicitFormTextField: View {
     var minimumLines = 1
     var maximumLines = 1
     var labelStyle: LabelStyle = .stacked
+    var inputFontSize: CGFloat = ExplicitFormMetrics.inputFontSize
+    var reservesLineSpace = false
+    var labelLineLimit = 1
+    var labelNote = ""
 
-    private var promptFontSize: CGFloat {
-        switch prompt.count {
-        case 22...: 10.5
-        case 17...: 11.5
-        case 13...: 12.5
-        default: 14
-        }
+    private var isOptional: Bool {
+        title.contains("任意") || prompt.contains("任意")
+    }
+
+    private var isRequired: Bool {
+        title.contains("必須") || prompt.contains("必須")
+    }
+
+    private var displayedTitle: String {
+        removingOptionalNotation(from: title)
+    }
+
+    private var displayedPrompt: String {
+        removingOptionalNotation(from: prompt)
+    }
+
+    private var effectiveInputFontSize: CGFloat {
+        let usesCompactLongText = displayedTitle == "住所"
+            || displayedTitle.localizedCaseInsensitiveContains("URL")
+        return usesCompactLongText ? min(inputFontSize, 14) : inputFontSize
+    }
+
+    private var minimumRowHeight: CGFloat {
+        guard minimumLines > 1 else { return ExplicitFormMetrics.rowMinimumHeight }
+        return 24 + CGFloat(minimumLines) * 20
     }
 
     var body: some View {
-        Group {
-            if labelStyle == .horizontal {
-                HStack(alignment: axis == .vertical ? .top : .firstTextBaseline, spacing: 8) {
-                    fieldTitle
-                        .frame(width: 72, alignment: .leading)
+        VStack(alignment: .leading, spacing: 0) {
+            fieldTitle
+            HStack(alignment: .top, spacing: 6) {
+                inputField
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Divider()
-                        .frame(height: 22)
-
-                    inputField
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    fieldTitle
-                    inputField
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(Color.secondary.opacity(0.72))
+                            .frame(width: 28, height: 27)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(displayedTitle)をすべて消去")
                 }
             }
         }
-        .padding(.vertical, labelStyle == .horizontal ? 0 : 1)
+        .padding(.top, ExplicitFormMetrics.rowTopPadding)
+        .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
+        .frame(minHeight: minimumRowHeight, alignment: .topLeading)
         .listRowInsets(
             EdgeInsets(
-                top: labelStyle == .horizontal ? 3 : 5,
+                top: 0,
                 leading: 16,
-                bottom: labelStyle == .horizontal ? 3 : 5,
+                bottom: 0,
                 trailing: 16
             )
         )
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
     }
 
     private var fieldTitle: some View {
-        Text(title)
-            .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
-            .foregroundStyle(Color.secondary.opacity(0.92))
-            .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .allowsTightening(true)
+        ExplicitFormFieldTitle(
+            title: displayedTitle,
+            isOptional: isOptional,
+            isRequired: isRequired,
+            note: labelNote
+        )
     }
 
+    @ViewBuilder
     private var inputField: some View {
+        if reservesLineSpace {
+            baseInputField
+                .lineLimit(maximumLines, reservesSpace: true)
+        } else {
+            baseInputField
+                .lineLimit(minimumLines...maximumLines)
+        }
+    }
+
+    private var baseInputField: some View {
         TextField(
-            title,
+            displayedTitle,
             text: $text,
-            prompt: Text(prompt)
-                .font(FavorecoTypography.jpSans(promptFontSize, weight: .regular, relativeTo: .body))
+            prompt: Text(displayedPrompt)
+                .font(
+                    FavorecoTypography.jpSans(
+                        effectiveInputFontSize,
+                        weight: .regular,
+                        relativeTo: .body
+                    )
+                )
                 .foregroundStyle(Color.secondary.opacity(0.7)),
             axis: axis
         )
-        .font(FavorecoTypography.jpSans(14, weight: .regular, relativeTo: .body))
-        .lineLimit(minimumLines...maximumLines)
+        .font(FavorecoTypography.jpSans(effectiveInputFontSize, weight: .regular, relativeTo: .body))
+        .frame(minHeight: 27, alignment: .topLeading)
+    }
+
+    private func removingOptionalNotation(from value: String) -> String {
+        let trimmed = value
+            .replacingOccurrences(of: "（任意）", with: "")
+            .replacingOccurrences(of: "(任意)", with: "")
+            .replacingOccurrences(of: "（必須）", with: "")
+            .replacingOccurrences(of: "(必須)", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != "任意", trimmed != "必須" else { return "" }
+        if trimmed.hasPrefix("任意（"), trimmed.hasSuffix("）") {
+            return String(trimmed.dropFirst(3).dropLast())
+        }
+        return trimmed
+    }
+}
+
+struct ExplicitFormControlRow<Control: View>: View {
+    let title: String
+    var isOptional = false
+    @ViewBuilder let control: () -> Control
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ExplicitFormFieldTitle(
+                title: title,
+                isOptional: isOptional,
+                isRequired: false
+            )
+
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                control()
+                    .font(
+                        FavorecoTypography.jpSans(
+                            ExplicitFormMetrics.inputFontSize,
+                            weight: .regular,
+                            relativeTo: .body
+                        )
+                    )
+            }
+            .frame(height: 27)
+            .padding(.trailing, ExplicitFormMetrics.controlTrailingPadding)
+        }
+        .padding(.top, ExplicitFormMetrics.rowTopPadding)
+        .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
+        .frame(minHeight: ExplicitFormMetrics.rowMinimumHeight, alignment: .topLeading)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+    }
+}
+
+struct ExplicitFormFieldTitle: View {
+    let title: String
+    let isOptional: Bool
+    let isRequired: Bool
+    var note = ""
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text(title)
+                .font(
+                    FavorecoTypography.jpSans(
+                        ExplicitFormMetrics.labelFontSize,
+                        weight: .semibold,
+                        relativeTo: .caption
+                    )
+                )
+                .foregroundStyle(Color.primary.opacity(0.78))
+                .lineLimit(1)
+                .minimumScaleFactor(0.76)
+                .allowsTightening(true)
+
+            if isOptional {
+                Text("任意")
+                    .font(FavorecoTypography.jpSans(10, weight: .regular, relativeTo: .caption2))
+                    .foregroundStyle(Color.secondary.opacity(0.72))
+            } else if isRequired {
+                Text("必須")
+                    .font(FavorecoTypography.jpSans(10, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            if !note.isEmpty {
+                Text("（\(note)）")
+                    .font(FavorecoTypography.jpSans(10, weight: .regular, relativeTo: .caption2))
+                    .foregroundStyle(Color.secondary.opacity(0.72))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .allowsTightening(true)
+            }
+        }
+        .frame(height: 21, alignment: .bottom)
+    }
+}
+
+struct TicketTagInputField: View {
+    @Binding var text: String
+
+    var body: some View {
+        ExplicitFormTextField(
+            title: "タグ（任意）",
+            prompt: "1行に1件入力",
+            text: $text,
+            axis: .vertical,
+            minimumLines: 3,
+            maximumLines: 6,
+            labelStyle: .horizontal,
+            labelNote: "改行すると次のタグを追加します"
+        )
     }
 }
 
@@ -280,8 +496,7 @@ struct TheaterSocialPlatformIcon: View {
             Text("X")
                 .font(.system(size: size * 0.42, weight: .medium, design: .rounded))
         case .instagram:
-            Image(systemName: "camera")
-                .font(.system(size: size * 0.42, weight: .semibold))
+            FavorecoIcon(systemName: "camera", size: size * 0.42)
         case .threads:
             Text("@")
                 .font(.system(size: size * 0.50, weight: .bold, design: .rounded))
@@ -298,37 +513,51 @@ struct TheaterSocialLinksEditor: View {
     @State private var pendingURL = ""
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text("SNS")
-                .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
-                .foregroundStyle(Color.secondary.opacity(0.92))
-                .frame(width: 72, alignment: .leading)
+        VStack(alignment: .leading, spacing: 6) {
+            ExplicitFormFieldTitle(
+                title: "SNS",
+                isOptional: true,
+                isRequired: false
+            )
 
-            Divider()
-                .frame(height: 30)
-
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 ForEach(TheaterSocialPlatform.allCases) { platform in
                     Button {
                         pendingURL = binding(for: platform).wrappedValue
                         editingPlatform = platform
                     } label: {
-                        TheaterSocialPlatformIcon(
-                            platform: platform,
-                            isActive: !trimmedValue(for: platform).isEmpty,
-                            size: 36
+                        HStack(spacing: 5) {
+                            TheaterSocialPlatformIcon(
+                                platform: platform,
+                                isActive: !trimmedValue(for: platform).isEmpty,
+                                size: 28
+                            )
+                            Text(platform.displayName)
+                                .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .padding(.horizontal, 6)
+                        .background(
+                            Color.secondary.opacity(0.07),
+                            in: Capsule()
                         )
+                        .overlay {
+                            Capsule()
+                                .stroke(Color.secondary.opacity(0.20), lineWidth: 0.8)
+                        }
+                        .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(platform.displayName)を入力")
                     .accessibilityValue(trimmedValue(for: platform).isEmpty ? "未登録" : "登録済み")
                 }
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(.vertical, 1)
-        .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+        .padding(.vertical, 6)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
         .sheet(item: $editingPlatform) { platform in
             NavigationStack {
                 Form {

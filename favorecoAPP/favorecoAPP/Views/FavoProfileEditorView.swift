@@ -117,10 +117,10 @@ struct FavoProfileEditorView: View {
                 NavigationLink {
                     FavoAnniversaryManagementView(profile: profile)
                 } label: {
-                    Label("記念日を管理", systemImage: "calendar.badge.clock")
+                    FavorecoIconLabel("記念日を管理", systemImage: "calendar.badge.clock")
                 }
             } else {
-                Label("プロフィール保存後に記念日を追加できます", systemImage: "calendar.badge.clock")
+                FavorecoIconLabel("プロフィール保存後に記念日を追加できます", systemImage: "calendar.badge.clock")
                     .foregroundStyle(.secondary)
             }
         } header: {
@@ -139,7 +139,7 @@ struct FavoProfileEditorView: View {
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             PhotosPicker(selection: $heroPickerItem, matching: .images) {
-                Label(heroActionTitle, systemImage: "photo")
+                FavorecoIconLabel(heroActionTitle, systemImage: "photo")
             }
             if draft.heroImageData != nil {
                 Button("大きな写真を外す", role: .destructive) { draft.heroImageData = nil }
@@ -168,10 +168,10 @@ struct FavoProfileEditorView: View {
                         candidateVisits: galleryCandidateVisits
                     )
                 } label: {
-                    Label("推し専用写真ギャラリー", systemImage: "photo.stack")
+                    FavorecoIconLabel("推し専用写真ギャラリー", systemImage: "photo.stack")
                 }
             } else {
-                Label("プロフィール保存後にギャラリーを追加できます", systemImage: "photo.stack")
+                FavorecoIconLabel("プロフィール保存後にギャラリーを追加できます", systemImage: "photo.stack")
                     .foregroundStyle(.secondary)
             }
         } header: {
@@ -214,8 +214,7 @@ struct FavoProfileEditorView: View {
         } else {
             ZStack {
                 Color(hex: draft.colorHex).opacity(0.14)
-                Image(systemName: fallbackSymbol)
-                    .font(.system(size: 28, weight: .semibold))
+                FavorecoIcon(systemName: fallbackSymbol, size: 28, fallbackWeight: .semibold)
                     .foregroundStyle(Color(hex: draft.colorHex))
             }
         }
@@ -460,7 +459,9 @@ struct FavoNewPersonView: View {
                                 addExistingPerson(person)
                             } label: {
                                 HStack(spacing: 10) {
-                                    Image(systemName: PersonActivityTags.icon(for: person.roleTagsRaw))
+                                    FavorecoIcon(
+                                        systemName: PersonActivityTags.icon(for: person.roleTagsRaw)
+                                    )
                                         .foregroundStyle(.secondary)
                                         .frame(width: 24)
                                     VStack(alignment: .leading, spacing: 2) {

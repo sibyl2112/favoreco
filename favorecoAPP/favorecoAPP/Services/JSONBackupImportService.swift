@@ -444,6 +444,8 @@ enum JSONBackupImportService {
             model.quantity = item.quantity
             model.purchaseURL = item.purchaseURL
             model.seatText = item.seatText
+            model.applicationGroupIDRaw = item.applicationGroupIDRaw ?? ""
+            model.applicationGroupName = item.applicationGroupName ?? ""
             model.notificationSettingsRaw = ""
             model.unitFieldsRaw = item.unitFieldsRaw
             model.memo = item.memo

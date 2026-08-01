@@ -20,7 +20,7 @@ struct ExperienceAdvancedUnitEditor: View {
                         Button(role: .destructive) {
                             entries.removeAll { $0.id == entry.id }
                         } label: {
-                            Label("この項目を削除", systemImage: "minus.circle")
+                            FavorecoIconLabel("この項目を削除", systemImage: "minus.circle")
                         }
                         .font(FavorecoTypography.caption)
                     }
@@ -31,7 +31,7 @@ struct ExperienceAdvancedUnitEditor: View {
             Button {
                 entries.append(AdvancedFieldEntry())
             } label: {
-                Label("項目を追加", systemImage: "plus.circle")
+                FavorecoIconLabel("項目を追加", systemImage: "plus.circle")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)

@@ -43,7 +43,7 @@ struct FavoAnniversaryManagementView: View {
                         isShowingPlans = true
                     }
                 } label: {
-                    Label(
+                    FavorecoIconLabel(
                         canAddAnniversary ? "記念日を追加" : "複数の記念日はPro以上",
                         systemImage: canAddAnniversary ? "calendar.badge.plus" : "lock.fill"
                     )
@@ -198,8 +198,7 @@ private struct FavoAnniversaryManagementRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "calendar")
-                .font(.system(size: 18, weight: .semibold))
+            FavorecoIcon(systemName: "calendar", size: 18, fallbackWeight: .semibold)
                 .foregroundStyle(.secondary)
                 .frame(width: 38, height: 38)
                 .background(Color(.secondarySystemGroupedBackground), in: Circle())
@@ -345,7 +344,7 @@ struct FavoAnniversarySection: View {
                 NavigationLink {
                     FavoAnniversaryManagementView(profile: profile)
                 } label: {
-                    Label("大切な日を登録する", systemImage: "calendar.badge.plus")
+                    FavorecoIconLabel("大切な日を登録する", systemImage: "calendar.badge.plus")
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
@@ -380,8 +379,7 @@ private struct FavoAnniversaryCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "calendar.badge.clock")
-                .font(.system(size: 18, weight: .semibold))
+            FavorecoIcon(systemName: "calendar.badge.clock", size: 18, fallbackWeight: .semibold)
                 .foregroundStyle(Color(hex: colorHex))
                 .frame(width: 42, height: 42)
                 .background(Color(hex: colorHex).opacity(0.12), in: Circle())

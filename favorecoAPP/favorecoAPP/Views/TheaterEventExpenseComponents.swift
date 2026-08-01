@@ -7,8 +7,7 @@ struct TheaterEventExpenseSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "wallet.pass")
-                    .font(.system(size: 17, weight: .medium))
+                FavorecoIcon(systemName: "wallet.pass", size: 17, fallbackWeight: .medium)
                     .foregroundStyle(accentColor)
                     .frame(width: 22)
 
@@ -31,8 +30,7 @@ struct TheaterEventExpenseSection: View {
 
             if snapshot.total == 0 {
                 HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "yensign.circle")
-                        .font(.title3)
+                    FavorecoIcon(systemName: "yensign.circle", size: 20)
                         .foregroundStyle(.secondary)
                         .frame(width: 28)
                     Text("チケット、グッズ、遠征費を登録すると、この作品・公演全体の金額がまとまります。")
@@ -94,8 +92,7 @@ struct TheaterEventExpenseSection: View {
 
     private func expenseTile(title: String, amount: Decimal, systemImage: String) -> some View {
         HStack(spacing: 9) {
-            Image(systemName: systemImage)
-                .font(.body.weight(.semibold))
+            FavorecoIcon(systemName: systemImage, size: 17, fallbackWeight: .semibold)
                 .foregroundStyle(accentColor)
                 .frame(width: 22)
 

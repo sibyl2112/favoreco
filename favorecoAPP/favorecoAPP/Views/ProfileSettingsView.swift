@@ -16,6 +16,7 @@ struct ProfileSettingsView: View {
     @AppStorage(AppStorageKeys.profileDisplayName) private var profileDisplayName = ""
     @AppStorage(AppStorageKeys.profileImageData) private var profileImageData = Data()
     @State private var selectedProfilePhoto: PhotosPickerItem?
+    @State private var profilePhotoCropDraft: ProfilePhotoCropDraft?
     @State private var photoErrorMessage = ""
 
     private var activeAccounts: [SocialAccount] {
@@ -38,7 +39,7 @@ struct ProfileSettingsView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         PhotosPicker(selection: $selectedProfilePhoto, matching: .images) {
-                            Label(photoActionTitle, systemImage: "photo")
+                            FavorecoIconLabel(photoActionTitle, systemImage: "photo")
                         }
 
                         if !profileImageData.isEmpty {
@@ -65,7 +66,7 @@ struct ProfileSettingsView: View {
                 NavigationLink {
                     EditSocialAccountView(account: nil)
                 } label: {
-                    Label("SNSを追加", systemImage: "plus.circle.fill")
+                    FavorecoIconLabel("SNSを追加", systemImage: "plus.circle.fill")
                 }
             }
 
@@ -89,19 +90,25 @@ struct ProfileSettingsView: View {
         .task(id: selectedProfilePhoto) {
             await loadSelectedProfilePhoto()
         }
+        .fullScreenCover(item: $profilePhotoCropDraft) { draft in
+            ProfileImageCropView(image: draft.image) { croppedData in
+                profileImageData = croppedData
+                photoErrorMessage = ""
+            }
+        }
     }
 
     @MainActor
     private func loadSelectedProfilePhoto() async {
         guard let selectedProfilePhoto else { return }
         guard let sourceData = try? await selectedProfilePhoto.loadTransferable(type: Data.self),
-              let sourceImage = UIImage(data: sourceData),
-              let processedData = sourceImage.profileAvatarData else {
+              let sourceImage = UIImage(data: sourceData) else {
             photoErrorMessage = "写真を読み込めませんでした。別の写真を選んでください。"
+            self.selectedProfilePhoto = nil
             return
         }
-        profileImageData = processedData
-        photoErrorMessage = ""
+        profilePhotoCropDraft = ProfilePhotoCropDraft(image: sourceImage)
+        self.selectedProfilePhoto = nil
     }
 }
 
@@ -128,24 +135,6 @@ struct ProfileAvatarView: View {
     }
 }
 
-private extension UIImage {
-    var profileAvatarData: Data? {
-        guard size.width > 0, size.height > 0 else { return nil }
-        let outputSize = CGSize(width: 320, height: 320)
-        let scale = max(outputSize.width / size.width, outputSize.height / size.height)
-        let drawSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let origin = CGPoint(
-            x: (outputSize.width - drawSize.width) / 2,
-            y: (outputSize.height - drawSize.height) / 2
-        )
-        let renderer = UIGraphicsImageRenderer(size: outputSize)
-        let redrawn = renderer.image { _ in
-            draw(in: CGRect(origin: origin, size: drawSize))
-        }
-        return redrawn.jpegData(compressionQuality: 0.82)
-    }
-}
-
 private struct SocialAccountRow: View {
     let account: SocialAccount
     let open: () -> Void
@@ -166,7 +155,7 @@ private struct SocialAccountRow: View {
             Button(action: open) {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
-                        Label(platform.displayName, systemImage: platform.symbolName)
+                        FavorecoIconLabel(platform.displayName, systemImage: platform.symbolName, iconSize: 13)
                             .font(FavorecoTypography.captionStrong)
                             .foregroundStyle(.secondary)
 
@@ -202,7 +191,7 @@ private struct SocialAccountRow: View {
             NavigationLink {
                 EditSocialAccountView(account: account)
             } label: {
-                Image(systemName: "pencil")
+                FavorecoIcon(systemName: "pencil", size: 16)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.borderless)
@@ -263,7 +252,7 @@ struct EditSocialAccountView: View {
                     Button(role: .destructive) {
                         archive()
                     } label: {
-                        Label("このSNSを削除", systemImage: "trash")
+                        FavorecoIconLabel("このSNSを削除", systemImage: "trash")
                     }
                 }
             }

@@ -13,11 +13,7 @@ struct VisitSummaryRow: View {
     let visit: Visit
     var showsCategory: Bool = true
 
-    @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
-    @Environment(\.displayScale) private var displayScale
     @Environment(\.favorecoThemePalette) private var themePalette
-    @State private var thumbnailImage: UIImage?
-    @State private var loadedThumbnailKey: String?
 
     private var title: String {
         visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
@@ -29,57 +25,6 @@ struct VisitSummaryRow: View {
 
     private var categoryColor: Color {
         themePalette.categoryColor(hex: category?.colorHex ?? "#147C88")
-    }
-
-    private var firstPhoto: PhotoBlob? {
-        let photos = (visit.photos ?? [])
-            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
-        if !visit.eyecatchPath.isEmpty,
-           let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
-            return cover
-        }
-        return photos.min { $0.createdAt < $1.createdAt }
-    }
-
-    // 64pt幅サムネ。scale過剰を避けるため上限クランプ。
-    private var thumbnailMaxPixel: CGFloat {
-        min(80 * displayScale, 480)
-    }
-
-    // 写真ID＋表示サイズをキーに含める
-    private func cacheKey(for photo: PhotoBlob) -> String {
-        "\(photo.id.uuidString)@\(Int(thumbnailMaxPixel.rounded()))"
-    }
-
-    private var thumbnailTaskID: String? {
-        firstPhoto.map { cacheKey(for: $0) }
-    }
-
-    @MainActor
-    private func loadThumbnail() async {
-        guard let photo = firstPhoto else {
-            thumbnailImage = nil
-            loadedThumbnailKey = nil
-            return
-        }
-        let targetID = photo.id
-        let key = cacheKey(for: photo)
-        if let cached = ThumbnailLoader.cached(forKey: key) {
-            thumbnailImage = cached
-            loadedThumbnailKey = key
-            return
-        }
-        thumbnailImage = nil
-        loadedThumbnailKey = nil
-        let data = photo.data // SwiftData プロパティはメインで読み、値型で渡す
-        let maxPixel = thumbnailMaxPixel
-        let image = await Task.detached(priority: .userInitiated) {
-            ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
-        }.value
-        // セル再利用や写真変更後に遅れて届いた結果で、別の写真の画像を上書きしない
-        guard !Task.isCancelled, firstPhoto?.id == targetID else { return }
-        thumbnailImage = image
-        loadedThumbnailKey = key
     }
 
     private var unitFields: VisitUnitFields {
@@ -114,7 +59,7 @@ struct VisitSummaryRow: View {
                 VisitSummaryMetaLine(items: metaItems)
 
                 if !peopleSummary.isEmpty {
-                    Label(peopleSummary, systemImage: "person.2")
+                    FavorecoIconLabel(peopleSummary, systemImage: "person.2", iconSize: 13)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -145,38 +90,24 @@ struct VisitSummaryRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .task(id: thumbnailTaskID) {
-            await loadThumbnail()
-        }
     }
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let displayedThumbnailImage {
-            Image(uiImage: displayedThumbnailImage)
-                .resizable()
-                .aspectRatio(
-                    contentMode: EyecatchAspectRatio.usesEyecatchFill(for: category) ? .fill : .fit
-                )
-                .frame(width: 64, height: thumbnailHeight)
-                .clipped()
-                .background(categoryColor.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        } else {
-            Image(systemName: category?.iconSymbol ?? "sparkles.rectangle.stack")
-                .font(.title3)
-                .foregroundStyle(categoryColor)
-                .frame(width: 64, height: thumbnailHeight)
-                .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        ThumbnailImage(
+            reference: visit.event.map { .event($0.id) },
+            displaySize: CGSize(width: 64, height: thumbnailHeight),
+            contentMode: EyecatchAspectRatio.usesEyecatchFill(for: category) ? .fill : .fit
+        ) {
+            CategoryDefaultArtworkImage(
+                templateKey: category?.templateKey ?? "",
+                displaySize: CGSize(width: 64, height: thumbnailHeight)
+            )
         }
-    }
-
-    private var displayedThumbnailImage: UIImage? {
-        guard let key = thumbnailTaskID else { return nil }
-        if loadedThumbnailKey == key {
-            return thumbnailImage
-        }
-        return ThumbnailLoader.cached(forKey: key)
+        .frame(width: 64, height: thumbnailHeight)
+        .clipped()
+        .background(categoryColor.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var thumbnailHeight: CGFloat {
@@ -204,10 +135,8 @@ struct VisitSummaryRow: View {
     }
 
     private var peopleSummary: String {
-        let linkedPeople = personLinks
-            .filter { link in
-                !link.isArchived && (link.event?.id == visit.event?.id || link.visit?.id == visit.id)
-            }
+        let linkedPeople = ((visit.event?.personLinks ?? []) + (visit.personLinks ?? []))
+            .filter { !$0.isArchived }
             .sorted { $0.sortOrder < $1.sortOrder }
             .prefix(2)
             .map { link in
@@ -373,7 +302,11 @@ private struct VisitRecordCompactTile: View {
                     .lineSpacing(-1.5)
                     .lineLimit(2, reservesSpace: true)
 
-                Label(FavorecoDateText.compactDateWithHalfWidthWeekday(visit.visitedAt), systemImage: "calendar")
+                FavorecoIconLabel(
+                    FavorecoDateText.compactDateWithHalfWidthWeekday(visit.visitedAt),
+                    systemImage: "calendar",
+                    iconSize: 9
+                )
                     .font(FavorecoTypography.jpSans(isMovie ? 8.5 : 9, weight: .medium, relativeTo: .caption2))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -459,9 +392,9 @@ private struct VisitRecordBannerRow: View {
                     .lineLimit(2, reservesSpace: true)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Label(FavorecoDateText.compactDate(visit.visitedAt), systemImage: "calendar")
+                    FavorecoIconLabel(FavorecoDateText.compactDate(visit.visitedAt), systemImage: "calendar", iconSize: 13)
                     if !visit.venueNameSnapshot.isEmpty {
-                        Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                        FavorecoIconLabel(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse", iconSize: 13)
                             .lineLimit(1)
                     }
                 }
@@ -508,65 +441,27 @@ private struct VisitRecordArtwork: View {
     var aspectRatioOverride: CGFloat? = nil
     var maxPixelSize: CGFloat = 520
 
-    @Environment(\.displayScale) private var displayScale
-    @Environment(\.favorecoThemePalette) private var themePalette
-    @State private var thumbnailImage: UIImage?
-    @State private var loadedThumbnailKey: String?
-
     private var category: RecordCategory? {
         visit.event?.category
     }
 
-    private var categoryColor: Color {
-        themePalette.categoryColor(hex: category?.colorHex ?? "#147C88")
-    }
-
-    private var firstPhoto: PhotoBlob? {
-        let photos = (visit.photos ?? [])
-            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
-        if !visit.eyecatchPath.isEmpty,
-           let cover = photos.first(where: { $0.relativePath == visit.eyecatchPath }) {
-            return cover
-        }
-        return photos.min { $0.createdAt < $1.createdAt }
-            ?? visit.event.flatMap { EventRepresentativePhotoResolver.photo(for: $0) }
-    }
-
-    private var thumbnailMaxPixel: CGFloat {
-        min(maxPixelSize * displayScale, 1040)
-    }
-
-    private func cacheKey(for photo: PhotoBlob) -> String {
-        "\(photo.id.uuidString)@record-library-\(Int(thumbnailMaxPixel.rounded()))"
-    }
-
-    private var thumbnailTaskID: String? {
-        firstPhoto.map { cacheKey(for: $0) }
-    }
-
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                categoryColor.opacity(0.12)
-
-                if let displayedThumbnailImage {
-                    Image(uiImage: displayedThumbnailImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .clipped()
-                } else {
-                    Image(systemName: category?.iconSymbol ?? "sparkles.rectangle.stack")
-                        .font(.title2)
-                        .foregroundStyle(categoryColor)
-                }
+            ThumbnailImage(
+                reference: visit.event.map { .event($0.id) },
+                displaySize: geometry.size,
+                contentMode: .fill
+            ) {
+                CategoryDefaultArtworkImage(
+                    templateKey: category?.templateKey ?? "",
+                    displaySize: geometry.size
+                )
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
         }
         .aspectRatio(aspectRatio, contentMode: .fit)
         .clipped()
-        .task(id: thumbnailTaskID) {
-            await loadThumbnail()
-        }
     }
 
     private var aspectRatio: CGFloat {
@@ -576,39 +471,6 @@ private struct VisitRecordArtwork: View {
         return CGFloat(EyecatchAspectRatio.option(for: fields.eyecatchAspectRatioKey, category: category).value)
     }
 
-    private var displayedThumbnailImage: UIImage? {
-        guard let key = thumbnailTaskID else { return nil }
-        if loadedThumbnailKey == key {
-            return thumbnailImage
-        }
-        return ThumbnailLoader.cached(forKey: key)
-    }
-
-    @MainActor
-    private func loadThumbnail() async {
-        guard let photo = firstPhoto else {
-            thumbnailImage = nil
-            loadedThumbnailKey = nil
-            return
-        }
-        let targetID = photo.id
-        let key = cacheKey(for: photo)
-        if let cached = ThumbnailLoader.cached(forKey: key) {
-            thumbnailImage = cached
-            loadedThumbnailKey = key
-            return
-        }
-        thumbnailImage = nil
-        loadedThumbnailKey = nil
-        let data = photo.data
-        let maxPixel = thumbnailMaxPixel
-        let image = await Task.detached(priority: .userInitiated) {
-            ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: maxPixel, cacheKey: key)
-        }.value
-        guard !Task.isCancelled, firstPhoto?.id == targetID else { return }
-        thumbnailImage = image
-        loadedThumbnailKey = key
-    }
 }
 
 private struct VisitSummaryMetaItem: Identifiable {
@@ -623,7 +485,7 @@ private struct VisitSummaryMetaLine: View {
     var body: some View {
         HStack(spacing: 10) {
             ForEach(items) { item in
-                Label(item.text, systemImage: item.icon)
+                FavorecoIconLabel(item.text, systemImage: item.icon, iconSize: 13)
                     .lineLimit(1)
             }
         }
@@ -637,7 +499,7 @@ private struct VisitSummaryBadge: View {
     let icon: String
 
     var body: some View {
-        Label(text, systemImage: icon)
+        FavorecoIconLabel(text, systemImage: icon, iconSize: 12)
             .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption2))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)

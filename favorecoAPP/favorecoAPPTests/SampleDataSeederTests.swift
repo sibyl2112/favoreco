@@ -161,6 +161,57 @@ final class SampleDataSeederTests: XCTestCase {
         XCTAssertFalse(SampleDataSeeder.isSampleEvent(personalEvent))
     }
 
+    func testRefreshBundledTheaterEyecatchesRestoresBSeriesSampleOnly() throws {
+        let context = try makeContext()
+        let category = makeCategory(name: "観劇", templateKey: "theater")
+        context.insert(category)
+        try context.save()
+
+        _ = try SampleDataSeeder.replaceSamples(
+            in: context,
+            categoryTemplateKeys: ["theater"]
+        )
+        let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        let sample = try XCTUnwrap(events.first { $0.title == "月影のアトリエ" })
+        sample.eyecatchData = Data("old-cropped-sample".utf8)
+        sample.representativeEyecatchPath = "old/path.jpg"
+        var sampleFields = VisitUnitFields(rawValue: sample.unitFieldsRaw)
+        sampleFields.eyecatchAspectRatioKey = EyecatchAspectRatio.square.key
+        sample.unitFieldsRaw = sampleFields.encodedRawValue
+
+        let personalData = Data("personal-image".utf8)
+        let personalEvent = ExperienceEvent(
+            title: "月影のアトリエ",
+            officialURL: "https://example.org/personal-theater",
+            unitFieldsRaw: VisitUnitFields(
+                eyecatchAspectRatioKey: EyecatchAspectRatio.square.key
+            ).encodedRawValue,
+            eyecatchData: personalData,
+            category: category
+        )
+        context.insert(personalEvent)
+        try context.save()
+
+        let refreshedCount = try SampleDataSeeder.refreshBundledTheaterSampleEyecatches(
+            in: context
+        )
+
+        XCTAssertEqual(refreshedCount, 1)
+        let refreshedImage = try XCTUnwrap(sample.eyecatchData.flatMap(UIImage.init(data:)))
+        XCTAssertEqual(Int(refreshedImage.size.width), 1_000)
+        XCTAssertEqual(Int(refreshedImage.size.height), 1_414)
+        XCTAssertEqual(sample.representativeEyecatchPath, "sample/v2/theater-1.jpg")
+        XCTAssertEqual(
+            VisitUnitFields(rawValue: sample.unitFieldsRaw).eyecatchAspectRatioKey,
+            EyecatchAspectRatio.bSeriesPoster.key
+        )
+        XCTAssertEqual(personalEvent.eyecatchData, personalData)
+        XCTAssertEqual(
+            VisitUnitFields(rawValue: personalEvent.unitFieldsRaw).eyecatchAspectRatioKey,
+            EyecatchAspectRatio.square.key
+        )
+    }
+
     private func makeContext() throws -> ModelContext {
         let configuration = ModelConfiguration(
             schema: FavorecoModelContainerBootstrap.schema,

@@ -52,7 +52,7 @@ struct HomeHeroSection: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("PICK UP")
                 .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
-                .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
+                .foregroundStyle(themePalette.headingText(for: colorScheme))
 
             VStack(spacing: 0) {
                 pickupTabs
@@ -61,13 +61,8 @@ struct HomeHeroSection: View {
                     .fill(Color.primary.opacity(0.10))
                     .frame(height: 1)
 
-                VStack(spacing: 8) {
-                    pickupBody
-                    if selectedItemCount > 0 {
-                        pickupFooter
-                    }
-                }
-                .padding(12)
+                pickupBody
+                    .padding(12)
             }
             .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
@@ -212,14 +207,25 @@ struct HomeHeroSection: View {
             .scrollPosition(id: positionBinding(selectedIndex))
         }
         .frame(height: HomeUpcomingHeroMetrics.embeddedCardHeight)
+        .overlay(alignment: .bottomLeading) {
+            pickupPageIndicator
+                .frame(
+                    width: HomeUpcomingHeroMetrics.posterWidth,
+                    height: HomeUpcomingHeroMetrics.actionHeight
+                )
+                .background(Color(.systemBackground))
+                .padding(.leading, HomeUpcomingHeroMetrics.embeddedPadding)
+                .padding(.bottom, HomeUpcomingHeroMetrics.embeddedPadding)
+                .allowsHitTesting(false)
+        }
     }
 
-    private var pickupFooter: some View {
+    private var pickupPageIndicator: some View {
         Text("\(selectedPageNumber) / \(selectedItemCount)")
             .font(FavorecoTypography.latinDisplay(13, weight: .semibold, relativeTo: .caption))
             .foregroundStyle(.secondary)
             .monospacedDigit()
-            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .accessibilityLabel("最新\(selectedItemCount)件中\(selectedPageNumber)件目")
     }
 
@@ -267,29 +273,14 @@ private struct HomePickupInterestCard: View {
     let onOpen: () -> Void
 
     var body: some View {
-        HomeUpcomingHeroLayout {
-            ThumbnailImage(
-                reference: item.thumbnailReference,
-                displaySize: CGSize(
-                    width: HomeUpcomingHeroMetrics.posterWidth,
-                    height: HomeUpcomingHeroMetrics.posterHeight
-                ),
-                contentMode: item.fillsEyecatchFrame ? .fill : .fit
-            ) {
-                ZStack {
-                    Color(hex: item.colorHex).opacity(0.12)
-                    Image(systemName: item.categoryIcon)
-                        .font(.system(size: 34, weight: .medium))
-                        .foregroundStyle(Color(hex: item.colorHex))
-                }
-            }
-            .frame(
-                width: HomeUpcomingHeroMetrics.posterWidth,
-                height: HomeUpcomingHeroMetrics.posterHeight
+        HomeUpcomingHeroLayout(isEmbedded: true) {
+            HomeUpcomingPoster(
+                thumbnailReference: item.thumbnailReference,
+                categoryTemplateKey: item.categoryTemplateKey,
+                fallbackIcon: item.categoryIcon,
+                tint: Color(hex: item.colorHex),
+                fillsFrame: false
             )
-            .clipped()
-            .background(Color(hex: item.colorHex).opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
 
@@ -301,6 +292,7 @@ private struct HomePickupInterestCard: View {
                 venueName: item.venueName,
                 officialURLString: item.officialURLString,
                 tint: themePalette.globalTint,
+                isEmbedded: true,
                 onOpen: onOpen
             ) {
                 Button {
@@ -335,7 +327,7 @@ private struct HomePickupEmptyState: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: icon)
+            FavorecoIcon(systemName: icon, size: 17)
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(themePalette.globalTint)
             Text(title)
@@ -345,7 +337,7 @@ private struct HomePickupEmptyState: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let actionTitle {
-                Label(actionTitle, systemImage: "plus")
+                FavorecoIconLabel(actionTitle, systemImage: "plus")
                     .font(FavorecoTypography.bodyStrong)
                     .foregroundStyle(themePalette.globalTint)
             }

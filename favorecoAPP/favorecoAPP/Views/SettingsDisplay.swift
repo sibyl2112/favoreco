@@ -9,6 +9,7 @@ struct DisplaySettingsView: View {
     @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
     @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
+    @AppStorage(AppStorageKeys.baseTheme) private var baseThemeRaw = FavorecoBaseTheme.skyBlue.rawValue
     @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
     @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#147C88"
 
@@ -40,8 +41,21 @@ struct DisplaySettingsView: View {
             }
 
             Section("テーマ") {
+                Picker("ベーステーマ", selection: $baseThemeRaw) {
+                    ForEach(FavorecoBaseTheme.allCases) { theme in
+                        Label {
+                            Text(theme.name)
+                        } icon: {
+                            Circle()
+                                .fill(Color(hex: theme.accentHex))
+                                .frame(width: 14, height: 14)
+                        }
+                        .tag(theme.rawValue)
+                    }
+                }
+
                 if purchaseManager.currentPlan.includesLocalFullFeatures {
-                    Picker("配色", selection: themeModeBinding) {
+                    Picker("ジャンル配色", selection: themeModeBinding) {
                         ForEach(FavorecoThemeMode.allCases) { mode in
                             Text(mode.name).tag(mode)
                         }
@@ -62,13 +76,13 @@ struct DisplaySettingsView: View {
                         }
                     }
                 } else {
-                    LabeledContent("配色", value: FavorecoThemeMode.categoryAccent.name)
+                    LabeledContent("ジャンル配色", value: FavorecoThemeMode.categoryAccent.name)
                     Label("全体統一テーマはPro以上", systemImage: "lock.fill")
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.secondary)
                 }
 
-                Text("標準では白を基調にジャンル色をアクセントとして使います。全体統一では操作色を選んだ色へ揃えます。")
+                Text("ベーステーマはHomeの背景・操作色・文字の墨色へ反映します。標準ではジャンル固有色を維持し、全体統一では操作色を選んだ色へ揃えます。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }

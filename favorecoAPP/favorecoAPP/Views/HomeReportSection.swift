@@ -68,7 +68,7 @@ struct HomeReportSection: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("FAVORECO REPORT")
                 .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
-                .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
+                .foregroundStyle(themePalette.headingText(for: colorScheme))
 
             VStack(spacing: 0) {
                 reportTabs
@@ -226,7 +226,7 @@ private struct HomeReportArtwork: View {
             ) {
                 ZStack {
                     Color(hex: visit.categoryColorHex).opacity(0.15)
-                    Image(systemName: visit.categoryIcon)
+                    FavorecoIcon(systemName: visit.categoryIcon, size: 16)
                         .font(.title2)
                         .foregroundStyle(Color(hex: visit.categoryColorHex))
                 }

@@ -11,7 +11,13 @@ struct TheaterFocusPeopleEditor: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("お目当て・注目した人")
-                    .font(FavorecoTypography.bodyStrong)
+                    .font(
+                        FavorecoTypography.jpSans(
+                            ExplicitFormMetrics.labelFontSize,
+                            weight: .semibold,
+                            relativeTo: .body
+                        )
+                    )
                 Text("全キャストの登録は不要です。目当てだった人や、観劇後に気になった人だけ選びます。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
@@ -30,7 +36,8 @@ struct TheaterFocusPeopleEditor: View {
                 namePlaceholder: "人物名",
                 addButtonTitle: "注目した人を追加",
                 relationshipTagOptions: TheaterFocusReaction.presets,
-                existingRelationshipTagKeys: existingReactionTagKeys
+                existingRelationshipTagKeys: existingReactionTagKeys,
+                usesExplicitTheaterLayout: true
             )
         }
     }
@@ -44,18 +51,16 @@ struct TheaterCreditsTextEditor: View {
             Text("公式サイトやパンフレットから、そのまま貼り付けられます。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
-            ZStack(alignment: .topLeading) {
-                if text.isEmpty {
-                    Text("例：\nハムレット：山田太郎\nオフィーリア：佐藤花子\n演出：鈴木一郎")
-                        .font(FavorecoTypography.body)
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, 8)
-                        .padding(.leading, 5)
-                        .allowsHitTesting(false)
-                }
-                TextEditor(text: $text)
-                    .frame(minHeight: 150)
-            }
+            ExplicitFormTextField(
+                title: "キャスト・スタッフ（任意）",
+                prompt: "役名：出演者、演出：担当者",
+                text: $text,
+                axis: .vertical,
+                minimumLines: 5,
+                maximumLines: 10,
+                labelStyle: .horizontal,
+                reservesLineSpace: true
+            )
         }
     }
 }

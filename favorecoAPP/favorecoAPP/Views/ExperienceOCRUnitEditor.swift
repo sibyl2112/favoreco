@@ -132,6 +132,7 @@ struct OCRUnitEditor: View {
     @Binding var ocrText: String
     @Binding var selectedItems: [PhotosPickerItem]
     var supportsTitleSuggestion = true
+    var usesExplicitTheaterLayout = false
     let onApplySuggestion: (OCRImportSuggestion) -> Void
     @State private var isRecognizing = false
     @State private var statusText = ""
@@ -142,7 +143,7 @@ struct OCRUnitEditor: View {
         VStack(alignment: .leading, spacing: 12) {
             if usesOCRImportAssist {
                 PhotosPicker(selection: $selectedItems, maxSelectionCount: 1, matching: .images) {
-                    Label(recognitionActionTitle, systemImage: "text.viewfinder")
+                    FavorecoIconLabel(recognitionActionTitle, systemImage: "text.viewfinder")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -154,7 +155,7 @@ struct OCRUnitEditor: View {
                     }
                 }
             } else {
-                Label("画像OCRは設定でOFFになっています", systemImage: "text.viewfinder")
+                FavorecoIconLabel("画像OCRは設定でOFFになっています", systemImage: "text.viewfinder")
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
             }
@@ -165,15 +166,28 @@ struct OCRUnitEditor: View {
                     .foregroundStyle(.secondary)
             }
 
-            ZStack(alignment: .topLeading) {
-                if ocrText.isEmpty {
-                    Text("読み取ったテキスト、または手入力の取込メモ")
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, 8)
-                        .padding(.leading, 5)
+            if usesExplicitTheaterLayout {
+                ExplicitFormTextField(
+                    title: "読み取り原文（任意）",
+                    prompt: "読み取ったテキスト、または手入力",
+                    text: $ocrText,
+                    axis: .vertical,
+                    minimumLines: 5,
+                    maximumLines: 8,
+                    labelStyle: .horizontal,
+                    reservesLineSpace: true
+                )
+            } else {
+                ZStack(alignment: .topLeading) {
+                    if ocrText.isEmpty {
+                        Text("読み取ったテキスト、または手入力の取込メモ")
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, 8)
+                            .padding(.leading, 5)
+                    }
+                    TextEditor(text: $ocrText)
+                        .frame(minHeight: 140)
                 }
-                TextEditor(text: $ocrText)
-                    .frame(minHeight: 140)
             }
 
             if !ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -200,7 +214,7 @@ struct OCRUnitEditor: View {
     private var advancedSuggestionSection: some View {
         if purchaseManager.currentPlan.includesLocalFullFeatures {
             VStack(alignment: .leading, spacing: 8) {
-                Label("項目候補", systemImage: "wand.and.stars")
+                FavorecoIconLabel("項目候補", systemImage: "wand.and.stars")
                     .font(FavorecoTypography.captionStrong)
 
                 if suggestions.isEmpty {
@@ -215,7 +229,7 @@ struct OCRUnitEditor: View {
                             statusText = "\(suggestion.kind.label)へ反映しました。"
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: suggestion.kind.systemImage)
+                                FavorecoIcon(systemName: suggestion.kind.systemImage, size: 16)
                                     .frame(width: 22)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(suggestion.kind.label)
@@ -236,7 +250,7 @@ struct OCRUnitEditor: View {
                 }
             }
         } else {
-            Label("項目候補への振り分けはPro以上", systemImage: "lock.fill")
+            FavorecoIconLabel("項目候補への振り分けはPro以上", systemImage: "lock.fill")
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(.secondary)
         }

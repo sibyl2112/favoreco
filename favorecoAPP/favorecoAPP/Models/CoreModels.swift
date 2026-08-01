@@ -759,6 +759,44 @@ final class ExperienceEvent {
     }
 }
 
+extension ExperienceEvent {
+    /// 同じ作品・公演へ記録や予定を追加する際に使う、表記揺れを吸収した識別キー。
+    /// 公演日は Visit / Plan 側で複数保持するため、同一ジャンル内の同名公演は1作品として扱う。
+    var productionIdentityKey: String {
+        Self.productionIdentityKey(title: title, categoryID: category?.id)
+    }
+
+    static func productionIdentityKey(title: String, categoryID: UUID?) -> String {
+        let normalizedTitle = title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(
+                options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                locale: Locale(identifier: "ja_JP")
+            )
+            .filter { !$0.isWhitespace }
+        return "\(categoryID?.uuidString ?? "uncategorized")|\(normalizedTitle)"
+    }
+
+    static func matchingProduction(
+        title: String,
+        categoryID: UUID?,
+        in events: [ExperienceEvent]
+    ) -> ExperienceEvent? {
+        let key = productionIdentityKey(title: title, categoryID: categoryID)
+        guard !key.hasSuffix("|") else { return nil }
+        return events
+            .filter { !$0.isArchived && $0.productionIdentityKey == key }
+            .max { lhs, rhs in
+                let lhsRelations = (lhs.visits?.count ?? 0) + (lhs.plans?.count ?? 0)
+                let rhsRelations = (rhs.visits?.count ?? 0) + (rhs.plans?.count ?? 0)
+                if lhsRelations != rhsRelations {
+                    return lhsRelations < rhsRelations
+                }
+                return lhs.updatedAt < rhs.updatedAt
+            }
+    }
+}
+
 @Model
 final class Plan {
     var id: UUID = UUID()
@@ -930,6 +968,8 @@ final class TicketAttempt {
     var quantity: Int = 1
     var purchaseURL: String = ""
     var seatText: String = ""
+    var applicationGroupIDRaw: String = ""
+    var applicationGroupName: String = ""
     var notificationSettingsRaw: String = ""
     var unitFieldsRaw: String = ""
     var memo: String = ""
@@ -958,6 +998,8 @@ final class TicketAttempt {
         quantity: Int = 1,
         purchaseURL: String = "",
         seatText: String = "",
+        applicationGroupIDRaw: String = "",
+        applicationGroupName: String = "",
         notificationSettingsRaw: String = "",
         unitFieldsRaw: String = "",
         memo: String = "",
@@ -984,6 +1026,8 @@ final class TicketAttempt {
         self.quantity = quantity
         self.purchaseURL = purchaseURL
         self.seatText = seatText
+        self.applicationGroupIDRaw = applicationGroupIDRaw
+        self.applicationGroupName = applicationGroupName
         self.notificationSettingsRaw = notificationSettingsRaw
         self.unitFieldsRaw = unitFieldsRaw
         self.memo = memo

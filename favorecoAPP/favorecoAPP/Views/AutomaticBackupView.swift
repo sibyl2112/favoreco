@@ -133,7 +133,7 @@ struct AutomaticBackupView: View {
                         Button(role: .destructive) {
                             delete(snapshot)
                         } label: {
-                            Label("削除", systemImage: "trash")
+                            FavorecoIconLabel("削除", systemImage: "trash")
                         }
                     }
                 }

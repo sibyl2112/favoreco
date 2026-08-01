@@ -327,6 +327,58 @@ enum SampleDataSeeder {
         UserDefaults.standard.set(false, forKey: automaticInsertionKey)
     }
 
+    @MainActor
+    @discardableResult
+    static func refreshBundledTheaterSampleEyecatches(
+        in context: ModelContext
+    ) throws -> Int {
+        let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        var refreshedCount = 0
+
+        for event in events where isSampleEvent(event) {
+            guard let category = event.category,
+                  category.templateKey == "theater",
+                  let sampleIndex = theaterSampleIndex(for: event, category: category) else {
+                continue
+            }
+            let image = sampleImage(for: category, index: sampleIndex)
+            let expectedPath = "\(samplePhotoPrefix)theater-\(sampleIndex + 1).jpg"
+            var unitFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+            let expectedRatioKey = EyecatchAspectRatio.bSeriesPoster.key
+            let needsRefresh = event.eyecatchData != image.data
+                || event.representativeEyecatchPath != expectedPath
+                || unitFields.eyecatchAspectRatioKey != expectedRatioKey
+            guard needsRefresh else { continue }
+
+            event.eyecatchData = image.data
+            event.representativeEyecatchPath = expectedPath
+            unitFields.eyecatchAspectRatioKey = expectedRatioKey
+            event.unitFieldsRaw = unitFields.encodedRawValue
+            event.updatedAt = Date()
+            refreshedCount += 1
+        }
+
+        if refreshedCount > 0 {
+            try context.save()
+        }
+        return refreshedCount
+    }
+
+    private static func theaterSampleIndex(
+        for event: ExperienceEvent,
+        category: RecordCategory
+    ) -> Int? {
+        if let lastComponent = URL(string: event.officialURL)?.lastPathComponent,
+           let oneBasedIndex = Int(lastComponent),
+           (1...samplesPerCategory).contains(oneBasedIndex) {
+            return oneBasedIndex - 1
+        }
+
+        return (0..<samplesPerCategory).first { sampleIndex in
+            sampleDefinition(for: category, index: sampleIndex).title == event.title
+        }
+    }
+
     private struct SampleImage {
         let data: Data
         let width: Int

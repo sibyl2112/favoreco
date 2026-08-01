@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 enum TheaterCategoryStyle {
     static let wine = Color(red: 0.28, green: 0.035, blue: 0.08)
@@ -21,28 +20,22 @@ struct TheaterPosterView: View {
     let event: ExperienceEvent?
     let width: CGFloat
 
-    private var representativePhoto: PhotoBlob? {
-        event.flatMap { EventRepresentativePhotoResolver.photo(for: $0) }
+    private var height: CGFloat {
+        width / CGFloat(EyecatchAspectRatio.bSeriesPoster.value)
     }
 
     var body: some View {
-        Group {
-            if let representativePhoto {
-                RepresentativePhotoImage(photo: representativePhoto, maxPixelSize: 420, contentMode: .fill)
-            } else if let data = event?.eyecatchData, let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                ZStack {
-                    TheaterCategoryStyle.wine.opacity(0.72)
-                    Image(systemName: "theatermasks.fill")
-                        .font(.system(size: 34, weight: .light))
-                        .foregroundStyle(TheaterCategoryStyle.gold)
-                }
-            }
+        ThumbnailImage(
+            reference: event.map { .event($0.id) },
+            displaySize: CGSize(width: width, height: height),
+            contentMode: .fill
+        ) {
+            CategoryDefaultArtworkImage(
+                templateKey: "theater",
+                displaySize: CGSize(width: width, height: height)
+            )
         }
-        .frame(width: width, height: width * 1.414)
+        .frame(width: width, height: height)
         .background(TheaterCategoryStyle.black)
         .clipped()
         .overlay {
@@ -93,9 +86,13 @@ struct TheaterEventRow: View {
                         }
 
                         HStack(spacing: 9) {
-                            Label("\(snapshot.visitCount)件", systemImage: "number")
+                            FavorecoIconLabel("\(snapshot.visitCount)件", systemImage: "number", iconSize: 12)
                             if let latestVisitDate = snapshot.latestVisitDate {
-                                Label(FavorecoDateText.compactDate(latestVisitDate), systemImage: "calendar")
+                                FavorecoIconLabel(
+                                    FavorecoDateText.compactDate(latestVisitDate),
+                                    systemImage: "calendar",
+                                    iconSize: 12
+                                )
                             }
                         }
                     }
@@ -108,8 +105,7 @@ struct TheaterEventRow: View {
             Spacer(minLength: 4)
 
             Button(action: onAddVisit) {
-                Image(systemName: "plus")
-                    .font(.caption.weight(.semibold))
+                FavorecoIcon(systemName: "plus", size: 13, fallbackWeight: .semibold)
                     .foregroundStyle(TheaterCategoryStyle.gold)
                     .frame(width: 32, height: 32)
                     .overlay {
@@ -159,8 +155,7 @@ struct TheaterVisitRow: View {
 
     private var performancePeriodBadge: some View {
         HStack(spacing: 3) {
-            Image(systemName: performancePeriodIcon)
-                .font(.system(size: 7.5, weight: .semibold))
+            FavorecoIcon(systemName: performancePeriodIcon, size: 8, fallbackWeight: .semibold)
             Text(performancePeriodTitle)
                 .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
         }
@@ -188,9 +183,10 @@ struct TheaterVisitRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 8) {
-                    Label(
+                    FavorecoIconLabel(
                         "\(FavorecoDateText.compactDate(visit.visitedAt))  \(performanceTimeText)",
-                        systemImage: "calendar"
+                        systemImage: "calendar",
+                        iconSize: 12
                     )
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -201,7 +197,7 @@ struct TheaterVisitRow: View {
                     performancePeriodBadge
                 }
                 if !visit.venueNameSnapshot.isEmpty {
-                    Label(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                    FavorecoIconLabel(visit.venueNameSnapshot, systemImage: "mappin.and.ellipse", iconSize: 12)
                         .lineLimit(1)
                 }
             }
@@ -223,6 +219,172 @@ struct TheaterVisitRow: View {
     }
 }
 
+struct TheaterPerformanceLogLayoutPicker: View {
+    @Binding var selection: TheaterPerformanceLogLayoutMode
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(TheaterPerformanceLogLayoutMode.allCases) { mode in
+                Button {
+                    selection = mode
+                } label: {
+                    Image(systemName: mode.systemImage)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(
+                            selection == mode
+                                ? TheaterCategoryStyle.deepWine
+                                : TheaterCategoryStyle.gold
+                        )
+                        .frame(width: 30, height: 28)
+                        .background(
+                            selection == mode
+                                ? TheaterCategoryStyle.lightGold
+                                : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(mode.displayName)表示")
+                .accessibilityAddTraits(selection == mode ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(
+            TheaterCategoryStyle.gold.opacity(0.10),
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(TheaterCategoryStyle.gold.opacity(0.24), lineWidth: 0.75)
+        }
+    }
+}
+
+struct TheaterVisitCompactGrid: View {
+    let visits: [Visit]
+    let onSelect: (Visit) -> Void
+
+    private let columns = Array(
+        repeating: GridItem(.flexible(), spacing: 12, alignment: .top),
+        count: 2
+    )
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+            ForEach(visits) { visit in
+                Button {
+                    onSelect(visit)
+                } label: {
+                    TheaterVisitCompactCard(visit: visit)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct TheaterVisitCompactCard: View {
+    let visit: Visit
+
+    private let cardHeight: CGFloat = 112
+
+    private var artworkHeight: CGFloat {
+        cardHeight - 16
+    }
+
+    private var artworkWidth: CGFloat {
+        artworkHeight * CGFloat(EyecatchAspectRatio.bSeriesPoster.value)
+    }
+
+    private var event: ExperienceEvent? {
+        visit.event
+    }
+
+    private var title: String {
+        guard let event, !event.title.isEmpty else {
+            return "観劇記録"
+        }
+        return event.title
+    }
+
+    private var performanceTimeText: String {
+        let endDate = visit.endedAt > visit.visitedAt ? visit.endedAt : visit.visitedAt
+        return "\(FavorecoDateText.time(visit.visitedAt))-\(FavorecoDateText.time(endDate))"
+    }
+
+    private var dateText: String {
+        FavorecoDateText.compactDateWithHalfWidthWeekday(visit.visitedAt)
+    }
+
+    private var venueText: String {
+        let trimmed = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "—" : trimmed
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            GeometryReader { geometry in
+                ThumbnailImage(
+                    reference: event.map { .event($0.id) },
+                    displaySize: geometry.size,
+                    contentMode: .fill
+                ) {
+                    CategoryDefaultArtworkImage(
+                        templateKey: "theater",
+                        displaySize: geometry.size
+                    )
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
+            }
+            .frame(width: artworkWidth, height: artworkHeight)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(FavorecoTypography.jpSans(10.5, weight: .bold, relativeTo: .caption))
+                    .foregroundStyle(TheaterCategoryStyle.ivory)
+                    .tracking(-0.35)
+                    .lineSpacing(-2)
+                    .lineLimit(2, reservesSpace: true)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                FavorecoIconLabel(dateText, systemImage: "calendar", iconSize: 9)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+
+                FavorecoIconLabel(performanceTimeText, systemImage: "clock", iconSize: 9)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+
+                FavorecoIconLabel(venueText, systemImage: "mappin.and.ellipse", iconSize: 9)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .font(FavorecoTypography.jpSans(8.5, weight: .medium, relativeTo: .caption2))
+            .foregroundStyle(TheaterCategoryStyle.ivory.opacity(0.62))
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .padding(8)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: cardHeight,
+            maxHeight: cardHeight,
+            alignment: .topLeading
+        )
+        .background(
+            TheaterCategoryStyle.tileBackground,
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(TheaterCategoryStyle.gold.opacity(0.42), lineWidth: 0.7)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title)、\(dateText)、\(performanceTimeText)、\(venueText)")
+    }
+}
+
 struct TheaterEmptyState: View {
     let icon: String
     let title: String
@@ -230,8 +392,7 @@ struct TheaterEmptyState: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
+            FavorecoIcon(systemName: icon, size: 20)
                 .foregroundStyle(TheaterCategoryStyle.gold)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {

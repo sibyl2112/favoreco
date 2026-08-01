@@ -1,12 +1,15 @@
 import Foundation
 import LinkPresentation
+import UIKit
 
 struct URLMetadataCandidate: Sendable {
     let title: String
     let resolvedURL: URL
     let eventDate: Date?
+    let eventEndDate: Date?
     let venueName: String
     let venueAddress: String
+    let imageData: Data?
     let structuredType: String
     let structuredDateLabel: String
     let contributors: [URLContributorCandidate]
@@ -21,6 +24,15 @@ struct URLContributorCandidate: Identifiable, Sendable {
 }
 
 enum URLMetadataService {
+    nonisolated static func htmlMetadataForTesting(
+        in html: String
+    ) -> (title: String?, imageURLString: String?) {
+        (
+            htmlMetadataContent(property: "og:title", in: html) ?? htmlTitle(in: html),
+            htmlMetadataContent(property: "og:image", in: html)
+        )
+    }
+
     @MainActor
     static func fetch(from rawValue: String, includesStructuredData: Bool = false) async throws -> URLMetadataCandidate {
         guard let url = normalizedURL(from: rawValue) else {
@@ -37,8 +49,10 @@ enum URLMetadataService {
             title: title,
             resolvedURL: resolvedURL,
             eventDate: structuredData?.date,
+            eventEndDate: structuredData?.endDate,
             venueName: structuredData?.venueName ?? "",
             venueAddress: structuredData?.venueAddress ?? "",
+            imageData: basicMetadata.imageData,
             structuredType: structuredData?.typeName ?? "",
             structuredDateLabel: structuredData.map { dateLabel(for: $0.typeName) } ?? "",
             contributors: structuredData?.contributors ?? []
@@ -46,16 +60,33 @@ enum URLMetadataService {
     }
 
     @MainActor
-    private static func fetchBasicMetadata(from url: URL) async throws -> (title: String, resolvedURL: URL) {
+    private static func fetchBasicMetadata(
+        from url: URL
+    ) async throws -> (title: String, resolvedURL: URL, imageData: Data?) {
         let provider = LPMetadataProvider()
         provider.timeout = 15
         if let metadata = try? await provider.startFetchingMetadata(for: url) {
             let title = metadata.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !title.isEmpty {
-                return (title, metadata.originalURL ?? metadata.url ?? url)
+                let resolvedURL = metadata.originalURL ?? metadata.url ?? url
+                let providerImageData = await loadImageData(from: metadata.imageProvider)
+                var fallbackImageData: Data?
+                if providerImageData == nil,
+                   let fallbackMetadata = try? await fetchHTMLMetadata(from: resolvedURL) {
+                    fallbackImageData = fallbackMetadata.imageData
+                }
+                return (title, resolvedURL, providerImageData ?? fallbackImageData)
             }
         }
 
+        let metadata = try await fetchHTMLMetadata(from: url)
+        return (metadata.title, metadata.resolvedURL, metadata.imageData)
+    }
+
+    @MainActor
+    private static func fetchHTMLMetadata(
+        from url: URL
+    ) async throws -> (title: String, resolvedURL: URL, imageData: Data?) {
         var request = URLRequest(url: url)
         request.timeoutInterval = 15
         request.setValue(
@@ -70,11 +101,19 @@ enum URLMetadataService {
         }
         let encoding = String.Encoding.utf8
         guard let html = String(data: data, encoding: encoding),
-              let title = htmlTitle(in: html),
+              let title = htmlMetadataContent(property: "og:title", in: html) ?? htmlTitle(in: html),
               !title.isEmpty else {
             throw URLMetadataError.titleNotFound
         }
-        return (title, httpResponse.url ?? url)
+        let resolvedURL = httpResponse.url ?? url
+        let imageData: Data?
+        if let rawImageURL = htmlMetadataContent(property: "og:image", in: html),
+           let imageURL = URL(string: rawImageURL, relativeTo: resolvedURL)?.absoluteURL {
+            imageData = await downloadedImageData(from: imageURL)
+        } else {
+            imageData = nil
+        }
+        return (title, resolvedURL, imageData)
     }
 
     nonisolated private static func htmlTitle(in html: String) -> String? {
@@ -94,6 +133,65 @@ enum URLMetadataService {
             .replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated private static func htmlMetadataContent(
+        property: String,
+        in html: String
+    ) -> String? {
+        let escapedProperty = NSRegularExpression.escapedPattern(for: property)
+        let patterns = [
+            #"<meta[^>]+(?:property|name)\s*=\s*["']\#(escapedProperty)["'][^>]+content\s*=\s*["']([^"']+)["'][^>]*>"#,
+            #"<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+(?:property|name)\s*=\s*["']\#(escapedProperty)["'][^>]*>"#,
+        ]
+        for pattern in patterns {
+            guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+                  let match = expression.firstMatch(
+                    in: html,
+                    range: NSRange(html.startIndex..., in: html)
+                  ),
+                  let range = Range(match.range(at: 1), in: html) else { continue }
+            return decodedHTMLEntities(String(html[range]))
+        }
+        return nil
+    }
+
+    nonisolated private static func decodedHTMLEntities(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    @MainActor
+    private static func loadImageData(from provider: NSItemProvider?) async -> Data? {
+        guard let provider, provider.canLoadObject(ofClass: UIImage.self) else { return nil }
+        return await withCheckedContinuation { continuation in
+            provider.loadObject(ofClass: UIImage.self) { object, _ in
+                continuation.resume(
+                    returning: (object as? UIImage)?.jpegData(compressionQuality: 0.9)
+                )
+            }
+        }
+    }
+
+    @MainActor
+    private static func downloadedImageData(from url: URL) async -> Data? {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Favoreco/1.0",
+            forHTTPHeaderField: "User-Agent"
+        )
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let httpResponse = response as? HTTPURLResponse,
+              (200..<400).contains(httpResponse.statusCode),
+              data.count <= 10_000_000,
+              UIImage(data: data) != nil else { return nil }
+        return data
     }
 
     nonisolated static func normalizedURL(from rawValue: String) -> URL? {
@@ -125,6 +223,9 @@ enum URLMetadataService {
             return StructuredPageData(
                 typeName: typeName,
                 date: structuredDate(from: candidate, typeName: typeName),
+                endDate: typeName == "Event"
+                    ? parsedISODate(candidate["endDate"] as? String)
+                    : nil,
                 venueName: typeName == "Event" ? venueName(from: candidate) : "",
                 venueAddress: typeName == "Event" ? venueAddress(from: candidate) : "",
                 contributors: contributors(from: candidate, typeName: typeName)
@@ -276,6 +377,7 @@ enum URLMetadataService {
 private struct StructuredPageData {
     let typeName: String
     let date: Date?
+    let endDate: Date?
     let venueName: String
     let venueAddress: String
     let contributors: [URLContributorCandidate]

@@ -21,6 +21,7 @@ struct ExperienceBasicUnitEditor: View {
     let usesMapSearchAssist: Bool
     let supportsPerformanceTime: Bool
     let supportsStyles: Bool
+    let usesExplicitTheaterLayout: Bool
     let ratingText: String
     let onSelectPlace: (PlaceMaster) -> Void
     let onSelectPublicPlace: (PublicPlaceSelectionDraft) -> Void
@@ -43,6 +44,7 @@ struct ExperienceBasicUnitEditor: View {
         usesMapSearchAssist: Bool,
         supportsPerformanceTime: Bool,
         supportsStyles: Bool,
+        usesExplicitTheaterLayout: Bool = false,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
         onSelectPublicPlace: @escaping (PublicPlaceSelectionDraft) -> Void,
@@ -66,6 +68,7 @@ struct ExperienceBasicUnitEditor: View {
         self.usesMapSearchAssist = usesMapSearchAssist
         self.supportsPerformanceTime = supportsPerformanceTime
         self.supportsStyles = supportsStyles
+        self.usesExplicitTheaterLayout = usesExplicitTheaterLayout
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
         self.onSelectPublicPlace = onSelectPublicPlace
@@ -89,6 +92,7 @@ struct ExperienceBasicUnitEditor: View {
         usesMapSearchAssist: Bool,
         supportsPerformanceTime: Bool,
         supportsStyles: Bool,
+        usesExplicitTheaterLayout: Bool = false,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
         onSelectPublicPlace: @escaping (PublicPlaceSelectionDraft) -> Void,
@@ -112,6 +116,7 @@ struct ExperienceBasicUnitEditor: View {
         self.usesMapSearchAssist = usesMapSearchAssist
         self.supportsPerformanceTime = supportsPerformanceTime
         self.supportsStyles = supportsStyles
+        self.usesExplicitTheaterLayout = usesExplicitTheaterLayout
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
         self.onSelectPublicPlace = onSelectPublicPlace
@@ -129,7 +134,39 @@ struct ExperienceBasicUnitEditor: View {
 
     @ViewBuilder
     private var targetFields: some View {
-        if let editableTitle, let editableSeriesName {
+        if usesExplicitTheaterLayout, let editableTitle, let editableSeriesName {
+            VStack(alignment: .leading, spacing: 0) {
+                ExplicitFormTextField(
+                    title: "公演名",
+                    prompt: template.titlePlaceholder,
+                    text: editableTitle,
+                    labelStyle: .horizontal
+                )
+                theaterDivider
+                ExplicitFormTextField(
+                    title: "シリーズ（任意）",
+                    prompt: template.seriesPlaceholder,
+                    text: editableSeriesName,
+                    labelStyle: .horizontal
+                )
+            }
+        } else if usesExplicitTheaterLayout {
+            VStack(alignment: .leading, spacing: 0) {
+                ExplicitFormControlRow(title: "公演名") {
+                    Text(existingTitle.isEmpty ? "未設定" : existingTitle)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+                if !existingSeriesName.isEmpty {
+                    theaterDivider
+                    ExplicitFormControlRow(title: "シリーズ", isOptional: true) {
+                        Text(existingSeriesName)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                    }
+                }
+            }
+        } else if let editableTitle, let editableSeriesName {
             VStack(alignment: .leading, spacing: 12) {
                 Text(template.targetSectionTitle)
                     .font(FavorecoTypography.caption)
@@ -150,7 +187,16 @@ struct ExperienceBasicUnitEditor: View {
         }
     }
 
+    @ViewBuilder
     private var visitFields: some View {
+        if usesExplicitTheaterLayout {
+            theaterVisitFields
+        } else {
+            standardVisitFields
+        }
+    }
+
+    private var standardVisitFields: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(template.visitSectionTitle)
                 .font(FavorecoTypography.caption)
@@ -196,13 +242,16 @@ struct ExperienceBasicUnitEditor: View {
                         .textInputAutocapitalization(.never)
                 }
             }
-            TextField(template.venuePlaceholder, text: $venueName)
+            TextField(
+                supportsStyles ? "会場（任意）" : template.venuePlaceholder,
+                text: $venueName
+            )
             placeSuggestionList
             if usesMapSearchAssist {
                 TextField("住所（地図では住所を優先）", text: $venueAddress)
                     .textContentType(.fullStreetAddress)
                 Button(action: onOpenPlaceSearch) {
-                    Label("Apple Mapsから会場を選択", systemImage: "map")
+                    FavorecoIconLabel("Apple Mapsから会場を選択", systemImage: "map")
                 }
                 PlaceMapPreview(
                     venueName: venueName,
@@ -220,6 +269,166 @@ struct ExperienceBasicUnitEditor: View {
         }
     }
 
+    private var theaterVisitFields: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ExplicitFormControlRow(title: template.dateLabel) {
+                DatePicker(
+                    template.dateLabel,
+                    selection: $visitedAt,
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+                .environment(\.locale, Locale(identifier: "ja_JP"))
+                .controlSize(.small)
+                .fixedSize()
+            }
+
+            if supportsPerformanceTime {
+                theaterDivider
+                ExplicitFormControlRow(title: "開演") {
+                    DatePicker(
+                        "開演",
+                        selection: $visitedAt,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
+                }
+                theaterDivider
+                ExplicitFormControlRow(title: "終演") {
+                    DatePicker(
+                        "終演",
+                        selection: $endedAt,
+                        in: visitedAt...,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
+                }
+            }
+
+            if supportsStyles {
+                theaterDivider
+                theaterStyleFields
+            }
+
+            theaterDivider
+            ExplicitFormTextField(
+                title: "会場（任意）",
+                prompt: "会場名を入力",
+                text: $venueName,
+                labelStyle: .horizontal
+            )
+
+            placeSuggestionList
+
+            if usesMapSearchAssist {
+                theaterDivider
+                ExplicitFormTextField(
+                    title: "住所（任意）",
+                    prompt: "地図では住所を優先",
+                    text: $venueAddress,
+                    labelStyle: .horizontal
+                )
+                .textContentType(.fullStreetAddress)
+
+                Button(action: onOpenPlaceSearch) {
+                    FavorecoIconLabel("Apple Mapsから会場を選択", systemImage: "map")
+                        .font(
+                            FavorecoTypography.jpSans(
+                                ExplicitFormMetrics.inputFontSize,
+                                weight: .semibold,
+                                relativeTo: .body
+                            )
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
+
+                PlaceMapPreview(
+                    venueName: venueName,
+                    address: venueAddress,
+                    latitude: latitude,
+                    longitude: longitude
+                )
+            }
+
+            theaterDivider
+            ExplicitFormControlRow(title: template.ratingLabel, isOptional: true) {
+                HStack(spacing: 8) {
+                    Slider(value: $overallRating, in: 0...5, step: 0.5)
+                        .frame(width: 172)
+                    Text(ratingText)
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 30, alignment: .trailing)
+                }
+            }
+        }
+        .onChange(of: visitedAt) { oldValue, newValue in
+            guard supportsPerformanceTime else { return }
+            let duration = max(endedAt.timeIntervalSince(oldValue), 0)
+            endedAt = newValue.addingTimeInterval(duration)
+        }
+    }
+
+    private var theaterStyleFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("鑑賞方法")
+                .font(
+                    FavorecoTypography.jpSans(
+                        ExplicitFormMetrics.labelFontSize,
+                        weight: .semibold,
+                        relativeTo: .caption
+                    )
+                )
+                .foregroundStyle(Color.secondary.opacity(0.92))
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 104), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(theaterStyleSuggestions, id: \.self) { style in
+                    let isSelected = selectedStyleNames.contains(style)
+                    Button {
+                        toggleStyle(style)
+                    } label: {
+                        HStack(spacing: 5) {
+                            if isSelected {
+                                Image(systemName: "checkmark")
+                                    .font(.caption2.weight(.bold))
+                            }
+                            Text(style)
+                                .lineLimit(1)
+                        }
+                        .font(FavorecoTypography.caption)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(isSelected ? Color(hex: "#8B2F45") : Color.secondary)
+                }
+            }
+
+            ExplicitFormTextField(
+                title: "自由入力（任意）",
+                prompt: "カンマ区切りで入力",
+                text: $styleNamesText,
+                axis: .vertical,
+                minimumLines: 1,
+                maximumLines: 2,
+                labelStyle: .horizontal
+            )
+            .textInputAutocapitalization(.never)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var theaterDivider: some View {
+        Divider()
+            .overlay(ExplicitFormMetrics.rowSeparatorColor)
+    }
+
     @ViewBuilder
     private var placeSuggestionList: some View {
         let suggestions = usesPlaceSuggestions ? placeSuggestions : []
@@ -235,7 +444,7 @@ struct ExperienceBasicUnitEditor: View {
                             onSelectPlace(place)
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: "mappin.and.ellipse")
+                                FavorecoIcon(systemName: "mappin.and.ellipse", size: 16)
                                     .foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack(spacing: 7) {
@@ -268,7 +477,7 @@ struct ExperienceBasicUnitEditor: View {
                             onSelectPublicPlace(PublicPlaceSelectionDraft(entry: entry))
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: "building.2.crop.circle")
+                                FavorecoIcon(systemName: "building.2.crop.circle", size: 16)
                                     .foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack(spacing: 7) {
@@ -281,7 +490,7 @@ struct ExperienceBasicUnitEditor: View {
                                         .lineLimit(1)
                                 }
                                 Spacer()
-                                Image(systemName: "plus.circle")
+                                FavorecoIcon(systemName: "plus.circle", size: 16)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -304,7 +513,7 @@ struct ExperienceBasicUnitEditor: View {
     private var placeSuggestions: [PlaceMaster] {
         let normalizedQuery = normalizedPlaceText(venueName)
         guard !normalizedQuery.isEmpty else { return [] }
-        return placeMasters
+        let matches = placeMasters
             .filter { !$0.isArchived }
             .filter { place in
                 normalizedPlaceText(place.name).contains(normalizedQuery)
@@ -312,6 +521,7 @@ struct ExperienceBasicUnitEditor: View {
                     || normalizedPlaceText(place.reading).contains(normalizedQuery)
                     || normalizedPlaceText(place.aliasesRaw).contains(normalizedQuery)
             }
+        return deduplicatedPlaceSuggestions(matches)
             .prefix(4)
             .map { $0 }
     }
@@ -384,21 +594,39 @@ struct PlaceMapPreview: View {
         explicitCoordinate ?? resolvedCoordinate
     }
 
+    private var geocodeQuery: String {
+        [venueName, address]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
     private var geocodeKey: String {
-        "\(address)|\(latitude)|\(longitude)"
+        "\(venueName)|\(address)|\(latitude)|\(longitude)"
     }
 
     var body: some View {
         if let coordinate {
             Map(initialPosition: .region(MKCoordinateRegion(
                 center: coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
+                span: MKCoordinateSpan(latitudeDelta: 0.0045, longitudeDelta: 0.0045)
             ))) {
                 Marker(venueName.isEmpty ? address : venueName, coordinate: coordinate)
             }
+            .frame(maxWidth: .infinity)
             .frame(height: 170)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .accessibilityLabel("\(venueName.isEmpty ? address : venueName)の地図")
+        } else if !geocodeQuery.isEmpty {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.secondary.opacity(0.08))
+                ProgressView("地図を確認中")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 170)
         }
         EmptyView()
             .task(id: geocodeKey) {
@@ -406,16 +634,16 @@ struct PlaceMapPreview: View {
                     resolvedCoordinate = nil
                     return
                 }
-                let query = address.trimmingCharacters(in: .whitespacesAndNewlines)
+                let query = geocodeQuery
                 guard !query.isEmpty else {
                     resolvedCoordinate = nil
                     return
                 }
-                try? await Task.sleep(for: .milliseconds(500))
+                let candidate = try? await PlaceSearchService.search(query: query).first
                 guard !Task.isCancelled else { return }
-                let placemarks = try? await CLGeocoder().geocodeAddressString(query)
-                guard !Task.isCancelled else { return }
-                resolvedCoordinate = placemarks?.first?.location?.coordinate
+                resolvedCoordinate = candidate.map {
+                    CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+                }
             }
     }
 }
@@ -442,16 +670,16 @@ struct ExperiencePlaceSearchView: View {
                 if isSearching {
                     ProgressView("検索中")
                 } else if !errorMessage.isEmpty {
-                    ContentUnavailableView(
+                    FavorecoContentUnavailableView(
                         "検索できませんでした",
                         systemImage: "wifi.exclamationmark",
-                        description: Text(errorMessage)
+                        description: errorMessage
                     )
                 } else if results.isEmpty {
-                    ContentUnavailableView(
+                    FavorecoContentUnavailableView(
                         "会場を検索",
                         systemImage: "map",
-                        description: Text("会場名や住所を入力してください")
+                        description: "会場名や住所を入力してください"
                     )
                 } else {
                     List(results) { candidate in

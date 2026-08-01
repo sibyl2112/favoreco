@@ -37,7 +37,7 @@ struct AddCollectibleSeriesView: View {
                 Section("画像") {
                     let photoActionTitle = imageData == nil ? "シリーズ画像を選ぶ" : "シリーズ画像を変更"
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Label(photoActionTitle, systemImage: "photo")
+                        FavorecoIconLabel(photoActionTitle, systemImage: "photo")
                     }
                     if let imageData, let image = UIImage(data: imageData) {
                         Image(uiImage: image)
@@ -135,13 +135,13 @@ struct CollectibleCategorySeriesGrid: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button(action: onAdd) { Image(systemName: "plus.circle.fill").font(.title2) }
+                Button(action: onAdd) { FavorecoIcon(systemName: "plus.circle.fill", size: 22) }
                     .tint(tint)
             }
 
             if events.isEmpty {
                 ContentUnavailableView {
-                    Label("シリーズはまだありません", systemImage: "shippingbox")
+                    FavorecoIconLabel("シリーズはまだありません", systemImage: "shippingbox", iconSize: 20)
                 } description: {
                     Text("カプセルトイやランダムグッズの全種類を登録して、収集状況を残しましょう。")
                 } actions: {
@@ -172,15 +172,15 @@ private struct CollectibleSeriesCard: View {
     var body: some View {
         let summary = CollectibleSeriesSummary.make(series: event)
         VStack(alignment: .leading, spacing: 9) {
-            Group {
-                if let data = event.eyecatchData, let image = UIImage(data: data) {
-                    Image(uiImage: image).resizable().scaledToFill()
-                } else {
-                    ZStack {
-                        tint.opacity(0.12)
-                        Image(systemName: "shippingbox.fill").font(.largeTitle).foregroundStyle(tint)
-                    }
-                }
+            ThumbnailImage(
+                reference: .event(event.id),
+                displaySize: CGSize(width: 160, height: 160),
+                contentMode: .fill
+            ) {
+                CategoryDefaultArtworkImage(
+                    templateKey: event.category?.templateKey ?? "random_goods",
+                    displaySize: CGSize(width: 160, height: 160)
+                )
             }
             .frame(maxWidth: .infinity)
             .aspectRatio(1, contentMode: .fit)
@@ -238,11 +238,11 @@ struct CollectibleSeriesDashboard: View {
 
             HStack(spacing: 10) {
                 Button { isShowingTransactionEditor = true } label: {
-                    Label("入手・手放し", systemImage: "plusminus.circle.fill").frame(maxWidth: .infinity)
+                    FavorecoIconLabel("入手・手放し", systemImage: "plusminus.circle.fill").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent).tint(accentColor)
                 Button { isShowingItemEditor = true } label: {
-                    Label("種類を追加", systemImage: "square.grid.2x2.fill")
+                    FavorecoIconLabel("種類を追加", systemImage: "square.grid.2x2.fill")
                 }
                 .buttonStyle(.bordered).tint(accentColor)
             }
@@ -253,7 +253,7 @@ struct CollectibleSeriesDashboard: View {
             .pickerStyle(.segmented)
 
             if items.isEmpty {
-                ContentUnavailableView("該当する種類はありません", systemImage: "checkmark.circle")
+                FavorecoContentUnavailableView("該当する種類はありません", systemImage: "checkmark.circle")
             } else {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(items) { item in
@@ -316,8 +316,11 @@ private struct CollectibleItemCard: View {
                     } else {
                         ZStack {
                             accentColor.opacity(0.1)
-                            Image(systemName: item.currentQuantity > 0 ? "checkmark.seal.fill" : "photo")
-                                .font(.title).foregroundStyle(item.currentQuantity > 0 ? accentColor : .secondary)
+                            FavorecoIcon(
+                                systemName: item.currentQuantity > 0 ? "checkmark.seal.fill" : "photo",
+                                size: 28
+                            )
+                            .foregroundStyle(item.currentQuantity > 0 ? accentColor : .secondary)
                         }
                     }
                 }
@@ -368,7 +371,7 @@ struct CollectibleItemEditorView: View {
                 Section("画像") {
                     let photoActionTitle = imageData == nil ? "画像を選ぶ" : "画像を変更"
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Label(photoActionTitle, systemImage: "photo")
+                        FavorecoIconLabel(photoActionTitle, systemImage: "photo")
                     }
                     if let imageData, let image = UIImage(data: imageData) {
                         Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 240)
@@ -520,7 +523,7 @@ private struct CollectibleItemDetailView: View {
                     CollectibleMetric(value: "\(item.duplicateQuantity)", label: "ダブり")
                 }
                 Button { isShowingTransaction = true } label: {
-                    Label("入手・手放しを記録", systemImage: "plusminus.circle.fill")
+                    FavorecoIconLabel("入手・手放しを記録", systemImage: "plusminus.circle.fill")
                 }.tint(accentColor)
             }
             Section("履歴") {

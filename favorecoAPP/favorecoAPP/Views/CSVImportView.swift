@@ -110,7 +110,7 @@ struct CSVImportView: View {
                         set: { defaultCategoryID = $0 }
                     )) {
                         ForEach(activeCategories) { category in
-                            Label(category.name, systemImage: category.iconSymbol)
+                            FavorecoIconLabel(category.name, systemImage: category.iconSymbol)
                                 .tag(Optional(category.id))
                         }
                     }

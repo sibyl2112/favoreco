@@ -37,7 +37,13 @@ struct ExperienceEmotionTagEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("感情タグ")
-                .font(FavorecoTypography.bodyStrong)
+                .font(
+                    FavorecoTypography.jpSans(
+                        ExplicitFormMetrics.labelFontSize,
+                        weight: .semibold,
+                        relativeTo: .body
+                    )
+                )
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 8)], alignment: .leading, spacing: 8) {
                 ForEach(TheaterEmotionTags.presets, id: \.self) { tag in
@@ -61,7 +67,12 @@ struct ExperienceEmotionTagEditor: View {
                 }
             }
 
-            TextField("その他のタグ（カンマ区切り）", text: $tagNamesText)
+            ExplicitFormTextField(
+                title: "その他のタグ（任意）",
+                prompt: "カンマ区切りで入力",
+                text: $tagNamesText,
+                labelStyle: .horizontal
+            )
             Text("この観劇回で感じたことです。共通のタグマスターへ集約され、他ジャンルでも再利用できます。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)

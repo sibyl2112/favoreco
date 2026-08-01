@@ -59,14 +59,14 @@ struct FavoGalleryManagementView: View {
                         maxSelectionCount: pickerSelectionLimit,
                         matching: .images
                     ) {
-                        Label("端末の写真から追加", systemImage: "photo.badge.plus")
+                        FavorecoIconLabel("端末の写真から追加", systemImage: "photo.badge.plus")
                     }
                     .disabled(isProcessing)
 
                     Button {
                         isShowingRecordPicker = true
                     } label: {
-                        Label("Favorecoの記録から選ぶ", systemImage: "rectangle.stack.badge.plus")
+                        FavorecoIconLabel("Favorecoの記録から選ぶ", systemImage: "rectangle.stack.badge.plus")
                     }
                     .disabled(isProcessing || recordPhotos.isEmpty)
 
@@ -83,7 +83,7 @@ struct FavoGalleryManagementView: View {
             } else {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("無料版の15枚を使用中", systemImage: "lock.fill")
+                        FavorecoIconLabel("無料版の15枚を使用中", systemImage: "lock.fill")
                             .font(FavorecoTypography.bodyStrong)
                         Text("保存済み写真の閲覧・編集・並べ替え・削除はそのまま使えます。新しく追加するには枚数を減らすか、Pro以上へ変更してください。")
                             .font(FavorecoTypography.caption)
@@ -443,10 +443,10 @@ private struct FavoRecordPhotoPickerView: View {
     var body: some View {
         List {
             if selectablePhotos.isEmpty {
-                ContentUnavailableView(
+                FavorecoContentUnavailableView(
                     "選べる写真がありません",
                     systemImage: "photo.on.rectangle.angled",
-                    description: Text("このFAVOに紐づく記録へ写真を追加すると、ここから選べます。")
+                    description: "このFAVOに紐づく記録へ写真を追加すると、ここから選べます。"
                 )
             } else {
                 Section {
@@ -598,7 +598,7 @@ private struct FavoGalleryPhotoDetailView: View {
                         .foregroundStyle(Color(hex: colorHex))
                 }
                 if photo.hasCapturedAt {
-                    Label(FavorecoDateText.fullDate(photo.capturedAt), systemImage: "calendar")
+                    FavorecoIconLabel(FavorecoDateText.fullDate(photo.capturedAt), systemImage: "calendar")
                 }
                 if !photo.memo.isEmpty {
                     Text(photo.memo).font(FavorecoTypography.body)
@@ -624,7 +624,7 @@ private struct FavoGalleryThumbnail: View {
             } else {
                 ZStack {
                     Color(.secondarySystemGroupedBackground)
-                    Image(systemName: "photo").foregroundStyle(.secondary)
+                    FavorecoIcon(systemName: "photo", size: 18).foregroundStyle(.secondary)
                 }
             }
         }

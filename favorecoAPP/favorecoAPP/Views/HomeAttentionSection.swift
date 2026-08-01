@@ -13,7 +13,7 @@ struct HomeAttentionSection: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Ticket Schedule")
                     .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
-                    .foregroundStyle(FavorecoTypography.brandColor(for: colorScheme))
+                    .foregroundStyle(themePalette.headingText(for: colorScheme))
                 if !items.isEmpty {
                     Text("\(items.count)")
                         .font(FavorecoTypography.captionStrong)
@@ -35,8 +35,7 @@ struct HomeAttentionSection: View {
 
             if items.isEmpty {
                 HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle")
-                        .font(.system(size: 14, weight: .semibold))
+                    FavorecoIcon(systemName: "checkmark.circle", size: 14)
                         .foregroundStyle(Color.green)
                     Text("今すぐ対応することはありません")
                         .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .caption))

@@ -35,7 +35,21 @@ struct favorecoAPPApp: App {
                     guard localStoreStartupError.isEmpty else { return }
                     await CategoryPresetSeeder.seedIfNeeded(in: sharedModelContainer.mainContext)
                     await PersonStarterPresetSeeder.seedIfNeeded(in: sharedModelContainer.mainContext)
+                    _ = try? SampleDataSeeder.refreshBundledTheaterSampleEyecatches(
+                        in: sharedModelContainer.mainContext
+                    )
                     _ = try? TicketNotificationMetadataMigrationService.normalize(
+                        in: sharedModelContainer.mainContext
+                    )
+                    let plans = (try? sharedModelContainer.mainContext.fetch(
+                        FetchDescriptor<Plan>()
+                    )) ?? []
+                    let attempts = (try? sharedModelContainer.mainContext.fetch(
+                        FetchDescriptor<TicketAttempt>()
+                    )) ?? []
+                    try? await TicketNotificationSettingsSyncService.synchronizeCopyIfNeeded(
+                        plans: plans,
+                        attempts: attempts,
                         in: sharedModelContainer.mainContext
                     )
                 }

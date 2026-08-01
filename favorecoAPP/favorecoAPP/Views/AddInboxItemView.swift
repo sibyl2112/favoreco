@@ -66,7 +66,7 @@ struct QuickRegistrationView: View {
                     }
 
                     PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
-                        Label(photoActionTitle, systemImage: "photo")
+                        FavorecoIconLabel(photoActionTitle, systemImage: "photo")
                     }
                     .disabled(isProcessingImage)
                     .onChange(of: selectedEyecatchItem) { _, item in
@@ -83,7 +83,10 @@ struct QuickRegistrationView: View {
                     Button {
                         Task { await fetchURLCandidate() }
                     } label: {
-                        Label(isFetchingURL ? "取得中" : "URLからタイトル候補を取得", systemImage: "link")
+                        FavorecoIconLabel(
+                            isFetchingURL ? "取得中" : "URLからタイトル候補を取得",
+                            systemImage: "link"
+                        )
                     }
                     .disabled(draft.trimmedSourceURL.isEmpty || isFetchingURL)
 
@@ -100,7 +103,7 @@ struct QuickRegistrationView: View {
                         Button {
                             openOCRCamera()
                         } label: {
-                            Label("カメラで読み取る", systemImage: "camera")
+                            FavorecoIconLabel("カメラで読み取る", systemImage: "camera")
                         }
                         .disabled(isProcessingImage)
                     } else {

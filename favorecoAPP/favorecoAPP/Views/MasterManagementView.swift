@@ -43,7 +43,7 @@ struct PersonMasterManagementView: View {
             }
 
             if activePeople.isEmpty {
-                ContentUnavailableView(
+                FavorecoContentUnavailableView(
                     people.contains(where: { !$0.isArchived }) ? "条件に一致する人物・団体がありません" : "人物・団体はまだありません",
                     systemImage: "person.2"
                 )
@@ -64,7 +64,7 @@ struct PersonMasterManagementView: View {
                 Button {
                     isShowingCreatePerson = true
                 } label: {
-                    Image(systemName: "plus")
+                    FavorecoIcon(systemName: "plus", size: 16)
                 }
                 .accessibilityLabel("人物・団体を追加")
             }
@@ -329,7 +329,7 @@ struct PlaceMasterManagementView: View {
                 Picker("カテゴリ", selection: $categoryFilter) {
                     Text("すべて").tag(PlaceMasterCategoryFilter.all)
                     ForEach(PlaceMasterCategory.allCases) { category in
-                        Label(category.title, systemImage: category.systemImage)
+                        FavorecoIconLabel(category.title, systemImage: category.systemImage)
                             .tag(PlaceMasterCategoryFilter.category(category))
                     }
                     Text("未分類").tag(PlaceMasterCategoryFilter.missing)
@@ -347,13 +347,13 @@ struct PlaceMasterManagementView: View {
 
             Section {
                 if allActivePlaces.isEmpty {
-                    ContentUnavailableView(
+                    FavorecoContentUnavailableView(
                         "場所はまだありません",
                         systemImage: "mappin.and.ellipse",
-                        description: Text("MAPは記録に保存した座標だけでも表示します。場所マスターは、住所から都道府県を確認できる場所を記録・編集した時に追加されます。")
+                        description: "MAPは記録に保存した座標だけでも表示します。場所マスターは、住所から都道府県を確認できる場所を記録・編集した時に追加されます。"
                     )
                 } else if activePlaces.isEmpty {
-                    ContentUnavailableView(
+                    FavorecoContentUnavailableView(
                         "条件に一致する場所がありません",
                         systemImage: "mappin.and.ellipse"
                     )
@@ -443,10 +443,10 @@ struct PersonMasterEditDestination: View {
         if let person = people.first {
             PersonMasterMergeView(person: person, showsCancelButton: showsCancelButton)
         } else {
-            ContentUnavailableView(
+            FavorecoContentUnavailableView(
                 "人物が見つかりません",
                 systemImage: "person.crop.circle.badge.questionmark",
-                description: Text("人物マスターが削除または統合された可能性があります。")
+                description: "人物マスターが削除または統合された可能性があります。"
             )
         }
     }
@@ -796,7 +796,7 @@ private struct PlaceMasterMergeView: View {
                 Button {
                     draft.pilgrimageMemberships.append(PlacePilgrimageMembership())
                 } label: {
-                    Label("巡礼・札所を追加", systemImage: "plus.circle")
+                    FavorecoIconLabel("巡礼・札所を追加", systemImage: "plus.circle")
                 }
             }
 
@@ -954,7 +954,7 @@ private struct FilterCheckChip: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                Image(systemName: systemImage)
+                FavorecoIcon(systemName: systemImage, size: 15)
                 Text(title)
             }
             .font(FavorecoTypography.caption)
@@ -990,7 +990,7 @@ private struct PersonActivityTagEditor: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: selectedIDs.contains(tag.id) ? "checkmark.circle.fill" : "circle")
-                            Image(systemName: tag.systemImage)
+                            FavorecoIcon(systemName: tag.systemImage, size: 14)
                             Text(tag.title).lineLimit(1)
                         }
                         .font(FavorecoTypography.caption)
@@ -1111,7 +1111,7 @@ private struct PersonPhotoEditor: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                    Label(photoActionTitle, systemImage: "photo")
+                    FavorecoIconLabel(photoActionTitle, systemImage: "photo")
                 }
                 if hasPhoto {
                     Button("写真を削除", role: .destructive) {
@@ -1146,8 +1146,7 @@ struct PersonAvatar: View {
             } else {
                 ZStack {
                     Color.accentColor.opacity(0.13)
-                    Image(systemName: systemImage)
-                        .font(.system(size: size * 0.45, weight: .medium))
+                    FavorecoIcon(systemName: systemImage, size: size * 0.45, fallbackWeight: .medium)
                         .foregroundStyle(Color.accentColor)
                 }
             }
@@ -1474,7 +1473,7 @@ private struct MasterListRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: systemImage).foregroundStyle(.secondary).frame(width: 26)
+            FavorecoIcon(systemName: systemImage, size: 17).foregroundStyle(.secondary).frame(width: 26)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
                     Text(title).font(FavorecoTypography.bodyStrong)

@@ -17,7 +17,10 @@ struct PlanDetailView: View {
     @Environment(\.favorecoThemePalette) private var themePalette
     let plan: Plan
     var highlightedPreparationTaskID: UUID? = nil
+    var highlightedTicketAttemptID: UUID? = nil
+    var showsRecordedPlanDetail = false
     let onBack: (() -> Void)?
+    let onOpenEvent: ((UUID) -> Void)?
     @State private var isShowingEditPlan = false
     @State private var isShowingAddAttempt = false
     @State private var editingAttempt: TicketAttempt?
@@ -25,17 +28,24 @@ struct PlanDetailView: View {
     @State private var isShowingDeleteConfirmation = false
     @State private var recordEventForVisit: ExperienceEvent?
     @State private var navigatingVisit: Visit?
+    @State private var navigatingEventID: UUID?
     @State private var operationError = ""
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
 
     init(
         plan: Plan,
         highlightedPreparationTaskID: UUID? = nil,
-        onBack: (() -> Void)? = nil
+        highlightedTicketAttemptID: UUID? = nil,
+        showsRecordedPlanDetail: Bool = false,
+        onBack: (() -> Void)? = nil,
+        onOpenEvent: ((UUID) -> Void)? = nil
     ) {
         self.plan = plan
         self.highlightedPreparationTaskID = highlightedPreparationTaskID
+        self.highlightedTicketAttemptID = highlightedTicketAttemptID
+        self.showsRecordedPlanDetail = showsRecordedPlanDetail
         self.onBack = onBack
+        self.onOpenEvent = onOpenEvent
     }
 
     private var categoryColor: Color {
@@ -61,7 +71,7 @@ struct PlanDetailView: View {
         if let purchaseURL = attempt?.purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines),
            !purchaseURL.isEmpty,
            let url = URL(string: purchaseURL) {
-            return TicketOpenDestination(label: "申込・購入ページを開く", url: url)
+            return TicketOpenDestination(label: "チケットサイトを開く", url: url)
         }
 
         if let attempt,
@@ -119,7 +129,7 @@ struct PlanDetailView: View {
 
     var body: some View {
         Group {
-            if isTheaterPlan, let visit = plan.visit {
+            if isTheaterPlan, let visit = plan.visit, !showsRecordedPlanDetail {
                 ExperienceDetailView(visit: visit, onBack: onBack)
             } else if isTheaterPlan {
                 theaterDetailContent
@@ -127,21 +137,33 @@ struct PlanDetailView: View {
                 standardDetailContent
             }
         }
-        .navigationTitle(isTheaterPlan ? "" : "予定・チケット")
+        .navigationTitle(isTheaterPlan || onBack != nil ? "" : "予定・チケット")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(isTheaterPlan ? .hidden : .visible, for: .navigationBar)
+        .toolbar(isTheaterPlan || onBack != nil ? .hidden : .visible, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    planActionItems
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+            if !isTheaterPlan, onBack == nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        planActionItems
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
             }
         }
         .overlay(alignment: .top) {
-            if isTheaterPlan, plan.visit == nil {
-                theaterNavigationControls
+            if showsDetailPanelNavigationControls {
+                detailPanelNavigationControls
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if onBack != nil, (!isTheaterPlan || plan.visit == nil) {
+                CategoryDetailBottomActionBar(
+                    shareText: detailShareText,
+                    tint: categoryColor,
+                    labelColor: isTheaterPlan ? categoryColor : .white,
+                    onEdit: { isShowingEditPlan = true }
+                )
             }
         }
         .sheet(isPresented: $isShowingEditPlan) {
@@ -171,6 +193,9 @@ struct PlanDetailView: View {
         }
         .navigationDestination(item: $navigatingVisit) { visit in
             ExperienceDetailView(visit: visit)
+        }
+        .navigationDestination(item: $navigatingEventID) { eventID in
+            EventDetailDestination(eventID: eventID)
         }
         .confirmationDialog("予定を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
             Button("予定を削除", role: .destructive) {
@@ -203,16 +228,29 @@ struct PlanDetailView: View {
                     memoSection
                 }
                 .padding(20)
+                .modifier(
+                    CategoryEmbeddedDetailCardModifier(
+                        isEnabled: onBack != nil,
+                        genreColor: panelGenreColor,
+                        borderColor: categoryColor
+                    )
+                )
+                .padding(.horizontal, onBack != nil ? 10 : 0)
+                .padding(.top, onBack != nil ? 74 : 0)
             }
-            .task(id: highlightedPreparationTaskID) {
-                guard let highlightedPreparationTaskID else { return }
+            .task(id: detailScrollTargetID) {
+                guard let detailScrollTargetID else { return }
                 await Task.yield()
                 withAnimation(.easeInOut(duration: 0.35)) {
-                    proxy.scrollTo(highlightedPreparationTaskID, anchor: .center)
+                    proxy.scrollTo(detailScrollTargetID, anchor: .center)
                 }
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background {
+            if onBack == nil {
+                Color(.systemGroupedBackground)
+            }
+        }
     }
 
     @ViewBuilder
@@ -220,26 +258,26 @@ struct PlanDetailView: View {
         Button {
             isShowingEditPlan = true
         } label: {
-            Label("予定を編集", systemImage: "pencil")
+            FavorecoIconLabel("予定を編集", systemImage: "pencil", iconSize: 17)
         }
 
         Button {
             isShowingAddAttempt = true
         } label: {
-            Label("チケットを追加", systemImage: "ticket")
+            FavorecoIconLabel("チケットを追加", systemImage: "ticket", iconSize: 17)
         }
 
         Button {
             calendarDraft = makeCalendarDraft()
         } label: {
-            Label("カレンダーに追加", systemImage: "calendar.badge.plus")
+            FavorecoIconLabel("カレンダーに追加", systemImage: "calendar.badge.plus", iconSize: 17)
         }
 
         if let destination = preferredOpenDestination {
             Button {
                 openURL(destination.url)
             } label: {
-                Label(destination.label, systemImage: "safari")
+                FavorecoIconLabel(destination.label, systemImage: "safari", iconSize: 17)
             }
         }
 
@@ -250,13 +288,17 @@ struct PlanDetailView: View {
                 prepareRecordEntry()
             }
         } label: {
-            Label(plan.visit == nil ? "参加記録を入力" : "参加記録を開く", systemImage: "sparkles")
+            FavorecoIconLabel(
+                plan.visit == nil ? "参加記録を入力" : "参加記録を開く",
+                systemImage: "sparkles",
+                iconSize: 17
+            )
         }
 
         Button(role: .destructive) {
             isShowingDeleteConfirmation = true
         } label: {
-            Label("予定を削除", systemImage: "trash")
+            FavorecoIconLabel("予定を削除", systemImage: "trash", iconSize: 17)
         }
     }
 
@@ -268,10 +310,14 @@ struct PlanDetailView: View {
         Color(hex: (plan.event?.category ?? plan.category)?.colorHex ?? "#8B2F45")
     }
 
+    private var panelGenreColor: Color {
+        Color(hex: (plan.event?.category ?? plan.category)?.colorHex ?? "#147C88")
+    }
+
     private var theaterDetailContent: some View {
         TheaterExperiencePage(
             genreColor: theaterGenreColor,
-            scrollTargetID: highlightedPreparationTaskID,
+            scrollTargetID: detailScrollTargetID,
             showsScrollingFrame: onBack != nil
         ) {
             theaterHero
@@ -285,7 +331,14 @@ struct PlanDetailView: View {
         }
     }
 
-    private var theaterNavigationControls: some View {
+    private var showsDetailPanelNavigationControls: Bool {
+        if isTheaterPlan {
+            return plan.visit == nil || showsRecordedPlanDetail
+        }
+        return onBack != nil && plan.visit == nil
+    }
+
+    private var detailPanelNavigationControls: some View {
         HStack {
             Button {
                 closeDetail()
@@ -325,18 +378,19 @@ struct PlanDetailView: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(theaterAccentColor)
+                    .foregroundStyle(categoryColor)
                     .frame(width: 50, height: 50)
-                    .background(theaterGenreColor.opacity(0.86), in: Circle())
+                    .background(panelGenreColor.opacity(0.86), in: Circle())
                     .overlay {
-                        Circle().stroke(theaterAccentColor.opacity(0.72), lineWidth: 1)
+                        Circle().stroke(categoryColor.opacity(0.72), lineWidth: 1)
                     }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("予定メニュー")
         }
         .padding(.horizontal, 20)
-        .safeAreaPadding(.top, 8)
+        .padding(.top, onBack != nil ? 54 : 0)
+        .safeAreaPadding(.top, onBack != nil ? 0 : 8)
     }
 
     private var theaterHero: some View {
@@ -362,17 +416,21 @@ struct PlanDetailView: View {
                 }
 
                 if let event = plan.event {
-                    NavigationLink {
-                        EventDetailView(event: event)
-                    } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 7) {
-                            theaterHeroTitle
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white.opacity(0.86))
+                    if let onOpenEvent {
+                        Button {
+                            onOpenEvent(event.id)
+                        } label: {
+                            theaterHeroEventLinkLabel
                         }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button {
+                            navigatingEventID = event.id
+                        } label: {
+                            theaterHeroEventLinkLabel
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 } else {
                     theaterHeroTitle
                 }
@@ -437,6 +495,15 @@ struct PlanDetailView: View {
         .frame(minHeight: 560, alignment: .bottom)
     }
 
+    private var theaterHeroEventLinkLabel: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            theaterHeroTitle
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white.opacity(0.86))
+        }
+    }
+
     private var theaterHeroTitle: some View {
         Text(theaterDisplayTitle)
             .font(FavorecoTypography.jpSerif(27, weight: .bold, relativeTo: .title2))
@@ -451,6 +518,33 @@ struct PlanDetailView: View {
         if !eventTitle.isEmpty { return eventTitle }
         let planTitle = plan.title.trimmingCharacters(in: .whitespacesAndNewlines)
         return planTitle.isEmpty ? "予定" : planTitle
+    }
+
+    private var detailShareText: String {
+        var lines = [
+            theaterDisplayTitle,
+            FavorecoDateText.fullDate(plan.startsAt)
+        ]
+
+        let performanceTime = [
+            FavorecoDateText.time(plan.startsAt),
+            FavorecoDateText.time(plan.endsAt)
+        ].joined(separator: "–")
+        lines.append(performanceTime)
+
+        let venue = plan.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !venue.isEmpty {
+            lines.append(venue)
+        }
+
+        let eventURL = plan.event?.officialURL.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let planURL = plan.officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let officialURL = eventURL.isEmpty ? planURL : eventURL
+        if !officialURL.isEmpty {
+            lines.append(officialURL)
+        }
+
+        return lines.joined(separator: "\n")
     }
 
     private var theaterHeroBackground: some View {
@@ -520,7 +614,7 @@ struct PlanDetailView: View {
 
     private var theaterHeroDateRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "calendar")
+            FavorecoIcon(systemName: "calendar", size: 17)
                 .foregroundStyle(.white.opacity(0.92))
                 .frame(width: 20)
             Text(FavorecoDateText.fullDate(plan.startsAt))
@@ -533,7 +627,7 @@ struct PlanDetailView: View {
 
     private var theaterHeroWeather: some View {
         HStack(spacing: 4) {
-            Image(systemName: "cloud.sun")
+            FavorecoIcon(systemName: "cloud.sun", size: 17)
             Text("—")
         }
         .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
@@ -543,7 +637,7 @@ struct PlanDetailView: View {
 
     private func theaterHeroMetadataRow(icon: String, text: String, tint: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: icon)
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(tint)
                 .frame(width: 20)
             Text(text)
@@ -561,18 +655,25 @@ struct PlanDetailView: View {
     private var theaterEventInformationSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("作品・公演情報", systemImage: "theatermasks")
+                FavorecoIconLabel("作品・公演情報", systemImage: "theatermasks", iconSize: 20)
                     .font(FavorecoTypography.sectionTitle)
                 Spacer()
                 if let event = plan.event {
-                    NavigationLink {
-                        EventDetailView(event: event)
-                    } label: {
-                        Label("公演情報を開く", systemImage: "chevron.right")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(theaterAccentColor)
+                    if let onOpenEvent {
+                        Button {
+                            onOpenEvent(event.id)
+                        } label: {
+                            theaterEventInformationLinkLabel
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button {
+                            navigatingEventID = event.id
+                        } label: {
+                            theaterEventInformationLinkLabel
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -610,9 +711,15 @@ struct PlanDetailView: View {
         .planSectionCard()
     }
 
+    private var theaterEventInformationLinkLabel: some View {
+        Label("公演情報を開く", systemImage: "chevron.right")
+            .font(FavorecoTypography.captionStrong)
+            .foregroundStyle(theaterAccentColor)
+    }
+
     private var theaterNextActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("次にやること", systemImage: "checklist")
+            FavorecoIconLabel("次にやること", systemImage: "checklist", iconSize: 20)
                 .font(FavorecoTypography.sectionTitle)
 
             if let nextPlanActionCallout {
@@ -622,7 +729,7 @@ struct PlanDetailView: View {
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
             } else {
-                Label("現在、期限のある対応はありません", systemImage: "checkmark.circle")
+                FavorecoIconLabel("現在、期限のある対応はありません", systemImage: "checkmark.circle")
                     .font(FavorecoTypography.bodyStrong)
                     .foregroundStyle(theaterAccentColor)
             }
@@ -631,7 +738,7 @@ struct PlanDetailView: View {
                 Button {
                     isShowingAddAttempt = true
                 } label: {
-                    Label("チケット申込", systemImage: "ticket")
+                    FavorecoIconLabel("チケット申込", systemImage: "ticket", iconSize: 17)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -640,7 +747,7 @@ struct PlanDetailView: View {
                 Button {
                     isShowingEditPlan = true
                 } label: {
-                    Label("予定を編集", systemImage: "pencil")
+                    FavorecoIconLabel("予定を編集", systemImage: "pencil", iconSize: 17)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -677,8 +784,7 @@ struct PlanDetailView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: plan.category?.iconSymbol ?? "ticket")
-                    .font(.title3)
+                FavorecoIcon(systemName: plan.category?.iconSymbol ?? "ticket", size: 20)
                     .foregroundStyle(categoryColor)
                     .frame(width: 38, height: 38)
                     .background(categoryColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -758,7 +864,7 @@ struct PlanDetailView: View {
                 Button {
                     openURL(mapURL)
                 } label: {
-                    Label("地図で見る", systemImage: "map")
+                    FavorecoIconLabel("地図で見る", systemImage: "map", iconSize: 17)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -795,7 +901,7 @@ struct PlanDetailView: View {
                 Button {
                     isShowingAddAttempt = true
                 } label: {
-                    Label("チケットを追加", systemImage: "plus")
+                    FavorecoIconLabel("チケットを追加", systemImage: "plus", iconSize: 17)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -810,7 +916,7 @@ struct PlanDetailView: View {
                     Button {
                         isShowingAddAttempt = true
                     } label: {
-                        Label("チケットを追加", systemImage: "plus")
+                        FavorecoIconLabel("チケットを追加", systemImage: "plus", iconSize: 13)
                             .font(FavorecoTypography.captionStrong)
                     }
                     .buttonStyle(.borderless)
@@ -822,11 +928,20 @@ struct PlanDetailView: View {
                         TicketAttemptDetailCard(attempt: attempt, accentColor: categoryColor)
                     }
                     .buttonStyle(.plain)
+                    .id(attempt.id)
+                    .overlay {
+                        if highlightedTicketAttemptID == attempt.id {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(categoryColor, lineWidth: 2)
+                                .shadow(color: categoryColor.opacity(0.55), radius: 7)
+                                .allowsHitTesting(false)
+                        }
+                    }
                     .contextMenu {
                         Button {
                             editingAttempt = attempt
                         } label: {
-                            Label("チケットを編集", systemImage: "pencil")
+                            FavorecoIconLabel("チケットを編集", systemImage: "pencil", iconSize: 17)
                         }
 
                         let transitions = TicketStatusTransitionDefinition.transitions(for: attempt)
@@ -836,7 +951,7 @@ struct PlanDetailView: View {
                                 Button {
                                     updateAttemptStatus(attempt, to: transition.targetStatusKey)
                                 } label: {
-                                    Label(transition.title, systemImage: transition.systemImage)
+                                    FavorecoIconLabel(transition.title, systemImage: transition.systemImage)
                                 }
                             }
                         }
@@ -845,6 +960,10 @@ struct PlanDetailView: View {
             }
             .planSectionCard()
         }
+    }
+
+    private var detailScrollTargetID: UUID? {
+        highlightedTicketAttemptID ?? highlightedPreparationTaskID
     }
 
     @ViewBuilder
@@ -1042,13 +1161,15 @@ private struct TheaterPlanArtwork: View {
             } else {
                 ZStack {
                     tint.opacity(0.18)
-                    Image(systemName: fallbackSymbol)
-                        .font(.system(size: 34, weight: .light))
+                    FavorecoIcon(systemName: fallbackSymbol, size: 34)
                         .foregroundStyle(tint)
                 }
             }
         }
-        .aspectRatio(148.0 / 209.0, contentMode: .fit)
+        .aspectRatio(
+            CGFloat(EyecatchAspectRatio.bSeriesPoster.value),
+            contentMode: .fit
+        )
         .frame(maxWidth: .infinity)
         .clipped()
         .background(Color(.secondarySystemBackground))
@@ -1082,7 +1203,7 @@ private struct TicketAttemptDetailCard: View {
             }
 
             if let inputIssue {
-                Label(inputIssue.title, systemImage: inputIssue.systemImage)
+                FavorecoIconLabel(inputIssue.title, systemImage: inputIssue.systemImage, iconSize: 13)
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.orange)
                     .padding(.horizontal, 10)
@@ -1209,8 +1330,7 @@ private struct TicketNextActionCallout: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: action.icon)
-                .font(FavorecoTypography.captionStrong)
+            FavorecoIcon(systemName: action.icon, size: 13)
             Text(action.isOverdue ? "要確認" : "次のアクション")
                 .font(FavorecoTypography.caption)
             Text(action.title)
@@ -1233,8 +1353,7 @@ private struct PlanInfoRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: icon)
-                .font(FavorecoTypography.body)
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(.secondary)
                 .frame(width: 22)
             Text(title)
@@ -1256,7 +1375,7 @@ private struct PlanStatusChip: View {
     let tint: Color
 
     var body: some View {
-        Label(text, systemImage: icon)
+        FavorecoIconLabel(text, systemImage: icon, iconSize: 13)
             .font(FavorecoTypography.captionStrong)
             .foregroundStyle(tint)
             .lineLimit(1)
@@ -1326,7 +1445,7 @@ struct ExperienceExpenseSummaryCard: View {
 
     private func expenseRow(icon: String, title: String, amount: Decimal) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: icon)
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(tint)
                 .frame(width: 22)
             Text(title)

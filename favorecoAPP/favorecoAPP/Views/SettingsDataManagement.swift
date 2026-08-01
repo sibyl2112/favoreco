@@ -79,31 +79,31 @@ struct DataManagementView: View {
                 NavigationLink {
                     FullBackupView()
                 } label: {
-                    Label("写真付き完全バックアップ", systemImage: "archivebox")
+                    FavorecoIconLabel("写真付き完全バックアップ", systemImage: "archivebox")
                 }
 
                 NavigationLink {
                     JSONExportView()
                 } label: {
-                    Label("JSONエクスポート", systemImage: "square.and.arrow.up")
+                    FavorecoIconLabel("JSONエクスポート", systemImage: "square.and.arrow.up")
                 }
 
                 NavigationLink {
                     CSVExportView()
                 } label: {
-                    Label("CSVエクスポート", systemImage: "tablecells")
+                    FavorecoIconLabel("CSVエクスポート", systemImage: "tablecells")
                 }
 
                 NavigationLink {
                     JSONImportView()
                 } label: {
-                    Label("JSONインポート", systemImage: "square.and.arrow.down")
+                    FavorecoIconLabel("JSONインポート", systemImage: "square.and.arrow.down")
                 }
 
                 NavigationLink {
                     CSVImportView()
                 } label: {
-                    Label("CSVインポート", systemImage: "tray.and.arrow.down")
+                    FavorecoIconLabel("CSVインポート", systemImage: "tray.and.arrow.down")
                 }
             }
 
@@ -118,14 +118,14 @@ struct DataManagementView: View {
                     URLCache.shared.removeAllCachedResponses()
                     maintenanceMessage = "Webキャッシュを削除しました。記録データは変更していません。"
                 } label: {
-                    Label("Webキャッシュを削除", systemImage: "network.slash")
+                    FavorecoIconLabel("Webキャッシュを削除", systemImage: "network.slash")
                 }
 
                 Button {
                     ThumbnailLoader.purge()
                     maintenanceMessage = "写真サムネイルのキャッシュを削除しました。写真本体は残っています。"
                 } label: {
-                    Label("写真キャッシュを削除", systemImage: "photo.badge.arrow.down")
+                    FavorecoIconLabel("写真キャッシュを削除", systemImage: "photo.badge.arrow.down")
                 }
 
                 Text("キャッシュは表示を速くする一時データです。削除しても記録や写真本体は消えません。")
@@ -143,7 +143,7 @@ struct DataManagementView: View {
                 Button(role: .destructive) {
                     isConfirmingArchivedDeletion = true
                 } label: {
-                    Label("アーカイブ済みデータを完全削除", systemImage: "archivebox.fill")
+                    FavorecoIconLabel("アーカイブ済みデータを完全削除", systemImage: "archivebox.fill")
                 }
                 .disabled(archivedItemCount == 0)
 
@@ -156,7 +156,7 @@ struct DataManagementView: View {
                 NavigationLink {
                     FullDataDeletionView()
                 } label: {
-                    Label("全データ削除", systemImage: "trash.fill")
+                    FavorecoIconLabel("全データ削除", systemImage: "trash.fill")
                         .foregroundStyle(.red)
                 }
             }
@@ -220,16 +220,18 @@ private struct ArchivedEventManagementView: View {
     var body: some View {
         List {
             if archivedEvents.isEmpty {
-                ContentUnavailableView(
+                FavorecoContentUnavailableView(
                     "非表示の対象はありません",
                     systemImage: "archivebox",
-                    description: Text("対象詳細のメニューから非表示にした項目がここへ表示されます。")
+                    description: "対象詳細のメニューから非表示にした項目がここへ表示されます。"
                 )
             } else {
                 Section {
                     ForEach(archivedEvents) { event in
                         HStack(spacing: 12) {
-                            Image(systemName: event.category?.iconSymbol ?? "rectangle.stack")
+                            FavorecoIcon(
+                                systemName: event.category?.iconSymbol ?? "rectangle.stack"
+                            )
                                 .foregroundStyle(Color(hex: event.category?.colorHex ?? "#6F8F7A"))
                                 .frame(width: 30)
 
@@ -363,7 +365,7 @@ struct FullDataDeletionView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     } else {
-                        Label("全データ削除へ進む", systemImage: "trash.fill")
+                        FavorecoIconLabel("全データ削除へ進む", systemImage: "trash.fill")
                     }
                 }
                 .disabled(confirmationText != requiredText || isDeleting || totalModelCount == 0)
@@ -735,7 +737,7 @@ struct SyncBackupSettingsView: View {
                 NavigationLink {
                     FullBackupView()
                 } label: {
-                    Label("完全バックアップ・復元", systemImage: "archivebox")
+                    FavorecoIconLabel("完全バックアップ・復元", systemImage: "archivebox")
                 }
                 Text("24時間に1回、起動時に写真付きバックアップを作成します。写真容量が増えると保持世代数を自動で減らし、作成前に端末の空き容量を確認します。")
                     .font(FavorecoTypography.caption)

@@ -26,8 +26,15 @@ struct PhotoUnitEditor: View {
     @State private var importCompletedCount = 0
     @State private var importTotalCount = 0
     @State private var editingTarget: PhotoEditorTarget?
+    @State private var isShowingAllPhotos = false
+    @State private var editingTargetAfterGallery: PhotoEditorTarget?
 
     private let largePhotoNoticeThreshold = 50
+    private let compactPhotoLimit = 8
+    private let compactColumns = Array(
+        repeating: GridItem(.flexible(), spacing: 6),
+        count: 4
+    )
 
     private var isImportingPhotos: Bool {
         importTotalCount > 0
@@ -96,7 +103,7 @@ struct PhotoUnitEditor: View {
                 Button {
                     heroBackgroundPath = ""
                 } label: {
-                    Label("トップ背景をジャンル既定に戻す", systemImage: "rectangle.landscape")
+                    FavorecoIconLabel("トップ背景をジャンル既定に戻す", systemImage: "rectangle.landscape")
                 }
                 .buttonStyle(.bordered)
             }
@@ -127,7 +134,7 @@ struct PhotoUnitEditor: View {
                 Label {
                     Text("写真はこのまま追加できます。枚数が多い記録は、取り込み・完全バックアップ・初回同期に時間がかかる場合があります（現在約\(formattedPhotoBytes)）。")
                 } icon: {
-                    Image(systemName: "externaldrive.badge.exclamationmark")
+                    FavorecoIcon(systemName: "externaldrive.badge.exclamationmark", size: 17)
                 }
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
@@ -139,7 +146,7 @@ struct PhotoUnitEditor: View {
             } else if canAddPhotos {
                 photoAddControls
             } else {
-                Label(photoLimitMessage, systemImage: "checkmark.circle")
+                FavorecoIconLabel(photoLimitMessage, systemImage: "checkmark.circle")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -181,6 +188,31 @@ struct PhotoUnitEditor: View {
                     }
             }
             .presentationDetents([.medium, .large])
+        }
+        .sheet(
+            isPresented: $isShowingAllPhotos,
+            onDismiss: {
+                if let target = editingTargetAfterGallery {
+                    editingTargetAfterGallery = nil
+                    editingTarget = target
+                }
+            }
+        ) {
+            NavigationStack {
+                ScrollView {
+                    allPhotoGrid
+                        .padding(16)
+                }
+                .navigationTitle("写真 \(currentPhotoCount)枚")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("閉じる") {
+                            isShowingAllPhotos = false
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -230,7 +262,7 @@ struct PhotoUnitEditor: View {
                     .font(FavorecoTypography.bodyStrong)
                 Spacer()
                 if !heroBackgroundPath.isEmpty {
-                    Label("自分の写真", systemImage: "photo.fill")
+                    FavorecoIconLabel("自分の写真", systemImage: "photo.fill")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -305,7 +337,7 @@ struct PhotoUnitEditor: View {
             maxSelectionCount: remainingPhotoSlots,
             matching: .images
         ) {
-            Label(label, systemImage: "photo.on.rectangle.angled")
+            FavorecoIconLabel(label, systemImage: "photo.on.rectangle.angled")
                 .frame(maxWidth: .infinity)
         }
         .onChange(of: selectedItems) { _, newItems in
@@ -330,7 +362,7 @@ struct PhotoUnitEditor: View {
             }
             isShowingCamera = true
         } label: {
-            Label(label, systemImage: "camera")
+            FavorecoIconLabel(label, systemImage: "camera")
                 .frame(maxWidth: .infinity)
         }
         if prominent {
@@ -341,62 +373,153 @@ struct PhotoUnitEditor: View {
     }
 
     private var photoGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 10)], spacing: 10) {
-            ForEach(activeExistingPhotos) { photo in
-                SavedPhotoThumbnail(
-                    photo: photo,
-                    title: "保存済み",
-                    aspectRatio: selectedAspectRatio.value,
-                    fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
-                    isCover: coverPhotoPath == photo.relativePath,
-                    isHeroBackground: heroBackgroundPath == photo.relativePath,
-                    purpose: existingMetadata(for: photo).purpose,
-                    canSetCover: existingMetadata(for: photo).purpose == .memory,
-                    canSetHeroBackground: existingMetadata(for: photo).purpose == .memory,
-                    onSetCover: {
-                        coverPhotoPath = photo.relativePath
-                    },
-                    onSetHeroBackground: {
-                        heroBackgroundPath = photo.relativePath
-                    },
-                    onEdit: {
-                        editingTarget = PhotoEditorTarget(id: photo.id, kind: .existing)
-                    },
-                    onDelete: {
-                        deletedPhotoIDs.insert(photo.id)
-                        selectFallbackCover(excluding: photo.relativePath)
-                        clearHeroBackground(excluding: photo.relativePath)
-                    }
-                )
+        VStack(spacing: 10) {
+            LazyVGrid(columns: compactColumns, spacing: 6) {
+                ForEach(Array(photoItems.prefix(compactPhotoLimit))) { item in
+                    compactTile(for: item, opensFromGallery: false)
+                }
             }
 
-            ForEach(pendingPhotos) { photo in
-                PendingPhotoThumbnail(
-                    photo: photo,
-                    title: "追加予定",
-                    aspectRatio: selectedAspectRatio.value,
-                    fillsFrame: EyecatchAspectRatio.usesEyecatchFill(for: category),
-                    isCover: coverPhotoPath == photo.relativePath,
-                    isHeroBackground: heroBackgroundPath == photo.relativePath,
-                    purpose: photo.metadata.purpose,
-                    canSetCover: photo.metadata.purpose == .memory,
-                    canSetHeroBackground: photo.metadata.purpose == .memory,
-                    onSetCover: {
-                        coverPhotoPath = photo.relativePath
-                    },
-                    onSetHeroBackground: {
-                        heroBackgroundPath = photo.relativePath
-                    },
-                    onEdit: {
-                        editingTarget = PhotoEditorTarget(id: photo.id, kind: .pending)
-                    },
-                    onDelete: {
-                        pendingPhotos.removeAll { $0.id == photo.id }
-                        selectFallbackCover(excluding: photo.relativePath)
-                        clearHeroBackground(excluding: photo.relativePath)
+            if currentPhotoCount > compactPhotoLimit {
+                Button {
+                    isShowingAllPhotos = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("さらに見る")
+                        Text("残り\(currentPhotoCount - compactPhotoLimit)枚")
+                            .foregroundStyle(.secondary)
                     }
-                )
+                    .font(FavorecoTypography.captionStrong)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
+        }
+    }
+
+    private var allPhotoGrid: some View {
+        LazyVGrid(columns: compactColumns, spacing: 6) {
+            ForEach(photoItems) { item in
+                compactTile(for: item, opensFromGallery: true)
+            }
+        }
+    }
+
+    private var photoItems: [PhotoGridItem] {
+        activeExistingPhotos.map {
+            PhotoGridItem(id: $0.id, kind: .existing)
+        } + pendingPhotos.map {
+            PhotoGridItem(id: $0.id, kind: .pending)
+        }
+    }
+
+    @ViewBuilder
+    private func compactTile(
+        for item: PhotoGridItem,
+        opensFromGallery: Bool
+    ) -> some View {
+        switch item.kind {
+        case .existing:
+            if let photo = activeExistingPhotos.first(where: { $0.id == item.id }) {
+                let metadata = existingMetadata(for: photo)
+                Button {
+                    openEditor(for: item.editorTarget, fromGallery: opensFromGallery)
+                } label: {
+                    CompactSavedPhotoThumbnail(
+                        photo: photo,
+                        purpose: metadata.purpose,
+                        isCover: coverPhotoPath == photo.relativePath,
+                        isHeroBackground: heroBackgroundPath == photo.relativePath
+                    )
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    photoContextMenu(
+                        purpose: metadata.purpose,
+                        path: photo.relativePath,
+                        editorTarget: item.editorTarget,
+                        opensFromGallery: opensFromGallery,
+                        onDelete: {
+                            deletedPhotoIDs.insert(photo.id)
+                            selectFallbackCover(excluding: photo.relativePath)
+                            clearHeroBackground(excluding: photo.relativePath)
+                        }
+                    )
+                }
+                .accessibilityLabel("保存済み写真、\(metadata.purpose.title)")
+                .accessibilityHint("タップして写真の情報を編集")
+            }
+        case .pending:
+            if let photo = pendingPhotos.first(where: { $0.id == item.id }) {
+                Button {
+                    openEditor(for: item.editorTarget, fromGallery: opensFromGallery)
+                } label: {
+                    CompactPendingPhotoThumbnail(
+                        photo: photo,
+                        purpose: photo.metadata.purpose,
+                        isCover: coverPhotoPath == photo.relativePath,
+                        isHeroBackground: heroBackgroundPath == photo.relativePath
+                    )
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    photoContextMenu(
+                        purpose: photo.metadata.purpose,
+                        path: photo.relativePath,
+                        editorTarget: item.editorTarget,
+                        opensFromGallery: opensFromGallery,
+                        onDelete: {
+                            pendingPhotos.removeAll { $0.id == photo.id }
+                            selectFallbackCover(excluding: photo.relativePath)
+                            clearHeroBackground(excluding: photo.relativePath)
+                        }
+                    )
+                }
+                .accessibilityLabel("追加予定の写真、\(photo.metadata.purpose.title)")
+                .accessibilityHint("タップして写真の情報を編集")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func photoContextMenu(
+        purpose: ExperiencePhotoPurpose,
+        path: String,
+        editorTarget: PhotoEditorTarget,
+        opensFromGallery: Bool,
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        Button {
+            openEditor(for: editorTarget, fromGallery: opensFromGallery)
+        } label: {
+            FavorecoIconLabel("写真の情報を編集", systemImage: "slider.horizontal.3")
+        }
+        if purpose == .memory {
+            Button {
+                coverPhotoPath = path
+            } label: {
+                FavorecoIconLabel("カバー写真にする", systemImage: "star")
+            }
+            Button {
+                heroBackgroundPath = path
+            } label: {
+                FavorecoIconLabel("トップ背景にする", systemImage: "rectangle.landscape")
+            }
+        }
+        Button(role: .destructive, action: onDelete) {
+            FavorecoIconLabel("削除", systemImage: "trash")
+        }
+    }
+
+    private func openEditor(
+        for target: PhotoEditorTarget,
+        fromGallery: Bool
+    ) {
+        if fromGallery {
+            editingTargetAfterGallery = target
+            isShowingAllPhotos = false
+        } else {
+            editingTarget = target
         }
     }
 
@@ -411,7 +534,7 @@ struct PhotoUnitEditor: View {
                     allowsBenefits: category?.templateKey == "theater"
                 )
             } else {
-                ContentUnavailableView("写真が見つかりません", systemImage: "photo")
+                FavorecoContentUnavailableView("写真が見つかりません", systemImage: "photo")
             }
         case .pending:
             if let index = pendingPhotos.firstIndex(where: { $0.id == target.id }) {
@@ -432,7 +555,7 @@ struct PhotoUnitEditor: View {
                     allowsBenefits: category?.templateKey == "theater"
                 )
             } else {
-                ContentUnavailableView("写真が見つかりません", systemImage: "photo")
+                FavorecoContentUnavailableView("写真が見つかりません", systemImage: "photo")
             }
         }
     }
@@ -543,6 +666,25 @@ private struct PhotoEditorTarget: Identifiable {
     let kind: Kind
 }
 
+private struct PhotoGridItem: Identifiable {
+    enum Kind {
+        case existing
+        case pending
+    }
+
+    let id: UUID
+    let kind: Kind
+
+    var editorTarget: PhotoEditorTarget {
+        switch kind {
+        case .existing:
+            PhotoEditorTarget(id: id, kind: .existing)
+        case .pending:
+            PhotoEditorTarget(id: id, kind: .pending)
+        }
+    }
+}
+
 private struct PhotoMetadataEditor: View {
     @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
     @Binding var metadata: PhotoMetadataDraft
@@ -558,7 +700,7 @@ private struct PhotoMetadataEditor: View {
                 if allowsBenefits {
                     Picker("写真の種類", selection: $metadata.purpose) {
                         ForEach(ExperiencePhotoPurpose.allCases) { purpose in
-                            Label(purpose.title, systemImage: purpose.systemImage)
+                            FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage)
                                 .tag(purpose)
                         }
                     }
@@ -566,7 +708,7 @@ private struct PhotoMetadataEditor: View {
                 } else {
                     Picker("写真の種類", selection: $metadata.purpose) {
                         ForEach(ExperiencePhotoPurpose.allCases.filter { $0 != .benefit }) { purpose in
-                            Label(purpose.title, systemImage: purpose.systemImage)
+                            FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage)
                                 .tag(purpose)
                         }
                     }
@@ -579,7 +721,10 @@ private struct PhotoMetadataEditor: View {
                     Button {
                         recognizeText()
                     } label: {
-                        Label(isRecognizing ? "読み取り中" : "この写真から文字を読み取る", systemImage: "text.viewfinder")
+                        FavorecoIconLabel(
+                            isRecognizing ? "読み取り中" : "この写真から文字を読み取る",
+                            systemImage: "text.viewfinder"
+                        )
                     }
                     .disabled(isRecognizing || !usesOCRImportAssist)
 
@@ -603,7 +748,10 @@ private struct PhotoMetadataEditor: View {
                             metadata.amountText = suggestion.value
                             statusText = "金額候補を反映しました。"
                         } label: {
-                            Label("金額候補 \(suggestion.displayValue)を使う", systemImage: "wand.and.stars")
+                            FavorecoIconLabel(
+                                "金額候補 \(suggestion.displayValue)を使う",
+                                systemImage: "wand.and.stars"
+                            )
                         }
                     }
                 }

@@ -75,7 +75,7 @@ struct AdmissionPreparationConfirmationSheet: View {
                 Button {
                     snooze()
                 } label: {
-                    Label("あとで確認", systemImage: "clock")
+                    FavorecoIconLabel("あとで確認", systemImage: "clock")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)

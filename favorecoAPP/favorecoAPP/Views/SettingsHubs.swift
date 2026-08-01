@@ -8,8 +8,7 @@ struct SettingsNavigationLabel: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.body.weight(.semibold))
+            FavorecoIcon(systemName: systemImage, size: 17, fallbackWeight: .semibold)
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 28)
 

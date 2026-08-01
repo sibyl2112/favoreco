@@ -385,8 +385,7 @@ private struct TheaterEventParticipationRow: View {
                         contentMode: .fill
                     )
                 } else {
-                    Image(systemName: "theatermasks.fill")
-                        .font(.title2)
+                    FavorecoIcon(systemName: "theatermasks.fill", size: 22)
                         .foregroundStyle(accentColor)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(accentColor.opacity(0.10))
@@ -434,7 +433,7 @@ private struct TheaterEventParticipationMetaRow: View {
     let text: String
 
     var body: some View {
-        Label(text, systemImage: systemImage)
+        FavorecoIconLabel(text, systemImage: systemImage, iconSize: 13)
             .font(FavorecoTypography.caption)
             .foregroundStyle(Color(red: 0.94, green: 0.91, blue: 0.86).opacity(0.86))
             .lineLimit(1)
@@ -501,8 +500,7 @@ private struct TheaterEventMetricTile: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: systemImage)
-                .font(.body.weight(.semibold))
+            FavorecoIcon(systemName: systemImage, size: 17, fallbackWeight: .semibold)
                 .foregroundStyle(.secondary)
                 .frame(width: 22)
 
@@ -528,7 +526,7 @@ private struct TheaterEventInfoRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: systemImage)
+            FavorecoIcon(systemName: systemImage, size: 16)
                 .foregroundStyle(.secondary)
                 .frame(width: 22)
             Text(title)
@@ -584,8 +582,7 @@ private struct TheaterEventSectionHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .medium))
+            FavorecoIcon(systemName: systemImage, size: 17, fallbackWeight: .medium)
                 .foregroundStyle(theaterSectionGold)
                 .frame(width: 22)
             Text(title)
@@ -619,8 +616,7 @@ private struct TheaterEventCollapsibleHeader: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 17, weight: .medium))
+                FavorecoIcon(systemName: systemImage, size: 17, fallbackWeight: .medium)
                     .foregroundStyle(theaterSectionGold)
                     .frame(width: 22)
                 Text(title)
@@ -659,8 +655,7 @@ private struct TheaterEventEmptyRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: systemImage)
-                .font(.title3)
+            FavorecoIcon(systemName: systemImage, size: 20)
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
             Text(message)

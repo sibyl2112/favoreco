@@ -18,8 +18,7 @@ struct TheaterEventUpcomingPlansSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "calendar.badge.clock")
-                    .font(.system(size: 17, weight: .medium))
+                FavorecoIcon(systemName: "calendar.badge.clock", size: 17, fallbackWeight: .medium)
                     .foregroundStyle(accentColor)
                     .frame(width: 22)
                 Text("次の予定")
@@ -33,8 +32,7 @@ struct TheaterEventUpcomingPlansSection: View {
             if plans.isEmpty {
                 Button(action: onAddPlan) {
                     HStack(spacing: 10) {
-                        Image(systemName: "calendar.badge.plus")
-                            .font(.title3)
+                        FavorecoIcon(systemName: "calendar.badge.plus", size: 20)
                             .foregroundStyle(accentColor)
                             .frame(width: 34, height: 34)
                             .background(accentColor.opacity(0.10), in: Circle())
@@ -128,8 +126,7 @@ struct TheaterEventTicketProgressSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "ticket")
-                    .font(.system(size: 17, weight: .medium))
+                FavorecoIcon(systemName: "ticket", size: 17, fallbackWeight: .medium)
                     .foregroundStyle(accentColor)
                     .frame(width: 22)
                 Text("チケット管理")
@@ -139,7 +136,7 @@ struct TheaterEventTicketProgressSection: View {
                     Button {
                         editingAttempt = selectedReference.attempt
                     } label: {
-                        Label("日付編集", systemImage: "pencil")
+                        FavorecoIconLabel("日付編集", systemImage: "pencil", iconSize: 13)
                             .font(FavorecoTypography.captionStrong)
                             .foregroundStyle(accentColor)
                     }
@@ -153,8 +150,7 @@ struct TheaterEventTicketProgressSection: View {
 
             if references.isEmpty {
                 HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "ticket")
-                        .font(.title3)
+                    FavorecoIcon(systemName: "ticket", size: 20)
                         .foregroundStyle(.secondary)
                         .frame(width: 28)
                     Text("この公演のチケット情報はまだ登録されていません。")
@@ -233,7 +229,7 @@ struct TheaterEventTicketProgressSection: View {
             if let plan = attempt.plan {
                 EditTicketAttemptView(plan: plan, attempt: attempt, prioritizesDates: true)
             } else {
-                ContentUnavailableView("予定が見つかりません", systemImage: "trash")
+                FavorecoContentUnavailableView("予定が見つかりません", systemImage: "trash")
             }
         }
     }
@@ -250,24 +246,18 @@ private struct TheaterEventScheduleArtwork: View {
     let accentColor: Color
 
     var body: some View {
-        Group {
-            if let representativePhoto {
-                RepresentativePhotoImage(
-                    photo: representativePhoto,
-                    maxPixelSize: 240,
-                    contentMode: .fill
+        GeometryReader { geometry in
+            ThumbnailImage(
+                reference: .event(event.id),
+                displaySize: geometry.size,
+                contentMode: .fill
+            ) {
+                CategoryDefaultArtworkImage(
+                    templateKey: event.category?.templateKey ?? "theater",
+                    displaySize: geometry.size
                 )
-            } else if let data = event.eyecatchData, let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: event.category?.iconSymbol ?? "theatermasks")
-                    .font(.title2)
-                    .foregroundStyle(accentColor)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(accentColor.opacity(0.10))
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .clipped()
     }

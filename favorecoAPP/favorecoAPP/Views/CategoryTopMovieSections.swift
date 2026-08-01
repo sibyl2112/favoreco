@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct MovieWatchedItem: Identifiable {
     let event: ExperienceEvent
@@ -13,37 +12,21 @@ struct MovieWatchedPosterTile: View {
 
     private let posterAspectRatio = CGFloat(EyecatchAspectRatio.cinemaPoster.value)
 
-    private var representativePhoto: PhotoBlob? {
-        EventRepresentativePhotoResolver.photo(for: item.event)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             GeometryReader { geometry in
-                ZStack {
-                    Color(.secondarySystemFill)
-
-                    if let representativePhoto {
-                        RepresentativePhotoImage(
-                            photo: representativePhoto,
-                            maxPixelSize: 420,
-                            contentMode: .fill
-                        )
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .clipped()
-                    } else if let data = item.event.eyecatchData, let image = UIImage(data: data) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipped()
-                    } else {
-                        Image(systemName: "movieclapper")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                    }
+                ThumbnailImage(
+                    reference: .event(item.event.id),
+                    displaySize: geometry.size,
+                    contentMode: .fill
+                ) {
+                    CategoryDefaultArtworkImage(
+                        templateKey: "movie",
+                        displaySize: geometry.size
+                    )
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
             }
             .aspectRatio(posterAspectRatio, contentMode: .fit)
 

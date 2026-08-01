@@ -67,10 +67,10 @@ struct PublicPlaceCatalogView: View {
 
                 Section("公開場所カタログ") {
                     if filteredEntries.isEmpty {
-                        ContentUnavailableView(
+                        FavorecoContentUnavailableView(
                             store.entries.isEmpty ? "カタログを取得できていません" : "条件に一致する場所がありません",
                             systemImage: "building.2.crop.circle",
-                            description: Text(store.entries.isEmpty ? "通信状態を確認して再取得してください。端末に取得済みのデータがあればオフラインでも表示します。" : "検索語または絞り込みを変更してください。")
+                            description: store.entries.isEmpty ? "通信状態を確認して再取得してください。端末に取得済みのデータがあればオフラインでも表示します。" : "検索語または絞り込みを変更してください。"
                         )
                     } else {
                         ForEach(filteredEntries) { entry in

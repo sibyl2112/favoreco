@@ -62,8 +62,7 @@ struct CalendarNextActionRow: View {
 
     var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: item.systemImage)
-                .font(.system(size: 13, weight: .semibold))
+            FavorecoIcon(systemName: item.systemImage, size: 13)
                 .foregroundStyle(tint)
                 .frame(width: 20)
 
@@ -133,8 +132,7 @@ struct CalendarPlanSummaryRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: plan.category?.iconSymbol ?? "ticket")
-                .font(.title3)
+            FavorecoIcon(systemName: plan.category?.iconSymbol ?? "ticket", size: 20)
                 .foregroundStyle(categoryColor)
                 .frame(width: 44, height: 44)
                 .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -157,9 +155,9 @@ struct CalendarPlanSummaryRow: View {
                 }
 
                 HStack(spacing: 8) {
-                    Label(FavorecoDateText.time(plan.startsAt), systemImage: "clock")
+                    FavorecoIconLabel(FavorecoDateText.time(plan.startsAt), systemImage: "clock", iconSize: 13)
                     if !plan.venueNameSnapshot.isEmpty {
-                        Label(plan.venueNameSnapshot, systemImage: "mappin.and.ellipse")
+                        FavorecoIconLabel(plan.venueNameSnapshot, systemImage: "mappin.and.ellipse", iconSize: 13)
                     }
                 }
                 .font(FavorecoTypography.caption)
@@ -174,14 +172,15 @@ struct CalendarPlanSummaryRow: View {
                 }
 
                 if let ticketInputIssue {
-                    Label(ticketInputIssue.title, systemImage: ticketInputIssue.systemImage)
+                    FavorecoIconLabel(ticketInputIssue.title, systemImage: ticketInputIssue.systemImage, iconSize: 13)
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.orange)
                         .lineLimit(1)
                 } else if let nextTicketAction {
-                    Label(
+                    FavorecoIconLabel(
                         "\(nextTicketAction.title) \(FavorecoDateText.compactDateTime(nextTicketAction.date))",
-                        systemImage: nextTicketAction.systemImage
+                        systemImage: nextTicketAction.systemImage,
+                        iconSize: 13
                     )
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(nextTicketAction.isOverdue ? .red : .orange)
@@ -210,7 +209,11 @@ struct ExternalCalendarEventRow: View {
                     .lineLimit(2)
 
                 HStack(spacing: 8) {
-                    Label(timeLabel, systemImage: event.isAllDay ? "sun.max" : "clock")
+                    FavorecoIconLabel(
+                        timeLabel,
+                        systemImage: event.isAllDay ? "sun.max" : "clock",
+                        iconSize: 13
+                    )
                     Text(event.calendarTitle)
                 }
                 .font(FavorecoTypography.caption)
@@ -299,7 +302,7 @@ struct CalendarAgendaSection: View {
                     .font(FavorecoTypography.sectionTitle)
 
                 HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle")
+                    FavorecoIcon(systemName: "checkmark.circle")
                         .foregroundStyle(.green)
                     Text("進行中のチケット予定はありません")
                         .font(FavorecoTypography.bodyStrong)
@@ -334,7 +337,7 @@ struct CalendarAgendaSection: View {
 
             if nextActionItems.isEmpty {
                 HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle")
+                    FavorecoIcon(systemName: "checkmark.circle")
                         .foregroundStyle(.green)
                     Text("今すぐ対応することはありません")
                         .font(FavorecoTypography.bodyStrong)

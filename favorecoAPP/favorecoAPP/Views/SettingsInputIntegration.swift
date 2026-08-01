@@ -122,7 +122,7 @@ struct RegistrationIntegrationSettingsView: View {
                 Button {
                     isShowingAccountEditor = true
                 } label: {
-                    Label("登録情報を追加", systemImage: "plus.circle")
+                    FavorecoIconLabel("登録情報を追加", systemImage: "plus.circle")
                 }
             }
 

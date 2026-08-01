@@ -8,11 +8,31 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import PhotosUI
 
 struct AddTicketPlanView: View {
     enum EntryMode {
         case plan
         case ticketSchedule
+        case unified
+    }
+
+    private enum UnifiedRegistrationPurpose: String, CaseIterable, Identifiable {
+        case interested
+        case plan
+        case application
+        case acquired
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .interested: "気になる"
+            case .plan: "予定"
+            case .application: "申込"
+            case .acquired: "取得済み"
+            }
+        }
     }
 
     private enum TargetSelectionMode: String, CaseIterable, Identifiable {
@@ -41,14 +61,31 @@ struct AddTicketPlanView: View {
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
     @StateObject private var publicPlaceStore = PublicPlaceCatalogStore.shared
     @State private var draft = TicketPlanDraft()
+    @State private var unifiedPurpose: UnifiedRegistrationPurpose = .interested
+    @State private var additionalApplications: [AdditionalTicketApplicationDraft] = []
     @State private var validationError = ""
     @State private var targetSelectionMode: TargetSelectionMode = .new
     @State private var selectedEventID: UUID?
     @State private var selectedPlanID: UUID?
     @State private var isShowingInterestedEventPicker = false
     @State private var isShowingRegisteredEventPicker = false
+    @State private var pendingSelectedEventID: UUID?
     @State private var isShowingPlaceSearch = false
+    @State private var savedTheaterPlan: Plan?
+    @State private var ticketPlanForNextStep: Plan?
+    @State private var isShowingAfterPlanSaveActions = false
+    @State private var savedTicketEvent: ExperienceEvent?
+    @State private var savedTicketSchedulePlan: Plan?
+    @State private var savedTicketAttempt: TicketAttempt?
+    @State private var planForAdditionalTicketAttempt: Plan?
+    @State private var eventForAdditionalTicketSchedule: ExperienceEvent?
+    @State private var isShowingAfterTicketSaveActions = false
+    @State private var selectedTicketOCRItems: [PhotosPickerItem] = []
+    @State private var isReadingTicketImage = false
+    @State private var ticketOCRStatus = ""
+    @State private var pendingTicketOCRImport: PendingTicketOCRImport?
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
+    @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
     private let editingPlan: Plan?
     private let targetEvent: ExperienceEvent?
     private let onSave: (() -> Void)?
@@ -71,12 +108,23 @@ struct AddTicketPlanView: View {
         _draft = State(initialValue: TicketPlanDraft(inboxItem: inboxItem, categoryID: category.id))
     }
 
-    init(event: ExperienceEvent, entryMode: EntryMode = .plan, onSave: (() -> Void)? = nil) {
+    init(
+        event: ExperienceEvent,
+        entryMode: EntryMode = .plan,
+        continuingApplication: TicketAttempt? = nil,
+        onSave: (() -> Void)? = nil
+    ) {
         self.editingPlan = nil
         self.targetEvent = event
         self.onSave = onSave
         self.entryMode = entryMode
-        _draft = State(initialValue: TicketPlanDraft(event: event, entryMode: entryMode))
+        _draft = State(
+            initialValue: TicketPlanDraft(
+                event: event,
+                entryMode: entryMode,
+                continuingApplication: continuingApplication
+            )
+        )
         _targetSelectionMode = State(initialValue: entryMode == .ticketSchedule ? .existingEvent : .new)
     }
 
@@ -107,12 +155,24 @@ struct AddTicketPlanView: View {
         accounts.first { $0.id == draft.accountID }
     }
 
+    private func selectedAccount(for draft: TicketPlanDraft) -> TicketAccount? {
+        accounts.first { $0.id == draft.accountID }
+    }
+
     private var interestedEvents: [ExperienceEvent] {
         events.filter { !$0.isArchived && $0.stateKey == "interested" }
     }
 
     private var activeEvents: [ExperienceEvent] {
         events.filter { !$0.isArchived }
+    }
+
+    private var interestedEventPickerItems: [EventPickerItem] {
+        interestedEvents.map(EventPickerItem.init)
+    }
+
+    private var activeEventPickerItems: [EventPickerItem] {
+        activeEvents.map(EventPickerItem.init)
     }
 
     private var availablePlans: [Plan] {
@@ -141,7 +201,10 @@ struct AddTicketPlanView: View {
     }
 
     private var targetSelectionModes: [TargetSelectionMode] {
-        entryMode == .ticketSchedule ? [.new, .existingEvent] : [.new, .interested]
+        if entryMode == .unified {
+            return [.new, .existingEvent]
+        }
+        return entryMode == .ticketSchedule ? [.new, .existingEvent] : [.new, .interested]
     }
 
     private var allowsTargetSelection: Bool {
@@ -152,38 +215,119 @@ struct AddTicketPlanView: View {
         editingPlan != nil && entryMode == .plan
     }
 
+    private var isUnifiedRegistration: Bool {
+        entryMode == .unified
+    }
+
+    private var isInterestedOnly: Bool {
+        isUnifiedRegistration && unifiedPurpose == .interested
+    }
+
+    private var usesPlanRegistration: Bool {
+        entryMode == .plan || (isUnifiedRegistration && unifiedPurpose == .plan)
+    }
+
+    private var usesTicketRegistration: Bool {
+        entryMode == .ticketSchedule
+            || (isUnifiedRegistration
+                && (unifiedPurpose == .application || unifiedPurpose == .acquired))
+    }
+
+    private var unifiedApplicationFlowOptions: [TicketFlowDefinition] {
+        TicketFlowDefinition.registrationOptions.filter {
+            $0.key == "lotteryPlanned" || $0.key == "saleWaiting"
+        }
+    }
+
+    private var unifiedPurposePicker: some View {
+        Picker("登録内容", selection: $unifiedPurpose) {
+            ForEach(UnifiedRegistrationPurpose.allCases) { purpose in
+                Text(purpose.title).tag(purpose)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                if allowsTargetSelection {
-                    Section("予定の対象") {
-                        Picker("登録方法", selection: $targetSelectionMode) {
-                            ForEach(targetSelectionModes) { mode in
-                                Text(targetSelectionTitle(mode)).tag(mode)
-                            }
+                if isUnifiedRegistration {
+                    Section("登録内容") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            unifiedPurposePicker
+
+                            Rectangle()
+                                .fill(Color.accentColor.opacity(0.18))
+                                .frame(height: 1)
+
+                            Text(unifiedPurposeDescription)
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.primary.opacity(0.76))
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .pickerStyle(.segmented)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 14)
+                        .background {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.accentColor.opacity(0.065))
+                        }
+                        .overlay(alignment: .center) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(
+                                    Color.accentColor.opacity(0.58),
+                                    lineWidth: 1.25,
+                                    antialiased: true
+                                )
+                                .allowsHitTesting(false)
+                        }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 24, bottom: 0, trailing: 24))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
+                } else if entryMode == .plan {
+                    Section {
+                        TheaterUnifiedFormIntroduction(entry: unifiedFormEntry)
+                    }
+                }
+
+                if allowsTargetSelection {
+                    Section(isUnifiedRegistration ? "対象" : "予定の対象") {
+                        if targetSelectionModes.count > 1 {
+                            Picker("登録方法", selection: $targetSelectionMode) {
+                                ForEach(targetSelectionModes) { mode in
+                                    Text(targetSelectionTitle(mode)).tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        }
 
                         if targetSelectionMode == .existingEvent {
                             if activeEvents.isEmpty {
-                                ContentUnavailableView(
+                                FavorecoContentUnavailableView(
                                     "登録済みのイベントがありません",
                                     systemImage: "rectangle.stack.badge.plus",
-                                    description: Text("新しいイベントとチケットを登録してください。")
+                                    description: "新しいイベントとチケットを登録してください。"
                                 )
                             } else {
                                 Button {
+                                    pendingSelectedEventID = nil
                                     isShowingRegisteredEventPicker = true
                                 } label: {
                                     HStack(spacing: 12) {
-                                        Image(systemName: selectedRegisteredEvent?.category?.iconSymbol ?? "magnifyingglass")
+                                        FavorecoIcon(
+                                            systemName: selectedRegisteredEvent?.category?.iconSymbol ?? "magnifyingglass",
+                                            size: 18
+                                        )
                                             .frame(width: 28)
 
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(selectedRegisteredEvent?.title ?? "登録済みイベントを検索")
-                                                .font(FavorecoTypography.bodyStrong)
+                                                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
                                                 .foregroundStyle(.primary)
-                                                .lineLimit(2)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.72)
+                                                .allowsTightening(true)
 
                                             if let selectedRegisteredEvent {
                                                 Text(selectedRegisteredEvent.category?.name ?? "未分類")
@@ -204,39 +348,90 @@ struct AddTicketPlanView: View {
 
                                 if selectedRegisteredEvent != nil {
                                     if plansForSelectedEvent.isEmpty {
-                                        Label("予定も同時に作成します", systemImage: "calendar.badge.plus")
+                                        FavorecoIconLabel(
+                                            "予定も同時に作成します",
+                                            systemImage: "calendar.badge.plus",
+                                            iconSize: 13
+                                        )
                                             .font(FavorecoTypography.caption)
                                             .foregroundStyle(.secondary)
                                     } else {
-                                        Picker("チケットを追加する予定", selection: $selectedPlanID) {
-                                            Text("新しい予定を作る").tag(Optional<UUID>.none)
-                                            ForEach(plansForSelectedEvent) { plan in
-                                                Text(planSelectionDescription(plan)).tag(Optional(plan.id))
+                                        Menu {
+                                            Button {
+                                                selectedPlanID = nil
+                                            } label: {
+                                                if selectedPlanID == nil {
+                                                    Label("新しい予定を作る", systemImage: "checkmark")
+                                                } else {
+                                                    Text("新しい予定を作る")
+                                                }
                                             }
+                                            ForEach(plansForSelectedEvent) { plan in
+                                                Button {
+                                                    selectedPlanID = plan.id
+                                                } label: {
+                                                    if selectedPlanID == plan.id {
+                                                        Label(planSelectionDescription(plan), systemImage: "checkmark")
+                                                    } else {
+                                                        Text(planSelectionDescription(plan))
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 8) {
+                                                Text("追加先予定")
+                                                    .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+
+                                                Divider()
+                                                    .frame(height: 20)
+
+                                                Text(selectedPlanSelectionText)
+                                                    .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                                                    .foregroundStyle(Color.accentColor)
+                                                    .lineLimit(1)
+                                                    .minimumScaleFactor(0.72)
+                                                    .allowsTightening(true)
+
+                                                Spacer(minLength: 0)
+
+                                                Image(systemName: "chevron.up.chevron.down")
+                                                    .font(.caption2.weight(.semibold))
+                                                    .foregroundStyle(Color.accentColor)
+                                            }
+                                            .contentShape(Rectangle())
                                         }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
                         } else if targetSelectionMode == .interested {
                             if interestedEvents.isEmpty {
-                                ContentUnavailableView(
+                                FavorecoContentUnavailableView(
                                     "気になる対象がありません",
                                     systemImage: "heart",
-                                    description: Text("先にクイック登録するか、新しく対象を登録してください。")
+                                    description: "先にクイック登録するか、新しく対象を登録してください。"
                                 )
                             } else {
                                 Button {
+                                    pendingSelectedEventID = nil
                                     isShowingInterestedEventPicker = true
                                 } label: {
                                     HStack(spacing: 12) {
-                                        Image(systemName: selectedInterestedEvent?.category?.iconSymbol ?? "magnifyingglass")
+                                        FavorecoIcon(
+                                            systemName: selectedInterestedEvent?.category?.iconSymbol ?? "magnifyingglass",
+                                            size: 18
+                                        )
                                             .frame(width: 28)
 
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(selectedInterestedEvent?.title ?? "作品・対象を検索")
-                                                .font(FavorecoTypography.bodyStrong)
+                                                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
                                                 .foregroundStyle(.primary)
-                                                .lineLimit(2)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.72)
+                                                .allowsTightening(true)
 
                                             if let selectedInterestedEvent {
                                                 Text(selectedInterestedEvent.category?.name ?? "未分類")
@@ -255,144 +450,392 @@ struct AddTicketPlanView: View {
                                 .buttonStyle(.plain)
                             }
                         } else {
-                            Text(entryMode == .ticketSchedule
+                            Text(usesTicketRegistration
                                  ? "新しいイベント、予定、チケット情報をまとめて登録します。"
-                                 : "作品・施設などの対象と予定を同時に登録します。")
+                                 : isInterestedOnly
+                                     ? "新しい公演を「気になる」に保存します。"
+                                     : "作品・施設などの対象と予定を同時に登録します。")
                                 .font(FavorecoTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
 
-                Section("予定の基本情報") {
-                    if entryMode == .ticketSchedule, let selectedExistingPlan {
-                        LabeledContent("ジャンル", value: selectedExistingPlan.category?.name ?? "未設定")
-                        LabeledContent("予定", value: selectedExistingPlan.title)
-                        LabeledContent(
-                            "日時",
-                            value: selectedExistingPlan.hasConfirmedSchedule
-                                ? FavorecoDateText.compactDateTime(selectedExistingPlan.startsAt)
-                                : "参加日未定"
-                        )
-                        if !selectedExistingPlan.venueNameSnapshot.isEmpty {
-                            LabeledContent("会場", value: selectedExistingPlan.venueNameSnapshot)
-                        }
-                    } else if let event = resolvedTargetEvent {
-                        LabeledContent("ジャンル", value: event.category?.name ?? "未設定")
-                    } else {
-                        Picker("ジャンル", selection: $draft.categoryID) {
-                            Text("未設定").tag(Optional<UUID>.none)
-                            ForEach(visibleCategories) { category in
-                                Text(category.name).tag(Optional(category.id))
+                if usesTicketRegistration, let selectedExistingPlan {
+                    Section("予定の基本情報") {
+                        VStack(spacing: 0) {
+                            compactPlanSummaryRow(
+                                title: "ジャンル",
+                                value: selectedExistingPlan.category?.name ?? "未設定"
+                            )
+                            Divider()
+                            compactPlanSummaryRow(
+                                title: "タイトル",
+                                value: displayedPlanTitle(selectedExistingPlan)
+                            )
+                            Divider()
+                            compactPlanSummaryRow(
+                                title: "日時",
+                                value: selectedExistingPlan.hasConfirmedSchedule
+                                    ? FavorecoDateText.compactDateTime(selectedExistingPlan.startsAt)
+                                    : "参加日未定"
+                            )
+                            if !selectedExistingPlan.venueNameSnapshot.isEmpty {
+                                Divider()
+                                compactPlanSummaryRow(
+                                    title: "会場",
+                                    value: selectedExistingPlan.venueNameSnapshot
+                                )
                             }
                         }
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                     }
+                } else {
+                    Section {
+                        if let event = resolvedTargetEvent {
+                            linkedTheaterReferenceRow(
+                                title: "ジャンル",
+                                value: event.category?.name ?? "未設定"
+                            )
+                        } else {
+                            ExplicitFormControlRow(title: "ジャンル") {
+                                Picker("ジャンル", selection: $draft.categoryID) {
+                                    Text("未設定").tag(Optional<UUID>.none)
+                                    ForEach(visibleCategories) { category in
+                                        Text(category.name).tag(Optional(category.id))
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                            }
+                        }
 
-                    if selectedExistingPlan == nil {
-                        ExplicitFormTextField(
-                            title: "公演・イベント名",
-                            prompt: "公演・イベント名を入力",
-                            text: $draft.title
-                        )
+                        if let event = resolvedTargetEvent,
+                           event.category?.templateKey == "theater" {
+                            let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+                            linkedTheaterReferenceRow(title: "公演名", value: event.title)
+                            if !event.seriesName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                linkedTheaterReferenceRow(title: "シリーズ", value: event.seriesName)
+                            }
+                            let performanceTypeName = TheaterPerformanceType.displayName(
+                                for: event.subTypeKey,
+                                customName: fields.eventPerformanceTypeCustomName
+                            )
+                            if !performanceTypeName.isEmpty {
+                                linkedTheaterReferenceRow(title: "公演種別", value: performanceTypeName)
+                            }
+                        } else {
+                            ExplicitFormTextField(
+                                title: "公演・イベント名",
+                                prompt: "公演・イベント名を入力",
+                                text: $draft.title,
+                                axis: .horizontal,
+                                minimumLines: 1,
+                                maximumLines: 1,
+                                labelStyle: .horizontal,
+                                inputFontSize: ExplicitFormMetrics.inputFontSize,
+                                labelLineLimit: 2
+                            )
+                        }
                         ExplicitFormTextField(
                             title: "サブタイトル",
                             prompt: "任意",
-                            text: $draft.subtitle
+                            text: $draft.subtitle,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
                         )
-                        if entryMode == .ticketSchedule {
-                            Toggle("参加する日時が決まっている", isOn: $draft.hasConfirmedSchedule)
+                        ExplicitFormTextField(
+                            title: "公式URL",
+                            prompt: "公演・この予定の案内ページ（任意）",
+                            text: $draft.officialURL,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
+                        )
+                            .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+
+                        if resolvedTargetEvent?.category?.templateKey == "theater" {
+                            Text("気になる公演の情報を引き継いでいます。ここでは観劇する日時と会場を追加します。")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } header: {
+                        if usesPlanRegistration {
+                            TheaterUnifiedSectionLabel(section: .performanceBasic)
+                        } else {
+                            Text("公演の基本情報")
+                        }
+                    }
+                }
+
+                if selectedExistingPlan == nil && !isInterestedOnly {
+                    Section {
+                        if usesTicketRegistration {
+                            Text("日程は決まっていますか？")
+                                .font(FavorecoTypography.bodyStrong)
+                            Picker("日程", selection: $draft.hasConfirmedSchedule) {
+                                Text("未定").tag(false)
+                                Text("決まっている").tag(true)
+                            }
+                            .pickerStyle(.segmented)
                             if !draft.hasConfirmedSchedule {
-                                Text("日程はチケット取得後にも設定できます。決まるまではComing Upとカレンダーには表示されません。")
-                                    .font(FavorecoTypography.caption)
+                                Text("未定の予定はComing Up・カレンダーに表示されません")
+                                    .font(FavorecoTypography.jpSans(10, weight: .regular, relativeTo: .caption2))
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(2, reservesSpace: true)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.vertical, 2)
                             }
                         }
                         if draft.hasConfirmedSchedule {
                             if usesOpeningTime {
-                                FiveMinuteDateTimeRow(title: "開場", selection: openingTimeBinding)
+                                TheaterScheduleDateRow(selection: scheduleDateBinding)
+                                OptionalTenMinuteTimeRow(
+                                    title: "開場",
+                                    selection: openingTimeBinding,
+                                    isSet: $draft.hasOpeningTime,
+                                    defaultValue: defaultOpeningTime
+                                )
+                                TenMinuteTimeRow(title: "開演", selection: startTimeBinding)
+                                TenMinuteTimeRow(title: "終了", selection: endTimeBinding)
+                            } else {
+                                FiveMinuteDateTimeRow(title: "開始", selection: startTimeBinding)
+                                FiveMinuteDateTimeRow(title: "終了", selection: endTimeBinding)
                             }
-                            FiveMinuteDateTimeRow(title: "開始", selection: startTimeBinding)
-                            FiveMinuteDateTimeRow(title: "終了", selection: endTimeBinding)
                         }
-                        ExplicitFormTextField(
-                            title: "会場",
-                            prompt: "会場名を入力、または下のApple Mapsから選択",
-                            text: venueNameBinding
-                        )
-                        placeSuggestionList
-                        ExplicitFormTextField(
-                            title: "住所",
-                            prompt: "任意（地図・カレンダーでは住所を優先）",
-                            text: venueAddressBinding
-                        )
-                            .textContentType(.fullStreetAddress)
-                        Button {
-                            isShowingPlaceSearch = true
-                        } label: {
-                            Label("Apple Mapsで会場・住所を入力", systemImage: "map")
+                    } header: {
+                        if usesPlanRegistration {
+                            TheaterUnifiedSectionLabel(section: .participation)
+                        } else {
+                            Text(usesOpeningTime ? "観劇予定日" : "予定日時")
                         }
-                        PlaceMapPreview(
-                            venueName: draft.venueName,
-                            address: draft.venueAddress,
-                            latitude: draft.latitude,
-                            longitude: draft.longitude
-                        )
-                        ExplicitFormTextField(
-                            title: "この予定の公式URL",
-                            prompt: "この予定専用の案内ページ（任意）",
-                            text: $draft.officialURL
-                        )
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
                     }
+
+                    if usesPlanRegistration || draft.hasConfirmedSchedule {
+                        Section {
+                            inheritedTheaterVenueChoices
+                            ExplicitFormTextField(
+                                title: "会場（任意）",
+                                prompt: "公演情報から選択、または会場名を入力",
+                                text: venueNameBinding,
+                                axis: .vertical,
+                                minimumLines: 1,
+                                maximumLines: 2,
+                                labelStyle: .horizontal
+                            )
+                            placeSuggestionList
+                            ExplicitFormTextField(
+                                title: "住所",
+                                prompt: "任意（地図・カレンダーでは住所を優先）",
+                                text: venueAddressBinding,
+                                axis: .vertical,
+                                minimumLines: 1,
+                                maximumLines: 2,
+                                labelStyle: .horizontal
+                            )
+                                .textContentType(.fullStreetAddress)
+                            Button {
+                                isShowingPlaceSearch = true
+                            } label: {
+                                FavorecoIconLabel("Apple Mapsで会場・住所を入力", systemImage: "map")
+                                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
+                                    .allowsTightening(true)
+                            }
+                            PlaceMapPreview(
+                                venueName: draft.venueName,
+                                address: draft.venueAddress,
+                                latitude: draft.latitude,
+                                longitude: draft.longitude
+                            )
+                        } header: {
+                            Text("会場")
+                        }
+                    }
+
                 }
 
-                if !editsPlanOnly, entryMode == .ticketSchedule {
-                    Section("チケット情報") {
-                        LabeledContent("入力内容", value: "チケットスケジュール")
+                if !editsPlanOnly, isUnifiedRegistration || entryMode == .ticketSchedule {
+                    Section {
+                        if usesOCRImportAssist {
+                            PhotosPicker(
+                                selection: $selectedTicketOCRItems,
+                                maxSelectionCount: 2,
+                                matching: .images
+                            ) {
+                                HStack(spacing: 8) {
+                                    FavorecoIcon(
+                                        systemName: "text.viewfinder",
+                                        size: 17
+                                    )
+                                    .foregroundStyle(Color.accentColor)
 
+                                    Text(
+                                        isReadingTicketImage
+                                            ? "画像を読み取り中"
+                                            : isUnifiedRegistration
+                                                ? "画像から情報を読み取る"
+                                                : "画像からチケット情報を読み取る"
+                                    )
+                                    .font(FavorecoTypography.jpSans(
+                                        13,
+                                        weight: .semibold,
+                                        relativeTo: .body
+                                    ))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
+                                    .allowsTightening(true)
+
+                                    Spacer(minLength: 4)
+
+                                    if isReadingTicketImage {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    } else {
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isReadingTicketImage)
+                            .onChange(of: selectedTicketOCRItems) { _, items in
+                                guard !items.isEmpty else { return }
+                                Task { await readTicketImages(from: items) }
+                            }
+                        } else {
+                            FavorecoIconLabel(
+                                "画像OCRは設定でOFFになっています",
+                                systemImage: "text.viewfinder"
+                            )
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        if !ticketOCRStatus.isEmpty {
+                            Text(ticketOCRStatus)
+                                .font(FavorecoTypography.jpSans(
+                                    10.5,
+                                    weight: .regular,
+                                    relativeTo: .caption
+                                ))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+
+                    Section("チケット情報") {
                         if draft.createsTicketAttempt {
-                            Picker("登録内容", selection: $draft.flowKey) {
-                                ForEach(draft.flowOptions) { flow in
-                                    Text(flow.name).tag(flow.key)
+                            if isUnifiedRegistration {
+                                if unifiedPurpose == .application {
+                                    ExplicitFormControlRow(title: "申込方法") {
+                                        Picker("申込方法", selection: $draft.flowKey) {
+                                            ForEach(unifiedApplicationFlowOptions) { flow in
+                                                Text(flow.key == "lotteryPlanned" ? "抽選" : "先着")
+                                                    .tag(flow.key)
+                                            }
+                                        }
+                                        .labelsHidden()
+                                        .pickerStyle(.segmented)
+                                        .frame(maxWidth: .infinity, alignment: .trailing)
+                                    }
+                                    .onChange(of: draft.flowKey) { _, newValue in
+                                        draft.applyFlowDefaults(newValue)
+                                    }
+                                }
+                            } else {
+                                ExplicitFormControlRow(title: "登録内容") {
+                                    Picker("登録内容", selection: $draft.flowKey) {
+                                        ForEach(draft.flowOptions) { flow in
+                                            Text(flow.name).tag(flow.key)
+                                        }
+                                    }
+                                    .labelsHidden()
+                                    .pickerStyle(.menu)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                                }
+                                .onChange(of: draft.flowKey) { _, newValue in
+                                    draft.applyFlowDefaults(newValue)
                                 }
                             }
-                            .onChange(of: draft.flowKey) { _, newValue in
-                                draft.applyFlowDefaults(newValue)
+
+                            if !isUnifiedRegistration || unifiedPurpose == .application {
+                                ticketFlowGuide
                             }
 
-                            Text(TicketFlowDefinition.definition(for: draft.flowKey).description)
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(.secondary)
+                            if draft.showsApplicationGroup {
+                                ExplicitFormTextField(
+                                    title: "申込まとめ",
+                                    prompt: "例：あの夏｜7/31 東京公演（任意）",
+                                    text: $draft.applicationGroupName,
+                                    axis: .vertical,
+                                    minimumLines: 1,
+                                    maximumLines: 2,
+                                    labelStyle: .horizontal
+                                )
+                                Text("同じ日程の別サイト申込、またはツアーの複数日程をまとめる名前です。先行区分と購入先は各申込で設定します。")
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
 
                             if draft.showsEntryRoute {
-                                Picker(draft.entryRouteLabel, selection: $draft.entryRouteKey) {
-                                    Text("未設定").tag("")
-                                    ForEach(draft.entryRouteOptions) { route in
-                                        Text(route.name).tag(route.key)
+                                ExplicitFormControlRow(title: draft.entryRouteLabel) {
+                                    Picker(draft.entryRouteLabel, selection: $draft.entryRouteKey) {
+                                        Text("未設定").tag("")
+                                        ForEach(draft.entryRouteOptions) { route in
+                                            Text(route.name).tag(route.key)
+                                        }
                                     }
+                                    .labelsHidden()
+                                    .pickerStyle(.menu)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
                                 }
                             }
 
                             if draft.showsAccountFields {
-                                Picker("申込アカウント（任意）", selection: $draft.accountID) {
-                                    Text("未設定").tag(Optional<UUID>.none)
-                                    ForEach(activeAccounts) { account in
-                                        Text(accountLabel(account)).tag(Optional(account.id))
+                                ExplicitFormControlRow(title: "申込アカウント", isOptional: true) {
+                                    Picker("申込アカウント", selection: $draft.accountID) {
+                                        Text("未設定").tag(Optional<UUID>.none)
+                                        ForEach(activeAccounts) { account in
+                                            Text(accountLabel(account)).tag(Optional(account.id))
+                                        }
                                     }
+                                    .labelsHidden()
+                                    .pickerStyle(.menu)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
                                 }
                                 .onChange(of: draft.accountID) { _, newValue in
                                     draft.applyAccount(activeAccounts.first { $0.id == newValue })
                                 }
 
-                                TextField("名義（任意）", text: $draft.holderName)
+                                ExplicitFormTextField(
+                                    title: "名義",
+                                    prompt: "任意",
+                                    text: $draft.holderName,
+                                    labelStyle: .horizontal
+                                )
                             }
 
                             if draft.showsTicketGuide {
-                                Picker("購入先", selection: $draft.ticketGuideKey) {
-                                    ForEach(TicketGuideDefinition.all) { guide in
-                                        Text(guide.name).tag(guide.key)
+                                ExplicitFormControlRow(title: "購入先") {
+                                    Picker("購入先", selection: $draft.ticketGuideKey) {
+                                        ForEach(TicketGuideDefinition.all) { guide in
+                                            Text(guide.name).tag(guide.key)
+                                        }
                                     }
+                                    .labelsHidden()
+                                    .pickerStyle(.menu)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
                                 }
                                 .onChange(of: draft.ticketGuideKey) { _, newValue in
                                     draft.applyTicketGuide(newValue)
@@ -400,13 +843,31 @@ struct AddTicketPlanView: View {
                                 .disabled(draft.accountID != nil)
 
                                 if draft.ticketGuideKey == TicketGuideDefinition.customKey {
-                                    TextField("FC・公式サイトなど", text: $draft.ticketSite)
-                                    TextField("申込・購入URL", text: $draft.purchaseURL)
+                                    ExplicitFormTextField(
+                                        title: "購入先（任意）",
+                                        prompt: "FC・公式サイトなど",
+                                        text: $draft.ticketSite,
+                                        axis: .vertical,
+                                        minimumLines: 1,
+                                        maximumLines: 2,
+                                        labelStyle: .horizontal
+                                    )
+                                    ExplicitFormTextField(
+                                        title: "購入URL（任意）",
+                                        prompt: "申込・購入URL",
+                                        text: $draft.purchaseURL,
+                                        axis: .vertical,
+                                        minimumLines: 1,
+                                        maximumLines: 2,
+                                        labelStyle: .horizontal
+                                    )
                                         .keyboardType(.URL)
                                         .textInputAutocapitalization(.never)
                                 } else {
-                                    LabeledContent("申込・購入URL", value: draft.purchaseURL.isEmpty ? "未設定" : draft.purchaseURL)
-                                        .font(FavorecoTypography.caption)
+                                    linkedTheaterReferenceRow(
+                                        title: "申込・購入URL",
+                                        value: draft.purchaseURL
+                                    )
                                 }
                             }
                         }
@@ -418,7 +879,11 @@ struct AddTicketPlanView: View {
                                 DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
                             }
                             if draft.showsApplyDeadline {
-                                DateToggleRow(title: "申込締切", isOn: $draft.hasApplyDeadline, date: $draft.applyDeadlineAt)
+                                DateToggleRow(
+                                    title: "抽選申込締切",
+                                    isOn: $draft.hasApplyDeadline,
+                                    date: $draft.applyDeadlineAt
+                                )
                             }
                             if draft.showsResultAnnounce {
                                 DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
@@ -438,50 +903,86 @@ struct AddTicketPlanView: View {
 
                     if draft.createsTicketAttempt && draft.showsTicketDetails {
                         Section("金額・座席") {
-                            TextField("チケット代", text: $draft.priceText)
+                            ExplicitFormTextField(
+                                title: "チケット代（任意）",
+                                prompt: "金額",
+                                text: $draft.priceText,
+                                labelStyle: .horizontal
+                            )
                                 .keyboardType(.numberPad)
-                            TextField("手数料", text: $draft.feeText)
+                            ExplicitFormTextField(
+                                title: "手数料（任意）",
+                                prompt: "金額",
+                                text: $draft.feeText,
+                                labelStyle: .horizontal
+                            )
                                 .keyboardType(.numberPad)
-                            Stepper("枚数 \(draft.quantity)", value: $draft.quantity, in: 1...20)
-                            TextField("座席・整理番号", text: $draft.seatText, axis: .vertical)
-                                .lineLimit(2...4)
+                            ExplicitFormControlRow(title: "枚数") {
+                                Stepper(
+                                    value: $draft.quantity,
+                                    in: 1...20
+                                ) {
+                                    Text("\(draft.quantity)枚")
+                                        .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                                }
+                                .fixedSize()
+                            }
+                            ExplicitFormTextField(
+                                title: "座席（任意）",
+                                prompt: "座席・整理番号",
+                                text: $draft.seatText,
+                                axis: .vertical,
+                                minimumLines: 1,
+                                maximumLines: 2,
+                                labelStyle: .horizontal
+                            )
                         }
+                    }
+
+                    if isUnifiedRegistration && unifiedPurpose == .application {
+                        additionalApplicationsSection
                     }
                 }
 
                 Section(editsPlanOnly ? "予定メモ" : "タグ・メモ") {
                     if !editsPlanOnly && draft.createsTicketAttempt {
-                        TextField("任意タグ（カンマ区切り）", text: $draft.tagNamesText)
-                        Text("例: S席、第1希望、同行者分")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
+                        TicketTagInputField(text: $draft.tagNamesText)
                     }
                     if editsPlanOnly {
-                        TextField(
-                            "この予定について残すメモ（任意）",
+                        ExplicitFormTextField(
+                            title: "メモ",
+                            prompt: "この予定について残すメモ（任意）",
                             text: $draft.memo,
-                            axis: .vertical
+                            axis: .vertical,
+                            minimumLines: 5,
+                            maximumLines: 5,
+                            labelStyle: .horizontal,
+                            reservesLineSpace: true
                         )
-                        .lineLimit(3...8)
                     } else {
                         ExplicitFormTextField(
                             title: "メモ",
                             prompt: "任意",
                             text: $draft.memo,
                             axis: .vertical,
-                            minimumLines: 3,
-                            maximumLines: 8
+                            minimumLines: 5,
+                            maximumLines: 5,
+                            reservesLineSpace: true
                         )
                     }
                 }
             }
+            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button {
                         dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
                     }
+                    .accessibilityLabel("キャンセル")
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
@@ -495,6 +996,12 @@ struct AddTicketPlanView: View {
                 if editingPlan == nil {
                     draft.setInitialCategoryIfNeeded(visibleCategories)
                 }
+                if isUnifiedRegistration {
+                    applyUnifiedPurpose(unifiedPurpose)
+                }
+            }
+            .onChange(of: unifiedPurpose) { _, purpose in
+                applyUnifiedPurpose(purpose)
             }
             .onChange(of: targetSelectionMode) { _, newValue in
                 selectedEventID = nil
@@ -529,25 +1036,31 @@ struct AddTicketPlanView: View {
             } message: {
                 Text(validationError)
             }
-            .sheet(isPresented: $isShowingInterestedEventPicker) {
+            .sheet(
+                isPresented: $isShowingInterestedEventPicker,
+                onDismiss: applyPendingEventSelection
+            ) {
                 EventPicker(
                     title: "気になるから選ぶ",
                     searchPrompt: "タイトル・シリーズ・ジャンル",
-                    events: interestedEvents,
+                    items: interestedEventPickerItems,
                     selectedEventID: selectedEventID
-                ) { event in
-                    selectedEventID = event.id
+                ) { eventID in
+                    pendingSelectedEventID = eventID
                     isShowingInterestedEventPicker = false
                 }
             }
-            .sheet(isPresented: $isShowingRegisteredEventPicker) {
+            .sheet(
+                isPresented: $isShowingRegisteredEventPicker,
+                onDismiss: applyPendingEventSelection
+            ) {
                 EventPicker(
                     title: "登録済みイベントから選ぶ",
                     searchPrompt: "タイトル・シリーズ・ジャンル",
-                    events: activeEvents,
+                    items: activeEventPickerItems,
                     selectedEventID: selectedEventID
-                ) { event in
-                    selectedEventID = event.id
+                ) { eventID in
+                    pendingSelectedEventID = eventID
                     isShowingRegisteredEventPicker = false
                 }
             }
@@ -559,6 +1072,58 @@ struct AddTicketPlanView: View {
                     )
                     isShowingPlaceSearch = false
                 }
+            }
+            .sheet(item: $ticketPlanForNextStep, onDismiss: {
+                dismiss()
+            }) { plan in
+                AddTicketPlanView(plan: plan, entryMode: .ticketSchedule)
+            }
+            .sheet(item: $eventForAdditionalTicketSchedule, onDismiss: {
+                dismiss()
+            }) { event in
+                AddTicketPlanView(
+                    event: event,
+                    entryMode: .ticketSchedule,
+                    continuingApplication: savedTicketAttempt
+                )
+            }
+            .sheet(item: $planForAdditionalTicketAttempt, onDismiss: {
+                if savedTicketSchedulePlan != nil {
+                    isShowingAfterTicketSaveActions = true
+                }
+            }) { plan in
+                EditTicketAttemptView(plan: plan)
+            }
+            .confirmationDialog(
+                "観劇予定を保存しました",
+                isPresented: $isShowingAfterPlanSaveActions,
+                titleVisibility: .visible
+            ) {
+                Button("チケットを手配する") {
+                    ticketPlanForNextStep = savedTheaterPlan
+                }
+                Button("完了") {
+                    dismiss()
+                }
+            } message: {
+                Text("続けて、抽選・発売・受取の予定を登録できます。")
+            }
+            .confirmationDialog(
+                "申込・発売を保存しました",
+                isPresented: $isShowingAfterTicketSaveActions,
+                titleVisibility: .visible
+            ) {
+                Button("同じ日程に別の申込を追加") {
+                    planForAdditionalTicketAttempt = savedTicketSchedulePlan
+                }
+                Button("同じ申込まとめに別日程を追加") {
+                    continueApplicationCollectionOnAnotherSchedule()
+                }
+                Button("入力完了") {
+                    dismiss()
+                }
+            } message: {
+                Text("同じ日程へ別サイトの申込を追加するか、ツアーの別日程を同じ申込まとめへ追加できます。")
             }
             .task { await publicPlaceStore.prepare() }
         }
@@ -597,7 +1162,7 @@ struct AddTicketPlanView: View {
                             draft.apply(placeMaster: place)
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: "mappin.and.ellipse")
+                                FavorecoIcon(systemName: "mappin.and.ellipse", size: 16)
                                     .foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(place.name)
@@ -626,7 +1191,7 @@ struct AddTicketPlanView: View {
                             draft.apply(publicPlace: PublicPlaceSelectionDraft(entry: entry))
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: "building.2.crop.circle")
+                                FavorecoIcon(systemName: "building.2.crop.circle", size: 16)
                                     .foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(entry.officialName).foregroundStyle(.primary)
@@ -636,7 +1201,7 @@ struct AddTicketPlanView: View {
                                         .lineLimit(1)
                                 }
                                 Spacer()
-                                Image(systemName: "plus.circle")
+                                FavorecoIcon(systemName: "plus.circle", size: 16)
                                     .foregroundStyle(.tertiary)
                             }
                         }
@@ -657,31 +1222,355 @@ struct AddTicketPlanView: View {
         )
     }
 
+    @ViewBuilder
+    private var inheritedTheaterVenueChoices: some View {
+        if let event = resolvedTargetEvent,
+           event.category?.templateKey == "theater" {
+            let venues = VisitUnitFields(rawValue: event.unitFieldsRaw)
+                .eventVenues
+                .filter { !$0.isEmpty }
+            if venues.count > 1 {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("公演情報から会場を選択")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.secondary)
+                    ForEach(venues) { venue in
+                        Button {
+                            draft.applyRegisteredVenue(venue)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: draft.trimmedVenueName == venue.trimmedName
+                                      ? "checkmark.circle.fill"
+                                      : "mappin.circle")
+                                    .foregroundStyle(Color.accentColor)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(venue.trimmedName.isEmpty ? "会場名未登録" : venue.trimmedName)
+                                        .font(FavorecoTypography.bodyStrong)
+                                    if !venue.trimmedAddress.isEmpty {
+                                        Text(venue.trimmedAddress)
+                                            .font(FavorecoTypography.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
     private var navigationTitle: String {
+        if isUnifiedRegistration { return "公演・チケットを登録" }
+        if entryMode == .plan { return unifiedFormEntry.navigationTitle }
         if editingPlan != nil { return "予定を編集" }
         return draft.createsTicketAttempt ? "チケットスケジュール" : "予定を立てる"
+    }
+
+    private var unifiedPurposeDescription: String {
+        switch unifiedPurpose {
+        case .interested:
+            return "公演情報だけを保存します。日時やチケットは後から追加できます。"
+        case .plan:
+            return "観に行く日時と会場を登録します。"
+        case .application:
+            return "抽選または先着の申込から、当落・入金・受取まで管理します。"
+        case .acquired:
+            return "取得済みチケットの日時、金額、枚数、座席を記録します。"
+        }
+    }
+
+    @ViewBuilder
+    private var additionalApplicationsSection: some View {
+        Section {
+            ForEach($additionalApplications) { $application in
+                DisclosureGroup(isExpanded: $application.isExpanded) {
+                    additionalApplicationEditor(application: $application)
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(application.title)
+                            .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                        Text(application.summary)
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .swipeActions {
+                    Button(role: .destructive) {
+                        additionalApplications.removeAll { $0.id == application.id }
+                    } label: {
+                        Label("削除", systemImage: "trash")
+                    }
+                }
+            }
+
+            Button {
+                addApplicationForSameSchedule()
+            } label: {
+                FavorecoIconLabel("同じ日程に別の申込を追加", systemImage: "plus.circle")
+                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+            }
+
+            if !additionalApplications.isEmpty {
+                Text("公演・参加日時は共通です。申込枠、購入先、名義、各期限だけを申込ごとに設定します。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("同じ日程の別申込")
+        }
+    }
+
+    @ViewBuilder
+    private func additionalApplicationEditor(
+        application: Binding<AdditionalTicketApplicationDraft>
+    ) -> some View {
+        let applicationDraft = application.draft
+
+        ExplicitFormControlRow(title: "申込方法") {
+            Picker("申込方法", selection: applicationDraft.flowKey) {
+                ForEach(unifiedApplicationFlowOptions) { flow in
+                    Text(flow.key == "lotteryPlanned" ? "抽選" : "先着")
+                        .tag(flow.key)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .onChange(of: applicationDraft.wrappedValue.flowKey) { _, newValue in
+            applicationDraft.wrappedValue.applyFlowDefaults(newValue)
+        }
+
+        if applicationDraft.wrappedValue.showsEntryRoute {
+            ExplicitFormControlRow(title: applicationDraft.wrappedValue.entryRouteLabel) {
+                Picker(
+                    applicationDraft.wrappedValue.entryRouteLabel,
+                    selection: applicationDraft.entryRouteKey
+                ) {
+                    Text("未設定").tag("")
+                    ForEach(applicationDraft.wrappedValue.entryRouteOptions) { route in
+                        Text(route.name).tag(route.key)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+
+        if applicationDraft.wrappedValue.showsAccountFields {
+            ExplicitFormControlRow(title: "申込アカウント", isOptional: true) {
+                Picker("申込アカウント", selection: applicationDraft.accountID) {
+                    Text("未設定").tag(Optional<UUID>.none)
+                    ForEach(activeAccounts) { account in
+                        Text(accountLabel(account)).tag(Optional(account.id))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .onChange(of: applicationDraft.wrappedValue.accountID) { _, accountID in
+                applicationDraft.wrappedValue.applyAccount(
+                    activeAccounts.first { $0.id == accountID }
+                )
+            }
+
+            ExplicitFormTextField(
+                title: "名義",
+                prompt: "任意",
+                text: applicationDraft.holderName,
+                labelStyle: .horizontal
+            )
+        }
+
+        ExplicitFormControlRow(title: "購入先") {
+            Picker("購入先", selection: applicationDraft.ticketGuideKey) {
+                ForEach(TicketGuideDefinition.all) { guide in
+                    Text(guide.name).tag(guide.key)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .onChange(of: applicationDraft.wrappedValue.ticketGuideKey) { _, newValue in
+            applicationDraft.wrappedValue.applyTicketGuide(newValue)
+        }
+        .disabled(applicationDraft.wrappedValue.accountID != nil)
+
+        if applicationDraft.wrappedValue.ticketGuideKey == TicketGuideDefinition.customKey {
+            ExplicitFormTextField(
+                title: "購入先（任意）",
+                prompt: "FC・公式サイトなど",
+                text: applicationDraft.ticketSite,
+                axis: .vertical,
+                minimumLines: 1,
+                maximumLines: 2,
+                labelStyle: .horizontal
+            )
+            ExplicitFormTextField(
+                title: "購入URL（任意）",
+                prompt: "申込・購入URL",
+                text: applicationDraft.purchaseURL,
+                axis: .vertical,
+                minimumLines: 1,
+                maximumLines: 2,
+                labelStyle: .horizontal
+            )
+            .keyboardType(.URL)
+            .textInputAutocapitalization(.never)
+        }
+
+        if applicationDraft.wrappedValue.showsSaleStart {
+            DateToggleRow(
+                title: applicationDraft.wrappedValue.saleStartLabel,
+                isOn: applicationDraft.hasSaleStart,
+                date: applicationDraft.saleStartAt
+            )
+        }
+        if applicationDraft.wrappedValue.showsApplyDeadline {
+            DateToggleRow(
+                title: "抽選申込締切",
+                isOn: applicationDraft.hasApplyDeadline,
+                date: applicationDraft.applyDeadlineAt
+            )
+        }
+        if applicationDraft.wrappedValue.showsResultAnnounce {
+            DateToggleRow(
+                title: "当落発表",
+                isOn: applicationDraft.hasResultAnnounce,
+                date: applicationDraft.resultAnnounceAt
+            )
+        }
+        if applicationDraft.wrappedValue.showsPaymentDeadline {
+            DateToggleRow(
+                title: "入金締切",
+                isOn: applicationDraft.hasPaymentDeadline,
+                date: applicationDraft.paymentDeadlineAt
+            )
+        }
+        if applicationDraft.wrappedValue.showsIssueStart {
+            DateToggleRow(
+                title: "チケット受取開始（任意）",
+                isOn: applicationDraft.hasIssueStart,
+                date: applicationDraft.issueStartAt
+            )
+        }
+    }
+
+    private func addApplicationForSameSchedule() {
+        var newDraft = TicketPlanDraft(entryMode: .ticketSchedule)
+        newDraft.applyFlowDefaults(
+            unifiedApplicationFlowOptions.contains { $0.key == draft.flowKey }
+                ? draft.flowKey
+                : "lotteryPlanned"
+        )
+        newDraft.applicationGroupIDRaw = draft.applicationGroupIDRaw
+        newDraft.applicationGroupName = draft.applicationGroupName
+        additionalApplications.append(
+            AdditionalTicketApplicationDraft(draft: newDraft, isExpanded: true)
+        )
+        for index in additionalApplications.indices.dropLast() {
+            additionalApplications[index].isExpanded = false
+        }
+    }
+
+    private func applyUnifiedPurpose(_ purpose: UnifiedRegistrationPurpose) {
+        if purpose != .application {
+            additionalApplications.removeAll()
+        }
+        switch purpose {
+        case .interested:
+            draft.createsTicketAttempt = false
+            draft.hasConfirmedSchedule = false
+        case .plan:
+            draft.createsTicketAttempt = false
+            draft.hasConfirmedSchedule = true
+        case .application:
+            draft.createsTicketAttempt = true
+            if draft.flowKey != "lotteryPlanned" && draft.flowKey != "saleWaiting" {
+                draft.flowKey = "lotteryPlanned"
+                draft.statusKey = TicketFlowDefinition.definition(for: "lotteryPlanned").defaultStatusKey
+            }
+        case .acquired:
+            draft.createsTicketAttempt = true
+            draft.flowKey = "acquired"
+            draft.statusKey = TicketFlowDefinition.definition(for: "acquired").defaultStatusKey
+        }
+    }
+
+    private var unifiedFormEntry: TheaterUnifiedFormEntry {
+        editingPlan == nil ? .planCreation : .planEditing
+    }
+
+    private var scheduleDateBinding: Binding<Date> {
+        Binding(
+            get: { draft.startsAt },
+            set: { newDate in
+                let dayStart = Calendar.current.startOfDay(for: newDate)
+                let dayEnd = Calendar.current.date(
+                    bySettingHour: 23,
+                    minute: 50,
+                    second: 0,
+                    of: newDate
+                ) ?? newDate
+                let proposedStart = date(on: newDate, preservingTimeFrom: draft.startsAt)
+                    .roundedToNearestTenMinutes()
+                let start = min(max(proposedStart, dayStart), dayEnd)
+                let proposedEnd = date(on: newDate, preservingTimeFrom: draft.endsAt)
+                    .roundedToNearestTenMinutes()
+                let end = min(max(proposedEnd, start), dayEnd)
+                draft.startsAt = start
+                draft.endsAt = end
+                if draft.hasOpeningTime {
+                    let opening = date(on: newDate, preservingTimeFrom: draft.opensAt)
+                        .roundedToNearestTenMinutes()
+                    draft.opensAt = min(max(opening, dayStart), start)
+                }
+            }
+        )
     }
 
     private var openingTimeBinding: Binding<Date> {
         Binding(
             get: { draft.opensAt },
             set: { newValue in
-                let opening = newValue.roundedToNearestFiveMinutes()
-                let start = Calendar.current.date(byAdding: .minute, value: 30, to: opening) ?? opening
-                draft.opensAt = opening
-                draft.startsAt = start
-                draft.endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: start) ?? start
+                let opening = date(on: draft.startsAt, preservingTimeFrom: newValue)
+                    .roundedToNearestTenMinutes()
+                draft.opensAt = min(max(opening, startOfScheduleDay), draft.startsAt)
             }
         )
+    }
+
+    private var defaultOpeningTime: Date {
+        let proposed = Calendar.current.date(byAdding: .minute, value: -30, to: draft.startsAt)
+            ?? draft.startsAt
+        return max(proposed, startOfScheduleDay).roundedToNearestTenMinutes()
     }
 
     private var startTimeBinding: Binding<Date> {
         Binding(
             get: { draft.startsAt },
             set: { newValue in
-                let start = newValue.roundedToNearestFiveMinutes()
+                let previousStart = draft.startsAt
+                let duration = max(0, draft.endsAt.timeIntervalSince(previousStart))
+                let start = date(on: previousStart, preservingTimeFrom: newValue)
+                    .roundedToNearestTenMinutes()
+                let proposedEnd = start.addingTimeInterval(duration)
                 draft.startsAt = start
-                draft.endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: start) ?? start
+                draft.endsAt = min(max(proposedEnd, start), endOfScheduleDay)
+
+                if draft.hasOpeningTime {
+                    let openingOffset = previousStart.timeIntervalSince(draft.opensAt)
+                    let proposedOpening = start.addingTimeInterval(-max(0, openingOffset))
+                    draft.opensAt = min(max(proposedOpening, startOfScheduleDay), start)
+                }
             }
         )
     }
@@ -689,13 +1578,215 @@ struct AddTicketPlanView: View {
     private var endTimeBinding: Binding<Date> {
         Binding(
             get: { draft.endsAt },
-            set: { draft.endsAt = $0.roundedToNearestFiveMinutes() }
+            set: { newValue in
+                let end = date(on: draft.startsAt, preservingTimeFrom: newValue)
+                    .roundedToNearestTenMinutes()
+                draft.endsAt = min(max(end, draft.startsAt), endOfScheduleDay)
+            }
         )
+    }
+
+    private var startOfScheduleDay: Date {
+        Calendar.current.startOfDay(for: draft.startsAt)
+    }
+
+    private var endOfScheduleDay: Date {
+        Calendar.current.date(
+            bySettingHour: 23,
+            minute: 50,
+            second: 0,
+            of: draft.startsAt
+        ) ?? draft.startsAt
+    }
+
+    private func date(on day: Date, preservingTimeFrom time: Date) -> Date {
+        let calendar = Calendar.current
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
+        return calendar.date(
+            bySettingHour: timeComponents.hour ?? 0,
+            minute: timeComponents.minute ?? 0,
+            second: 0,
+            of: day
+        ) ?? day
     }
 
     private func accountLabel(_ account: TicketAccount) -> String {
         let holder = account.accountName.isEmpty ? "名義未設定" : account.accountName
         return "\(account.serviceName)｜\(holder)"
+    }
+
+    @MainActor
+    private func readTicketImages(from items: [PhotosPickerItem]) async {
+        isReadingTicketImage = true
+        ticketOCRStatus = "\(items.count)枚の画像から文字を読み取っています。"
+        defer {
+            isReadingTicketImage = false
+            selectedTicketOCRItems = []
+        }
+
+        var sourceData: [Data] = []
+        for item in items.prefix(2) {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                sourceData.append(data)
+            }
+        }
+        guard !sourceData.isEmpty else {
+            ticketOCRStatus = "画像を読み込めませんでした。別の画像をお試しください。"
+            return
+        }
+
+        let analyses = await Task.detached(priority: .userInitiated) {
+            sourceData.map {
+                QuickCaptureImageService.recognizedTextAnalysis(from: $0)
+            }
+        }.value
+        let combinedText = analyses
+            .map(\.fullText)
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        guard !combinedText.isEmpty else {
+            ticketOCRStatus = "文字を読み取れませんでした。必要な項目を手入力してください。"
+            return
+        }
+
+        var result = TicketOCRImportParser.parse(
+            text: combinedText,
+            referenceDate: selectedExistingPlan?.startsAt ?? Date()
+        )
+        if !draft.showsSaleStart { result.saleStartAt = nil }
+        if !draft.showsApplyDeadline { result.applyDeadlineAt = nil }
+        if !draft.showsResultAnnounce { result.resultAnnounceAt = nil }
+        if !draft.showsPaymentDeadline { result.paymentDeadlineAt = nil }
+        if !draft.showsIssueStart { result.issueStartAt = nil }
+        if !draft.showsTicketDetails {
+            result.priceText = nil
+            result.seatText = nil
+            result.quantity = nil
+        }
+        let canImportPlanInformation = selectedExistingPlan == nil
+        let pending = PendingTicketOCRImport(
+            result: result,
+            suggestedTitle: canImportPlanInformation
+                && draft.trimmedTitle.isEmpty
+                ? analyses.first(where: {
+                    $0.isTitleSuggestionReliable && !$0.suggestedTitle.isEmpty
+                })?.suggestedTitle
+                : nil,
+            venue: canImportPlanInformation && draft.trimmedVenueName.isEmpty
+                ? analyses.lazy.compactMap(\.venueCandidates.first).first
+                : nil,
+            eventDateRange: canImportPlanInformation && !draft.hasConfirmedSchedule
+                ? analyses.lazy.compactMap(\.eventDateRange).first
+                : nil
+        )
+        guard pending.hasSuggestions else {
+            ticketOCRStatus = "文字は読み取れましたが、自動反映できる項目は見つかりませんでした。"
+            return
+        }
+        pendingTicketOCRImport = pending
+        applyPendingTicketOCRImport()
+    }
+
+    private func applyPendingTicketOCRImport() {
+        guard let pending = pendingTicketOCRImport else { return }
+        pendingTicketOCRImport = nil
+        let result = pending.result
+        var appliedFields: [String] = []
+
+        if let guideKey = result.ticketGuideKey,
+           draft.trimmedTicketSite.isEmpty,
+           draft.trimmedPurchaseURL.isEmpty {
+            draft.applyTicketGuide(guideKey)
+            appliedFields.append("購入先")
+        }
+        if let purchaseURL = result.purchaseURL, draft.trimmedPurchaseURL.isEmpty {
+            draft.purchaseURL = purchaseURL
+            appliedFields.append("購入URL")
+        }
+
+        if draft.showsSaleStart, !draft.hasSaleStart, let date = result.saleStartAt {
+            draft.hasSaleStart = true
+            draft.saleStartAt = date
+            appliedFields.append(draft.saleStartLabel)
+        }
+        if draft.showsApplyDeadline, !draft.hasApplyDeadline, let date = result.applyDeadlineAt {
+            draft.hasApplyDeadline = true
+            draft.applyDeadlineAt = date
+            appliedFields.append("抽選申込締切")
+        }
+        if draft.showsResultAnnounce, !draft.hasResultAnnounce, let date = result.resultAnnounceAt {
+            draft.hasResultAnnounce = true
+            draft.resultAnnounceAt = date
+            appliedFields.append("当落発表")
+        }
+        if draft.showsPaymentDeadline, !draft.hasPaymentDeadline, let date = result.paymentDeadlineAt {
+            draft.hasPaymentDeadline = true
+            draft.paymentDeadlineAt = date
+            appliedFields.append("入金締切")
+        }
+        if draft.showsIssueStart, !draft.hasIssueStart, let date = result.issueStartAt {
+            draft.hasIssueStart = true
+            draft.issueStartAt = date
+            appliedFields.append("チケット受取開始")
+        }
+
+        if draft.showsTicketDetails {
+            if let priceText = result.priceText, draft.priceText.isEmpty {
+                draft.priceText = priceText
+                appliedFields.append("チケット代")
+            }
+            if let seatText = result.seatText, draft.seatText.isEmpty {
+                draft.seatText = seatText
+                appliedFields.append("座席")
+            }
+            if let quantity = result.quantity, draft.quantity == 1 {
+                draft.quantity = quantity
+                appliedFields.append("枚数")
+            }
+        }
+
+        if selectedExistingPlan == nil {
+            if draft.trimmedTitle.isEmpty,
+               let suggestedTitle = pending.suggestedTitle,
+               !suggestedTitle.isEmpty {
+                draft.title = suggestedTitle
+                appliedFields.append("タイトル")
+            }
+            if draft.trimmedVenueName.isEmpty,
+               let venue = pending.venue {
+                draft.venueName = venue
+                appliedFields.append("会場")
+            }
+            if !draft.hasConfirmedSchedule, let dateRange = pending.eventDateRange {
+                draft.hasConfirmedSchedule = true
+                draft.startsAt = dateRange.startsAt
+                draft.endsAt = dateRange.endsAt
+                appliedFields.append("日時")
+            }
+        }
+
+        let uniqueFields = appliedFields.reduce(into: [String]()) { values, field in
+            if !values.contains(field) {
+                values.append(field)
+            }
+        }
+        if uniqueFields.isEmpty {
+            ticketOCRStatus = "文字は読み取れましたが、自動反映できる項目は見つかりませんでした。"
+        } else {
+            let importedDateFields = Set([
+                draft.saleStartLabel,
+                "抽選申込締切",
+                "当落発表",
+                "入金締切",
+                "チケット受取開始",
+                "日時",
+            ])
+            let needsDateReview = uniqueFields.contains {
+                importedDateFields.contains($0)
+            }
+            ticketOCRStatus = "\(uniqueFields.joined(separator: "・"))へ仮入力しました。保存前に確認してください。"
+                + (needsDateReview ? " 日時を確認してください。" : "")
+        }
     }
 
     private func planSelectionDescription(_ plan: Plan) -> String {
@@ -705,8 +1796,110 @@ struct AddTicketPlanView: View {
         return "\(title) / \(date) / \(plan.venueNameSnapshot)"
     }
 
+    private var selectedPlanSelectionText: String {
+        guard let selectedExistingPlan else { return "新しい予定を作る" }
+        return planSelectionDescription(selectedExistingPlan)
+    }
+
+    private func applyPendingEventSelection() {
+        guard let eventID = pendingSelectedEventID else { return }
+        pendingSelectedEventID = nil
+        selectedEventID = eventID
+    }
+
+    private var ticketFlowGuide: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("この登録で入力する項目")
+                    .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(Color.accentColor)
+
+                Text(TicketFlowDefinition.definition(for: draft.flowKey).description)
+                    .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.68)
+                    .allowsTightening(true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.accentColor.opacity(0.08))
+        )
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .listRowSeparator(.hidden)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func compactPlanSummaryRow(title: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title)
+                .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .allowsTightening(true)
+                .frame(width: 64, alignment: .leading)
+
+            Divider()
+                .frame(height: 18)
+
+            Text(value)
+                .font(FavorecoTypography.jpSans(12, weight: .regular, relativeTo: .body))
+                .foregroundStyle(value == "未設定" ? Color.secondary : Color.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .allowsTightening(true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 7)
+    }
+
+    private func linkedTheaterReferenceRow(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(
+                    FavorecoTypography.jpSans(
+                        ExplicitFormMetrics.labelFontSize,
+                        weight: .semibold,
+                        relativeTo: .caption
+                    )
+                )
+                .foregroundStyle(Color.secondary.opacity(0.92))
+                .lineLimit(1)
+                .frame(height: 21, alignment: .bottom)
+
+            Text(value.isEmpty ? "未設定" : value)
+                .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+                .allowsTightening(true)
+                .frame(maxWidth: .infinity, minHeight: 27, alignment: .leading)
+        }
+        .frame(minHeight: ExplicitFormMetrics.rowMinimumHeight, alignment: .topLeading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title)、\(value.isEmpty ? "未設定" : value)")
+    }
+
+    private func displayedPlanTitle(_ plan: Plan) -> String {
+        let eventTitle = plan.event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !eventTitle.isEmpty { return eventTitle }
+        let planTitle = plan.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return planTitle.isEmpty ? "予定" : planTitle
+    }
+
     private func targetSelectionTitle(_ mode: TargetSelectionMode) -> String {
-        guard entryMode == .ticketSchedule else { return mode.title }
+        guard usesTicketRegistration || isUnifiedRegistration else { return mode.title }
         switch mode {
         case .new: return "新規イベント"
         case .existingEvent: return "登録済みイベント"
@@ -731,28 +1924,64 @@ struct AddTicketPlanView: View {
             validationError = validationMessage
             return
         }
+        if isUnifiedRegistration && unifiedPurpose == .application {
+            for (index, application) in additionalApplications.enumerated() {
+                if let validationMessage = application.draft.validationMessage(
+                    usesOpeningTime: false
+                ) {
+                    validationError = "申込\(index + 2)：\(validationMessage)"
+                    return
+                }
+            }
+        }
 
         let now = Date()
-        if let editingPlan {
+        if isInterestedOnly {
+            saveInterestedEvent(now: now)
+        } else if let editingPlan {
             update(plan: editingPlan, now: now)
-        } else if entryMode == .ticketSchedule, let selectedExistingPlan {
+        } else if usesTicketRegistration, let selectedExistingPlan {
             createTicketAttempt(on: selectedExistingPlan, now: now)
         } else {
             create(now: now)
         }
     }
 
+    private func saveInterestedEvent(now: Date) {
+        let event: ExperienceEvent
+        if let resolvedTargetEvent {
+            event = resolvedTargetEvent
+        } else {
+            event = createTargetEvent(now: now, initialStateKey: "interested")
+        }
+        if event.stateKey.isEmpty {
+            event.stateKey = "interested"
+        }
+        event.updatedAt = now
+
+        do {
+            try modelContext.save()
+            onSave?()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            validationError = "公演を保存できませんでした。もう一度お試しください。"
+            assertionFailure("Failed to save interested event: \(error)")
+        }
+    }
+
     private func create(now: Date) {
         let event = resolvedTargetEvent ?? createTargetEvent(now: now)
+        let synchronizedTitle = synchronizedPlanTitle(event: event)
         let plan = Plan(
-            title: draft.trimmedTitle,
+            title: synchronizedTitle,
             subtitle: draft.trimmedSubtitle,
             planKindKey: draft.hasConfirmedSchedule ? "performance" : Plan.undatedTicketPlanKindKey,
             stateKey: "planned",
             startsAt: draft.startsAt,
             endsAt: draft.endsAt,
-            opensAt: usesOpeningTime ? draft.opensAt : Date.distantPast,
-            venueNameSnapshot: draft.trimmedVenueName,
+            opensAt: usesOpeningTime && draft.hasOpeningTime ? draft.opensAt : Date.distantPast,
+            venueNameSnapshot: draft.hasConfirmedSchedule ? draft.trimmedVenueName : "",
             officialURL: draft.trimmedOfficialURL,
             sourceURL: draft.trimmedOfficialURL,
             memo: draft.trimmedMemo,
@@ -760,34 +1989,48 @@ struct AddTicketPlanView: View {
             updatedAt: now,
             category: event.category ?? selectedCategory,
             event: event,
-            placeMaster: resolvePlaceMaster(
-                for: draft.placeSnapshot,
-                publicSelection: draft.publicPlaceSelection,
-                from: placeMasters,
-                in: modelContext
-            )
+            placeMaster: draft.hasConfirmedSchedule
+                ? resolvePlaceMaster(
+                    for: draft.placeSnapshot,
+                    publicSelection: draft.publicPlaceSelection,
+                    from: placeMasters,
+                    in: modelContext
+                )
+                : nil
         )
         modelContext.insert(plan)
         event.stateKey = draft.hasConfirmedSchedule ? "active" : "interested"
         event.updatedAt = now
 
-        var attemptForScheduling: TicketAttempt?
+        var attemptsForScheduling: [TicketAttempt] = []
         if draft.createsTicketAttempt {
-            let attempt = makeTicketAttempt(for: plan, now: now)
-            attempt.notificationSettingsRaw = notificationSettingsRaw(for: attempt, plan: plan)
-            modelContext.insert(attempt)
-            attemptForScheduling = attempt
+            let attempts = makeTicketAttempts(for: plan, now: now)
+            if let primaryAttempt = attempts.first {
+                attachUngroupedAttempts(on: plan, to: primaryAttempt, now: now)
+            }
+            for attempt in attempts {
+                attempt.notificationSettingsRaw = notificationSettingsRaw(for: attempt, plan: plan)
+                modelContext.insert(attempt)
+            }
+            attemptsForScheduling = attempts
         }
 
         do {
             try modelContext.save()
             syncNotifications(
                 for: plan,
-                attempt: attemptForScheduling,
+                attempts: attemptsForScheduling,
                 includesPlanReminder: plan.hasConfirmedSchedule
             )
             onSave?()
-            dismiss()
+            if usesPlanRegistration,
+               event.category?.templateKey == "theater",
+               !draft.createsTicketAttempt {
+                savedTheaterPlan = plan
+                isShowingAfterPlanSaveActions = true
+            } else {
+                finishTicketSaveIfNeeded(plan, attempt: attemptsForScheduling.first)
+            }
         } catch {
             modelContext.rollback()
             validationError = "予定を保存できませんでした。もう一度お試しください。"
@@ -796,15 +2039,19 @@ struct AddTicketPlanView: View {
     }
 
     private func createTicketAttempt(on plan: Plan, now: Date) {
-        let attempt = makeTicketAttempt(for: plan, now: now)
-        attempt.notificationSettingsRaw = notificationSettingsRaw(for: attempt, plan: plan)
-        modelContext.insert(attempt)
+        let attempts = makeTicketAttempts(for: plan, now: now)
+        guard let primaryAttempt = attempts.first else { return }
+        attachUngroupedAttempts(on: plan, to: primaryAttempt, now: now)
+        for attempt in attempts {
+            attempt.notificationSettingsRaw = notificationSettingsRaw(for: attempt, plan: plan)
+            modelContext.insert(attempt)
+        }
 
         do {
             try modelContext.save()
-            syncNotifications(for: plan, attempt: attempt, includesPlanReminder: false)
+            syncNotifications(for: plan, attempts: attempts, includesPlanReminder: false)
             onSave?()
-            dismiss()
+            finishTicketSaveIfNeeded(plan, attempt: primaryAttempt)
         } catch {
             modelContext.rollback()
             validationError = "チケットスケジュールを保存できませんでした。もう一度お試しください。"
@@ -812,41 +2059,110 @@ struct AddTicketPlanView: View {
         }
     }
 
-    private func makeTicketAttempt(for plan: Plan, now: Date) -> TicketAttempt {
-        TicketAttempt(
-            statusKey: draft.statusKey,
-            entryRouteKey: draft.entryRouteKey,
-            ticketSite: draft.trimmedTicketSite,
-            holderName: draft.trimmedHolderName,
-            saleStartAt: draft.hasSaleStart ? draft.saleStartAt : Date.distantPast,
-            applyDeadlineAt: draft.hasApplyDeadline ? draft.applyDeadlineAt : Date.distantPast,
-            resultAnnounceAt: draft.hasResultAnnounce ? draft.resultAnnounceAt : Date.distantPast,
-            paymentDeadlineAt: draft.hasPaymentDeadline ? draft.paymentDeadlineAt : Date.distantPast,
-            issueStartAt: draft.hasIssueStart ? draft.issueStartAt : Date.distantPast,
-            price: decimal(from: draft.priceText),
-            fee: decimal(from: draft.feeText),
-            quantity: draft.quantity,
-            purchaseURL: draft.trimmedPurchaseURL,
-            seatText: draft.trimmedSeatText,
-            unitFieldsRaw: draft.ticketUnitFieldsRaw,
-            memo: draft.trimmedMemo,
+    private func makeTicketAttempt(
+        for plan: Plan,
+        now: Date,
+        sourceDraft: TicketPlanDraft? = nil,
+        applicationGroupIDRaw sharedGroupID: String? = nil,
+        applicationGroupName sharedGroupName: String? = nil
+    ) -> TicketAttempt {
+        let sourceDraft = sourceDraft ?? draft
+        let applicationGroupName = sharedGroupName
+            ?? sourceDraft.resolvedApplicationGroupName(for: plan)
+        let applicationGroupIDRaw = sharedGroupID
+            ?? sourceDraft.resolvedApplicationGroupIDRaw(for: applicationGroupName)
+        return TicketAttempt(
+            statusKey: sourceDraft.statusKey,
+            entryRouteKey: sourceDraft.entryRouteKey,
+            ticketSite: sourceDraft.trimmedTicketSite,
+            holderName: sourceDraft.trimmedHolderName,
+            saleStartAt: sourceDraft.hasSaleStart ? sourceDraft.saleStartAt : Date.distantPast,
+            applyDeadlineAt: sourceDraft.hasApplyDeadline ? sourceDraft.applyDeadlineAt : Date.distantPast,
+            resultAnnounceAt: sourceDraft.hasResultAnnounce ? sourceDraft.resultAnnounceAt : Date.distantPast,
+            paymentDeadlineAt: sourceDraft.hasPaymentDeadline ? sourceDraft.paymentDeadlineAt : Date.distantPast,
+            issueStartAt: sourceDraft.hasIssueStart ? sourceDraft.issueStartAt : Date.distantPast,
+            price: decimal(from: sourceDraft.priceText),
+            fee: decimal(from: sourceDraft.feeText),
+            quantity: sourceDraft.quantity,
+            purchaseURL: sourceDraft.trimmedPurchaseURL,
+            seatText: sourceDraft.trimmedSeatText,
+            applicationGroupIDRaw: applicationGroupIDRaw,
+            applicationGroupName: applicationGroupName,
+            unitFieldsRaw: sourceDraft.ticketUnitFieldsRaw,
+            memo: sourceDraft.trimmedMemo,
             createdAt: now,
             updatedAt: now,
             plan: plan,
-            account: selectedAccount
+            account: selectedAccount(for: sourceDraft)
         )
     }
 
-    private func createTargetEvent(now: Date) -> ExperienceEvent {
-        let event = ExperienceEvent(
+    private func makeTicketAttempts(for plan: Plan, now: Date) -> [TicketAttempt] {
+        let primary = makeTicketAttempt(for: plan, now: now)
+        guard isUnifiedRegistration,
+              unifiedPurpose == .application,
+              !additionalApplications.isEmpty else {
+            return [primary]
+        }
+
+        return [primary] + additionalApplications.map { application in
+            makeTicketAttempt(
+                for: plan,
+                now: now,
+                sourceDraft: application.draft,
+                applicationGroupIDRaw: primary.applicationGroupIDRaw,
+                applicationGroupName: primary.applicationGroupName
+            )
+        }
+    }
+
+    private func attachUngroupedAttempts(
+        on plan: Plan,
+        to newAttempt: TicketAttempt,
+        now: Date
+    ) {
+        let groupID = newAttempt.applicationGroupIDRaw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !groupID.isEmpty else { return }
+        for existingAttempt in plan.ticketAttempts ?? [] where
+            !existingAttempt.isArchived
+                && existingAttempt.applicationGroupIDRaw
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty {
+            existingAttempt.applicationGroupIDRaw = groupID
+            existingAttempt.applicationGroupName = newAttempt.applicationGroupName
+            existingAttempt.updatedAt = now
+        }
+    }
+
+    private func createTargetEvent(
+        now: Date,
+        initialStateKey: String = "active"
+    ) -> ExperienceEvent {
+        let existingEvent: ExperienceEvent? = if selectedCategory?.templateKey == "theater" {
+            ExperienceEvent.matchingProduction(
+                title: draft.trimmedTitle,
+                categoryID: selectedCategory?.id,
+                in: events
+            )
+        } else {
+            nil
+        }
+        let event = existingEvent ?? ExperienceEvent(
             title: draft.trimmedTitle,
-            officialURL: draft.trimmedOfficialURL,
-            stateKey: "active",
+            stateKey: initialStateKey,
             createdAt: now,
             updatedAt: now,
             category: selectedCategory
         )
-        modelContext.insert(event)
+        if existingEvent == nil {
+            modelContext.insert(event)
+        }
+        event.title = draft.trimmedTitle
+        if !draft.trimmedOfficialURL.isEmpty {
+            event.officialURL = draft.trimmedOfficialURL
+        }
+        event.updatedAt = now
         return event
     }
 
@@ -856,19 +2172,21 @@ struct AddTicketPlanView: View {
         }
         let existingAttempt = latestAttempt(for: plan)
 
-        plan.title = draft.trimmedTitle
+        plan.title = synchronizedPlanTitle(event: plan.event)
         plan.subtitle = draft.trimmedSubtitle
         plan.planKindKey = draft.hasConfirmedSchedule ? "performance" : Plan.undatedTicketPlanKindKey
         plan.startsAt = draft.startsAt
         plan.endsAt = draft.endsAt
-        plan.opensAt = usesOpeningTime ? draft.opensAt : Date.distantPast
-        plan.venueNameSnapshot = draft.trimmedVenueName
-        plan.placeMaster = resolvePlaceMaster(
-            for: draft.placeSnapshot,
-            publicSelection: draft.publicPlaceSelection,
-            from: placeMasters,
-            in: modelContext
-        )
+        plan.opensAt = usesOpeningTime && draft.hasOpeningTime ? draft.opensAt : Date.distantPast
+        plan.venueNameSnapshot = draft.hasConfirmedSchedule ? draft.trimmedVenueName : ""
+        plan.placeMaster = draft.hasConfirmedSchedule
+            ? resolvePlaceMaster(
+                for: draft.placeSnapshot,
+                publicSelection: draft.publicPlaceSelection,
+                from: placeMasters,
+                in: modelContext
+            )
+            : nil
         plan.officialURL = draft.trimmedOfficialURL
         plan.sourceURL = draft.trimmedOfficialURL
         plan.memo = draft.trimmedMemo
@@ -914,11 +2232,29 @@ struct AddTicketPlanView: View {
                     try? modelContext.save()
                 }
             }
-            dismiss()
+            finishTicketSaveIfNeeded(plan, attempt: attemptForScheduling)
         } catch {
             modelContext.rollback()
             validationError = "予定を更新できませんでした。もう一度お試しください。"
             assertionFailure("Failed to update ticket plan: \(error)")
+        }
+    }
+
+    private func synchronizedPlanTitle(event: ExperienceEvent?) -> String {
+        let eventTitle = event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return eventTitle.isEmpty ? draft.trimmedTitle : eventTitle
+    }
+
+    private func finishTicketSaveIfNeeded(_ plan: Plan, attempt: TicketAttempt?) {
+        if usesTicketRegistration,
+           let event = plan.event,
+           event.category?.templateKey == "theater" {
+            savedTicketEvent = event
+            savedTicketSchedulePlan = plan
+            savedTicketAttempt = attempt
+            isShowingAfterTicketSaveActions = true
+        } else {
+            dismiss()
         }
     }
 
@@ -948,6 +2284,25 @@ struct AddTicketPlanView: View {
         }
     }
 
+    private func syncNotifications(
+        for plan: Plan,
+        attempts: [TicketAttempt],
+        includesPlanReminder: Bool
+    ) {
+        Task {
+            if includesPlanReminder {
+                await TicketNotificationScheduler.reschedule(plan: plan, attempt: nil)
+            }
+            for attempt in attempts {
+                if TicketStatusDefinition.isTerminal(attempt.statusKey) {
+                    TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+                } else {
+                    await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
+                }
+            }
+        }
+    }
+
     private func latestAttempt(for plan: Plan) -> TicketAttempt? {
         plan.ticketAttempts?
             .filter { !$0.isArchived }
@@ -960,6 +2315,10 @@ struct AddTicketPlanView: View {
         attempt.entryRouteKey = draft.entryRouteKey
         attempt.ticketSite = draft.trimmedTicketSite
         attempt.holderName = draft.trimmedHolderName
+        attempt.applicationGroupIDRaw = draft.resolvedApplicationGroupIDRaw(
+            preserving: attempt.applicationGroupIDRaw
+        )
+        attempt.applicationGroupName = draft.trimmedApplicationGroupName
         attempt.saleStartAt = draft.hasSaleStart ? draft.saleStartAt : Date.distantPast
         attempt.applyDeadlineAt = draft.hasApplyDeadline ? draft.applyDeadlineAt : Date.distantPast
         attempt.resultAnnounceAt = draft.hasResultAnnounce ? draft.resultAnnounceAt : Date.distantPast
@@ -978,6 +2337,44 @@ struct AddTicketPlanView: View {
         attempt.account = selectedAccount
     }
 
+    private func continueApplicationCollectionOnAnotherSchedule() {
+        guard let event = savedTicketEvent,
+              let attempt = savedTicketAttempt else {
+            validationError = "保存した申込情報を読み込めませんでした。"
+            return
+        }
+
+        let now = Date()
+        if attempt.applicationGroupIDRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            attempt.applicationGroupIDRaw = UUID().uuidString
+        }
+        let groupID = attempt.applicationGroupIDRaw
+        let relatedAttempts = plans
+            .flatMap { $0.ticketAttempts ?? [] }
+            .filter { $0.applicationGroupIDRaw == groupID }
+        if TicketApplicationCollectionNaming.shouldReplaceWithTourName(
+            attempt.applicationGroupName,
+            attempts: relatedAttempts.isEmpty ? [attempt] : relatedAttempts
+        ) {
+            let groupName = TicketApplicationCollectionNaming.tourName(eventTitle: event.title)
+            for relatedAttempt in relatedAttempts {
+                relatedAttempt.applicationGroupName = groupName
+                relatedAttempt.updatedAt = now
+            }
+            attempt.applicationGroupName = groupName
+        }
+        attempt.updatedAt = now
+
+        do {
+            try modelContext.save()
+            savedTicketAttempt = attempt
+            eventForAdditionalTicketSchedule = event
+        } catch {
+            modelContext.rollback()
+            validationError = "申込まとめを準備できませんでした。もう一度お試しください。"
+        }
+    }
+
     private func decimal(from text: String) -> Decimal {
         let digits = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return Decimal(string: digits) ?? Decimal(0)
@@ -990,8 +2387,16 @@ struct DateToggleRow: View {
     @Binding var date: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(title, isOn: $isOn)
+        VStack(alignment: .leading, spacing: 0) {
+            ExplicitFormControlRow(
+                title: title
+                    .replacingOccurrences(of: "（任意）", with: ""),
+                isOptional: title.contains("任意")
+            ) {
+                Toggle(title, isOn: $isOn)
+                    .labelsHidden()
+                    .accessibilityLabel(title)
+            }
             if isOn {
                 FiveMinuteDateTimeRow(title: title, selection: $date, showsLabel: false)
             }
@@ -1005,74 +2410,324 @@ struct FiveMinuteDateTimeRow: View {
     var showsLabel = true
 
     var body: some View {
-        HStack(spacing: 10) {
-            if showsLabel {
-                Text(title)
+        ExplicitFormControlRow(title: showsLabel ? title : "日時") {
+            HStack(spacing: 8) {
+                DatePicker(
+                    title,
+                    selection: $selection,
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+                .environment(\.locale, Locale(identifier: "ja_JP"))
+                .controlSize(.small)
+                .fixedSize()
+                .scaleEffect(ExplicitFormMetrics.dateControlScale)
+
+                FiveMinuteTimeField(selection: $selection, accessibilityLabel: title)
             }
-            Spacer(minLength: 8)
+        }
+    }
+}
+
+private struct TheaterScheduleDateRow: View {
+    @Binding var selection: Date
+
+    var body: some View {
+        ExplicitFormControlRow(title: "日付") {
             DatePicker(
-                title,
+                "日付",
                 selection: $selection,
                 displayedComponents: .date
             )
             .labelsHidden()
             .environment(\.locale, Locale(identifier: "ja_JP"))
+            .controlSize(.small)
             .fixedSize()
-
-            FiveMinuteTimePicker(selection: $selection, accessibilityLabel: title)
-                .frame(width: 92, height: 34)
         }
     }
 }
 
-private struct FiveMinuteTimePicker: UIViewRepresentable {
+private struct TenMinuteTimeRow: View {
+    let title: String
     @Binding var selection: Date
+
+    var body: some View {
+        ExplicitFormControlRow(title: title) {
+            TenMinuteTimeField(
+                selection: $selection,
+                accessibilityLabel: "\(title)時刻"
+            )
+        }
+    }
+}
+
+private struct OptionalTenMinuteTimeRow: View {
+    let title: String
+    @Binding var selection: Date
+    @Binding var isSet: Bool
+    let defaultValue: Date
+
+    var body: some View {
+        ExplicitFormControlRow(title: title, isOptional: true) {
+            HStack(spacing: 6) {
+                TenMinuteTimeField(
+                    selection: $selection,
+                    isSet: $isSet,
+                    defaultValue: defaultValue,
+                    accessibilityLabel: "\(title)時刻"
+                )
+
+                if isSet {
+                    Button {
+                        isSet = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(title)時刻を未設定に戻す")
+                }
+            }
+        }
+    }
+}
+
+private struct TenMinuteTimeField: View {
+    @Binding var selection: Date
+    var isSet: Binding<Bool>?
+    var defaultValue: Date?
     let accessibilityLabel: String
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
+    @State private var isShowingPicker = false
+    @State private var pendingSelection = Date()
+
+    private var isTimeSet: Bool {
+        isSet?.wrappedValue ?? true
     }
 
-    func makeUIView(context: Context) -> UIDatePicker {
-        let picker = UIDatePicker()
-        picker.datePickerMode = .time
-        picker.preferredDatePickerStyle = .compact
-        picker.minuteInterval = 5
-        picker.locale = Locale(identifier: "ja_JP")
-        picker.accessibilityLabel = accessibilityLabel
-        picker.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
-        return picker
+    private var displayText: String {
+        guard isTimeSet else { return "--:--" }
+        return selection.formatted(
+            Date.FormatStyle()
+                .hour(.twoDigits(amPM: .omitted))
+                .minute(.twoDigits)
+                .locale(Locale(identifier: "ja_JP"))
+        )
     }
 
-    func updateUIView(_ picker: UIDatePicker, context: Context) {
-        context.coordinator.parent = self
-        let roundedSelection = selection.roundedToNearestFiveMinutes()
-        if abs(picker.date.timeIntervalSince(roundedSelection)) >= 1 {
-            picker.setDate(roundedSelection, animated: false)
+    var body: some View {
+        Button {
+            pendingSelection = (isTimeSet ? selection : (defaultValue ?? selection))
+                .roundedToNearestTenMinutes()
+            isShowingPicker = true
+        } label: {
+            Text(displayText)
+                .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                .monospacedDigit()
+                .foregroundStyle(isTimeSet ? Color.primary : Color.secondary)
+                .frame(minWidth: 72)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color(.secondarySystemFill), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(isTimeSet ? displayText : "未設定")
+        .popover(isPresented: $isShowingPicker, attachmentAnchor: .rect(.bounds)) {
+            VStack(spacing: 8) {
+                TenMinuteWheelTimePicker(
+                    selection: $pendingSelection,
+                    accessibilityLabel: accessibilityLabel,
+                    onUserChange: { newValue in
+                        selection = newValue.roundedToNearestTenMinutes()
+                        isSet?.wrappedValue = true
+                    }
+                )
+                .frame(width: 180, height: 170)
+
+                Button("完了") {
+                    isShowingPicker = false
+                }
+                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(12)
+            .presentationCompactAdaptation(.popover)
         }
     }
+}
 
-    @MainActor
-    final class Coordinator: NSObject {
-        var parent: FiveMinuteTimePicker
+private struct TenMinuteWheelTimePicker: View {
+    @Binding var selection: Date
+    let accessibilityLabel: String
+    let onUserChange: (Date) -> Void
 
-        init(parent: FiveMinuteTimePicker) {
-            self.parent = parent
-        }
+    private static let minuteValues = Array(stride(from: 0, to: 24 * 60, by: 10))
 
-        @objc func valueChanged(_ sender: UIDatePicker) {
-            let calendar = Calendar.current
-            let components = calendar.dateComponents([.hour, .minute], from: sender.date)
-            guard let hour = components.hour,
-                  let minute = components.minute,
-                  let updated = calendar.date(
+    private var minuteOfDay: Binding<Int> {
+        Binding(
+            get: {
+                let rounded = selection.roundedToNearestTenMinutes()
+                let components = Calendar.current.dateComponents([.hour, .minute], from: rounded)
+                return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+            },
+            set: { newMinuteOfDay in
+                let hour = newMinuteOfDay / 60
+                let minute = newMinuteOfDay % 60
+                guard let updated = Calendar.current.date(
                     bySettingHour: hour,
                     minute: minute,
                     second: 0,
-                    of: parent.selection
-                  ) else { return }
-            parent.selection = updated
+                    of: selection
+                ) else { return }
+                selection = updated
+                onUserChange(updated)
+            }
+        )
+    }
+
+    var body: some View {
+        Picker(accessibilityLabel, selection: minuteOfDay) {
+            ForEach(Self.minuteValues, id: \.self) { minuteOfDay in
+                Text(
+                    String(
+                        format: "%02d:%02d",
+                        minuteOfDay / 60,
+                        minuteOfDay % 60
+                    )
+                )
+                .font(FavorecoTypography.jpSans(17, weight: .regular, relativeTo: .body))
+                .monospacedDigit()
+                .tag(minuteOfDay)
+            }
         }
+        .pickerStyle(.wheel)
+        .labelsHidden()
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct FiveMinuteTimeField: View {
+    @Binding var selection: Date
+    let accessibilityLabel: String
+
+    @State private var isShowingPicker = false
+    @State private var pendingSelection = Date()
+
+    private var displayText: String {
+        selection
+            .roundedToNearestFiveMinutes()
+            .formatted(
+                Date.FormatStyle()
+                    .hour(.twoDigits(amPM: .omitted))
+                    .minute(.twoDigits)
+                    .locale(Locale(identifier: "ja_JP"))
+            )
+    }
+
+    var body: some View {
+        Button {
+            pendingSelection = selection.roundedToNearestFiveMinutes()
+            isShowingPicker = true
+        } label: {
+            Text(displayText)
+                .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+                .monospacedDigit()
+                .foregroundStyle(Color.primary)
+                .frame(minWidth: 68)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Color(.secondarySystemFill), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(displayText)
+        .onAppear {
+            normalizeSelectionIfNeeded()
+        }
+        .onChange(of: selection) { _, newValue in
+            let rounded = newValue.roundedToNearestFiveMinutes()
+            if abs(newValue.timeIntervalSince(rounded)) >= 1 {
+                selection = rounded
+            }
+        }
+        .popover(isPresented: $isShowingPicker, attachmentAnchor: .rect(.bounds)) {
+            VStack(spacing: 8) {
+                FiveMinuteWheelTimePicker(
+                    selection: $pendingSelection,
+                    accessibilityLabel: accessibilityLabel
+                ) { newValue in
+                    selection = newValue.roundedToNearestFiveMinutes()
+                }
+                .frame(width: 180, height: 170)
+
+                Button("完了") {
+                    isShowingPicker = false
+                }
+                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(12)
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    private func normalizeSelectionIfNeeded() {
+        let rounded = selection.roundedToNearestFiveMinutes()
+        if abs(selection.timeIntervalSince(rounded)) >= 1 {
+            selection = rounded
+        }
+    }
+}
+
+private struct FiveMinuteWheelTimePicker: View {
+    @Binding var selection: Date
+    let accessibilityLabel: String
+    let onUserChange: (Date) -> Void
+
+    private static let minuteValues = Array(stride(from: 0, to: 24 * 60, by: 5))
+
+    private var minuteOfDay: Binding<Int> {
+        Binding(
+            get: {
+                let rounded = selection.roundedToNearestFiveMinutes()
+                let components = Calendar.current.dateComponents([.hour, .minute], from: rounded)
+                return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+            },
+            set: { newMinuteOfDay in
+                let hour = newMinuteOfDay / 60
+                let minute = newMinuteOfDay % 60
+                guard let updated = Calendar.current.date(
+                    bySettingHour: hour,
+                    minute: minute,
+                    second: 0,
+                    of: selection
+                ) else { return }
+                selection = updated
+                onUserChange(updated)
+            }
+        )
+    }
+
+    var body: some View {
+        Picker(accessibilityLabel, selection: minuteOfDay) {
+            ForEach(Self.minuteValues, id: \.self) { minuteOfDay in
+                Text(
+                    String(
+                        format: "%02d:%02d",
+                        minuteOfDay / 60,
+                        minuteOfDay % 60
+                    )
+                )
+                .font(FavorecoTypography.jpSans(17, weight: .regular, relativeTo: .body))
+                .monospacedDigit()
+                .tag(minuteOfDay)
+            }
+        }
+        .pickerStyle(.wheel)
+        .labelsHidden()
+        .accessibilityLabel(accessibilityLabel)
     }
 }
 
@@ -1081,6 +2736,27 @@ extension Date {
         let interval: TimeInterval = 5 * 60
         return Date(timeIntervalSinceReferenceDate: (timeIntervalSinceReferenceDate / interval).rounded() * interval)
     }
+
+    func roundedToNearestTenMinutes() -> Date {
+        let interval: TimeInterval = 10 * 60
+        return Date(timeIntervalSinceReferenceDate: (timeIntervalSinceReferenceDate / interval).rounded() * interval)
+    }
+}
+
+private struct EventPickerItem: Identifiable {
+    let id: UUID
+    let title: String
+    let categoryName: String
+    let categoryIcon: String
+    let seriesName: String
+
+    init(event: ExperienceEvent) {
+        id = event.id
+        title = event.title
+        categoryName = event.category?.name ?? "未分類"
+        categoryIcon = event.category?.iconSymbol ?? "rectangle.stack"
+        seriesName = event.seriesName
+    }
 }
 
 private struct EventPicker: View {
@@ -1088,51 +2764,53 @@ private struct EventPicker: View {
 
     let title: String
     let searchPrompt: String
-    let events: [ExperienceEvent]
+    let items: [EventPickerItem]
     let selectedEventID: UUID?
-    let onSelect: (ExperienceEvent) -> Void
+    let onSelect: (UUID) -> Void
 
     @State private var searchText = ""
 
-    private var filteredEvents: [ExperienceEvent] {
+    private var filteredItems: [EventPickerItem] {
         let query = normalized(searchText)
-        guard !query.isEmpty else { return events }
-        return events.filter { event in
-            normalized(event.title).contains(query)
-                || normalized(event.seriesName).contains(query)
-                || normalized(event.category?.name ?? "").contains(query)
+        guard !query.isEmpty else { return items }
+        return items.filter { item in
+            normalized(item.title).contains(query)
+                || normalized(item.seriesName).contains(query)
+                || normalized(item.categoryName).contains(query)
         }
     }
 
     var body: some View {
         NavigationStack {
             Group {
-                if filteredEvents.isEmpty {
+                if filteredItems.isEmpty {
                     ContentUnavailableView.search(text: searchText)
                 } else {
-                    List(filteredEvents) { event in
+                    List(filteredItems) { item in
                         Button {
-                            onSelect(event)
+                            onSelect(item.id)
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: event.category?.iconSymbol ?? "rectangle.stack")
+                                FavorecoIcon(systemName: item.categoryIcon, size: 18)
                                     .foregroundStyle(.secondary)
                                     .frame(width: 28)
 
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(event.title)
-                                        .font(FavorecoTypography.bodyStrong)
+                                    Text(item.title)
+                                        .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
                                         .foregroundStyle(.primary)
-                                        .lineLimit(2)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.72)
+                                        .allowsTightening(true)
 
-                                    Text(eventDescription(event))
+                                    Text(eventDescription(item))
                                         .font(FavorecoTypography.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
 
                                 Spacer()
-                                if event.id == selectedEventID {
+                                if item.id == selectedEventID {
                                     Image(systemName: "checkmark")
                                         .font(.body.weight(.semibold))
                                 }
@@ -1154,8 +2832,8 @@ private struct EventPicker: View {
         }
     }
 
-    private func eventDescription(_ event: ExperienceEvent) -> String {
-        let description = [event.category?.name, event.seriesName.isEmpty ? nil : event.seriesName]
+    private func eventDescription(_ item: EventPickerItem) -> String {
+        let description = [item.categoryName, item.seriesName.isEmpty ? nil : item.seriesName]
             .compactMap { $0 }
             .joined(separator: " / ")
         return description.isEmpty ? "未分類" : description
@@ -1169,13 +2847,304 @@ private struct EventPicker: View {
     }
 }
 
+private struct TicketOCRImportResult {
+    var ticketGuideKey: String?
+    var purchaseURL: String?
+    var saleStartAt: Date?
+    var applyDeadlineAt: Date?
+    var resultAnnounceAt: Date?
+    var paymentDeadlineAt: Date?
+    var issueStartAt: Date?
+    var priceText: String?
+    var seatText: String?
+    var quantity: Int?
+}
+
+private struct PendingTicketOCRImport {
+    let result: TicketOCRImportResult
+    let suggestedTitle: String?
+    let venue: String?
+    let eventDateRange: QuickCaptureDateRange?
+
+    var hasSuggestions: Bool {
+        !summaryItems.isEmpty
+    }
+
+    var summary: String {
+        "候補：\(summaryItems.joined(separator: "、"))"
+    }
+
+    private var summaryItems: [String] {
+        var values: [String] = []
+        if result.ticketGuideKey != nil { values.append("購入先") }
+        if result.purchaseURL != nil { values.append("購入URL") }
+        if result.saleStartAt != nil { values.append("申込・発売開始") }
+        if result.applyDeadlineAt != nil { values.append("抽選申込締切") }
+        if result.resultAnnounceAt != nil { values.append("当落発表") }
+        if result.paymentDeadlineAt != nil { values.append("支払締切") }
+        if result.issueStartAt != nil { values.append("チケット受取開始") }
+        if result.priceText != nil { values.append("チケット代") }
+        if result.seatText != nil { values.append("座席") }
+        if result.quantity != nil { values.append("枚数") }
+        if suggestedTitle?.isEmpty == false { values.append("タイトル") }
+        if venue?.isEmpty == false { values.append("会場") }
+        if eventDateRange != nil { values.append("日時") }
+        return values
+    }
+}
+
+private enum TicketOCRImportParser {
+    static func parse(text: String, referenceDate: Date) -> TicketOCRImportResult {
+        let lines = text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let contexts = lines + zip(lines, lines.dropFirst()).map { "\($0) \($1)" }
+
+        return TicketOCRImportResult(
+            ticketGuideKey: inferredTicketGuideKey(from: text),
+            purchaseURL: firstMatch(
+                in: text,
+                pattern: #"https?://[^\s　]+"#
+            ),
+            saleStartAt: labeledDate(
+                in: contexts,
+                labels: ["抽選申込開始", "申込開始", "受付開始", "発売開始"],
+                referenceDate: referenceDate
+            ),
+            applyDeadlineAt: labeledDate(
+                in: contexts,
+                labels: ["抽選申込締切", "申込締切", "受付終了", "応募締切"],
+                referenceDate: referenceDate
+            ),
+            resultAnnounceAt: labeledDate(
+                in: contexts,
+                labels: ["当落発表", "抽選結果", "結果発表"],
+                referenceDate: referenceDate
+            ),
+            paymentDeadlineAt: labeledDate(
+                in: contexts,
+                labels: ["入金締切", "支払締切", "支払期限", "入金期限"],
+                referenceDate: referenceDate
+            ),
+            issueStartAt: labeledDate(
+                in: contexts,
+                labels: ["チケット受取開始", "受取開始", "発券開始", "表示開始"],
+                referenceDate: referenceDate
+            ),
+            priceText: inferredPrice(from: lines),
+            seatText: inferredSeat(from: lines),
+            quantity: inferredQuantity(from: lines)
+        )
+    }
+
+    private static func inferredTicketGuideKey(from text: String) -> String? {
+        let normalizedText = normalized(text)
+        let aliases: [(String, [String])] = [
+            ("pia", ["チケットぴあ", "t.pia.jp"]),
+            ("eplus", ["イープラス", "eplus", "eplus.jp", "e+"]),
+            ("lawson", ["ローソンチケット", "ローチケ", "l-tike"]),
+            ("rakuten", ["楽天チケット", "ticket.rakuten"]),
+            ("cnplayguide", ["cnプレイガイド", "cnplayguide"]),
+            ("ticketboard", ["ticketboard", "tickebo"]),
+            ("tixplus", ["tixplus"]),
+            ("confetti", ["カンフェティ", "confetti"]),
+            ("teket", ["teket"]),
+            ("livepocket", ["livepocket"]),
+            ("tiget", ["tiget"]),
+            ("zaiko", ["zaiko"]),
+            ("peatix", ["peatix"]),
+            ("passmarket", ["passmarket"]),
+        ]
+        return aliases.first { _, values in
+            values.contains { normalizedText.contains(normalized($0)) }
+        }?.0
+    }
+
+    private static func labeledDate(
+        in lines: [String],
+        labels: [String],
+        referenceDate: Date
+    ) -> Date? {
+        guard let line = lines.first(where: { line in
+            let normalizedLine = normalized(line)
+            return labels.contains { normalizedLine.contains(normalized($0)) }
+        }) else {
+            return nil
+        }
+        return parsedDate(in: line, referenceDate: referenceDate)
+    }
+
+    private static func parsedDate(in text: String, referenceDate: Date) -> Date? {
+        let pattern = #"(?:(20\d{2})[年./-]\s*)?(\d{1,2})[月./-]\s*(\d{1,2})日?(?:[^0-9]{0,8}(\d{1,2})[:：](\d{2}))?"#
+        guard let match = regularExpression(pattern).firstMatch(
+            in: text,
+            range: NSRange(text.startIndex..., in: text)
+        ) else {
+            return nil
+        }
+
+        func integer(at index: Int) -> Int? {
+            let range = match.range(at: index)
+            guard range.location != NSNotFound,
+                  let swiftRange = Range(range, in: text) else {
+                return nil
+            }
+            return Int(text[swiftRange])
+        }
+
+        let calendar = Calendar.current
+        let referenceYear = calendar.component(.year, from: referenceDate)
+        let referenceMonth = calendar.component(.month, from: referenceDate)
+        guard let month = integer(at: 2), let day = integer(at: 3) else {
+            return nil
+        }
+        var year = integer(at: 1) ?? referenceYear
+        if integer(at: 1) == nil, month + 6 < referenceMonth {
+            year += 1
+        }
+        return calendar.date(from: DateComponents(
+            year: year,
+            month: month,
+            day: day,
+            hour: integer(at: 4) ?? 0,
+            minute: integer(at: 5) ?? 0
+        ))
+    }
+
+    private static func inferredPrice(from lines: [String]) -> String? {
+        let preferred = lines.filter {
+            let value = normalized($0)
+            return ["チケット代", "券面額", "料金", "合計"].contains {
+                value.contains(normalized($0))
+            } && !value.contains("手数料")
+        }
+        for line in preferred {
+            if let amount = firstCapturedGroup(
+                in: line,
+                pattern: #"(?:[¥￥]\s*|)([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})\s*円?"#
+            ) {
+                return amount.replacingOccurrences(of: ",", with: "")
+            }
+        }
+        for line in lines where !normalized(line).contains("手数料") {
+            if let amount = firstCapturedGroup(
+                in: line,
+                pattern: #"(?:[¥￥]\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})|([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})\s*円)"#
+            ) {
+                return amount.replacingOccurrences(of: ",", with: "")
+            }
+        }
+        return nil
+    }
+
+    private static func inferredSeat(from lines: [String]) -> String? {
+        let labels = ["座席番号", "座席", "席種", "整理番号"]
+        for line in lines {
+            if let label = labels.first(where: { normalized(line).contains(normalized($0)) }) {
+                let value = line.replacingOccurrences(
+                    of: label,
+                    with: "",
+                    options: [.caseInsensitive, .widthInsensitive]
+                )
+                .trimmingCharacters(
+                    in: CharacterSet.whitespacesAndNewlines.union(
+                        CharacterSet(charactersIn: ":：-｜")
+                    )
+                )
+                if !value.isEmpty {
+                    return value
+                }
+            }
+        }
+        return lines.first {
+            $0.range(of: #"\d+\s*列.*\d+\s*番"#, options: .regularExpression) != nil
+        }
+    }
+
+    private static func inferredQuantity(from lines: [String]) -> Int? {
+        for line in lines where normalized(line).contains("枚") {
+            if let value = firstCapturedGroup(in: line, pattern: #"([0-9]{1,2})\s*枚"#),
+               let quantity = Int(value),
+               (1...20).contains(quantity) {
+                return quantity
+            }
+        }
+        return nil
+    }
+
+    private static func firstMatch(in text: String, pattern: String) -> String? {
+        guard let match = regularExpression(pattern).firstMatch(
+            in: text,
+            range: NSRange(text.startIndex..., in: text)
+        ), let range = Range(match.range, in: text) else {
+            return nil
+        }
+        return String(text[range]).trimmingCharacters(in: CharacterSet(charactersIn: ".,、。"))
+    }
+
+    private static func firstCapturedGroup(in text: String, pattern: String) -> String? {
+        guard let match = regularExpression(pattern).firstMatch(
+            in: text,
+            range: NSRange(text.startIndex..., in: text)
+        ), match.numberOfRanges > 1 else {
+            return nil
+        }
+        for index in 1..<match.numberOfRanges {
+            let capturedRange = match.range(at: index)
+            guard capturedRange.location != NSNotFound,
+                  let range = Range(capturedRange, in: text) else {
+                continue
+            }
+            let value = String(text[range])
+            if !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func regularExpression(_ pattern: String) -> NSRegularExpression {
+        // Patterns are static and controlled by this parser.
+        try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value
+            .folding(
+                options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                locale: Locale(identifier: "ja_JP")
+            )
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "　", with: "")
+            .lowercased()
+    }
+}
+
+private struct AdditionalTicketApplicationDraft: Identifiable {
+    let id = UUID()
+    var draft: TicketPlanDraft
+    var isExpanded: Bool
+
+    var title: String {
+        draft.flowKey == "lotteryPlanned" ? "抽選申込" : "先着・発売"
+    }
+
+    var summary: String {
+        let site = draft.trimmedTicketSite
+        let route = TicketEntryRouteDefinition.name(for: draft.entryRouteKey)
+        let values = [route, site].filter { !$0.isEmpty }
+        return values.isEmpty ? "申込内容を入力" : values.joined(separator: "・")
+    }
+}
+
 private struct TicketPlanDraft {
     var categoryID: UUID?
     var title = ""
     var subtitle = ""
-    var startsAt = Date().roundedToNearestFiveMinutes()
-    var endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: Date().roundedToNearestFiveMinutes()) ?? Date()
-    var opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: Date().roundedToNearestFiveMinutes()) ?? Date()
+    var startsAt = Date().roundedToNearestTenMinutes()
+    var endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: Date().roundedToNearestTenMinutes()) ?? Date()
+    var opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: Date().roundedToNearestTenMinutes()) ?? Date()
+    var hasOpeningTime = false
     var venueName = ""
     var venueAddress = ""
     var latitude: Double = 0
@@ -1191,6 +3160,8 @@ private struct TicketPlanDraft {
     var ticketGuideKey = TicketGuideDefinition.customKey
     var ticketSite = ""
     var holderName = ""
+    var applicationGroupIDRaw = ""
+    var applicationGroupName = ""
     var hasSaleStart = false
     var saleStartAt = Date().roundedToNearestFiveMinutes()
     var hasApplyDeadline = true
@@ -1210,8 +3181,21 @@ private struct TicketPlanDraft {
     var memo = ""
 
     init(entryMode: AddTicketPlanView.EntryMode = .ticketSchedule) {
-        createsTicketAttempt = entryMode == .ticketSchedule
-        hasConfirmedSchedule = entryMode != .ticketSchedule
+        switch entryMode {
+        case .plan:
+            createsTicketAttempt = false
+            hasConfirmedSchedule = true
+        case .ticketSchedule:
+            createsTicketAttempt = true
+            hasConfirmedSchedule = false
+        case .unified:
+            createsTicketAttempt = false
+            hasConfirmedSchedule = false
+            hasApplyDeadline = false
+            hasResultAnnounce = false
+            hasPaymentDeadline = false
+            hasIssueStart = false
+        }
     }
 
     init(inboxItem: InboxItem, categoryID: UUID) {
@@ -1223,19 +3207,46 @@ private struct TicketPlanDraft {
         hasConfirmedSchedule = true
     }
 
-    init(event: ExperienceEvent, entryMode: AddTicketPlanView.EntryMode = .plan) {
+    init(
+        event: ExperienceEvent,
+        entryMode: AddTicketPlanView.EntryMode = .plan,
+        continuingApplication: TicketAttempt? = nil
+    ) {
         categoryID = event.category?.id
         title = event.title
         officialURL = event.officialURL
         memo = event.memo
+        let registeredVenues = VisitUnitFields(rawValue: event.unitFieldsRaw)
+            .eventVenues
+            .filter { !$0.isEmpty }
+        if registeredVenues.count == 1, let venue = registeredVenues.first {
+            venueName = venue.trimmedName
+            venueAddress = venue.trimmedAddress
+        }
         createsTicketAttempt = entryMode == .ticketSchedule
         hasConfirmedSchedule = entryMode != .ticketSchedule
+        if let continuingApplication {
+            applyContinuation(continuingApplication)
+        }
     }
 
     init(plan: Plan?, entryMode: AddTicketPlanView.EntryMode = .ticketSchedule) {
         guard let plan else {
-            createsTicketAttempt = entryMode == .ticketSchedule
-            hasConfirmedSchedule = entryMode != .ticketSchedule
+            switch entryMode {
+            case .plan:
+                createsTicketAttempt = false
+                hasConfirmedSchedule = true
+            case .ticketSchedule:
+                createsTicketAttempt = true
+                hasConfirmedSchedule = false
+            case .unified:
+                createsTicketAttempt = false
+                hasConfirmedSchedule = false
+                hasApplyDeadline = false
+                hasResultAnnounce = false
+                hasPaymentDeadline = false
+                hasIssueStart = false
+            }
             return
         }
         let attempt = plan.ticketAttempts?
@@ -1244,12 +3255,13 @@ private struct TicketPlanDraft {
             .first
 
         categoryID = plan.category?.id
-        title = plan.title
+        title = plan.event?.title.isEmpty == false ? plan.event?.title ?? plan.title : plan.title
         subtitle = plan.subtitle
         hasConfirmedSchedule = plan.hasConfirmedSchedule
         startsAt = plan.startsAt
         endsAt = plan.endsAt
         opensAt = plan.opensAt
+        hasOpeningTime = plan.opensAt != Date.distantPast
         venueName = plan.venueNameSnapshot
         venueAddress = plan.placeMaster?.address ?? ""
         latitude = plan.placeMaster?.latitude ?? 0
@@ -1262,8 +3274,7 @@ private struct TicketPlanDraft {
             return
         }
 
-        createsTicketAttempt = attempt != nil
-
+        createsTicketAttempt = true
         guard let attempt else { return }
         flowKey = TicketFlowDefinition.inferredKey(statusKey: attempt.statusKey, entryRouteKey: attempt.entryRouteKey)
         statusKey = attempt.statusKey
@@ -1272,6 +3283,8 @@ private struct TicketPlanDraft {
         ticketGuideKey = TicketGuideDefinition.inferredKey(siteName: attempt.ticketSite, urlString: attempt.purchaseURL)
         ticketSite = attempt.ticketSite
         holderName = attempt.holderName
+        applicationGroupIDRaw = attempt.applicationGroupIDRaw
+        applicationGroupName = attempt.applicationGroupName
         hasSaleStart = attempt.saleStartAt != Date.distantPast
         saleStartAt = hasSaleStart ? attempt.saleStartAt : Date()
         hasApplyDeadline = attempt.applyDeadlineAt != Date.distantPast
@@ -1286,7 +3299,7 @@ private struct TicketPlanDraft {
         feeText = decimalText(attempt.fee)
         quantity = attempt.quantity
         seatText = attempt.seatText
-        tagNamesText = TicketAttemptUnitFields(rawValue: attempt.unitFieldsRaw).tagNames.joined(separator: ", ")
+        tagNamesText = TicketAttemptUnitFields(rawValue: attempt.unitFieldsRaw).tagNames.joined(separator: "\n")
         purchaseURL = attempt.purchaseURL
     }
 
@@ -1296,6 +3309,29 @@ private struct TicketPlanDraft {
     var trimmedOfficialURL: String { officialURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedTicketSite: String { ticketSite.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedHolderName: String { holderName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedApplicationGroupName: String {
+        applicationGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    func resolvedApplicationGroupName(for plan: Plan) -> String {
+        if !trimmedApplicationGroupName.isEmpty {
+            return trimmedApplicationGroupName
+        }
+        return TicketApplicationCollectionNaming.scheduleName(for: plan)
+    }
+    func resolvedApplicationGroupIDRaw(for groupName: String) -> String {
+        guard !groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ""
+        }
+        let draftID = applicationGroupIDRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return draftID.isEmpty ? UUID().uuidString : draftID
+    }
+    func resolvedApplicationGroupIDRaw(preserving existingID: String = "") -> String {
+        guard !trimmedApplicationGroupName.isEmpty else { return "" }
+        let draftID = applicationGroupIDRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !draftID.isEmpty { return draftID }
+        let preservedID = existingID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return preservedID.isEmpty ? UUID().uuidString : preservedID
+    }
     var trimmedSeatText: String { seatText.trimmingCharacters(in: .whitespacesAndNewlines) }
     var ticketUnitFieldsRaw: String {
         TicketAttemptUnitFields(
@@ -1370,13 +3406,14 @@ private struct TicketPlanDraft {
     func placeSuggestions(from placeMasters: [PlaceMaster]) -> [PlaceMaster] {
         let query = normalizedPlaceText(trimmedVenueName)
         guard !query.isEmpty else { return [] }
-        return placeMasters
+        let matches = placeMasters
             .filter { !$0.isArchived && !$0.isClosed }
             .filter {
                 normalizedPlaceText($0.name).contains(query)
                     || normalizedPlaceText($0.reading).contains(query)
                     || normalizedPlaceText($0.aliasesRaw).contains(query)
             }
+        return deduplicatedPlaceSuggestions(matches)
             .prefix(4)
             .map { $0 }
     }
@@ -1389,15 +3426,15 @@ private struct TicketPlanDraft {
         if hasConfirmedSchedule && endsAt < startsAt {
             return "終了日時は開始日時以降にしてください。"
         }
-        if hasConfirmedSchedule && usesOpeningTime && opensAt > startsAt {
+        if hasConfirmedSchedule && usesOpeningTime && hasOpeningTime && opensAt > startsAt {
             return "開場日時は開始日時以前にしてください。"
         }
         guard createsTicketAttempt else { return nil }
         if hasSaleStart && hasApplyDeadline && saleStartAt > applyDeadlineAt {
-            return "申込開始は申込締切以前にしてください。"
+            return "抽選申込開始は抽選申込締切以前にしてください。"
         }
         if hasApplyDeadline && hasResultAnnounce && applyDeadlineAt > resultAnnounceAt {
-            return "当落発表は申込締切以降にしてください。"
+            return "当落発表は抽選申込締切以降にしてください。"
         }
         if hasResultAnnounce && hasPaymentDeadline && resultAnnounceAt > paymentDeadlineAt {
             return "入金締切は当落発表以降にしてください。"
@@ -1414,6 +3451,10 @@ private struct TicketPlanDraft {
     }
 
     var showsEntryRoute: Bool {
+        flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
+    }
+
+    var showsApplicationGroup: Bool {
         flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
     }
 
@@ -1454,7 +3495,7 @@ private struct TicketPlanDraft {
     }
 
     var saleStartLabel: String {
-        flowKey == "saleWaiting" ? "発売開始" : "申込開始"
+        flowKey == "saleWaiting" ? "発売開始" : "抽選申込開始"
     }
 
     var entryRouteLabel: String {
@@ -1487,30 +3528,76 @@ private struct TicketPlanDraft {
         categoryID = event.category?.id
         title = event.title
         officialURL = event.officialURL
+        venueName = ""
+        venueAddress = ""
+        latitude = 0
+        longitude = 0
+        publicPlaceSelection = nil
+        let registeredVenues = VisitUnitFields(rawValue: event.unitFieldsRaw)
+            .eventVenues
+            .filter { !$0.isEmpty }
+        if registeredVenues.count == 1, let venue = registeredVenues.first {
+            venueName = venue.trimmedName
+            venueAddress = venue.trimmedAddress
+        }
     }
 
     mutating func applyTarget(_ plan: Plan) {
         categoryID = plan.category?.id
-        title = plan.title.isEmpty ? (plan.event?.title ?? "") : plan.title
+        let eventTitle = plan.event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        title = eventTitle.isEmpty ? plan.title : eventTitle
         subtitle = plan.subtitle
         startsAt = plan.startsAt
         endsAt = plan.endsAt
         opensAt = plan.opensAt
+        hasOpeningTime = plan.opensAt != Date.distantPast
         venueName = plan.venueNameSnapshot
         venueAddress = plan.placeMaster?.address ?? ""
         latitude = plan.placeMaster?.latitude ?? 0
         longitude = plan.placeMaster?.longitude ?? 0
         officialURL = plan.officialURL
+
+        guard applicationGroupIDRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        let groupedAttempt = plan.ticketAttempts?
+            .filter {
+                !$0.isArchived
+                    && !$0.applicationGroupIDRaw
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .isEmpty
+            }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+        if let groupedAttempt {
+            applicationGroupIDRaw = groupedAttempt.applicationGroupIDRaw
+            applicationGroupName = TicketApplicationCollectionNaming.displayName(
+                storedName: groupedAttempt.applicationGroupName,
+                attempts: [groupedAttempt]
+            ) ?? TicketApplicationCollectionNaming.scheduleName(for: plan)
+        } else {
+            applicationGroupIDRaw = UUID().uuidString
+            applicationGroupName = TicketApplicationCollectionNaming.scheduleName(for: plan)
+        }
+    }
+
+    mutating func applyRegisteredVenue(_ venue: EventVenueEntry) {
+        venueName = venue.trimmedName
+        venueAddress = venue.trimmedAddress
+        latitude = 0
+        longitude = 0
+        publicPlaceSelection = nil
     }
 
     mutating func clearTarget() {
-        let now = Date().roundedToNearestFiveMinutes()
+        let now = Date().roundedToNearestTenMinutes()
         categoryID = nil
         title = ""
         subtitle = ""
         startsAt = now
         endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: now) ?? now
         opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: now) ?? now
+        hasOpeningTime = false
         venueName = ""
         venueAddress = ""
         latitude = 0
@@ -1529,6 +3616,8 @@ private struct TicketPlanDraft {
 
         switch flow.key {
         case "interested":
+            applicationGroupIDRaw = ""
+            applicationGroupName = ""
             hasSaleStart = false
             hasApplyDeadline = false
             hasResultAnnounce = false
@@ -1548,11 +3637,42 @@ private struct TicketPlanDraft {
             hasResultAnnounce = false
             hasPaymentDeadline = false
         case "acquired":
+            applicationGroupIDRaw = ""
+            applicationGroupName = ""
             hasApplyDeadline = false
             hasResultAnnounce = false
         default:
             break
         }
+    }
+
+    mutating func applyContinuation(_ attempt: TicketAttempt) {
+        flowKey = TicketFlowDefinition.inferredKey(
+            statusKey: attempt.statusKey,
+            entryRouteKey: attempt.entryRouteKey
+        )
+        statusKey = TicketFlowDefinition.definition(for: flowKey).defaultStatusKey
+        entryRouteKey = attempt.entryRouteKey
+        accountID = attempt.account?.id
+        ticketGuideKey = TicketGuideDefinition.inferredKey(
+            siteName: attempt.ticketSite,
+            urlString: attempt.purchaseURL
+        )
+        ticketSite = attempt.ticketSite
+        holderName = attempt.holderName
+        applicationGroupIDRaw = attempt.applicationGroupIDRaw
+        applicationGroupName = attempt.applicationGroupName
+        hasSaleStart = attempt.saleStartAt != Date.distantPast
+        saleStartAt = hasSaleStart ? attempt.saleStartAt : Date()
+        hasApplyDeadline = attempt.applyDeadlineAt != Date.distantPast
+        applyDeadlineAt = hasApplyDeadline ? attempt.applyDeadlineAt : Date()
+        hasResultAnnounce = attempt.resultAnnounceAt != Date.distantPast
+        resultAnnounceAt = hasResultAnnounce ? attempt.resultAnnounceAt : Date()
+        hasPaymentDeadline = attempt.paymentDeadlineAt != Date.distantPast
+        paymentDeadlineAt = hasPaymentDeadline ? attempt.paymentDeadlineAt : Date()
+        hasIssueStart = attempt.issueStartAt != Date.distantPast
+        issueStartAt = hasIssueStart ? attempt.issueStartAt : Date()
+        purchaseURL = attempt.purchaseURL
     }
 
     mutating func applyTicketGuide(_ key: String) {

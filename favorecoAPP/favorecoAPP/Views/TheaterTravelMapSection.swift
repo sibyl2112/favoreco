@@ -31,7 +31,7 @@ struct TheaterEventTravelMapSection: View {
 
             if let selectedPoint {
                 HStack(spacing: 8) {
-                    Image(systemName: "mappin.and.ellipse")
+                    FavorecoIcon(systemName: "mappin.and.ellipse", size: 16)
                         .foregroundStyle(accentColor)
                     Text(selectedPoint.name)
                         .font(FavorecoTypography.captionStrong)
@@ -44,7 +44,7 @@ struct TheaterEventTravelMapSection: View {
                 .transition(.opacity)
             } else {
                 HStack(spacing: 8) {
-                    Label("\(snapshot.points.count)会場", systemImage: "mappin.and.ellipse")
+                    FavorecoIconLabel("\(snapshot.points.count)会場", systemImage: "mappin.and.ellipse")
                     Text("\(mappedVisitCount)回")
                     if snapshot.missingCoordinateCount > 0 {
                         Text("位置未設定 \(snapshot.missingCoordinateCount)件")
@@ -105,8 +105,7 @@ struct TheaterEventTravelMapSection: View {
                     .fill(Color.black.opacity(0.82))
                     .overlay {
                         VStack(spacing: 8) {
-                            Image(systemName: "map")
-                                .font(.title2)
+                            FavorecoIcon(systemName: "map", size: 22)
                             Text("会場の位置を登録するとMapに表示されます")
                                 .font(FavorecoTypography.captionStrong)
                             if snapshot.totalVisitCount > 0 {

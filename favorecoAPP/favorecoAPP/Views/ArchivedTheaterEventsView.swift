@@ -19,10 +19,10 @@ struct ArchivedTheaterEventsView: View {
     var body: some View {
         List {
             if archivedEvents.isEmpty {
-                ContentUnavailableView(
+                FavorecoContentUnavailableView(
                     "非表示の公演はありません",
                     systemImage: "archivebox",
-                    description: Text("再表示した公演は、観劇の公演一覧へ戻ります。")
+                    description: "再表示した公演は、観劇の公演一覧へ戻ります。"
                 )
             } else {
                 Section {
@@ -96,22 +96,18 @@ struct ArchivedTheaterEventsView: View {
 
     @ViewBuilder
     private func eventThumbnail(_ event: ExperienceEvent) -> some View {
-        if let data = event.eyecatchData,
-           let image = UIImage(data: data) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 44, height: 62)
-                .clipped()
-        } else {
-            ZStack {
-                Color.secondary.opacity(0.12)
-                Image(systemName: "theatermasks")
-                    .font(.system(size: 17))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 44, height: 62)
+        ThumbnailImage(
+            reference: .event(event.id),
+            displaySize: CGSize(width: 44, height: 62),
+            contentMode: .fill
+        ) {
+            CategoryDefaultArtworkImage(
+                templateKey: event.category?.templateKey ?? "theater",
+                displaySize: CGSize(width: 44, height: 62)
+            )
         }
+        .frame(width: 44, height: 62)
+        .clipped()
     }
 
     private func restore(_ event: ExperienceEvent) {

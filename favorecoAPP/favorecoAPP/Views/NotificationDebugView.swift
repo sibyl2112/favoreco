@@ -74,7 +74,7 @@ struct NotificationDebugView: View {
                 Button(role: .destructive) {
                     Task { await removeTestNotifications() }
                 } label: {
-                    Label("テスト通知を削除", systemImage: "trash")
+                    FavorecoIconLabel("テスト通知を削除", systemImage: "trash")
                 }
                 Text("テスト通知IDは「\(Self.testPrefix)」で始まります。")
                     .font(FavorecoTypography.caption)

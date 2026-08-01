@@ -130,7 +130,7 @@ struct DeveloperSettingsView: View {
                     lastSeenReleaseVersion = ""
                     debugMessage = "アプリを終了して再起動すると、更新案内が表示されます。"
                 } label: {
-                    Label("次回起動で更新案内を表示", systemImage: "sparkles")
+                    FavorecoIconLabel("次回起動で更新案内を表示", systemImage: "sparkles")
                 }
 
                 Button {
@@ -152,14 +152,14 @@ struct DeveloperSettingsView: View {
                 Button(role: .destructive) {
                     deleteDebugData()
                 } label: {
-                    Label("仮データを削除", systemImage: "trash")
+                    FavorecoIconLabel("仮データを削除", systemImage: "trash")
                 }
                 .disabled(isMutatingDebugData)
 
                 NavigationLink {
                     FullDataDeletionView()
                 } label: {
-                    Label("全データ削除（テスト）", systemImage: "trash.fill")
+                    FavorecoIconLabel("全データ削除（テスト）", systemImage: "trash.fill")
                         .foregroundStyle(.red)
                 }
 

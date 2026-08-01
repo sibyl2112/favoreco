@@ -192,7 +192,7 @@ final class TicketWorkflowTests: XCTestCase {
 
         let stages = TicketProgressTimeline.stages(for: attempt, plan: plan)
 
-        XCTAssertEqual(stages.map(\.title), ["申込", "当落", "入金", "取得"])
+        XCTAssertEqual(stages.map(\.title), ["申込", "当落", "支払", "取得"])
         XCTAssertEqual(TicketProgressTimeline.currentIndex(for: attempt, stages: stages), 2)
     }
 
@@ -232,8 +232,80 @@ final class TicketWorkflowTests: XCTestCase {
 
         let stages = TicketProgressTimeline.stages(for: attempt, plan: plan)
 
-        XCTAssertEqual(stages.map(\.title), ["申込", "当落", "入金", "取得"])
+        XCTAssertEqual(stages.map(\.title), ["申込", "当落", "支払", "取得"])
         XCTAssertEqual(TicketProgressTimeline.currentIndex(for: attempt, stages: stages), stages.count)
+    }
+
+    func testIssuedTicketSchedulesNoCompletedMilestoneNotifications() {
+        XCTAssertTrue(
+            TicketNotificationScheduler.scheduledMilestoneKeys(for: "issued").isEmpty
+        )
+        XCTAssertEqual(
+            TicketNotificationScheduler.scheduledMilestoneKeys(for: "waitingPayment"),
+            ["paymentDeadline", "ticketIssue"]
+        )
+        XCTAssertEqual(
+            TicketNotificationScheduler.scheduledMilestoneKeys(for: "waitingResult"),
+            ["lotteryResult", "paymentDeadline", "ticketIssue"]
+        )
+    }
+
+    func testScheduleCorrectionMovesIncompleteProgressBackButPreservesAcquiredStatus() {
+        let plan = Plan()
+        let attempt = TicketAttempt(
+            statusKey: "waitingPayment",
+            entryRouteKey: "fanClub",
+            applyDeadlineAt: date(2026, 7, 31),
+            resultAnnounceAt: date(2026, 8, 5),
+            plan: plan
+        )
+        let now = date(2026, 7, 29)
+
+        XCTAssertEqual(
+            TicketProgressTimeline.reconciledStatusAfterScheduleEdit(
+                currentStatusKey: "waitingPayment",
+                attempt: attempt,
+                now: now
+            ),
+            "beforeApply"
+        )
+        XCTAssertEqual(
+            TicketProgressTimeline.reconciledStatusAfterScheduleEdit(
+                currentStatusKey: "issued",
+                attempt: attempt,
+                now: now
+            ),
+            "issued"
+        )
+    }
+
+    func testProgressDatesUseOnlyEditableScheduleDates() {
+        let plan = Plan()
+        let attempt = TicketAttempt(
+            statusKey: "issued",
+            entryRouteKey: "fanClub",
+            applyDeadlineAt: date(2026, 7, 30),
+            resultAnnounceAt: date(2026, 8, 13),
+            paidAt: date(2026, 7, 27),
+            issuedAt: date(2026, 7, 27),
+            plan: plan
+        )
+
+        var stages = TicketProgressTimeline.stages(for: attempt, plan: plan)
+        XCTAssertNil(stages.first(where: { $0.kind == .payment })?.date)
+        XCTAssertNil(stages.first(where: { $0.kind == .acquired })?.date)
+
+        attempt.paymentDeadlineAt = date(2026, 8, 15)
+        attempt.issueStartAt = date(2026, 8, 20)
+        stages = TicketProgressTimeline.stages(for: attempt, plan: plan)
+        XCTAssertEqual(stages.first(where: { $0.kind == .payment })?.date, date(2026, 8, 15))
+        XCTAssertEqual(stages.first(where: { $0.kind == .acquired })?.date, date(2026, 8, 20))
+
+        attempt.paymentDeadlineAt = .distantPast
+        attempt.issueStartAt = .distantPast
+        stages = TicketProgressTimeline.stages(for: attempt, plan: plan)
+        XCTAssertNil(stages.first(where: { $0.kind == .payment })?.date)
+        XCTAssertNil(stages.first(where: { $0.kind == .acquired })?.date)
     }
 
     func testTicketIsUnacquiredUntilAnIssuedAttemptExists() {
@@ -283,8 +355,8 @@ final class TicketWorkflowTests: XCTestCase {
             planTitle: "月影のアトリエ"
         )
 
-        XCTAssertEqual(copy.title, "発売開始")
-        XCTAssertEqual(copy.body, "月影のアトリエ のチケット発売が始まります。")
+        XCTAssertEqual(copy.title, "🔔 一般販売通知")
+        XCTAssertEqual(copy.body, "月影のアトリエ の一般販売が始まります。")
     }
 
     func testApplicationStartNotificationKeepsApplicationCopyForLottery() {
@@ -299,8 +371,37 @@ final class TicketWorkflowTests: XCTestCase {
             planTitle: "星屑の航路"
         )
 
-        XCTAssertEqual(copy.title, "申込開始")
-        XCTAssertEqual(copy.body, "星屑の航路 の申込が始まります。")
+        XCTAssertEqual(copy.title, "🔔 抽選申込通知")
+        XCTAssertEqual(copy.body, "星屑の航路 の抽選申込が始まります。")
+    }
+
+    func testTicketNotificationCopyExplainsLotteryDeadlineAndResult() {
+        let deadline = TicketNotificationScheduler.applicationDeadlineNotificationCopy(
+            planTitle: "月影のアトリエ"
+        )
+        let result = TicketNotificationScheduler.lotteryResultNotificationCopy(
+            planTitle: "月影のアトリエ"
+        )
+
+        XCTAssertEqual(deadline.title, "🔔 抽選申込通知")
+        XCTAssertEqual(deadline.body, "月影のアトリエ の抽選申込締切が近づいています。")
+        XCTAssertEqual(result.title, "🔔 当落発表通知")
+        XCTAssertEqual(result.body, "月影のアトリエ の当落発表日です。")
+    }
+
+    func testSaleNotificationUsesSelectedSaleMethod() {
+        XCTAssertEqual(
+            TicketNotificationScheduler.saleNotificationMethod(for: "presale"),
+            "先行販売"
+        )
+        XCTAssertEqual(
+            TicketNotificationScheduler.saleNotificationMethod(for: "sameDay"),
+            "当日券販売"
+        )
+        XCTAssertEqual(
+            TicketNotificationScheduler.saleNotificationMethod(for: "resale"),
+            "リセール販売"
+        )
     }
 
     func testHomeNextActionFollowsCurrentTicketStatus() {
@@ -321,7 +422,7 @@ final class TicketWorkflowTests: XCTestCase {
         XCTAssertEqual(TicketNextActionDefinition.nextAction(for: attempt, now: now)?.title, "当落発表")
 
         attempt.statusKey = "waitingPayment"
-        XCTAssertEqual(TicketNextActionDefinition.nextAction(for: attempt, now: now)?.title, "入金締切")
+        XCTAssertEqual(TicketNextActionDefinition.nextAction(for: attempt, now: now)?.title, "支払締切")
 
         attempt.statusKey = "waitingIssue"
         XCTAssertEqual(TicketNextActionDefinition.nextAction(for: attempt, now: now)?.title, "チケット受取開始")
@@ -389,6 +490,85 @@ final class TicketWorkflowTests: XCTestCase {
 
         XCTAssertEqual(restored.admissionPreparationConfirmedAt, confirmedAt)
         XCTAssertEqual(restored.admissionPreparationSnoozedUntil, snoozedUntil)
+    }
+
+    func testApplicationCollectionNamesOneScheduleByEventDateAndVenue() {
+        let event = ExperienceEvent(title: "あの夏")
+        let plan = Plan(
+            title: "あの夏",
+            planKindKey: "performance",
+            startsAt: date(2026, 7, 31),
+            venueNameSnapshot: "東京劇場",
+            event: event
+        )
+
+        XCTAssertEqual(
+            TicketApplicationCollectionNaming.scheduleName(for: plan),
+            "あの夏｜7/31 東京劇場"
+        )
+    }
+
+    func testLegacyReceptionHeadingBecomesScheduleOrTourHeading() {
+        let event = ExperienceEvent(title: "あの夏")
+        let tokyo = Plan(
+            title: "あの夏",
+            planKindKey: "performance",
+            startsAt: date(2026, 7, 31),
+            venueNameSnapshot: "東京劇場",
+            event: event
+        )
+        let osaka = Plan(
+            title: "あの夏",
+            planKindKey: "performance",
+            startsAt: date(2026, 8, 7),
+            venueNameSnapshot: "大阪劇場",
+            event: event
+        )
+        let first = TicketAttempt(
+            entryRouteKey: "official",
+            ticketSite: "イープラス",
+            plan: tokyo
+        )
+        let second = TicketAttempt(
+            entryRouteKey: "official",
+            ticketSite: "楽天チケット",
+            plan: osaka
+        )
+        let legacyName = TicketApplicationCollectionNaming.legacyReceptionName(for: first)
+
+        XCTAssertEqual(
+            TicketApplicationCollectionNaming.displayName(
+                storedName: legacyName,
+                attempts: [first]
+            ),
+            "あの夏｜7/31 東京劇場"
+        )
+        XCTAssertEqual(
+            TicketApplicationCollectionNaming.displayName(
+                storedName: legacyName,
+                attempts: [first, second]
+            ),
+            "あの夏｜ツアー申込"
+        )
+    }
+
+    func testCustomApplicationCollectionNameIsPreserved() {
+        let event = ExperienceEvent(title: "あの夏")
+        let plan = Plan(
+            title: "あの夏",
+            planKindKey: "performance",
+            startsAt: date(2026, 7, 31),
+            event: event
+        )
+        let attempt = TicketAttempt(plan: plan)
+
+        XCTAssertEqual(
+            TicketApplicationCollectionNaming.displayName(
+                storedName: "友人分とまとめる",
+                attempts: [attempt]
+            ),
+            "友人分とまとめる"
+        )
     }
 
     private func date(

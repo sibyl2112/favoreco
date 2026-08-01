@@ -6,6 +6,128 @@
 import SwiftUI
 import UIKit
 
+struct CompactPendingPhotoThumbnail: View {
+    let photo: PendingPhoto
+    let purpose: ExperiencePhotoPurpose
+    let isCover: Bool
+    let isHeroBackground: Bool
+    @State private var image: UIImage?
+
+    var body: some View {
+        CompactPhotoThumbnail(
+            image: image,
+            purpose: purpose,
+            isCover: isCover,
+            isHeroBackground: isHeroBackground
+        )
+        .task(id: cacheKey) {
+            image = await compactThumbnail(data: photo.data, cacheKey: cacheKey)
+        }
+    }
+
+    private var cacheKey: String {
+        "pending-compact-\(photo.id.uuidString)-\(photo.data.count)"
+    }
+}
+
+struct CompactSavedPhotoThumbnail: View {
+    let photo: PhotoBlob
+    let purpose: ExperiencePhotoPurpose
+    let isCover: Bool
+    let isHeroBackground: Bool
+    @State private var image: UIImage?
+
+    var body: some View {
+        CompactPhotoThumbnail(
+            image: image,
+            purpose: purpose,
+            isCover: isCover,
+            isHeroBackground: isHeroBackground
+        )
+        .task(id: cacheKey) {
+            image = await compactThumbnail(data: photo.data, cacheKey: cacheKey)
+        }
+    }
+
+    private var cacheKey: String {
+        "saved-compact-\(photo.id.uuidString)-\(photo.byteCount)"
+    }
+}
+
+@MainActor
+private func compactThumbnail(data: Data, cacheKey: String) async -> UIImage? {
+    if let cached = ThumbnailLoader.cached(forKey: cacheKey) {
+        return cached
+    }
+    return await Task.detached(priority: .userInitiated) {
+        ThumbnailLoader.makeThumbnail(from: data, maxPixelSize: 240, cacheKey: cacheKey)
+    }.value
+}
+
+private struct CompactPhotoThumbnail: View {
+    let image: UIImage?
+    let purpose: ExperiencePhotoPurpose
+    let isCover: Bool
+    let isHeroBackground: Bool
+
+    var body: some View {
+        ZStack {
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    FavorecoIcon(systemName: "photo", size: 22)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color(.secondarySystemGroupedBackground))
+                }
+            }
+            .aspectRatio(1, contentMode: .fill)
+            .clipped()
+
+            VStack {
+                HStack {
+                    FavorecoIcon(systemName: purpose.systemImage, size: 13)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 18, height: 18)
+                        .background(.black.opacity(0.58), in: Circle())
+                    Spacer(minLength: 0)
+                    if isCover {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.yellow)
+                            .frame(width: 18, height: 18)
+                            .background(.black.opacity(0.58), in: Circle())
+                    }
+                }
+                Spacer(minLength: 0)
+                if isHeroBackground {
+                    HStack {
+                        Spacer(minLength: 0)
+                        Image(systemName: "rectangle.landscape.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.yellow)
+                            .frame(width: 18, height: 18)
+                            .background(.black.opacity(0.58), in: Circle())
+                    }
+                }
+            }
+            .padding(4)
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(Color.secondary.opacity(0.22), lineWidth: 0.7)
+        }
+    }
+}
+
 struct PendingPhotoThumbnail: View {
     let photo: PendingPhoto
     let title: String
@@ -131,7 +253,7 @@ private struct PhotoThumbnail: View {
                         .resizable()
                         .aspectRatio(contentMode: fillsFrame ? .fill : .fit)
                 } else {
-                    Image(systemName: "photo")
+                    FavorecoIcon(systemName: "photo", size: 22)
                         .font(.title2)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -145,7 +267,7 @@ private struct PhotoThumbnail: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             HStack {
-                Label(purpose.title, systemImage: purpose.systemImage)
+                FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage, iconSize: 13)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 7)

@@ -45,10 +45,14 @@ struct TheaterExperiencePage<Hero: View, Content: View>: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
                 .modifier(
-                    TheaterScrollingPageFrameModifier(
-                        isEnabled: showsScrollingFrame
+                    CategoryEmbeddedDetailCardModifier(
+                        isEnabled: showsScrollingFrame,
+                        genreColor: genreColor,
+                        borderColor: TheaterCategoryStyle.gold
                     )
                 )
+                .padding(.horizontal, showsScrollingFrame ? 10 : 0)
+                .padding(.top, showsScrollingFrame ? 74 : 0)
             }
             .scrollIndicators(showsScrollingFrame ? .hidden : .automatic)
             .task(id: scrollTargetID) {
@@ -59,18 +63,13 @@ struct TheaterExperiencePage<Hero: View, Content: View>: View {
                 }
             }
         }
-        .ignoresSafeArea(edges: .top)
         .background {
-            ZStack {
-                Color.black
-                LinearGradient(
-                    colors: [genreColor, genreColor.opacity(0.72), Color.black.opacity(0.94)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+            if !showsScrollingFrame {
+                categoryDetailPageBackground(genreColor: genreColor)
+                    .ignoresSafeArea()
             }
-            .ignoresSafeArea()
         }
+        .ignoresSafeArea(edges: showsScrollingFrame ? [] : .top)
         .environment(\.colorScheme, .dark)
     }
 
@@ -90,23 +89,83 @@ struct TheaterExperiencePage<Hero: View, Content: View>: View {
     }
 }
 
-private struct TheaterScrollingPageFrameModifier: ViewModifier {
+struct CategoryEmbeddedDetailCardModifier: ViewModifier {
     let isEnabled: Bool
+    let genreColor: Color
+    let borderColor: Color
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if isEnabled {
-            content.overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(
-                        Color(red: 0.82, green: 0.62, blue: 0.30).opacity(0.72),
-                        lineWidth: 0.8
-                    )
-                    .allowsHitTesting(false)
-            }
+            content
+                .background {
+                    categoryDetailPageBackground(genreColor: genreColor)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(
+                            borderColor.opacity(0.72),
+                            lineWidth: 0.8
+                        )
+                        .allowsHitTesting(false)
+                }
+                .shadow(color: .black.opacity(0.48), radius: 22, y: 8)
         } else {
             content
         }
+    }
+}
+
+func categoryDetailPageBackground(genreColor: Color) -> some View {
+    ZStack {
+        Color.black
+        LinearGradient(
+            colors: [genreColor, genreColor.opacity(0.72), Color.black.opacity(0.94)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
+struct CategoryDetailBottomActionBar: View {
+    let shareText: String
+    let tint: Color
+    let labelColor: Color
+    let onEdit: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(tint.opacity(0.54))
+                .frame(height: 0.8)
+
+            HStack(spacing: 0) {
+                Button(action: onEdit) {
+                    FavorecoIconLabel("編集", systemImage: "pencil")
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Rectangle()
+                    .fill(tint.opacity(0.42))
+                    .frame(width: 0.8, height: 34)
+
+                ShareLink(item: shareText) {
+                    Label("SHARE", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 58)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .caption))
+            .foregroundStyle(labelColor)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Color.black.opacity(0.96).ignoresSafeArea(edges: .bottom))
     }
 }
 
@@ -125,6 +184,7 @@ private struct PersonMasterEditTarget: Identifiable {
 struct ExperienceDetailView: View {
     let visit: Visit
     let onBack: (() -> Void)?
+    let onOpenEvent: ((UUID) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
@@ -134,6 +194,7 @@ struct ExperienceDetailView: View {
     @State private var calendarDraft: CalendarEventDraft?
     @State private var ticketPlanForEditor: Plan?
     @State private var navigatingPlan: Plan?
+    @State private var navigatingEventID: UUID?
     @State private var isShowingDeleteConfirmation = false
     @State private var deletionErrorMessage: String?
     @State private var planCreationErrorMessage: String?
@@ -151,9 +212,14 @@ struct ExperienceDetailView: View {
     @State private var backSwipeExclusionFrames: [CGRect] = []
     @State private var personMasterEditTarget: PersonMasterEditTarget?
 
-    init(visit: Visit, onBack: (() -> Void)? = nil) {
+    init(
+        visit: Visit,
+        onBack: (() -> Void)? = nil,
+        onOpenEvent: ((UUID) -> Void)? = nil
+    ) {
         self.visit = visit
         self.onBack = onBack
+        self.onOpenEvent = onOpenEvent
     }
 
     var body: some View {
@@ -239,9 +305,22 @@ struct ExperienceDetailView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 24)
+                    .modifier(
+                        CategoryEmbeddedDetailCardModifier(
+                            isEnabled: onBack != nil,
+                            genreColor: genreColor,
+                            borderColor: accentColor
+                        )
+                    )
+                    .padding(.horizontal, onBack != nil ? 10 : 0)
+                    .padding(.top, onBack != nil ? 74 : 0)
                 }
-                .ignoresSafeArea(edges: .top)
-                .background(detailPageBackground(genreColor: genreColor))
+                .ignoresSafeArea(edges: onBack == nil ? .top : [])
+                .background {
+                    if onBack == nil {
+                        detailPageBackground(genreColor: genreColor)
+                    }
+                }
             }
         }
         .environment(\.colorScheme, .dark)
@@ -252,6 +331,16 @@ struct ExperienceDetailView: View {
         }
         .overlay(alignment: .top) {
             detailNavigationControls(accentColor: accentColor, genreColor: genreColor)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if onBack != nil {
+                CategoryDetailBottomActionBar(
+                    shareText: detailShareText,
+                    tint: accentColor,
+                    labelColor: isTheater ? accentColor : .white,
+                    onEdit: { isShowingEdit = true }
+                )
+            }
         }
         .sheet(isPresented: $isShowingEdit) {
             EditExperienceView(visit: visit)
@@ -269,6 +358,9 @@ struct ExperienceDetailView: View {
         }
         .navigationDestination(item: $navigatingPlan) { plan in
             PlanDetailView(plan: plan)
+        }
+        .navigationDestination(item: $navigatingEventID) { eventID in
+            EventDetailDestination(eventID: eventID)
         }
         .confirmationDialog("この記録を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
             Button("この記録だけ削除", role: .destructive) {
@@ -369,22 +461,21 @@ struct ExperienceDetailView: View {
                 }
 
                 if let event = snapshot.event {
-                    NavigationLink {
-                        EventDetailView(event: event)
-                    } label: {
-                        HStack(alignment: .firstTextBaseline, spacing: 7) {
-                            Text(snapshot.eventTitle)
-                                .font(FavorecoTypography.jpSerif(27, weight: .bold, relativeTo: .title2))
-                                .foregroundStyle(.white)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .shadow(color: .black.opacity(0.62), radius: 5, y: 2)
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white.opacity(0.86))
+                    if let onOpenEvent {
+                        Button {
+                            onOpenEvent(event.id)
+                        } label: {
+                            recordHeroEventLinkLabel(title: snapshot.eventTitle)
                         }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button {
+                            navigatingEventID = event.id
+                        } label: {
+                            recordHeroEventLinkLabel(title: snapshot.eventTitle)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 } else {
                     Text(snapshot.eventTitle)
                         .font(FavorecoTypography.jpSerif(27, weight: .bold, relativeTo: .title2))
@@ -451,6 +542,20 @@ struct ExperienceDetailView: View {
         }
         .frame(minHeight: 560, alignment: .bottom)
         .accessibilityElement(children: .contain)
+    }
+
+    private func recordHeroEventLinkLabel(title: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text(title)
+                .font(FavorecoTypography.jpSerif(27, weight: .bold, relativeTo: .title2))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .shadow(color: .black.opacity(0.62), radius: 5, y: 2)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white.opacity(0.86))
+        }
     }
 
     private func recordHeroBackground(
@@ -569,13 +674,13 @@ struct ExperienceDetailView: View {
                 Button {
                     isShowingEdit = true
                 } label: {
-                    Label("編集", systemImage: "pencil")
+                    FavorecoIconLabel("編集", systemImage: "pencil")
                 }
 
                 Button(role: .destructive) {
                     isShowingDeleteConfirmation = true
                 } label: {
-                    Label("この記録だけ削除", systemImage: "trash")
+                    FavorecoIconLabel("この記録だけ削除", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -590,7 +695,8 @@ struct ExperienceDetailView: View {
             .accessibilityLabel("メニュー")
         }
         .padding(.horizontal, 20)
-        .safeAreaPadding(.top, 8)
+        .padding(.top, onBack != nil ? 54 : 0)
+        .safeAreaPadding(.top, onBack != nil ? 0 : 8)
     }
 
     private var edgeBackGesture: some Gesture {
@@ -615,9 +721,33 @@ struct ExperienceDetailView: View {
         }
     }
 
+    private var detailShareText: String {
+        var lines: [String] = []
+        let title = visit.event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        lines.append(title.isEmpty ? "記録" : title)
+        lines.append(FavorecoDateText.fullDate(visit.visitedAt))
+
+        let performanceTime = ExperienceDetailPresentation.performanceTime(for: visit)
+        if !performanceTime.isEmpty {
+            lines.append(performanceTime)
+        }
+
+        let venue = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !venue.isEmpty {
+            lines.append(venue)
+        }
+
+        let officialURL = visit.event?.officialURL.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !officialURL.isEmpty {
+            lines.append(officialURL)
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
     private func heroDateRow(snapshot: ExperienceDetailSnapshot) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "calendar")
+            FavorecoIcon(systemName: "calendar", size: 17)
                 .foregroundStyle(.white.opacity(0.92))
                 .frame(width: 20)
             Text(FavorecoDateText.fullDate(visit.visitedAt))
@@ -630,10 +760,11 @@ struct ExperienceDetailView: View {
 
     private func heroWeather(snapshot: ExperienceDetailSnapshot) -> some View {
         HStack(spacing: 4) {
-            Image(
+            FavorecoIcon(
                 systemName: snapshot.unitFields.weatherSymbolName.isEmpty
                     ? "cloud.sun"
-                    : snapshot.unitFields.weatherSymbolName
+                    : snapshot.unitFields.weatherSymbolName,
+                size: 18
             )
             Text(
                 heroDisplayText(
@@ -648,7 +779,7 @@ struct ExperienceDetailView: View {
 
     private func recordMetadataRow(icon: String, text: String, accentColor: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: icon)
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(accentColor)
                 .frame(width: 20)
             Text(text)
@@ -774,7 +905,7 @@ struct ExperienceDetailView: View {
                     .overlay(accentColor.opacity(0.24))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("チケットサイト", systemImage: "ticket")
+                    FavorecoIconLabel("チケットサイト", systemImage: "ticket", iconSize: 13)
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.secondary)
                     if ticketLinks.isEmpty {
@@ -792,7 +923,7 @@ struct ExperienceDetailView: View {
                     .overlay(Color.white.opacity(0.12))
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("SNS", systemImage: "at")
+                    FavorecoIconLabel("SNS", systemImage: "at", iconSize: 13)
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.secondary)
 
@@ -847,7 +978,7 @@ struct ExperienceDetailView: View {
         accentColor: Color
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: icon)
+            FavorecoIconLabel(title, systemImage: icon, iconSize: 13)
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(.secondary)
 
@@ -954,8 +1085,7 @@ struct ExperienceDetailView: View {
 
                 ZStack {
                     Color.white.opacity(0.06)
-                    Image(systemName: "map")
-                        .font(.system(size: 30, weight: .light))
+                    FavorecoIcon(systemName: "map", size: 30)
                         .foregroundStyle(accentColor.opacity(0.52))
                     PlaceMapPreview(
                         venueName: venueName,
@@ -968,10 +1098,10 @@ struct ExperienceDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .allowsHitTesting(false)
             } else {
-                ContentUnavailableView(
+                FavorecoContentUnavailableView(
                     "会場未登録",
                     systemImage: "map",
-                    description: Text("会場や住所を登録すると地図が表示されます")
+                    description: "会場や住所を登録すると地図が表示されます"
                 )
                 .frame(maxWidth: .infinity, minHeight: 150)
             }
@@ -1021,7 +1151,11 @@ struct ExperienceDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 7) {
-                            Label("\(purpose.title) \(index + 1)", systemImage: purpose.systemImage)
+                            FavorecoIconLabel(
+                                "\(purpose.title) \(index + 1)",
+                                systemImage: purpose.systemImage,
+                                iconSize: 13
+                            )
                                 .font(FavorecoTypography.captionStrong)
                                 .foregroundStyle(accentColor)
 
@@ -1073,7 +1207,7 @@ struct ExperienceDetailView: View {
         switch purpose {
         case .memory:
             PhotosPicker(selection: $memoryPhotoItems, maxSelectionCount: 20, matching: .images) {
-                Label(title, systemImage: "plus")
+                FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
                     .font(labelFont)
                     .foregroundStyle(accentColor)
             }
@@ -1082,7 +1216,7 @@ struct ExperienceDetailView: View {
                 }
         case .goods:
             PhotosPicker(selection: $goodsPhotoItems, maxSelectionCount: 20, matching: .images) {
-                Label(title, systemImage: "plus")
+                FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
                     .font(labelFont)
                     .foregroundStyle(accentColor)
             }
@@ -1091,7 +1225,7 @@ struct ExperienceDetailView: View {
                 }
         case .benefit:
             PhotosPicker(selection: $benefitPhotoItems, maxSelectionCount: 20, matching: .images) {
-                Label(title, systemImage: "plus")
+                FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
                     .font(labelFont)
                     .foregroundStyle(accentColor)
             }
@@ -1100,7 +1234,7 @@ struct ExperienceDetailView: View {
                 }
         case .ticket:
             Button { isShowingEdit = true } label: {
-                Label(title, systemImage: "plus")
+                FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
                     .font(labelFont)
                     .foregroundStyle(accentColor)
             }
@@ -1171,7 +1305,7 @@ struct ExperienceDetailView: View {
                         guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
                         ticketPlanForEditor = plan
                     } label: {
-                        Label("チケットを追加", systemImage: "ticket")
+                        FavorecoIconLabel("チケットを追加", systemImage: "ticket", iconSize: 17)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -1181,7 +1315,7 @@ struct ExperienceDetailView: View {
                         guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
                         navigatingPlan = plan
                     } label: {
-                        Label("遠征ToDo", systemImage: "suitcase.rolling")
+                        FavorecoIconLabel("遠征ToDo", systemImage: "suitcase.rolling", iconSize: 17)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -1210,7 +1344,7 @@ struct ExperienceDetailView: View {
                 }
             } label: {
                 HStack {
-                    Label("次にやること", systemImage: "checklist")
+                    FavorecoIconLabel("次にやること", systemImage: "checklist", iconSize: 20)
                         .font(FavorecoTypography.sectionTitle)
                     Spacer()
                     if outstanding > 0 {
@@ -1231,7 +1365,7 @@ struct ExperienceDetailView: View {
                         guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
                         ticketPlanForEditor = plan
                     } label: {
-                        Label("チケット申込", systemImage: "ticket")
+                        FavorecoIconLabel("チケット申込", systemImage: "ticket", iconSize: 14)
                             .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
@@ -1245,7 +1379,7 @@ struct ExperienceDetailView: View {
                         guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
                         navigatingPlan = plan
                     } label: {
-                        Label("遠征ToDo", systemImage: "suitcase.rolling")
+                        FavorecoIconLabel("遠征ToDo", systemImage: "suitcase.rolling", iconSize: 16)
                             .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
@@ -1383,7 +1517,11 @@ struct ExperienceDetailView: View {
         Button {
             isShowingEdit = true
         } label: {
-            Label(title, systemImage: icon)
+            Label {
+                Text(title)
+            } icon: {
+                FavorecoIcon(systemName: icon, size: 14)
+            }
                 .font(FavorecoTypography.jpSans(10, weight: .semibold, relativeTo: .caption2))
                 .frame(maxWidth: .infinity)
         }
@@ -1556,7 +1694,7 @@ struct ExperienceDetailView: View {
 
             if isPhotoCollectionExpanded {
                 HStack {
-                    Label("思い出", systemImage: "camera")
+                    FavorecoIconLabel("思い出", systemImage: "camera", iconSize: 17)
                         .font(FavorecoTypography.bodyStrong)
                     Spacer()
                     detailPhotoPicker(purpose: .memory, accentColor: accentColor)
@@ -1573,7 +1711,7 @@ struct ExperienceDetailView: View {
                 Divider().overlay(accentColor.opacity(0.24))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("グッズ・ノベルティ・特典", systemImage: "gift")
+                    FavorecoIconLabel("グッズ・ノベルティ・特典", systemImage: "gift", iconSize: 17)
                         .font(FavorecoTypography.bodyStrong)
                     HStack(spacing: 12) {
                         Spacer()
@@ -1614,7 +1752,7 @@ struct ExperienceDetailView: View {
                             .background(Color(.secondarySystemFill))
                             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         if showsPurpose {
-                            Label(purpose.title, systemImage: purpose.systemImage)
+                            FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage, iconSize: 9, spacing: 3)
                                 .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .lineLimit(1)
@@ -1784,7 +1922,7 @@ struct ExperienceDetailView: View {
             Button {
                 calendarDraft = makeCalendarDraft(snapshot: snapshot)
             } label: {
-                Label("カレンダーに追加", systemImage: "calendar.badge.plus")
+                FavorecoIconLabel("カレンダーに追加", systemImage: "calendar.badge.plus", iconSize: 17)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.bordered)
@@ -1843,7 +1981,7 @@ struct ExperienceDetailView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 7) {
                                 ForEach(tagNames, id: \.self) { tag in
-                                    Label(tag, systemImage: "heart.text.square")
+                                    FavorecoIconLabel(tag, systemImage: "heart.text.square", iconSize: 13)
                                         .font(FavorecoTypography.caption)
                                         .padding(.horizontal, 9)
                                         .padding(.vertical, 6)
@@ -1935,8 +2073,7 @@ private struct RecordDetailEyecatch: View {
             } else {
                 ZStack {
                     tint.opacity(0.18)
-                    Image(systemName: fallbackSymbol)
-                        .font(.system(size: 34, weight: .light))
+                    FavorecoIcon(systemName: fallbackSymbol, size: 34)
                         .foregroundStyle(tint)
                 }
             }
@@ -2014,8 +2151,7 @@ private struct TheaterCastItem: View {
         } else {
             ZStack {
                 tint.opacity(0.22)
-                Image(systemName: PersonActivityTags.icon(for: roleTagsRaw))
-                    .font(.system(size: 24, weight: .semibold))
+                FavorecoIcon(systemName: PersonActivityTags.icon(for: roleTagsRaw), size: 24)
                     .foregroundStyle(tint)
             }
         }
@@ -2048,8 +2184,7 @@ private struct DetailInfoRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: icon)
-                .font(FavorecoTypography.body)
+            FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(.secondary)
                 .frame(width: 22)
             Text(title)

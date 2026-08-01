@@ -78,7 +78,7 @@ struct VisitedPlacesHeatMapSection: View {
             map
 
             HStack(spacing: 8) {
-                Label("\(filteredPoints.count)か所", systemImage: "mappin.and.ellipse")
+                FavorecoIconLabel("\(filteredPoints.count)か所", systemImage: "mappin.and.ellipse")
                 Text("\(filteredPoints.reduce(0) { $0 + $1.visitCount })回")
                 if missingCoordinateCount > 0 {
                     Text("位置未設定 \(missingCoordinateCount)件")
@@ -185,8 +185,7 @@ struct VisitedPlacesHeatMapSection: View {
                     .fill(Color(.secondarySystemGroupedBackground).opacity(0.94))
                     .overlay {
                         VStack(spacing: 8) {
-                            Image(systemName: "map")
-                                .font(.title2)
+                            FavorecoIcon(systemName: "map", size: 22)
                             Text(allPoints.isEmpty ? "位置を登録するとMAPに表示されます" : "条件に合う場所がありません")
                                 .font(FavorecoTypography.captionStrong)
                             if allPoints.isEmpty {

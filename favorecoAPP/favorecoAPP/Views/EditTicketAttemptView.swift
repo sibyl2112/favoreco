@@ -12,6 +12,7 @@ struct EditTicketAttemptView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
+    @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var allAttempts: [TicketAttempt]
 
     let plan: Plan
     private let editingAttempt: TicketAttempt?
@@ -25,7 +26,27 @@ struct EditTicketAttemptView: View {
         self.plan = plan
         self.editingAttempt = attempt
         self.prioritizesDates = prioritizesDates
-        _draft = State(initialValue: TicketAttemptDraft(attempt: attempt))
+        var initialDraft = TicketAttemptDraft(attempt: attempt)
+        let groupingSeed = attempt ?? plan.ticketAttempts?
+            .filter {
+                !$0.isArchived
+                    && !$0.applicationGroupIDRaw
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .isEmpty
+            }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+        if let groupingSeed {
+            initialDraft.applicationGroupIDRaw = groupingSeed.applicationGroupIDRaw
+            initialDraft.applicationGroupName = TicketApplicationCollectionNaming.displayName(
+                storedName: groupingSeed.applicationGroupName,
+                attempts: [groupingSeed]
+            ) ?? TicketApplicationCollectionNaming.scheduleName(for: plan)
+        } else if attempt == nil {
+            initialDraft.applicationGroupIDRaw = UUID().uuidString
+            initialDraft.applicationGroupName = TicketApplicationCollectionNaming.scheduleName(for: plan)
+        }
+        _draft = State(initialValue: initialDraft)
     }
 
     private var activeAccounts: [TicketAccount] {
@@ -68,10 +89,14 @@ struct EditTicketAttemptView: View {
                 }
 
                 Section("チケット情報") {
-                    Picker("登録内容", selection: $draft.flowKey) {
-                        ForEach(draft.flowOptions) { flow in
-                            Text(flow.name).tag(flow.key)
+                    ExplicitFormControlRow(title: "登録内容") {
+                        Picker("登録内容", selection: $draft.flowKey) {
+                            ForEach(draft.flowOptions) { flow in
+                                Text(flow.name).tag(flow.key)
+                            }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                     }
                     .onChange(of: draft.flowKey) { _, newValue in
                         draft.applyFlowDefaults(newValue)
@@ -80,35 +105,66 @@ struct EditTicketAttemptView: View {
                     Text(TicketFlowDefinition.definition(for: draft.flowKey).description)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
+                        .padding(.vertical, ExplicitFormMetrics.rowTopPadding)
+
+                    if draft.showsApplicationGroup {
+                        ExplicitFormTextField(
+                            title: "申込まとめ（任意）",
+                            prompt: "例：あの夏｜7/31 東京公演",
+                            text: $draft.applicationGroupName,
+                            labelStyle: .horizontal
+                        )
+                        Text("同じ日程の別サイト申込や、ツアーの複数日程をまとめます。申込枠と購入先はこの申込だけに保存されます。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, ExplicitFormMetrics.rowTopPadding)
+                    }
 
                     if draft.showsEntryRoute {
-                        Picker(draft.entryRouteLabel, selection: $draft.entryRouteKey) {
-                            Text("未設定").tag("")
-                            ForEach(draft.entryRouteOptions) { route in
-                                Text(route.name).tag(route.key)
+                        ExplicitFormControlRow(title: draft.entryRouteLabel) {
+                            Picker(draft.entryRouteLabel, selection: $draft.entryRouteKey) {
+                                Text("未設定").tag("")
+                                ForEach(draft.entryRouteOptions) { route in
+                                    Text(route.name).tag(route.key)
+                                }
                             }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
                         }
                     }
 
                     if draft.showsAccountFields {
-                        Picker("申込アカウント（任意）", selection: $draft.accountID) {
-                            Text("未設定").tag(Optional<UUID>.none)
-                            ForEach(activeAccounts) { account in
-                                Text(accountLabel(account)).tag(Optional(account.id))
+                        ExplicitFormControlRow(title: "申込アカウント", isOptional: true) {
+                            Picker("申込アカウント", selection: $draft.accountID) {
+                                Text("未設定").tag(Optional<UUID>.none)
+                                ForEach(activeAccounts) { account in
+                                    Text(accountLabel(account)).tag(Optional(account.id))
+                                }
                             }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
                         }
                         .onChange(of: draft.accountID) { _, newValue in
                             draft.applyAccount(activeAccounts.first { $0.id == newValue })
                         }
 
-                        TextField("名義（任意）", text: $draft.holderName)
+                        ExplicitFormTextField(
+                            title: "名義（任意）",
+                            prompt: "名義を入力",
+                            text: $draft.holderName,
+                            labelStyle: .horizontal
+                        )
                     }
 
                     if draft.showsTicketGuide {
-                        Picker("購入先", selection: $draft.ticketGuideKey) {
-                            ForEach(TicketGuideDefinition.all) { guide in
-                                Text(guide.name).tag(guide.key)
+                        ExplicitFormControlRow(title: "購入先") {
+                            Picker("購入先", selection: $draft.ticketGuideKey) {
+                                ForEach(TicketGuideDefinition.all) { guide in
+                                    Text(guide.name).tag(guide.key)
+                                }
                             }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
                         }
                         .onChange(of: draft.ticketGuideKey) { _, newValue in
                             draft.applyTicketGuide(newValue)
@@ -116,13 +172,27 @@ struct EditTicketAttemptView: View {
                         .disabled(draft.accountID != nil)
 
                         if draft.ticketGuideKey == TicketGuideDefinition.customKey {
-                            TextField("FC・公式サイトなど", text: $draft.ticketSite)
-                            TextField("申込・購入URL", text: $draft.purchaseURL)
+                            ExplicitFormTextField(
+                                title: "購入先（任意）",
+                                prompt: "FC・公式サイトなど",
+                                text: $draft.ticketSite,
+                                labelStyle: .horizontal
+                            )
+                            ExplicitFormTextField(
+                                title: "申込・購入URL（任意）",
+                                prompt: "URLを入力",
+                                text: $draft.purchaseURL,
+                                labelStyle: .horizontal
+                            )
                                 .keyboardType(.URL)
                                 .textInputAutocapitalization(.never)
                         } else {
-                            LabeledContent("申込・購入URL", value: draft.purchaseURL.isEmpty ? "未設定" : draft.purchaseURL)
-                                .font(FavorecoTypography.caption)
+                            ExplicitFormControlRow(title: "申込・購入URL", isOptional: true) {
+                                Text(draft.purchaseURL.isEmpty ? "未設定" : draft.purchaseURL)
+                                    .foregroundStyle(draft.purchaseURL.isEmpty ? .secondary : .primary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.72)
+                            }
                         }
                     }
                 }
@@ -133,23 +203,52 @@ struct EditTicketAttemptView: View {
 
                 if draft.showsTicketDetails {
                     Section("金額・座席") {
-                        TextField("チケット代", text: $draft.priceText)
+                        ExplicitFormTextField(
+                            title: "チケット代（任意）",
+                            prompt: "金額を入力",
+                            text: $draft.priceText,
+                            labelStyle: .horizontal
+                        )
                             .keyboardType(.numberPad)
-                        TextField("手数料", text: $draft.feeText)
+                        ExplicitFormTextField(
+                            title: "手数料（任意）",
+                            prompt: "金額を入力",
+                            text: $draft.feeText,
+                            labelStyle: .horizontal
+                        )
                             .keyboardType(.numberPad)
-                        Stepper("枚数 \(draft.quantity)", value: $draft.quantity, in: 1...20)
-                        TextField("座席・整理番号", text: $draft.seatText, axis: .vertical)
-                            .lineLimit(2...4)
+                        ExplicitFormControlRow(title: "枚数") {
+                            Stepper(
+                                "\(draft.quantity)枚",
+                                value: $draft.quantity,
+                                in: 1...20
+                            )
+                            .fixedSize()
+                        }
+                        ExplicitFormTextField(
+                            title: "座席・整理番号（任意）",
+                            prompt: "例：1階 10列 12番",
+                            text: $draft.seatText,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
+                        )
                     }
                 }
 
                 Section("タグ・メモ") {
-                    TextField("任意タグ（カンマ区切り）", text: $draft.tagNamesText)
-                    Text("例: S席、第1希望、同行者分")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                    TextField("メモ", text: $draft.memo, axis: .vertical)
-                        .lineLimit(3...8)
+                    TicketTagInputField(text: $draft.tagNamesText)
+                    ExplicitFormTextField(
+                        title: "メモ（任意）",
+                        prompt: "メモを入力",
+                        text: $draft.memo,
+                        axis: .vertical,
+                        minimumLines: 5,
+                        maximumLines: 5,
+                        labelStyle: .horizontal,
+                        reservesLineSpace: true
+                    )
                 }
 
                 if editingAttempt != nil {
@@ -157,11 +256,12 @@ struct EditTicketAttemptView: View {
                         Button(role: .destructive) {
                             isShowingArchiveConfirmation = true
                         } label: {
-                            Label("このチケット情報を非表示", systemImage: "archivebox")
+                            FavorecoIconLabel("このチケット情報を非表示", systemImage: "archivebox")
                         }
                     }
                 }
             }
+            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle(editorTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -180,7 +280,7 @@ struct EditTicketAttemptView: View {
                 }
                 ToolbarItem(placement: .principal) {
                     Text(editorTitle)
-                        .font(FavorecoTypography.jpSerif(17, weight: .semibold, relativeTo: .headline))
+                        .font(.system(size: 17, weight: .semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.86)
                         .layoutPriority(1)
@@ -238,7 +338,11 @@ struct EditTicketAttemptView: View {
                     DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
                 }
                 if draft.showsApplyDeadline {
-                    DateToggleRow(title: "申込締切", isOn: $draft.hasApplyDeadline, date: $draft.applyDeadlineAt)
+                    DateToggleRow(
+                        title: "抽選申込締切",
+                        isOn: $draft.hasApplyDeadline,
+                        date: $draft.applyDeadlineAt
+                    )
                 }
                 if draft.showsResultAnnounce {
                     DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
@@ -270,11 +374,22 @@ struct EditTicketAttemptView: View {
 
         let now = Date()
         let attempt = editingAttempt ?? TicketAttempt(createdAt: now, plan: plan)
+        let statusBeforeEditing = attempt.statusKey
         applyDraft(to: attempt, now: now)
+        if prioritizesDates, draft.resolvedStatusKey == statusBeforeEditing {
+            attempt.statusKey = TicketProgressTimeline.reconciledStatusAfterScheduleEdit(
+                currentStatusKey: statusBeforeEditing,
+                attempt: attempt,
+                now: now
+            )
+        }
 
         if editingAttempt == nil {
             modelContext.insert(attempt)
+            attachUngroupedAttemptsOnSamePlan(to: attempt, now: now)
         }
+
+        propagateApplicationGroupName(from: attempt, now: now)
 
         let isTerminal = TicketStatusDefinition.isTerminal(attempt.statusKey)
         attempt.notificationSettingsRaw = isTerminal
@@ -320,6 +435,10 @@ struct EditTicketAttemptView: View {
         attempt.entryRouteKey = draft.entryRouteKey
         attempt.ticketSite = draft.trimmedTicketSite
         attempt.holderName = draft.trimmedHolderName
+        attempt.applicationGroupIDRaw = draft.resolvedApplicationGroupIDRaw(
+            preserving: attempt.applicationGroupIDRaw
+        )
+        attempt.applicationGroupName = draft.trimmedApplicationGroupName
         attempt.saleStartAt = draft.hasSaleStart ? draft.saleStartAt : Date.distantPast
         attempt.applyDeadlineAt = draft.hasApplyDeadline ? draft.applyDeadlineAt : Date.distantPast
         attempt.resultAnnounceAt = draft.hasResultAnnounce ? draft.resultAnnounceAt : Date.distantPast
@@ -338,6 +457,39 @@ struct EditTicketAttemptView: View {
         attempt.account = selectedAccount
     }
 
+    private func propagateApplicationGroupName(
+        from attempt: TicketAttempt,
+        now: Date
+    ) {
+        let groupID = attempt.applicationGroupIDRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !groupID.isEmpty else { return }
+        for relatedAttempt in allAttempts where
+            relatedAttempt.id != attempt.id
+                && relatedAttempt.applicationGroupIDRaw == groupID {
+            relatedAttempt.applicationGroupName = attempt.applicationGroupName
+            relatedAttempt.updatedAt = now
+        }
+    }
+
+    private func attachUngroupedAttemptsOnSamePlan(
+        to newAttempt: TicketAttempt,
+        now: Date
+    ) {
+        let groupID = newAttempt.applicationGroupIDRaw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !groupID.isEmpty else { return }
+        for relatedAttempt in plan.ticketAttempts ?? [] where
+            relatedAttempt.id != newAttempt.id
+                && !relatedAttempt.isArchived
+                && relatedAttempt.applicationGroupIDRaw
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty {
+            relatedAttempt.applicationGroupIDRaw = groupID
+            relatedAttempt.applicationGroupName = newAttempt.applicationGroupName
+            relatedAttempt.updatedAt = now
+        }
+    }
+
     private func decimal(from text: String) -> Decimal {
         Decimal(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) ?? Decimal(0)
     }
@@ -351,6 +503,8 @@ private struct TicketAttemptDraft {
     var ticketGuideKey = TicketGuideDefinition.customKey
     var ticketSite = ""
     var holderName = ""
+    var applicationGroupIDRaw = ""
+    var applicationGroupName = ""
     var hasSaleStart = false
     var saleStartAt = Date()
     var hasApplyDeadline = true
@@ -380,6 +534,8 @@ private struct TicketAttemptDraft {
         ticketGuideKey = TicketGuideDefinition.inferredKey(siteName: attempt.ticketSite, urlString: attempt.purchaseURL)
         ticketSite = attempt.ticketSite
         holderName = attempt.holderName
+        applicationGroupIDRaw = attempt.applicationGroupIDRaw
+        applicationGroupName = attempt.applicationGroupName
         hasSaleStart = attempt.saleStartAt != Date.distantPast
         saleStartAt = hasSaleStart ? attempt.saleStartAt : Date()
         hasApplyDeadline = attempt.applyDeadlineAt != Date.distantPast
@@ -394,13 +550,23 @@ private struct TicketAttemptDraft {
         feeText = decimalText(attempt.fee)
         quantity = attempt.quantity
         seatText = attempt.seatText
-        tagNamesText = TicketAttemptUnitFields(rawValue: attempt.unitFieldsRaw).tagNames.joined(separator: ", ")
+        tagNamesText = TicketAttemptUnitFields(rawValue: attempt.unitFieldsRaw).tagNames.joined(separator: "\n")
         purchaseURL = attempt.purchaseURL
         memo = attempt.memo
     }
 
     var trimmedTicketSite: String { ticketSite.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedHolderName: String { holderName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedApplicationGroupName: String {
+        applicationGroupName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    func resolvedApplicationGroupIDRaw(preserving existingID: String) -> String {
+        guard !trimmedApplicationGroupName.isEmpty else { return "" }
+        let draftID = applicationGroupIDRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !draftID.isEmpty { return draftID }
+        let preservedID = existingID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return preservedID.isEmpty ? UUID().uuidString : preservedID
+    }
     var trimmedSeatText: String { seatText.trimmingCharacters(in: .whitespacesAndNewlines) }
     var ticketUnitFieldsRaw: String {
         TicketAttemptUnitFields(
@@ -415,10 +581,10 @@ private struct TicketAttemptDraft {
 
     var validationMessage: String? {
         if hasSaleStart && hasApplyDeadline && saleStartAt > applyDeadlineAt {
-            return "申込開始は申込締切以前にしてください。"
+            return "抽選申込開始は抽選申込締切以前にしてください。"
         }
         if hasApplyDeadline && hasResultAnnounce && applyDeadlineAt > resultAnnounceAt {
-            return "当落発表は申込締切以降にしてください。"
+            return "当落発表は抽選申込締切以降にしてください。"
         }
         if hasResultAnnounce && hasPaymentDeadline && resultAnnounceAt > paymentDeadlineAt {
             return "入金締切は当落発表以降にしてください。"
@@ -435,6 +601,10 @@ private struct TicketAttemptDraft {
     }
 
     var showsEntryRoute: Bool {
+        flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
+    }
+
+    var showsApplicationGroup: Bool {
         flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
     }
 
@@ -475,7 +645,7 @@ private struct TicketAttemptDraft {
     }
 
     var saleStartLabel: String {
-        flowKey == "saleWaiting" ? "発売開始" : "申込開始"
+        flowKey == "saleWaiting" ? "発売開始" : "抽選申込開始"
     }
 
     var entryRouteLabel: String {
@@ -508,6 +678,8 @@ private struct TicketAttemptDraft {
 
         switch flow.key {
         case "interested":
+            applicationGroupIDRaw = ""
+            applicationGroupName = ""
             hasSaleStart = false
             hasApplyDeadline = false
             hasResultAnnounce = false
@@ -527,6 +699,8 @@ private struct TicketAttemptDraft {
             hasResultAnnounce = false
             hasPaymentDeadline = false
         case "acquired":
+            applicationGroupIDRaw = ""
+            applicationGroupName = ""
             hasApplyDeadline = false
             hasResultAnnounce = false
         default:

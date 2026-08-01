@@ -167,7 +167,10 @@ struct GoshuinTopHero: View {
                 }
 
                 Button(action: onAdd) {
-                    Label(visit == nil ? "最初の御朱印を追加" : "御朱印を追加", systemImage: "plus.circle.fill")
+                    FavorecoIconLabel(
+                        visit == nil ? "最初の御朱印を追加" : "御朱印を追加",
+                        systemImage: "plus.circle.fill"
+                    )
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -206,7 +209,7 @@ struct GoshuinTopHero: View {
                     .fill(Color.white.opacity(0.72))
                     .frame(width: imageWidth, height: imageHeight)
                     .overlay {
-                        Image(systemName: "seal")
+                        FavorecoIcon(systemName: "seal", size: 16)
                             .font(.system(size: 34, weight: .semibold))
                             .foregroundStyle(accent.opacity(0.8))
                     }
@@ -298,7 +301,7 @@ struct GoshuinStampTile: View {
                 .fill(Color(.secondarySystemGroupedBackground))
                 .aspectRatio(CGFloat(size.aspectRatio), contentMode: .fit)
                 .overlay {
-                    Image(systemName: "seal")
+                    FavorecoIcon(systemName: "seal", size: 16)
                         .foregroundStyle(.secondary)
                 }
         }
@@ -328,7 +331,7 @@ struct GoshuinBookRow: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(Color(.secondarySystemGroupedBackground))
                     .frame(width: 56, height: 56 / CGFloat(selection.size.aspectRatio))
-                    .overlay { Image(systemName: "book.closed") }
+                    .overlay { FavorecoIcon(systemName: "book.closed", size: 18) }
             }
 
             VStack(alignment: .leading, spacing: 5) {
@@ -425,8 +428,7 @@ struct GoshuinMapPreview: View {
                     .fill(Color(.secondarySystemGroupedBackground))
                     .overlay {
                         VStack(spacing: 8) {
-                            Image(systemName: "map")
-                                .font(.title2)
+                            FavorecoIcon(systemName: "map", size: 22)
                             Text("場所を登録するとMAPにピンが立ちます")
                                 .font(FavorecoTypography.caption)
                         }
@@ -468,8 +470,7 @@ struct GoshuinVisitedPlaceRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "mappin.and.ellipse")
-                .font(.title3)
+            FavorecoIcon(systemName: "mappin.and.ellipse", size: 20)
                 .foregroundStyle(.red)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 5) {

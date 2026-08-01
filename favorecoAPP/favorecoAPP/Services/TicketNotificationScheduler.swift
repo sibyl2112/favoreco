@@ -76,6 +76,23 @@ enum TicketNotificationScheduler {
     static let destinationPlanIDKey = "favorecoPlanID"
     static let destinationPreparationTaskIDKey = "favorecoPreparationTaskID"
 
+    static func scheduledMilestoneKeys(for statusKey: String) -> Set<String> {
+        switch statusKey {
+        case "beforeApply", "onSaleSoon":
+            return ["applicationStart", "applicationDeadline", "lotteryResult", "paymentDeadline", "ticketIssue"]
+        case "waitingResult":
+            return ["lotteryResult", "paymentDeadline", "ticketIssue"]
+        case "won", "waitingPayment":
+            return ["paymentDeadline", "ticketIssue"]
+        case "waitingIssue":
+            return ["ticketIssue"]
+        case "interested", "lost", "issued", "attended", "skipped":
+            return []
+        default:
+            return ["applicationStart", "applicationDeadline", "lotteryResult", "paymentDeadline", "ticketIssue"]
+        }
+    }
+
     static func scheduledAttemptIdentifiers(plan: Plan, attempt: TicketAttempt) -> [String] {
         guard UserDefaults.standard.bool(forKey: AppStorageKeys.notificationMasterEnabled) else {
             return []
@@ -234,8 +251,10 @@ enum TicketNotificationScheduler {
             return performanceReminderSpecs(plan: plan)
         }
 
+        let scheduledMilestones = scheduledMilestoneKeys(for: attempt.statusKey)
         var specs: [TicketNotificationSpec] = []
-        if UserDefaults.standard.bool(forKey: AppStorageKeys.notificationApplicationStartEnabled),
+        if scheduledMilestones.contains("applicationStart"),
+           UserDefaults.standard.bool(forKey: AppStorageKeys.notificationApplicationStartEnabled),
            attempt.saleStartAt != Date.distantPast {
             let timing = pointTiming(forKey: AppStorageKeys.notificationApplicationStartTiming)
             let copy = applicationStartNotificationCopy(
@@ -252,38 +271,43 @@ enum TicketNotificationScheduler {
             )
         }
 
-        if notificationPreference(
+        if scheduledMilestones.contains("applicationDeadline"),
+           notificationPreference(
             forKey: AppStorageKeys.notificationApplicationDeadlineEnabled,
             defaultValue: true
         ),
            attempt.applyDeadlineAt != Date.distantPast {
+            let copy = applicationDeadlineNotificationCopy(planTitle: planTitle(plan))
             specs.append(contentsOf: deadlineSpecs(
                 attemptID: attempt.id,
                 typeKey: "applicationDeadline",
                 date: attempt.applyDeadlineAt,
-                title: "申込締切",
-                body: "\(planTitle(plan)) の申込締切が近づいています。",
+                title: copy.title,
+                body: copy.body,
                 timing: deadlineTiming(forKey: AppStorageKeys.notificationApplicationDeadlineTiming)
             ))
         }
 
-        if notificationPreference(
+        if scheduledMilestones.contains("lotteryResult"),
+           notificationPreference(
             forKey: AppStorageKeys.notificationLotteryResultEnabled,
             defaultValue: true
         ),
            attempt.resultAnnounceAt != Date.distantPast {
             let timing = pointTiming(forKey: AppStorageKeys.notificationLotteryResultTiming)
+            let copy = lotteryResultNotificationCopy(planTitle: planTitle(plan))
             specs.append(
                 TicketNotificationSpec(
                     identifier: "ticket.\(attempt.id.uuidString).lotteryResult",
                     fireDate: pointFireDate(date: attempt.resultAnnounceAt, timing: timing),
-                    title: "当落発表",
-                    body: "\(planTitle(plan)) の当落発表日です。"
+                    title: copy.title,
+                    body: copy.body
                 )
             )
         }
 
-        if notificationPreference(
+        if scheduledMilestones.contains("paymentDeadline"),
+           notificationPreference(
             forKey: AppStorageKeys.notificationPaymentDeadlineEnabled,
             defaultValue: true
         ),
@@ -298,7 +322,8 @@ enum TicketNotificationScheduler {
             ))
         }
 
-        if notificationPreference(
+        if scheduledMilestones.contains("ticketIssue"),
+           notificationPreference(
             forKey: AppStorageKeys.notificationTicketIssueEnabled,
             defaultValue: true
         ),
@@ -322,9 +347,43 @@ enum TicketNotificationScheduler {
         planTitle: String
     ) -> (title: String, body: String) {
         if TicketProgressTimeline.usesLotteryFlow(attempt) {
-            return ("申込開始", "\(planTitle) の申込が始まります。")
+            return ("🔔 抽選申込通知", "\(planTitle) の抽選申込が始まります。")
         }
-        return ("発売開始", "\(planTitle) のチケット発売が始まります。")
+        let saleMethod = saleNotificationMethod(for: attempt.entryRouteKey)
+        return ("🔔 \(saleMethod)通知", "\(planTitle) の\(saleMethod)が始まります。")
+    }
+
+    static func applicationDeadlineNotificationCopy(
+        planTitle: String
+    ) -> (title: String, body: String) {
+        (
+            "🔔 抽選申込通知",
+            "\(planTitle) の抽選申込締切が近づいています。"
+        )
+    }
+
+    static func lotteryResultNotificationCopy(
+        planTitle: String
+    ) -> (title: String, body: String) {
+        (
+            "🔔 当落発表通知",
+            "\(planTitle) の当落発表日です。"
+        )
+    }
+
+    static func saleNotificationMethod(for entryRouteKey: String) -> String {
+        switch entryRouteKey {
+        case "presale":
+            "先行販売"
+        case "general":
+            "一般販売"
+        case "sameDay":
+            "当日券販売"
+        case "resale":
+            "リセール販売"
+        default:
+            "チケット販売"
+        }
     }
 
     private static func performanceReminderSpecs(plan: Plan) -> [TicketNotificationSpec] {

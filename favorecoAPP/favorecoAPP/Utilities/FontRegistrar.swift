@@ -14,6 +14,7 @@ enum FontRegistrar {
             "NotoSansJP-wght",
             "NotoSerifJP-wght",
             "CormorantGaramond-wght",
+            "Phosphor-Light",
         ].forEach(registerFont)
     }
 
