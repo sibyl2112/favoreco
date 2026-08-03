@@ -60,14 +60,14 @@ enum CategoryPresetSeeder {
             dateLabel: "参戦日"
         ),
         CategoryPreset(
-            name: "映画",
+            name: "映像作品",
             templateKey: "movie",
             templateTypeKey: "watching",
             iconSymbol: "movieclapper.fill",
             colorHex: "#3B3D4A",
             sortOrder: 40,
             enabledUnitsRaw: "basic,people,photos,importOCR,officialInfo,memo",
-            targetNameLabel: "映画",
+            targetNameLabel: "映像作品",
             recordUnitName: "鑑賞",
             dateLabel: "鑑賞日"
         ),
@@ -144,7 +144,7 @@ enum CategoryPresetSeeder {
             dateLabel: "読了日"
         ),
         CategoryPreset(
-            name: "ランダムグッズ",
+            name: "Goods",
             templateKey: "random_goods",
             templateTypeKey: "collection",
             iconSymbol: "shippingbox.fill",

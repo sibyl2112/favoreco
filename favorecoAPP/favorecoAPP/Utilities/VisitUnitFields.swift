@@ -7,6 +7,50 @@
 
 import Foundation
 
+enum ScreenWorkType: String, CaseIterable, Identifiable {
+    case movie
+    case drama
+    case anime
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .movie: "映画"
+        case .drama: "ドラマ"
+        case .anime: "アニメ"
+        }
+    }
+
+    var supportsSeason: Bool { self != .movie }
+
+    static func resolved(from rawValue: String) -> ScreenWorkType {
+        ScreenWorkType(rawValue: rawValue) ?? .movie
+    }
+}
+
+enum ScreenWorkFilter: String, CaseIterable, Identifiable {
+    case all
+    case movie
+    case drama
+    case anime
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .all: "すべて"
+        case .movie: "映画"
+        case .drama: "ドラマ"
+        case .anime: "アニメ"
+        }
+    }
+
+    func includes(_ type: ScreenWorkType) -> Bool {
+        self == .all || rawValue == type.rawValue
+    }
+}
+
 struct EventVenueEntry: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
@@ -44,6 +88,7 @@ struct VisitUnitFields: Codable {
     var eventVenues: [EventVenueEntry] = []
     var excludedEventCastLinkIDs: [UUID] = []
     var hasVisitCastSnapshot: Bool = false
+    var screenWorkSeasonNumber: Int = 0
     var eyecatchAspectRatioKey: String = ""
     var heroBackgroundPath: String = ""
     var heroBackgroundPresetKey: String = ""
@@ -67,6 +112,7 @@ struct VisitUnitFields: Codable {
         eventVenues: [EventVenueEntry] = [],
         excludedEventCastLinkIDs: [UUID] = [],
         hasVisitCastSnapshot: Bool = false,
+        screenWorkSeasonNumber: Int = 0,
         eyecatchAspectRatioKey: String = "",
         heroBackgroundPath: String = "",
         heroBackgroundPresetKey: String = "",
@@ -89,6 +135,7 @@ struct VisitUnitFields: Codable {
         self.eventVenues = eventVenues
         self.excludedEventCastLinkIDs = excludedEventCastLinkIDs
         self.hasVisitCastSnapshot = hasVisitCastSnapshot
+        self.screenWorkSeasonNumber = Self.normalizedSeasonNumber(screenWorkSeasonNumber)
         self.eyecatchAspectRatioKey = eyecatchAspectRatioKey
         self.heroBackgroundPath = heroBackgroundPath
         self.heroBackgroundPresetKey = heroBackgroundPresetKey
@@ -113,6 +160,7 @@ struct VisitUnitFields: Codable {
         case eventVenues
         case excludedEventCastLinkIDs
         case hasVisitCastSnapshot
+        case screenWorkSeasonNumber
         case eyecatchAspectRatioKey
         case heroBackgroundPath
         case heroBackgroundPresetKey
@@ -138,6 +186,9 @@ struct VisitUnitFields: Codable {
         eventVenues = try container.decodeIfPresent([EventVenueEntry].self, forKey: .eventVenues) ?? []
         excludedEventCastLinkIDs = try container.decodeIfPresent([UUID].self, forKey: .excludedEventCastLinkIDs) ?? []
         hasVisitCastSnapshot = try container.decodeIfPresent(Bool.self, forKey: .hasVisitCastSnapshot) ?? false
+        screenWorkSeasonNumber = Self.normalizedSeasonNumber(
+            try container.decodeIfPresent(Int.self, forKey: .screenWorkSeasonNumber) ?? 0
+        )
         eyecatchAspectRatioKey = try container.decodeIfPresent(String.self, forKey: .eyecatchAspectRatioKey) ?? ""
         heroBackgroundPath = try container.decodeIfPresent(String.self, forKey: .heroBackgroundPath) ?? ""
         heroBackgroundPresetKey = try container.decodeIfPresent(String.self, forKey: .heroBackgroundPresetKey) ?? ""
@@ -171,6 +222,7 @@ struct VisitUnitFields: Codable {
                 || !eventVenues.isEmpty
                 || !excludedEventCastLinkIDs.isEmpty
                 || hasVisitCastSnapshot
+                || screenWorkSeasonNumber > 0
                 || !eyecatchAspectRatioKey.isEmpty
                 || !heroBackgroundPath.isEmpty
                 || !heroBackgroundPresetKey.isEmpty
@@ -195,6 +247,36 @@ struct VisitUnitFields: Codable {
         weatherFetchedAt = other.weatherFetchedAt
         weatherAttributionURL = other.weatherAttributionURL
     }
+
+    static func normalizedSeasonNumber(_ value: Int) -> Int {
+        (1...10).contains(value) ? value : 0
+    }
+}
+
+extension ExperienceEvent {
+    var screenWorkType: ScreenWorkType {
+        ScreenWorkType.resolved(from: subTypeKey)
+    }
+
+    var screenWorkSeasonNumber: Int {
+        guard screenWorkType.supportsSeason else { return 0 }
+        return VisitUnitFields(rawValue: unitFieldsRaw).screenWorkSeasonNumber
+    }
+
+    var screenWorkSeasonLabel: String {
+        let number = screenWorkSeasonNumber
+        return number > 0 ? "シーズン\(number)" : ""
+    }
+
+    func applyScreenWorkClassification(typeKey: String, seasonNumber: Int) {
+        let type = ScreenWorkType.resolved(from: typeKey)
+        subTypeKey = type.rawValue
+        var fields = VisitUnitFields(rawValue: unitFieldsRaw)
+        fields.screenWorkSeasonNumber = type.supportsSeason
+            ? VisitUnitFields.normalizedSeasonNumber(seasonNumber)
+            : 0
+        unitFieldsRaw = fields.encodedRawValue
+    }
 }
 
 struct HeroBackgroundPreset: Identifiable, Equatable {
@@ -214,7 +296,7 @@ struct HeroBackgroundPreset: Identifiable, Equatable {
             ]
         case "movie":
             [
-                .init(key: "movieDefault", title: "映画", resourceName: "movie-hero-default"),
+                .init(key: "movieDefault", title: "映像作品", resourceName: "movie-hero-default"),
             ]
         case "book":
             [

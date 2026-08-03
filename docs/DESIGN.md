@@ -166,24 +166,43 @@ favorecoは1アプリで多ジャンルを抱える。**バラバラに見せな
 1. **骨格は全ジャンル共通**：ステータスバー／ナビ（ホーム・暦・ライブラリ・マイ）／カード素材（Liquid Glass）／タイポ／余白（8pxグリッド）／角丸は**不変**。
 2. **テーマ色はアクセントだけ**：ヘッダーのタイトル・セクション見出し・状態バッジ・active タブ・フィルタON。ジャンルごとにテーマを選べるが、**面を塗りつぶさない**。
 3. **ジャンル固有レイアウトはコンテンツエリア内だけ**：棚の並べ方・カードの形（映画=ポスターウォール／酒=ボトル2列／観劇=縦長3列）は中身の話。枠は共通。
-4. **app chrome は2つのベーステーマ**：ホーム・設定・通知・登録情報ハブは、共通オフホワイトを基準に **Sky Blue / Red Magenta** を選べる。アクセントだけでなく、見出し／本文／補助文字の墨色も同じ色相へ揃える。ジャンル固有の色世界はライブラリの中だけにまとう。
+4. **app chrome は5つのベーステーマ**：ホーム・設定・通知・登録情報ハブは、**Airy Teal / Earth Glass / Lime Editorial / Sky Blue / Red Magenta** を選べる。標準は内部保存キー`favoNeon`を維持したAiry Tealとし、操作のAquaとFAVOのPinkを役割分担する。アクセントだけでなく、見出し／本文／補助文字の墨色も同じ色相へ揃える。ジャンル固有の色世界はライブラリの中だけにまとう。
 5. **写真が主役**：色やアイコンは脇役。実装アイコンは絵文字でなく **SF Symbols**（モックの絵文字は仮）。
+
+app chromeの設定、追加メニュー、登録フォームは、呼び出し元ジャンルの固有Light／Dark環境を引き継がず、利用者が選んだ外観モードを使う。操作アイコン、リンク、Pickerの選択、Toggle等は画面ごとの`Color.accentColor`指定を持たず、共通の`FavorecoThemePalette.globalTint`で描画する。Airy Tealは同一の意味トークンをLight `#256f9c`、Dark `#60dde4`へ切り替え、Lightの主要操作面は`#39d7e2`とする。FAVO感情色と警告・完了・チケット進捗等の意味色はこの統一対象外。
+
+塗りの強調ボタンは`prominentAction`を面に使い、文字・アイコンは背景色に対して白と青墨の相対輝度を比較し、コントラストが高い側を選ぶ。濃い操作色の面へ青墨をそのまま載せない。Airy Teal Lightの基準は`#39d7e2`＋`#192735`（8.67:1）とする。
 
 ## 3. 色（Colors）
 
 ### app chromeのベーステーマ
-| 用途 | Sky Blue Light | Red Magenta Light |
-|---|---|---|
-| キャンバス | `#f7f7f3` | `#f7f7f3` |
-| サーフェス（Glass） | `rgba(255,255,255,.85)` +blur | `rgba(255,255,255,.85)` +blur |
-| appアクセント | `#3474a3` | `#b04464` |
-| 淡色面 | `#e3eff7` | `#f5e2e7` |
-| 見出し | `#192735` | `#38232b` |
-| 本文 | `#293640` | `#443039` |
-| 補助 | `#68737d` | `#77656c` |
-| 非活性 | `#8a949c` | `#998a90` |
+| 用途 | Airy Teal Light（標準） | Earth Glass Light | Lime Editorial Light | Sky Blue Light | Red Magenta Light |
+|---|---|---|---|---|---|
+| キャンバス | `#f7f7f3` | `#f5f0e7` | `#f5f5f0` | `#f7f7f3` | `#f7f7f3` |
+| 操作色（文字・アイコン） | `#256f9c` | `#5e7056` | `#566900` | `#3474a3` | `#b04464` |
+| 操作色（主要ボタン面） | `#39d7e2` | `#afc09f` | `#d8ff3e` | `#3474a3` | `#b04464` |
+| 操作の淡色面 | `#e9fafc` | `#e8eee2` | `#f1f7cc` | `#e3eff7` | `#f5e2e7` |
+| FAVO色（文字・アイコン） | `#b62f58` | `#a95436` | `#4f65d8` | `#b04464` | `#b04464` |
+| FAVO色（強調面） | `#ff638a` | `#d98662` | `#7183ef` | `#ff638a` | `#b04464` |
+| FAVOの淡色面 | `#fff0f5` | `#f6e3d7` | `#eaedff` | `#fff0f5` | `#f5e2e7` |
+| 見出し | `#192735` | `#2d3029` | `#181b18` | `#192735` | `#38232b` |
+| 本文 | `#293640` | `#45483f` | `#343833` | `#293640` | `#443039` |
+| 補助 | `#68737d` | `#74786d` | `#71766f` | `#68737d` | `#77656c` |
+| 非活性 | `#8a949c` | `#969a8f` | `#949a91` | `#8a949c` | `#998a90` |
 
-DarkはSky Blueを`canvas #14191d / heading #eff4f7 / body #dce4e9 / secondary #aebac2`、Red Magentaを`canvas #1b1517 / heading #f7f0f2 / body #e9dde1 / secondary #c0adb4`とする。文字色に純黒`#000000`は使わない。
+DarkはAiry Teal=`canvas #14191d / action #60dde4 / emotion #ff84a1`、Earth Glass=`canvas #171914 / action #b8cbaa / emotion #e39573`、Lime Editorial=`canvas #11130f / action #d7ff55 / emotion #8a98ff`とする。Sky BlueとRed Magentaの既存配色は維持する。文字色に純黒`#000000`は使わない。
+
+### app chromeの追加テーマ意図（実装済み）
+
+写真を主役にしたライト／ダークの選択肢として、次の3方向を設定画面へ実装する。
+
+| 候補 | Light | Dark | 補完色と狙い |
+|---|---|---|---|
+| **Airy Teal** | canvas `#f7f7f3` / surface `#ffffff` / ink `#192735` / blue `#256f9c` / bright `#39d7e2` | canvas `#14191d` / surface `#20282e` / ink `#eff4f7` / aqua `#60dde4` | pink `#b62f58`（Dark `#ff84a1`）。旧表示名Favo Neonの保存キーとAqua/Pink系を維持する |
+| **Earth Glass** | canvas `#f5f0e7` / surface `#fffcf7` / ink `#2d3029` / sage `#5e7056` / bright `#afc09f` | canvas `#171914` / surface `#24271f` / ink `#f4efe6` / sage `#b8cbaa` | clay `#a95436`（Dark `#e39573`）。霧・砂・森・夕景を拾う、写真になじむ暖かなアース系 |
+| **Lime Editorial** | canvas `#f5f5f0` / surface `#ffffff` / ink `#181b18` / lime text `#566900` / bright `#d8ff3e` | canvas `#11130f` / surface `#1c2018` / ink `#f4f6ee` / lime `#d7ff55` | cobalt `#4f65d8`（Dark `#8a98ff`）。モノクロ主体へライムを小面積で差し、TikTok風ではなく編集的に見せる |
+
+補助面はAiry Teal=`#e9fafc / #fff0f5`（Dark `#19383d / #3a222a`）、Earth Glass=`#e8eee2 / #f6e3d7`（Dark `#313a2c / #3e2b24`）、Lime Editorial=`#f1f7cc / #eaedff`（Dark `#2b3217 / #252a45`）とする。明色は広い背景や細い本文文字へ使わず、主要ボタン面・選択状態・小さな強調へ限定する。
 
 意味色：赤 `#e0533a`（緊急・締切）／琥珀 `#e0a12a`（注意・機会損失）／青 `#3a6df0`（情報）／緑 `#1f8a5a`（完了）。
 

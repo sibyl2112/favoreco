@@ -103,6 +103,8 @@
 
 | テンプレ | 追加フィールド | 所属 | 格納 | 由来 |
 |---|---|---|---|---|
+| 映像作品 | 種別（映画 / ドラマ / アニメ） | Event | `subTypeKey`。空または未知の旧値は映画として解決 | 手入力 |
+| 映像作品 | シーズン（なし / 1...10） | Event | `unitFieldsRaw.screenWorkSeasonNumber`。映画では常に0として扱う | 手入力 |
 | 映画 | 原題・製作年・製作国・上映時間・あらすじ | Event | 年/尺=個別、あらすじ/国=unitFieldsRaw（あらすじは「続きを読む」で畳む・感想と別） | TMDb |
 | 映画 | 監督・脚本・出演者 | Event↔Person credits | 参照（役割付き）＋名称スナップ。「この人の映画n本」統計 | TMDb |
 | 映画 | 観たい状態（観たい/観た）・公開日 | Event | watchStatus（積読と同型・A5）／releaseDate（個別・Coming Up/カレンダーへ） | TMDb。観たいは未公開作の公開予定バッジ・私的watchlist |

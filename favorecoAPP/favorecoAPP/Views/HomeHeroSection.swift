@@ -208,15 +208,23 @@ struct HomeHeroSection: View {
         }
         .frame(height: HomeUpcomingHeroMetrics.embeddedCardHeight)
         .overlay(alignment: .bottomLeading) {
-            pickupPageIndicator
-                .frame(
-                    width: HomeUpcomingHeroMetrics.posterWidth,
-                    height: HomeUpcomingHeroMetrics.actionHeight
-                )
-                .background(Color(.systemBackground))
-                .padding(.leading, HomeUpcomingHeroMetrics.embeddedPadding)
-                .padding(.bottom, HomeUpcomingHeroMetrics.embeddedPadding)
-                .allowsHitTesting(false)
+            ZStack(alignment: .bottomLeading) {
+                Rectangle()
+                    .fill(Color(.systemBackground))
+                    .frame(
+                        width: HomeUpcomingHeroMetrics.embeddedPageMaskWidth,
+                        height: HomeUpcomingHeroMetrics.embeddedPageMaskHeight
+                    )
+
+                pickupPageIndicator
+                    .frame(
+                        width: HomeUpcomingHeroMetrics.posterWidth,
+                        height: HomeUpcomingHeroMetrics.actionHeight
+                    )
+                    .padding(.leading, HomeUpcomingHeroMetrics.embeddedPadding)
+                    .padding(.bottom, HomeUpcomingHeroMetrics.embeddedPadding)
+            }
+            .allowsHitTesting(false)
         }
     }
 
@@ -327,8 +335,7 @@ private struct HomePickupEmptyState: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            FavorecoIcon(systemName: icon, size: 17)
-                .font(.system(size: 28, weight: .medium))
+            FavorecoIcon(systemName: icon, size: 28)
                 .foregroundStyle(themePalette.globalTint)
             Text(title)
                 .font(FavorecoTypography.cardTitle)

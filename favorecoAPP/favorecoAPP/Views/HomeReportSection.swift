@@ -139,8 +139,7 @@ struct HomeReportSection: View {
 
             if periodVisits.isEmpty {
                 VStack(spacing: 10) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 28, weight: .medium))
+                    FavorecoIcon(systemName: "photo.on.rectangle.angled", size: 28)
                         .foregroundStyle(themePalette.globalTint)
                     Text("この期間の記録はまだありません")
                         .font(FavorecoTypography.cardTitle)

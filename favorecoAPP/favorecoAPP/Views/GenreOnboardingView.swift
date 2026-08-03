@@ -89,7 +89,7 @@ struct GenreOnboardingView: View {
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     OnboardingGenreBubble(name: "観劇", color: Color(hex: "#9F2F4D"), icon: "theatermasks.fill")
-                    OnboardingGenreBubble(name: "映画", color: Color(hex: "#D69B4F"), icon: "film.fill")
+                    OnboardingGenreBubble(name: "映像作品", color: Color(hex: "#D69B4F"), icon: "film.fill")
                     OnboardingGenreBubble(name: "美術", color: Color(hex: "#A9D4EA"), icon: "paintpalette.fill")
                     OnboardingGenreBubble(name: "酒", color: Color(hex: "#6F8F7A"), icon: "wineglass.fill")
                 }

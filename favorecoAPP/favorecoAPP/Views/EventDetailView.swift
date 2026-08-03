@@ -257,7 +257,11 @@ struct EventDetailView: View {
             AddTicketPlanView(event: event, entryMode: .ticketSchedule)
         }
         .sheet(isPresented: $isShowingEditEvent) {
-            EditEventView(event: event)
+            if category?.templateKey == "random_goods" {
+                AddCollectibleSeriesView(series: event)
+            } else {
+                EditEventView(event: event)
+            }
         }
         .sheet(isPresented: $isShowingRepresentativePhotoPicker) {
             RepresentativePhotoPicker(event: event)
@@ -317,7 +321,12 @@ struct EventDetailView: View {
         Button {
             isShowingEditEvent = true
         } label: {
-            FavorecoIconLabel("対象情報・画像を編集", systemImage: "pencil")
+            Label(
+                category?.templateKey == "random_goods"
+                    ? "シリーズ情報・画像を編集"
+                    : "対象情報・画像を編集",
+                systemImage: "pencil"
+            )
         }
 
         if EventRepresentativePhotoResolver.resolve(
@@ -327,20 +336,20 @@ struct EventDetailView: View {
             Button {
                 isShowingRepresentativePhotoPicker = true
             } label: {
-                FavorecoIconLabel("代表写真を選ぶ", systemImage: "photo.badge.checkmark")
+                Label("代表写真を選ぶ", systemImage: "photo.badge.checkmark")
             }
         }
 
         Button(role: .destructive) {
             isShowingArchiveConfirmation = true
         } label: {
-            FavorecoIconLabel("対象を非表示", systemImage: "archivebox")
+            Label("対象を非表示", systemImage: "archivebox")
         }
 
         Button(role: .destructive) {
             isShowingDeleteConfirmation = true
         } label: {
-            FavorecoIconLabel("この対象とすべての記録を削除", systemImage: "trash")
+            Label("この対象とすべての記録を削除", systemImage: "trash")
         }
     }
 
@@ -1324,6 +1333,14 @@ struct EditEventView: View {
                         } label: {
                             TheaterUnifiedSectionLabel(section: .performanceBasic)
                         }
+                    } else if event.category?.templateKey == "movie" {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ScreenWorkTypeAndSeasonEditor(
+                                typeKey: $draft.subTypeKey,
+                                seasonNumber: $draft.screenWorkSeasonNumber
+                            )
+                            TextField(template.titlePlaceholder, text: $draft.title)
+                        }
                     } else {
                         TextField(template.titlePlaceholder, text: $draft.title)
                         TextField(template.seriesPlaceholder, text: $draft.seriesName)
@@ -1551,6 +1568,8 @@ struct EditEventView: View {
                 plan.title = updatedTitle
                 plan.updatedAt = now
             }
+        } else if event.category?.templateKey == "movie" {
+            event.subTypeKey = ScreenWorkType.resolved(from: draft.subTypeKey).rawValue
         }
         event.officialURL = draft.trimmedOfficialURL
         var unitFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
@@ -1561,6 +1580,11 @@ struct EditEventView: View {
             key: draft.subTypeKey,
             input: draft.performanceTypeCustomName
         )
+        if event.category?.templateKey == "movie" {
+            unitFields.screenWorkSeasonNumber = ScreenWorkType.resolved(from: draft.subTypeKey).supportsSeason
+                ? draft.screenWorkSeasonNumber
+                : 0
+        }
         let normalizedVenueEntries = draft.normalizedVenueEntries
         unitFields.eventVenues = normalizedVenueEntries
         if normalizedVenueEntries.isEmpty {
@@ -1640,6 +1664,7 @@ private struct EventDraft {
     var title: String
     var seriesName: String
     var subTypeKey: String
+    var screenWorkSeasonNumber: Int
     var performanceTypeCustomName: String
     var officialURL: String
     var xURL: String
@@ -1665,6 +1690,10 @@ private struct EventDraft {
         subTypeKey = event.subTypeKey
         officialURL = event.officialURL
         let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        if event.category?.templateKey == "movie" {
+            subTypeKey = ScreenWorkType.resolved(from: subTypeKey).rawValue
+        }
+        screenWorkSeasonNumber = fields.screenWorkSeasonNumber
         performanceTypeCustomName = fields.eventPerformanceTypeCustomName
         xURL = fields.socialLinks.first {
             TheaterSocialPlatform.platform(for: $0) == .x

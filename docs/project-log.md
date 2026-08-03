@@ -5,6 +5,662 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-08-03: 参加日時アイコンと進捗管理の鉛筆を拡大
+
+### 変更概要・意図
+
+- チケット管理カードの参加日時カレンダーを15ptから16ptへ1pt拡大した
+- 個別`進捗管理`シートの日付編集鉛筆を14ptから16ptへ拡大した
+- 日時文字、鉛筆の34×30pt押下領域、カード・シート寸法は維持した
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 参加日時アイコンを16ptへ変更
+- `favorecoAPP/favorecoAPP/Views/TicketQuickActionSheet.swift`: 日付編集鉛筆を16ptへ変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行のアイコン寸法を反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット管理カードの参加日時行
+- 個別`進捗管理`シートの日付編集ボタン
+- Home、日時文字、押下領域、編集処理、保存データには影響なし
+
+### 確認結果
+
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+
+### 残課題・既知リスク
+
+- 実機で日時とのベースライン、鉛筆の視認性、Dynamic Type時の収まりを確認する
+
+## 2026-08-03: チケット管理の残日数補助文字を1pt縮小
+
+### 変更概要・意図
+
+- チケット管理カード期限欄の縦組み`あと`を10ptから9ptへ変更した
+- 日数右の単位`日`も10ptから9ptへ変更した
+- 中央の日数30pt、期限欄70pt、期限日・時刻、カード高は維持した
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 残日数の補助文字2か所を9ptへ変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行の残日数寸法を反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット管理ページの期限欄にある`あとn日`
+- HomeのTicket Schedule、期限判定、カード寸法、保存データには影響なし
+
+### 確認結果
+
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+
+### 残課題・既知リスク
+
+- 実機で1桁／2桁／3桁の日数とDynamic Type時の可読性を確認する
+
+## 2026-08-03: チケット管理カードの公演タイトルをさらに2pt縮小
+
+### 変更概要・意図
+
+- チケット管理カード上段の公演タイトルを14pt Semiboldから12pt Semiboldへ変更した
+- 最大2行と2行分の予約領域、上段104pt、点線・切り込み位置は維持した
+- タグや期限表示に対してタイトルが強すぎない情報階層へ調整した
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 管理カードの公演タイトルを12ptへ変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行のタイトル寸法を反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット管理ページのチケットカード上段
+- Home、観劇トップ、公演詳細、カード高、保存データ、状態判定、スワイプ操作には影響なし
+
+### 確認結果
+
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+
+### 残課題・既知リスク
+
+- 実機で長いタイトル、小幅端末、Dynamic Type時の可読性と収まりを確認する
+
+## 2026-08-03: タイトル行数にかかわらず切り込みとミシン線を整列
+
+### 変更概要・原因
+
+- カード外形の切り込み中心は上端から104pt固定だが、横ミシン線は上段内容の実際の高さへ追従していた
+- 2行タイトルが上段の最低高を超えたカードだけ、ミシン線が切り込みより下へ移動していた
+- タイトルへ常に2行分の領域を予約し、上段を切り込み中心と同じ104pt高へ固定した
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: タイトルの2行領域予約と上段高固定を追加
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行の高さ・整列規則を反映
+- `docs/00-開発状況と残課題.md`: 原因、実装状態、実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット管理ページのチケットカード上段高、横ミシン線、左右切り込み
+- タイトル14pt・最大2行、Progress、次対応、工程色、保存データ、スワイプ操作は変更なし
+- Home、観劇トップ、公演詳細のカードには影響なし
+
+### 確認結果
+
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+
+### 残課題・既知リスク
+
+- 実機で1行／2行／長い省略タイトル、小幅端末、Dynamic Type時の収まりを確認する
+
+## 2026-08-03: チケット管理の次対応を取得方法が分かる文言へ統一
+
+### 変更概要・意図
+
+- 抽選の申込開始・締切前を`抽選に申し込む`へ統一した
+- 先着の発売前を`チケットを購入する`へ変更した
+- 期限経過後を`申込状況を確認 / 購入状況を確認`へ変更した
+- `申込を開始する / 申込を完了する / 購入する / 〜状況を更新`の曖昧さを解消した
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 次対応の表示変換を明示的な語彙へ変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行の次対応文言を反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット管理ページのカード最下段にある`次にやること`
+- 期限・状態判定、通知文言、Home、保存データ、状態更新処理には影響なし
+
+### 確認結果
+
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+
+### 残課題・既知リスク
+
+- 実機で抽選／先着の期限前後と、長い文言の小幅端末での収まりを確認する
+
+## 2026-08-03: チケット管理カードの公演タイトルを2pt縮小
+
+### 変更概要・意図
+
+- チケット管理カード上段の公演タイトルを16pt Semiboldから14pt Semiboldへ変更した
+- 最大2行、カード高、タグ、参加日時、期限の寸法は維持した
+- 周辺情報との強弱を整え、長い公演名の見切れを抑える
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 管理カードの公演タイトルを14ptへ変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行のタイトル寸法を反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット管理ページのチケットカード上段
+- Home、観劇トップ、公演詳細、保存データ、状態判定、スワイプ操作には影響なし
+
+### 確認結果
+
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+
+### 残課題・既知リスク
+
+- 実機で長い2行タイトル、小幅端末、Dynamic Type時の収まりを確認する
+
+## 2026-08-03: チケット単体編集の保存色をapp chromeへ統一
+
+### 変更概要・原因
+
+- `EditTicketAttemptView`の保存ボタンだけ、観劇カテゴリを舞台専用ゴールド面＋黒文字へ固定していた
+- フォーム全体は選択中のapp chromeテーマで描画されるため、保存操作だけジャンル装飾色になりトンマナが分離していた
+- ジャンル固定色を外し、全ジャンルで選択中テーマの`prominentAction`面と、背景輝度から選ぶ高コントラスト文字へ統一した
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/EditTicketAttemptView.swift`: 保存カプセルをテーマの主要アクショントークンへ接続
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行の保存操作配色を追記
+- `docs/00-開発状況と残課題.md`: 原因、実装状態、実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット単体の追加／編集画面にある右上の保存ボタン
+- 34ptカプセル、文字寸法、保存可否、保存・通知再予約処理、データには変更なし
+- チケットスケジュール登録画面、ジャンル画面のゴールド装飾、チケット工程の意味色には影響なし
+
+### 確認結果
+
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、iOS 18.0 deployment target、署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- AppIntentsメタデータ抽出スキップの既存警告のみで、今回変更の新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機で5テーマのライト／ダーク、観劇／他ジャンル、追加／編集時の背景色と文字コントラストを確認する
+
+## 2026-08-03: Homeとチケット管理のカード横幅を統一
+
+### 変更概要・原因
+
+- チケット管理はList標準の外側余白に加えて、カード行へ左右16ptずつ追加していたため、Homeより約32pt狭かった
+- カード行固有の追加左右余白を0にし、List外側の約20pt余白だけを残してHomeカードと外幅を揃えた
+- 管理カード上段の期限欄を68ptから70pt、区切り線後を5ptから6ptへ変更し、右側情報欄の開始位置もHome基準へ揃えた
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: カード行の左右余白と上段列幅をHome基準へ統一
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行のカード幅規則を追記
+- `docs/00-開発状況と残課題.md`: 原因、実装状態、実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット管理一覧の通常カード・非表示カード
+- Home Ticket Schedule、管理画面の検索・フィルター・Section見出しには影響なし
+- Progress、次対応、スワイプ操作、保存データには影響なし
+
+### 確認結果
+
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView.swift` MainActor警告2件とAppIntentsメタデータ抽出スキップ警告のみで、今回変更の新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機でHomeとの左右端一致、長いタイトル・チップ、小幅端末、左右スワイプ中の外形を確認する
+
+## 2026-08-03: Home Ticket Scheduleの期限日時を1pt拡大
+
+### 変更概要・意図
+
+- 期限欄下段の日付・時刻を14ptから15pt、曜日を11ptから12ptへ各1pt拡大した
+- 70pt幅に`12/31(水)`が収まる寸法のため、切り込み線は移動せず既存位置を維持した
+- 上段の`明日 / あとn日`、カード高、右側公演情報は変更しない
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`: 期限欄下段の日付・曜日・時刻を各1pt拡大
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行の文字寸法を追記
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- HomeのTicket Scheduleカード
+- 期限計算、工程色、カード操作、切り込み線、保存データには影響なし
+
+### 確認結果
+
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView.swift` MainActor警告2件とAppIntentsメタデータ抽出スキップ警告のみで、今回変更の新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機で`1/1(木)`、`12/31(水)`、小幅端末、Dynamic Type時の収まりを確認する
+
+## 2026-08-03: 観劇トップTicket Progressのメタ情報と操作アイコンを整理
+
+### 変更概要・原因
+
+- 左の丸点・縦線は複数申込を示すリストマーカーだったが、1件でも点だけ残り、既存の区切り線と役割が重複していたため削除した
+- 申込枠・販売サイトは独自のアイコン付きテキストから、総合Ticket Scheduleと同じ20pt高の細枠チップへ変更した
+- 日付編集の鉛筆と、`チケット追加`・`詳細`の左アイコンを16ptへ拡大した
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 左マーカー削除、メタ情報チップ統一、操作アイコン拡大
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行の表示寸法と構造を追記
+- `docs/00-開発状況と残課題.md`: 原因、実装状態、実機確認項目を追加
+
+### 影響画面・機能
+
+- 観劇トップComing Up内の`Ticket Progress`
+- チケット日付編集、チケット追加、公演詳細の処理自体は変更なし
+- 総合Ticket Schedule、チケット管理一覧、個別進捗管理には影響なし
+
+### 確認結果
+
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- AppIntents未使用によるメタデータ抽出スキップ警告のみで、今回変更の新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機で長い申込枠・販売サイト、販売サイトなし、1件／複数申込、小幅端末の収まりを確認する
+
+## 2026-08-03: 共通Progressの現在工程を工程色ベタへ変更
+
+### 変更概要・意図
+
+- 現在工程の二重枠＋工程色文字は、完了／未来と比べて現在地の強調が弱かった
+- 現在工程を工程色のベタ塗り＋白抜き文字へ変更し、総合のチケット状態面と同じ工程色のナラティブへ揃えた
+- 完了済みは中立グレーのベタ塗り＋白文字、未到達は背景色＋中立枠＋本文色を維持する
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 共通Progressノードの現在工程を工程色ベタ＋白文字へ変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 3状態の視覚規則を追記
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- Home・ジャンルトップから開く個別`進捗管理`
+- ジャンルトップのComing Up内`Ticket Progress`と`Ticket Management`
+- チケット管理一覧のProgress
+- 状態判定、工程色、接続線、日付、寸法、操作、保存データには影響なし
+
+### 確認結果
+
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- AppIntents未使用によるメタデータ抽出スキップ警告のみで、今回変更の新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機でライト／ダーク、申込／発売／当落／支払／受取の白文字コントラストと、3工程・4工程を確認する
+
+## 2026-08-03: ジャンルトップの完了工程をグレーへ統一
+
+### 変更概要・原因
+
+- ジャンルトップ側の3つのProgress呼び出しだけ`completedTint`がなく、完了済み工程が各工程色へフォールバックしていた
+- Coming Up内の`Ticket Progress`と`Ticket Management`カードへ同じ中立グレーを指定した
+- 現在工程の工程色と未到達工程の中立表示は維持する
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: ジャンルトップ側の3つのProgressへ完了工程の中立色を指定
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: ジャンルトップを含む現行の工程色規則を追記
+- `docs/00-開発状況と残課題.md`: 原因、実装状態、実機確認項目を追加
+
+### 影響画面・機能
+
+- ジャンルトップのComing Up内`Ticket Progress`
+- ジャンルトップの`Ticket Management`カード
+- 状態判定、工程日、カード寸法、操作、保存データには影響なし
+
+### 確認結果
+
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- AppIntents未使用によるメタデータ抽出スキップ警告のみで、今回変更の新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機で申込／当落／支払／受取の各段階と、3工程・4工程の表示を確認する
+
+## 2026-08-03: 個別進捗管理の完了工程をグレーへ統一
+
+### 変更概要・原因
+
+- チケット管理一覧は共通Progressへ`completedNeutral`を渡していたが、個別`進捗管理`にはなく、完了工程が各工程色で表示されていた
+- 個別シートにも同じ中立グレーを渡し、完了済みノードと接続線をグレーへ統一
+- 現在工程は工程色、未到達は中立表示を維持する
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/TicketQuickActionSheet.swift`: Progressへ完了工程の中立色を指定
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行の工程色規則を追記
+- `docs/00-開発状況と残課題.md`: 原因、実装状態、実機確認項目を追加
+
+### 影響画面・機能
+
+- Homeとジャンルトップのチケットカードから開く個別`進捗管理`
+- 状態判定、工程日、ボタン、通知、保存データには影響なし
+
+### 確認結果
+
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView.swift` MainActor警告2件のみで、今回変更の新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機で抽選の申込→当落→支払→受取、先着の発売→受取を各状態で確認する
+
+## 2026-08-03: チケット管理カードの現在工程日と次期限を強調
+
+### 変更概要・意図
+
+- Progressの現在工程の日付を9ptのままMediumからSemiboldへ変更し、ほかの工程日より少し目立たせた
+- 最下段右端の期限日時を12pt Semiboldから13pt Semiboldへ1pt拡大した
+- 工程色、カード高、余白、操作名の寸法は維持した
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 共通Progressへ現在工程日の任意強調設定を追加
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 管理カードだけ強調を有効化し、次期限を13ptへ変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行の文字寸法とウェイトを反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット管理ページのProgress現在工程日と最下段右端の期限日時
+- 観劇トップ、公演詳細、進捗管理シートの共通Progressには強調設定を適用しない
+- 保存データ、工程判定、通知、スワイプ操作には影響なし
+
+### 確認結果
+
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+
+### 残課題・既知リスク
+
+- 実機で3工程のウェイト差、長い期限日時、小幅端末、Dynamic Type時の収まりを確認する
+
+## 2026-08-03: お知らせカードの締切文字を1pt縮小
+
+### 変更概要・意図
+
+- `申込締切 / 入金締切 / 期限`の補足文字を12pt Regularから11pt Regularへ変更
+- 13pt Semiboldのタイトル、カード寸法、行間、余白、遷移は変更しない
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`: `AttentionRow`の補足文字を11ptへ変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行の文字寸法を反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- ベルから開くお知らせ一覧と、同じ`AttentionRow`の`次にやること`一覧
+- 通知内容、並び順、遷移、保存データには影響なし
+
+### 確認結果
+
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView.swift` MainActor警告2件のみで、今回変更の新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機で11ptの可読性とDynamic Type時のタイトルとの強弱差を確認する
+
+## 2026-08-03: チケット管理カードのミシン線へ半円の切り込みを追加
+
+### 変更概要・意図
+
+- 上段とProgress下段の境目にある左右の切り込み中心を、横ミシン線と同じ高さへ揃えた
+- 三角形だった切り込みを、深さ・半径8ptの滑らかな半円形へ変更した
+- チケットらしい外形を明確にしつつ、9pt角落ち、工程色、内容配置、スワイプ操作は維持した
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: カードShapeの切り込み位置と曲線を変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 現行のカード外形仕様を反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- チケット管理ページのチケットカード外形
+- Home、観劇トップ、公演詳細のカード、保存データ、工程判定、通知には影響なし
+
+### 確認結果
+
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+
+### 残課題・既知リスク
+
+- 実機で全工程色、長い2行タイトル、Progress有無、左右スワイプ中の外形を確認する
+- Dynamic Typeで上段の高さが変わる場合は、固定位置の切り込みとミシン線の一致を再確認する
+
+## 2026-08-03: お知らせカードのタイトルを2pt縮小
+
+### 変更概要・意図
+
+- カード内の公演・予定タイトルを15pt Semiboldから13pt Semiboldへ変更
+- 期限の12pt補足文字、カード寸法、余白、アイコン、シェブロンは変更しない
+- 長いタイトルの1行末尾省略を維持し、カード内の視覚密度を下げる
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`: `AttentionRow`のタイトルだけを13ptへ変更
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md`: 通知カードの文字寸法を反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- 共通ヘッダーのベルから開くお知らせ一覧
+- 同じ`AttentionRow`を使う`次にやること`一覧
+- 通知内容、並び順、遷移、保存データには影響なし
+
+### 確認結果
+
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView.swift` MainActor警告2件のみで、今回変更の新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機で通常タイトル、長いタイル、英数字タイトル、Dynamic Typeの可読性を確認する
+
+## 2026-08-02: 観劇予定のタイトル入力と日時未定を修正
+
+### 変更概要・原因
+
+- 公演・イベント名は入力段の約27ptだけがフォーカス対象で、同じ入力行の項目名側を押しても反応しなかった
+- 新規公演・イベント名に限り、66pt基準の行全体からTextFieldへフォーカスするよう変更した
+- 日時未定は申込／チケット登録の分岐にだけあり、通常の`予定`は日付確定へ固定されていた
+- 体験日程の日付へ×を追加し、解除時は開場設定も解除して開場・開演・終了を隠し、`日時未定`として保存できるようにした
+- 未定状態には`日付を設定`を表示し、同じフォーム内で日程入力へ戻せる
+- 通常の`予定`は日時未定でも対象を`気になる`へ戻さず、予定としてのactive状態を維持する
+
+### 変更意図
+
+総合から新規予定を作る際の最初の入力を1タップで開始できるようにし、公演へ行く意思はあるが参加日時が未確定の段階でも予定を失わず登録できるようにするため。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: タイトル行の全体フォーカス指定、日付解除／再設定、日時未定表示を追加
+- `favorecoAPP/favorecoAPP/Utilities/TheaterPerformanceType.swift`: 共通文字入力へ任意の行全体フォーカス機能を追加
+- `favoreco/CLAUDE.md` / `docs/spec-A7-登録フロー.md` / `docs/15-画面情報設計.md`: 現行の入力・日時未定仕様を反映
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- 総合／観劇から開く観劇予定の新規追加・編集
+- 日時未定PlanのHome、Coming Up、カレンダー除外という既存表示規則
+- チケット工程日時、観劇記録日時、保存済み日時確定予定の値は変更なし
+
+### 確認結果
+
+- 対象Swift 2ファイルの構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDKの署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
+
+### 残課題・既知リスク
+
+- 実機でタイトル行上部／入力段の1タップ、日本語連続入力、消去ボタンとの競合を確認する
+- 日付解除、開場・開演・終了の消去表示、日時未定保存、編集時の未定表示、日付再設定を確認する
+
+## 2026-08-02: PICK UPスワイプ時の下段はみ出しを遮蔽
+
+### 変更概要
+
+- `n / N`の不透明背景を132×30ptから146×38ptへ拡張
+- ページ番号の文字位置、カード高214pt、アイキャッチ132×174pt、公式サイト後の6pt間隔は維持
+- 古い署名済みビルドのインストール失敗に対し、新しいDerivedDataと自動署名更新で実機用アプリを再作成
+
+### 変更意図・原因
+
+ページ番号の背景が文字と同寸法しかなく、横ページング中に隣カードの操作ボタン枠が左余白と上下から露出していた。背景だけを左カード端・右情報欄直前・画像直下・カード下端まで広げ、動くカード内容より前面で覆う。インストールエラーは古い署名済み成果物で再現し、自動署名を更新した新規成果物では解消した。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`: 遮蔽面の共通寸法を追加
+- `favorecoAPP/favorecoAPP/Views/HomeHeroSection.swift`: ページ番号と独立した前面遮蔽を追加
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md`: スワイプ中の遮蔽規則を追記
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- Home PICK UPの`気になる / 予定 / 記録`横ページング
+- 静止時のページ番号、操作位置、画像、情報、遷移、保存データには変更なし
+
+### 確認結果
+
+- 対象Swift 2ファイルの構文解析成功
+- `git diff --check`成功
+- 自動署名更新を許可した接続iPhone向けDebug全体ビルド成功
+- `iPhone16_Nero8`への上書きインストールとアプリ起動成功
+
+### 残課題
+
+- 実機で3タブを左右へ途中まで／最後までスワイプし、ボタン枠がページ番号側へ露出しないことを確認
+- ライト／ダーク、1件／10件、小幅端末で遮蔽面の色と境界を確認
+
+## 2026-08-01: Home PICK UPの下段操作前へ間隔を追加
+
+### 変更概要
+
+- 公式サイト行と詳細／編集ボタンの間へ6ptの固定間隔を追加
+- 左のページ位置`n / N`も操作ボタンと一緒に6pt下げ、同じ下段位置を維持
+- PICK UP埋め込みカード高を208ptから214ptへ変更し、132×174ptのアイキャッチは維持
+
+### 変更意図・原因
+
+公式サイト行と操作ボタンが直接続き、会場行と公式サイト行の間より詰まって見えていた。ページ位置と操作ボタンは同じ下段として揃える設計のため、右側だけでなく左側もカード下端とともに同量移動した。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`: PICK UP専用寸法と操作列上余白を調整
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md`: 現行寸法と配置規則を更新
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- Home PICK UPの`気になる / 予定 / 記録`カード
+- 上側の情報行、アイキャッチ寸法、ボタン寸法、遷移、保存データには変更なし
+
+### 確認結果
+
+- `HomeView.swift`と`HomeHeroSection.swift`のSwift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+
+### 残課題
+
+- 実機で3タブの公式サイト行と下段操作の間隔、左右下段の位置揃えを確認
+- 1件／10件、長い2行タイトル、小幅端末でカード内へ収まることを確認
+
+## 2026-08-01: Home空状態アイコンをPhosphor Light 28ptへ統一
+
+### 変更概要
+
+- PICK UP「気になる」とFAVORECO REPORTの空状態アイコンを`FavorecoIcon`の28ptへ統一
+- `bookmark`をPhosphor Bookmark、`photo.on.rectangle.*`をPhosphor Imagesへ解決
+- 共通解決の回帰テスト対象に2字形を追加
+
+### 変更意図・原因
+
+PICK UPは共通部品を通していたが`bookmark`が未対応で、SF Symbolsへ17ptフォールバックになっていた。REPORTはSF Symbolsを直接28ptで描画していた。そのため同じHomeの空状態で線質、見かけの大きさ、ベースラインが揃っていなかった。
+
+### 主な変更ファイル
+
+- `favorecoAPP/favorecoAPP/Utilities/FavorecoIcon.swift`: BookmarkとImagesのPhosphor変換を追加
+- `favorecoAPP/favorecoAPP/Views/HomeHeroSection.swift`: PICK UP空状態を28pt化
+- `favorecoAPP/favorecoAPP/Views/HomeReportSection.swift`: REPORT空状態を共通アイコン化
+- `favorecoAPP/favorecoAPPTests/FavorecoIconTests.swift`: 2字形の解決を固定
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md`: Home空状態のアイコン基準を追記
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響画面・機能
+
+- Home PICK UPの気になる空状態
+- Home FAVORECO REPORTの月間／年間空状態
+- `bookmark`と`photo.on.rectangle.*`を共通部品で使う他画面も同じPhosphor字形へ揃う
+- 文言、空状態の高さ、タップ操作、テーマ色には変更なし
+
+### 確認結果
+
+- 対象Swift 4ファイルの構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+
+### 残課題
+
+- 実機で両空状態の線質、見かけの大きさ、上下位置を確認
+- PICK UPの気になる／予定／記録の各0件とREPORTの月間／年間0件を確認
+
 ## 2026-07-31: 観劇アイキャッチを全表示でB判比率へ統一
 
 ### 変更概要
@@ -23522,6 +24178,9 @@ URLと画像が独立した取得方法である境界を明確にする。公�
 - 対象Swift構文解析成功
 - `git diff --check`成功
 - iOS Simulator向けDebug全体ビルド成功
+- iPhone Simulatorで区分・保存・フィルター・旧データ互換の回帰テスト4件成功
+- iOS 26.5 SDK、署名なしgeneric iPhoneOS向け`build-for-testing`成功
+- iOS Simulator向けDebug全体ビルド成功
 - `TicketWorkflowTests` 25件成功
 - 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
 
@@ -23890,3 +24549,884 @@ SwiftUIのTabViewが透明な追加用プレースホルダーへの選択を処
 
 ### 既知のリスク・残課題
 - 実機で高速なジャンル往復と`追加`の連続開閉を確認する
+
+## 2026-08-01: Warm Paper基調のFavo Neonライトテーマを追加
+
+### 変更概要
+- 既存のスカイブルー／赤マゼンタを残したまま、`Favo Neon`を3つ目のベーステーマとして追加し、新規標準にした
+- ライトのキャンバスは現行Warm Paper `#F7F7F3`、青墨の文字階層は`#192735 / #293640 / #68737D / #8A949C`を維持した
+- 操作を白地用Aqua `#147C88`、主要ボタン面用`#39D7E2`、淡色`#E9FAFC`へ分けた
+- FAVOの感情表現を文字・アイコン用Pink `#B62F58`、強調面`#FF638A`、淡色`#FFF0F5`へ分けた
+- FAVOタブ選択中とFAVO画面内の標準操作だけをPinkへ切り替えた
+- Proの全体統一テーマでは、既存仕様どおりFAVOも選択した統一色へ揃える
+
+### 変更意図
+ワイン系の固定アクセントが画面全体で重く見える状態を避け、写真とジャンル色を主役にしたWarm Paper／モノクロ基調へ、操作のAquaとFAVOのPinkだけを差すため。蛍光色を文字へ直接使わず、白地用の濃色と強調面用の明色を分けて可読性を守る。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift`: Favo Neonと操作／感情トークンを追加
+- `favorecoAPP/favorecoAPP/ContentView.swift`: 新規標準と不正値フォールバックをFavo Neonへ変更
+- `favorecoAPP/favorecoAPP/Views/SettingsDisplay.swift`: Favo Neon選択肢と役割説明を追加
+- `favorecoAPP/favorecoAPP/Views/MainTabView.swift`: FAVOタブ選択時だけ感情色へ切替
+- `favorecoAPP/favorecoAPP/Views/FavoView.swift`: FAVO画面内の標準操作へ感情色を適用
+- `docs/DESIGN.md` / `favoreco/CLAUDE.md` / `docs/00-開発状況と残課題.md`: 配色正本、現在仕様、確認項目を更新
+
+### 影響する画面・機能
+- 表示・外観のベーステーマ設定
+- Homeと共通操作のルートTint、下部タブ
+- FAVO画面内のNavigationLink、Toggle等の標準Tint
+- ジャンル固有色、人物等の利用者設定色、意味色、保存モデルは変更なし
+
+### 確認結果（実機 / ビルド）
+- 対象Swift 5ファイルの構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- Warm Paper `#F7F7F3`上で、操作色`#147C88`は4.58:1、FAVO色`#B62F58`は5.53:1、見出し`#192735`は14.14:1を確認した
+- 明るいAqua面`#39D7E2`と濃色文字`#12383C`は7.24:1、Pink面`#FF638A`と濃色文字`#4A0D20`は5.41:1を確認した
+
+### 既知のリスク・残課題
+- 保存済みベーステーマは自動変更しないため、既存端末では表示・外観から`Favo Neon`を選択して確認する
+- 実機でHome全長、下部タブ、FAVO画面、標準Liquid Glass、ライト／ダーク、小幅端末、Dynamic Typeを確認する
+
+## 2026-08-01: app chromeのライト／ダーク配色候補を追加
+
+### 変更概要
+- `Airy Teal`を第一候補として保持した
+- 添付イメージの霧・砂・森・夕景から`Earth Glass`、白黒＋蛍光ライムから`Lime Editorial`を作成した
+- 3候補それぞれにLight / Dark、補完色、淡い補助面を定義した
+
+### 変更意図
+写真を主役にするFavorecoの骨格を保ちながら、現行のAqua/Pink系、自然になじむアース系、編集的なモノクロ＋蛍光系を同じ画面で比較できるようにするため。ライム案はコバルトを補完色にし、TikTok風のシアン／ピンク配色とは分ける。
+
+### 主な変更ファイル
+- `docs/DESIGN.md`: 3候補のLight / Darkトークンと用途を記録
+- `docs/00-開発状況と残課題.md`: テーマ選定を未着手項目として追加
+
+### 影響する画面・機能
+- デザイン比較のみ。アプリ本体、保存値、設定画面、現行Favo Neonには変更なし
+
+### 確認結果（実機 / ビルド）
+- Favoの簡易画面上で3候補とLight / Darkを切り替えられる比較表示を作成
+- Lightの主要文字色は各キャンバス上で4.5:1以上、Darkのアクセント文字も各キャンバス上で7:1以上を確認
+- `git diff --check`で文書差分の問題なし
+
+### 既知のリスク・残課題
+- 実際の写真、Liquid Glass、各ジャンル色と並べた実機比較後に採用テーマと役割色を決める
+
+## 2026-08-01: Airy Teal／Earth Glass／Lime Editorialを実装
+
+### 変更概要
+- 旧`Favo Neon`の内部保存キーを維持し、表示名を`エアリーティール`へ変更した
+- `アースグラス`と`ライムエディトリアル`をベーステーマ選択へ追加した
+- 3テーマの操作色、主要ボタン面、FAVO補完色、淡色面、キャンバス、4段階の文字色をLight / Darkで切り替えるようにした
+- 既存のスカイブルー／赤マゼンタは選択肢と保存互換を維持した
+
+### 変更意図
+比較モックで確認した3方向を実機上でも切り替え、写真、Liquid Glass、各ジャンル色との相性を評価できるようにするため。保存済み`favoNeon`を移行せず、既存ユーザーの選択をそのままAiry Tealへ引き継ぐ。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift`: 5テーマのLight / Darkトークンと動的Colorを一元化
+- `favorecoAPP/favorecoAPP/Views/SettingsDisplay.swift`: 追加テーマと選択中テーマ別の説明を表示
+- `favoreco/CLAUDE.md`: 現在のテーマ仕様を5テーマへ更新
+- `docs/DESIGN.md`: 実装済みトークンと配色意図を更新
+- `docs/00-開発状況と残課題.md`: 実装済み内容と実機確認項目を更新
+
+### 影響する画面・機能
+- 表示・外観のベーステーマ設定
+- Homeキャンバス、操作色、文字階層、主要アクション
+- FAVOタブとFAVO画面内の標準操作
+- 既存のジャンル色、意味色、保存モデル、Liquid Glassの形状・材質は変更なし
+
+### 確認結果（実機 / ビルド）
+- iOS 26.5 SDK、iOS 18.0 deployment target、iOS Simulator向けDebug全体ビルド成功
+- 新規エラーなし。既存の`AddTicketPlanView` MainActor警告2件のみ
+- 設定画面の色見本をダーク追従へ変更後の対象ファイル再コンパイルも成功。その後の全体再実行はCoreSimulatorService切断によりAsset Catalog処理で停止し、コード由来の追加エラーはなし
+- `git diff --check`成功
+
+### 既知のリスク・残課題
+- 実機で5テーマ×ライト／ダーク、写真のあるHome、FAVO、下部タブ、Liquid Glassを確認する
+- テーマ選択後の再起動で保存値が維持されること、旧`favoNeon`保存値がAiry Tealとして表示されることを確認する
+
+## 2026-08-01: 登録内容4択の文字切れとテーマ色見本を修正
+
+### 変更概要
+- 公演・チケット登録先頭の`気になる / 予定 / 申込 / 取得済み`は、従来の横幅・余白・等分幅の標準SwiftUI Pickerへ戻した
+- 設定のベーステーマ色見本を1色から、操作主色＋FAVO補完色の2色表示へ変更した
+
+### 変更意図
+セグメントの横幅や項目比率を変えず、写真基準の標準Liquid Glassへ揃える。見た目に対する変更はテーマ色の反映と、共通の通常Regular／選択中Semiboldだけに限定する。テーマ設定ではAiry TealのAqua＋Pink等が1つの配色セットであることを選択前にも判別できるようにする。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 横幅・余白・等分幅を従来値へ戻し、標準Pickerを維持
+- `favorecoAPP/favorecoAPP/Views/SettingsDisplay.swift`: テーマの2色見本を追加
+- `favoreco/CLAUDE.md` / `docs/00-開発状況と残課題.md`: 現行仕様と確認項目を更新
+
+### 影響する画面・機能
+- 公演・チケット登録の先頭4択
+- 表示・外観のベーステーマPicker
+- 状態切替、説明文、入力内容、保存処理、他のセグメントには変更なし
+
+### 確認結果（実機 / ビルド）
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、iOS 18.0 deployment target、generic iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
+
+### 既知のリスク・残課題
+- 実機で標準／大きい文字サイズ、ライト／ダーク、小幅端末における4項目全文と選択中太字を確認する
+- 設定Pickerで5テーマすべての主色＋補完色が判別できることを確認する
+
+## 2026-08-01: 登録内容カードを写真基準へ戻し、変更を選択文字ウェイトだけに限定
+
+### 変更概要
+- `登録内容`の4択と説明文を、独自装飾のない標準Formの白いカードへ戻した
+- 淡いテーマ色背景、アクセント外枠、色付き区切り線、強めの説明文字色、独自の左右・上下Padding、独自のList Row Insetsを削除した
+- 4等分の標準SwiftUI PickerとiOS標準Liquid Glassは維持し、通常Regular／選択中Semiboldの共通文字属性だけを残した
+
+### 変更意図
+選択中の文字ウェイトだけを変更する指定に対し、カード背景・外枠・横幅まで変更して写真基準と異なる表示にしていたため。画面固有の見た目変更を取り消し、OS標準のレイアウトと材質へ責務を戻す。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 登録内容カードの独自背景・枠・余白を削除
+- `favoreco/CLAUDE.md`: 標準Form白カードと文字ウェイトだけを変える現行仕様へ訂正
+- `docs/spec-A7-登録フロー.md`: 登録フローの表示仕様を訂正
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新
+
+### 影響する画面・機能
+- 観劇の`公演・チケットを登録`統合フォーム先頭だけ
+- 4状態の切替、説明文、入力項目、保存処理、下の`対象`カード、テーマ配色、他画面のセグメントには変更なし
+
+### 確認結果（実機 / ビルド）
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、iOS 18.0 deployment target、generic iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
+
+### 既知のリスク・残課題
+- 実機で写真2と同じカード幅・白背景・標準Liquid Glassになっていることを確認する
+- `気になる / 予定 / 申込 / 取得済み`を順に切り替え、選択中だけSemiboldになることを確認する
+
+## 2026-08-01: app chromeの外観モードとAiry Teal操作色を共通化
+
+### 変更概要
+- 利用者が設定したライト／ダークを`favorecoAppColorScheme`としてルートから配布し、app chromeへ戻す共通Modifierを追加した
+- 設定、下部追加メニュー、観劇記録先選択、公演・チケット登録へ共通Modifierを適用し、観劇／LIVEの固有ダーク環境がシートへ漏れないようにした
+- 対象画面の操作アイコン、リンク、Picker、Toggle等を`FavorecoThemePalette.globalTint`へ集約した
+- Airy Tealの操作色はLight `#147C88`／Dark `#60DDE4`とし、同じ意味トークンを外観別に切り替える仕様を明記した
+- 設定ハブのアイコンを17ptから20pt、説明文を12pt相当から11ptへ調整した
+
+### 変更意図
+設定がライトでも観劇のダークEnvironmentを引き継いで設定画面が黒くなり、ダーク用の明るいアクアが表示されていたため。また、画面ごとの`Color.accentColor`参照が呼び出し元のtintへ依存し、同じapp chrome操作でも色が揃わなかったため。外観と操作色の責務を共通Environmentへ集約し、入口ジャンルに左右されない表示へする。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift`: app chrome外観Environmentと共通Modifierを追加
+- `favorecoAPP/favorecoAPP/ContentView.swift`: 利用者が選んだ実効外観モードを配布
+- `favorecoAPP/favorecoAPP/Views/SettingsView.swift`: 設定画面をapp chrome外観と共通tintへ固定
+- `favorecoAPP/favorecoAPP/Views/SettingsHubs.swift`: ハブの色、アイコン寸法、説明文字サイズを共通化
+- `favorecoAPP/favorecoAPP/Views/MainTabView.swift`: 追加メニューと観劇記録先選択の外観／操作色を共通化
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 登録フォームの外観と操作色を共通化
+- `favorecoAPP/favorecoAPP/Views/SettingsDisplay.swift`: Airy TealのLight／Dark操作色の違いが分かる説明へ更新
+- `favoreco/CLAUDE.md` / `docs/DESIGN.md` / `docs/00-開発状況と残課題.md`: 現行仕様、共通化ルール、確認項目を更新
+
+### 影響する画面・機能
+- 設定トップと配下画面
+- 下部タブの追加メニュー
+- 観劇の思い出を記録する際の対象公演選択
+- 公演・チケット登録フォームの操作色
+- FAVO感情色、警告／完了色、チケット進捗の意味色、ジャンル固有の没入配色は変更なし
+
+### 確認結果（実機 / ビルド）
+- 対象Swift 6ファイルの構文解析成功
+- 対象経路に残る直接`Color.accentColor`参照がないことを確認
+- `git diff --check`成功
+- iOS 26.5 SDK、iOS 18.0 deployment target、署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+
+### 既知のリスク・残課題
+- 実機で観劇／LIVEから設定を開いても、ライト選択時は白いapp chromeとLight `#147C88`になることを確認する
+- 5テーマ×ライト／ダークで設定、追加メニュー、公演・チケット登録の操作色が各テーマの`globalTint`へ揃うことを確認する
+- Dynamic Typeで設定ハブの11pt説明文が読みづらくならず、20ptアイコンが行高を崩さないことを確認する
+
+## 2026-08-01: Airy Teal Lightの濃色を青寄りへ調整
+
+### 変更概要
+- Airy Teal Lightの文字・アイコン用操作色を、緑寄りの`#147C88`から青寄りの`#256F9C`へ変更した
+- Aライトの主要操作面`#39D7E2`、FAVO強調面`#FF638A`、Dark操作色`#60DDE4`は維持した
+- ベーステーマと統一色の新規初期値、設定説明、仕様書を同じ値へ揃えた
+
+### 変更意図
+Aライトの明るいシアンと並べた比較で、従来の濃色は緑みが強く見えたため。3案のうち「さらに青寄り」を採用し、Aライトの爽やかさを保ちながら白背景上の可読性を確保する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift`: Airy Teal Lightの`globalTint`と標準統一色を更新
+- `favorecoAPP/favorecoAPP/ContentView.swift`: 統一色の新規初期値を更新
+- `favorecoAPP/favorecoAPP/Views/SettingsDisplay.swift`: 統一色初期値とテーマ説明を更新
+- `favoreco/CLAUDE.md` / `docs/DESIGN.md` / `docs/00-開発状況と残課題.md`: 現行配色を更新
+
+### 影響する画面・機能
+- Airy Teal Lightで`globalTint`を使う操作文字、アイコン、リンク、Picker、Toggle、選択状態
+- 既存のユーザー指定ジャンル色、カスタム統一色の保存値、FAVO色、意味色、Dark配色は変更なし
+
+### 確認結果（実機 / ビルド）
+- Warm Paper `#F7F7F3`上の`#256F9C`はコントラスト比5.10:1
+- 対象Swift構文解析、`git diff --check`成功
+- iOS 26.5 SDK、iOS 18.0 deployment target、署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
+
+### 既知のリスク・残課題
+- 実機で明るい操作面`#39D7E2`との色相差、Liquid Glass上の見え方、細いSF Symbolsの視認性を確認する
+
+## 2026-08-01: 進捗管理の強調ボタンに高コントラスト配色を適用
+
+### 変更概要
+- 進捗管理の状態更新と参加日設定を、共通の`prominentAction`背景へ接続した
+- 背景色と白／青墨の相対輝度を計算し、コントラスト比が高い文字・アイコン色を返す共通処理を追加した
+- Airy Teal Lightでは`#39D7E2`面＋`#192735`文字を使用する
+
+### 変更意図
+濃い操作色`#256F9C`の背景に青墨`#192735`が載り、コントラスト比が2.77:1しかなく、状態更新ボタンの文字とアイコンが判読しづらかったため。背景だけでなく前景も同じ意味トークンから決定し、テーマやカスタム統一色を変えても同じ問題を繰り返さないようにする。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift`: 強調面の高コントラスト前景色を共通計算
+- `favorecoAPP/favorecoAPP/Views/TicketQuickActionSheet.swift`: 状態更新／参加日設定へ共通強調面と前景色を適用
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md` / `docs/DESIGN.md` / `docs/00-開発状況と残課題.md`: 現行仕様と確認項目を更新
+
+### 影響する画面・機能
+- Home、ジャンルトップ、チケット管理一覧等から開く共通の進捗管理シート
+- 強調表示される状態更新ボタンと`参加日を設定`
+- アウトラインの`落選にする / 見送る / チケットの詳細を見る`、Progress工程色、保存処理は変更なし
+
+### 確認結果（実機 / ビルド）
+- 変更前`#256F9C`＋`#192735`は2.77:1
+- 変更後`#39D7E2`＋`#192735`は8.67:1
+- 対象Swift構文解析、`git diff --check`成功
+- iOS 26.5 SDK、iOS 18.0 deployment target、署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
+
+### 既知のリスク・残課題
+- 5テーマ×ライト／ダーク、カスタム統一色で強調面と文字・アイコンが判読できることを実機確認する
+- Liquid Glassと無効状態の透過後にも情報階層が維持されることを確認する
+
+## 2026-08-01: 観劇トップから参加日未定一覧へ接続
+
+### 変更概要
+- チケット管理の状態チップへ件数付きの`参加日未定`を追加した
+- 観劇トップの`Ticket Management > すべて見る`から、該当フィルターを選択済みで開くようにした
+- Home、共通ヘッダー、カレンダー、LIVE等の他入口は従来どおり`要対応`で開く
+
+### 変更意図
+観劇トップは参加日未定の進行中申込だけを表示していたが、`すべて見る`の遷移先は常に`要対応`が初期選択され、遷移前後で対象が一致していなかった。入口から初期フィルターを渡し、利用者が再度絞り込む操作を不要にする。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 参加日未定フィルターと初期フィルター指定を追加
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 観劇トップ入口から参加日未定を指定
+- `favorecoAPP/favorecoAPPTests/TicketWorkflowTests.swift`: 日時確定済みと終端状態を除外する回帰テストを追加
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/spec-A8-チケット管理・通知.md` / `docs/00-開発状況と残課題.md`: 現行仕様と確認項目を更新
+
+### 影響する画面・機能
+- チケット管理の状態フィルターと空状態
+- 観劇トップの`Ticket Management > すべて見る`
+- 他入口の初期フィルター、保存モデル、チケット状態更新は変更なし
+
+### 確認結果（実機 / ビルド）
+- `TicketWorkflowTests`成功
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+- 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
+
+### 既知のリスク・残課題
+- 実機で0件・1件・複数件、日時確定後の一覧からの解除、状態チップの横スクロールを確認する
+- 観劇トップと他入口の初期フィルターが意図どおり分かれることを確認する
+
+## 2026-08-01: Home Ticket Scheduleの4件目を展開表示し要対応条件を統一
+
+### 変更概要
+- Homeの`Ticket Schedule`は合計件数を見出しに表示したまま、初期表示を3件に制限した
+- 4件以上の場合は3件目の下に`さらに見る（残りn件）`を表示し、ページ内で残りを展開できるようにした
+- 展開後は`閉じる`で3件表示へ戻せるようにした
+- チケット管理の`要対応`をHomeの現在進行中状態と同じ条件へ揃えた
+- `当選`後に支払期限が未入力の場合は`支払締切を設定`として理由を表示するようにした
+
+### 変更意図
+Homeの見出しに4件とあるのにカードは3件しか表示されず、隠れた1件への導線もなかった。また、Homeとチケット管理で抽出条件が異なり、`すべて見る`の前後で件数が一致しなかったため。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/HomeAttentionSection.swift`: 3件折りたたみと残件数付き展開ボタンを追加
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: `要対応`にHomeと同じ進行中状態を含めた
+- `favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift`: 当選後の支払期限未入力を入力不足として定義
+- `favorecoAPP/favorecoAPPTests/TicketWorkflowTests.swift`: 0・1・4・多数件の表示数と要対応条件の回帰テストを追加
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/spec-A8-チケット管理・通知.md` / `docs/00-開発状況と残課題.md`: 件数の意味、段階表示、抽出条件を追記
+
+### 影響する画面・機能
+- Homeの`Ticket Schedule`表示件数とページ内展開
+- チケット管理の`要対応`一覧と件数
+- 当選後の入力不足案内
+- チケットの保存データや状態更新処理は変更なし
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルの構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、iOS 18.0 deployment target、署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 追加した`TicketWorkflowTests`を含む署名なしgeneric iPhoneOS向け`build-for-testing`成功（この作業内では実行未実施）
+
+### 既知のリスク・残課題
+- 実機で4件時に`さらに見る（残り1件）`が3件目の下に表示され、4件目の展開と`閉じる`が動作することを確認する
+- Homeの合計件数とチケット管理の`要対応`件数が一致し、表示した各チケットを開けることを確認する
+- 展開中に件数が3件以下に減った場合の自動折りたたみを実機で確認する
+
+## 2026-08-02 チケット管理へ明るい工程色カードを先行導入
+
+> 段階導入へ変更: この作業ではチケット管理一覧だけを対象とする。Homeの`Ticket Schedule`と個別`進捗管理`シートへ一度加えた配色変更は切り戻し、従来配色を維持した。
+
+### 変更概要
+- チケット管理カードの上段情報面を現在工程の淡色で塗り分けた
+- 管理一覧専用の工程色を`申込=ライトシアン / 発売=淡いコーラル / 当落=ローズピンク / 支払=ハニーイエロー / 取得・参加日=ミント`とし、当落の紫を廃止した
+- チケット管理のSection見出し・件数をグループの工程色へ合わせ、Progressは現在工程だけを色付き、完了済みと未来を中立グレーにした
+- プレイガイド先行、販売方法、購入先等の補助チップを白〜クリームの中立色へ統一した
+
+### 変更意図
+- 色を見ただけで工程を暗記していない利用者にも、グループ見出しとカードの対応を分かりやすくする
+- 工程色とプレイガイド色が同時に主張する状態を避け、現在の対応と期限警告を最初に読めるようにする
+- 管理画面単体で見え方を確認してから、Homeへの展開可否を判断できるようにする
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift`: 共通5工程、警告、中立チップ、完了済みの配色を定義
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: Section見出し、上段工程色、Progress、次対応を反映
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 管理一覧だけ現在工程／完了済み色を差し替えられるProgress引数を追加
+- `favorecoAPP/favorecoAPPTests/TicketWorkflowTests.swift`: 表示ラベルと共通工程色の回帰テストを追加
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/spec-A8-チケット管理・通知.md`: 現在仕様を更新
+
+### 影響する画面・機能
+- チケット管理のSection見出し・一覧カード・工程Progress
+- Homeと個別進捗管理は影響対象外
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、署名なしgeneric iPhoneOS向け`build-for-testing`成功
+- 配色の回帰テストをテストターゲットへ追加（この作業内では実行未実施）
+
+### 既知のリスク・残課題
+- 実機で全5工程、長い申込枠・購入先、小幅端末、Dynamic Typeの収まりを確認する
+- 今日／明日／期限超過と期限未入力で既存の赤系警告が工程色より優先されることを確認する
+- チケット管理の左右スワイプ背面とカードタップに副作用がないことを確認する
+- HomeのTicket Scheduleと個別進捗管理が従来配色のままであることを確認する
+
+## 2026-08-02 Home Ticket Scheduleを同じ工程色のチケット型へ拡張
+
+### 変更概要
+- 管理一覧で確認した5工程色をHomeの`Ticket Schedule`にも適用した
+- カード高、画像・期限・公演情報の配置を維持したまま、外形を角落ち＋上下切り込みのチケット型へ変更した
+- 期限欄と公演情報欄の境界を縦ミシン線にし、申込枠・購入先等を中立チップへ統一した
+
+### 変更意図
+- チケット管理とHomeで工程の色を一致させ、同じ対応を同じ色で認識できるようにする
+- 情報量と読み慣れた配置を変えず、Homeカードがチケットであることを外形で伝える
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`: 工程色、チケット外形、切り込み、ミシン線、中立チップを追加
+- `favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift`: 管理一覧とHomeが明示的に使う5工程色を保持
+- `favorecoAPP/favorecoAPPTests/TicketWorkflowTests.swift`: 5工程色の対応を回帰確認
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、関連仕様書: 段階導入後の現行範囲を更新
+
+### 影響する画面・機能
+- 総合HomeのTicket Scheduleカード
+- チケット管理一覧との工程色の対応
+- 表示件数、展開、カードタップ、進捗管理シート、ジャンルスワイプ、保存データは変更しない
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、署名なしgeneric iPhoneOS向け`build-for-testing`成功
+
+### 既知のリスク・残課題
+- 実機で切り込みとミシン線が同じ位置に見えることを確認する
+- 全5工程、期限未入力、今日、明日、期限超過、小幅端末、Dynamic Typeを確認する
+- カードタップ、Homeのジャンル横スワイプ、3件／全件展開に副作用がないことを確認する
+
+## 2026-08-02 申込開始と販売開始を青系の開始色へ整理
+
+### 変更概要
+- 抽選申込はライトシアンを維持し、販売開始／チケ発売を淡いコーラルからエアリーブルーへ変更した
+- 販売開始は面`#DDEFFC`、アクセント`#3D73A3`、文字`#244C6C`とした
+- チケット管理とHome Ticket Scheduleへ同じ色を反映した
+
+### 変更意図
+- 抽選申込開始と販売開始を同じ「開始」群として青系にまとめる
+- 同系統の中でもシアン寄りと青寄りに分け、2種類の開始を識別できるようにする
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift`: 販売開始のライト／ダーク配色を更新
+- `favorecoAPP/favorecoAPPTests/TicketWorkflowTests.swift`: 販売開始面の回帰値を更新
+- 現在仕様・画面設計・チケット仕様・進捗文書: 開始色の意味を更新
+
+### 影響する画面・機能
+- チケット管理の販売開始グループ、カード、現在Progress
+- Home Ticket Scheduleのチケ発売カード
+- 保存データ、状態判定、期限、レイアウト、操作は変更しない
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、署名なしgeneric iPhoneOS向け`build-for-testing`成功
+
+### 既知のリスク・残課題
+- 実機でライトシアンとエアリーブルーが同系統に見えつつ識別できることを確認する
+- ライト／ダーク、小幅端末、期限警告重畳時の可読性を確認する
+
+## 2026-08-02 映画ジャンルを映像作品へ拡張・入力を簡略化
+
+### 変更概要
+- 旧`映画`ジャンルを`映像作品`へ改称し、映画・ドラマ・アニメを1つのジャンルトップで記録できるようにした
+- トップへ4分類フィルターを追加し、一覧を3列ポスターへ固定した
+- ドラマ・アニメ向けに任意のシーズン1〜10を追加し、登録フォームの常設入力を最小限へ絞った
+
+### 変更意図
+- 配信サービスや視聴進捗など管理項目を増やさず、作品を素早く残してポスターで見返す体験を優先する
+- 既存映画データと保存形式の互換性を保ちながら、ドラマ・アニメまで扱える範囲を広げる
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`: 映像種別、分類フィルター、後方互換なシーズン保存を追加
+- `favorecoAPP/favorecoAPP/Views/ExperienceBasicUnitEditor.swift`: 種別・シーズンと年選択を追加し、映像作品の基本情報を簡略化
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 新規・編集・既存作品への記録追加へ映像種別とシーズンを接続
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 対象編集へ映像種別とシーズンを接続
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 4分類、3列固定、日付/年・任意評価・シーズン表示を追加
+- `favorecoAPP/favorecoAPP/Services/CategoryPresetSeeder.swift`、`DebugDataSeeder.swift`: 表示名とサンプルを映像作品仕様へ更新
+- `favorecoAPP/favorecoAPPTests/ScreenWorkMetadataTests.swift`、`SampleDataSeederTests.swift`: 旧データ互換、保存、分類、サンプル構成の回帰テストを追加
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`、関連仕様書: 現在仕様と確認待ち項目を更新
+
+### 影響する画面・機能
+- ジャンルトップの名称、絞り込み、一覧表示、ミニ統計
+- 映像作品の新規登録、記録追加、記録編集、対象編集
+- 初回サンプルデータと既存映画データの読込
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftファイルの構文解析成功
+- `git diff --check`成功
+- iOS Simulator向けDebug全体ビルド成功
+- 追加した`ScreenWorkMetadataTests`と更新した`SampleDataSeederTests`を含むテストビルド成功
+- 映像種別・旧データ互換・シーズン正規化・分類の3テストと、映画／ドラマ／アニメを含むサンプル構成テストの計4件をiPhone Simulatorで実行し成功
+
+### 既知のリスク・残課題
+- 実機で旧映画データが`映画`へ分類されることを確認する
+- 映画・ドラマ・アニメの新規登録／編集、年選択、シーズンなし／1／10、評価なしを確認する
+- 0件、1件、大量データ、日付・年と評価がないカード、長いタイトル、Dynamic Typeで3列表示を確認する
+
+## 2026-08-03 映像作品の作品区分を登録フォーム最上部へ常設
+
+### 変更概要
+- 新規登録・登録済み作品への記録追加・記録編集の先頭へ`作品区分`を追加
+- 映画／ドラマ／アニメと、ドラマ・アニメのシーズンをアコーディオン外で常時確認できるようにした
+- 登録済み作品への記録追加で変更した区分とシーズンを、参照元作品へ保存するようにした
+
+### 変更意図
+- 区分入力が基本情報の中へ隠れ、既存作品への追加では表示されないため、トップの分類結果を利用者が確認できなかった
+- どの登録経路でも同じ場所で分類を確認・修正できるようにする
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 3登録経路へ作品区分Sectionを常設し、既存作品への保存を追加
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`: 区分とシーズンを正規化して作品へ適用する共通処理を追加
+- `favorecoAPP/favorecoAPPTests/ScreenWorkMetadataTests.swift`: 既存作品の再分類とトップフィルター対象変更の回帰テストを追加
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`: 現在仕様と実機確認項目を更新
+
+### 影響する画面・機能
+- 映像作品の新規登録、登録済み作品への記録追加、記録編集
+- 映像作品トップの映画／ドラマ／アニメ絞り込み
+
+### 確認結果（実機 / ビルド）
+- 対象Swift構文解析成功
+- `git diff --check`成功
+
+### 既知のリスク・残課題
+- 実機で3つの登録経路の最上部に作品区分が表示されることを確認する
+- 既存作品を映画→ドラマ→アニメへ変更し、各タブへ移動することを確認する
+- 映画へ戻した時に保存済みシーズンが非表示・0へ正規化されることを確認する
+## 2026-08-02 抽選申込の管理画面誤分類修正・Homeカード文字強調
+
+### 変更概要
+- Homeでは`抽選申込`だった新規チケットが、チケット管理で`チケ発売`／`発売・購入`へ分類される不一致を修正した
+- `申込・発売開始`の表示分類を共通化し、抽選／先着の保存フローを優先するようにした
+- Home Ticket Scheduleの作品名・通常期限を黒に近い青墨、日時等を一段弱い青墨へ強めた
+
+### 変更意図
+- 共通アクション名に「発売」が含まれることによる誤分類をなくし、同じチケットを両画面で同じ工程として見せる
+- 純黒の強さは避けながら、淡い工程色上の主要情報を一目で読めるようにする
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift`: 抽選／先着を優先する共通表示ラベル判定を追加
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: グループとカードの分類を共通判定へ接続
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`: 同じ分類判定を利用し、主要・補助文字色を強調
+- `favorecoAPP/favorecoAPPTests/TicketWorkflowTests.swift`: 抽選と先着の`申込・発売開始`分類回帰テストを追加
+
+### 影響する画面・機能
+- Homeの`Ticket Schedule`カード本文
+- チケット管理のグループ見出し、カード工程ラベル、工程色、次にやること
+- 保存モデル、期限算出、進捗更新、カード配置・操作は変更なし
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- 追加回帰テストを含む署名なしgeneric iPhoneOS向け`build-for-testing`成功（テスト実行は未実施）
+
+### 既知のリスク・残課題
+- 実機で新規の抽選申込と販売開始を各1件作り、Homeとチケット管理のラベル・色・グループが一致することを確認する
+- 既存抽選データ、ライト／ダーク、今日／明日／超過、長い作品名で文字の強さと収まりを確認する
+## 2026-08-02 チケット管理カードをチケット形へ統一
+
+### 変更概要
+- チケット管理カードを角丸長方形から、Homeと同じ角落ちを持つチケット形へ変更した
+- 工程色の上段と白いProgress下段の境目へ左右の切り込みと横ミシン線を追加した
+- カード左右に常時見えていた緑・赤のスワイプ背面ベロを削除した
+- Homeとチケット管理の参加日時カレンダーアイコンを15ptへ拡大した
+
+### 変更意図
+- Homeと管理画面で同じチケット情報だと外形から認識できるようにする
+- 色のベロによる工程色との競合をなくし、現在工程の淡色面を主役にする
+- 日時行のアイコンを本文と釣り合う視認サイズにする
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: チケット形、左右切り込み、横ミシン線、ベロ削除、カレンダー拡大
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`: Ticket Scheduleのカレンダーを15ptへ拡大
+- `favoreco/CLAUDE.md`、`docs/spec-A8-チケット管理・通知.md`、`docs/00-開発状況と残課題.md`: 現行仕様と実機確認項目を更新
+
+### 影響する画面・機能
+- チケット管理の全一覧カード
+- HomeのTicket Schedule日時行
+- 右スワイプの状態更新、左スワイプの編集・落選／見送りは処理を維持
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向け`build-for-testing`成功
+
+### 既知のリスク・残課題
+- 実機で上段と下段の境目に左右切り込みと横ミシン線が揃うことを確認する
+- Progressなし／2工程／4工程、長い2行タイトル、Dynamic Typeで切り込み位置がずれないことを確認する
+- ベロ非表示後も左右スワイプとカードタップが競合せず動作することを確認する
+## 2026-08-02 チケット管理Progressと次対応の視認性調整
+
+### 変更概要
+- 管理一覧の工程円を34ptから30pt、円内文字を9ptから8ptへ縮小した
+- 工程日付と次対応の区切り線の間隔を4pt広げた
+- 次対応の左アイコンを15ptから17pt、背景円を24ptから28ptへ拡大した
+- `次にやること / 現在の状態`を9pt Mediumのsecondaryから8pt Semibold・本文色72%へ変更した
+
+### 変更意図
+- Progressの丸と工程名の主張を少し抑え、日付が下線へ接近して見える状態を解消する
+- 次対応では操作アイコンを見つけやすくし、補助見出しは小さくしても読める濃さを保つ
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 共通Progressへ任意の工程円・文字寸法を追加
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 管理一覧だけの寸法、余白、次対応見出しとアイコンを指定
+- `favoreco/CLAUDE.md`、`docs/spec-A8-チケット管理・通知.md`、`docs/00-開発状況と残課題.md`: 現在仕様と実機確認項目を更新
+
+### 影響する画面・機能
+- チケット管理一覧カードのProgressと次対応行
+- 観劇トップ、公演詳細、進捗管理シートは共通Progressの既定寸法を維持
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向け`build-for-testing`成功
+
+### 既知のリスク・残課題
+- 実機で2・3・4工程、日付あり／なしの下余白を確認する
+- 長い次対応名と期限日時、小幅端末、Dynamic Typeで横詰まりがないことを確認する
+## 2026-08-02 チケット管理スワイプの不明記号と暗い配色を修正
+
+### 変更概要
+- `進める`の丸付き矢印を囲みなしの白い右矢印へ変更した
+- 独自アイコンが解決できず`?`四角になっていた`編集`を、白い標準鉛筆へ変更した
+- `落選 / 見送り`を丸付き×から囲みなしの白い×へ変更した
+- 背景をシアン`#2F9FB0`、ブルー`#578BC2`、ローズ`#D65C7A`へ明るく整理した
+
+### 変更意図
+- 丸と四角に意味の差があるように見える不統一をなくす
+- 灰色面＋黒記号や代替`?`を排除し、各操作を白い記号と文字で明快に見せる
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: スワイプアイコンを標準SF Symbolsへ統一し、3操作色を更新
+- `favoreco/CLAUDE.md`、`docs/spec-A8-チケット管理・通知.md`、`docs/00-開発状況と残課題.md`: 現在仕様と実機確認項目を更新
+
+### 影響する画面・機能
+- チケット管理カードの左右スワイプ操作
+- 非表示カードの再表示スワイプ
+- 状態更新、編集、落選／見送り、再表示の処理は変更なし
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向け`build-for-testing`成功
+
+### 既知のリスク・残課題
+- 実機で白い矢印・鉛筆・×が表示され、灰色円・黒記号・`?`が出ないことを確認する
+- 部分スワイプと全スワイプ、左右各操作、VoiceOver読み上げを確認する
+
+## 2026-08-02 進捗管理の色・語彙・状態更新をナラティブに統一
+
+### 変更概要
+- 進捗管理の申込区分をブルー細枠、販売サイトを中立グレー細枠へ分け、白〜アイボリー面と14ptアイコンへ統一した
+- 共通ProgressをHome／チケット管理と同じ5工程色へ揃え、利用者向けの最終工程を`取得`から`受取`へ変更した
+- `支払済み・取得済みにする`を`支払い済みにする`と`チケットを受け取った`へ分割し、各ボタン下へ保存結果を明記した
+- 日付優先編集画面へ、確認後に状態を1工程戻す操作を追加した
+
+### 変更意図
+- 申込区分、販売サイト、現在工程、次対応、操作結果を上から順に読めるようにし、色の役割と状態更新の意味を混ぜないため
+- 誤って落選や受取済みにした場合に、工程日や申込情報を消さず進捗だけを安全に修正できるようにするため
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/Color+Hex.swift`: 共通工程色と申込区分／販売サイトのチップ色を整理
+- `favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift`: 受取語彙、明示的な支払→受取遷移、直前工程判定を追加
+- `favorecoAPP/favorecoAPP/Services/TicketAttemptStatusUpdater.swift`: 支払／受取実績の保存と1工程巻き戻しを追加
+- `favorecoAPP/favorecoAPP/Views/TicketQuickActionSheet.swift`: 情報順、チップ、現在工程、保存結果表示を更新
+- `favorecoAPP/favorecoAPP/Views/EditTicketAttemptView.swift`: 確認付き巻き戻し操作を追加
+- `favorecoAPP/favorecoAPP/Views/HomeView.swift`、`TicketOverviewView.swift`、`CategoryTopView.swift`: チップ役割と受取語彙を揃えた
+- `favorecoAPP/favorecoAPPTests/TicketWorkflowTests.swift`: 支払／受取分離と巻き戻し判定の回帰テストを追加
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、署名なしgeneric iPhoneOS向け`build-for-testing`成功
+- iPhone 17 Pro Simulatorで`TicketWorkflowTests`全件成功
+
+### 既知のリスク・残課題
+- 実機で長い申込区分・販売サイト、各5工程、Dynamic Typeの収まりを確認する
+- `支払→受取待ち→受取済み`と、落選／受取済みからの巻き戻し、確認キャンセル、通知再同期を確認する
+
+## 2026-08-03 進捗管理の重複説明削除・現在工程と直近期限の明確化
+
+### 変更概要
+- 状態更新ボタン下の`〜として記録します`を削除した
+- 現在工程を`抽選申込 / 当落待ち / 支払い待ち / 受取待ち`等の状態が分かる文言へ変更した
+- チケット管理カードの`今日 / 明日`はHomeのTicket Scheduleと同じく赤系文字だけで強調し、日付・時刻と工程色の面を維持した
+
+### 変更意図
+- 操作結果がボタン名だけで分かる状態では説明行を重ねず、必要な情報へ視線を集中させるため
+- 短い工程名だけで次の行動を推測させず、現在何を待っているかを明示するため
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TicketQuickActionSheet.swift`: 重複説明を削除
+- `favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift`: 現在工程の表示語彙を共通化
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 今日／明日の期限表示をHomeと共通化
+- `favorecoAPP/favorecoAPPTests/TicketWorkflowTests.swift`: 現在工程語彙の回帰テストを追加
+
+### 確認結果（実機 / ビルド）
+- 対象Swift構文解析成功
+- `git diff --check`成功
+- iOS 26.5 SDK、署名なしgeneric iPhoneOS向け`build-for-testing`成功
+- iPhone 17 Pro Simulatorで`TicketWorkflowTests`全件成功
+
+### 既知のリスク・残課題
+- 実機で当落待ち／抽選申込の収まり、Homeとチケット管理で今日／明日の文字表現が一致することを確認する
+- Homeとの表示統一後、`TicketOverviewView.swift`の構文解析と`git diff --check`は成功した
+- 全体再ビルドは本変更箇所ではなく、別変更中の`AddTicketPlanView.swift:3337`にある`.secondary / .tint`のShapeStyle型不一致で停止した。期限表示の変更範囲ではないため、この作業では修正していない
+
+## 2026-08-03 申込まとめを内部化し任意項目を申込の詳細へ集約
+
+### 変更概要
+- 登録フォームから利用者入力の`申込まとめ`を削除し、既存の日程／ツアー文脈による自動生成を通常非表示のまま使うようにした
+- `申込枠または販売方法 / 申込アカウント / 名義 / 購入先 / 購入URL`を、初期状態を閉じた`申込の詳細`へまとめた
+- 閉じた見出しへ入力済みの区分・購入先を要約し、展開先へ入力効果と未入力可の案内を追加した
+- 抽選の案内文を、任意属性の列挙ではなく締切・当落・入金等の工程日程中心へ変更した
+
+### 変更意図
+- 自動で扱える上位グループを利用者へ命名させず、チケット取得に必須な工程日程へ集中できるようにするため
+- 申込枠や購入先は複数申込の識別・検索には役立つが、未入力でも登録できる任意情報として視覚的な重さを下げるため
+- 画像・案内文からの一括入力は裏側の入力支援として扱い、複数件を無確認でフォームへ追加する設計にしないため
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 申込まとめ入力を削除し、申込の詳細DisclosureGroupと要約、利用者向けの別日程追加文言を追加
+- `favorecoAPP/favorecoAPP/Views/EditTicketAttemptView.swift`: チケット単体編集から申込まとめ入力を削除
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 検索プレースホルダーから内部概念の申込まとめを削除
+- `favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift`: 抽選登録の案内文を工程日程中心へ変更
+- `favoreco/CLAUDE.md`、`docs/spec-A8-チケット管理・通知.md`: 現在仕様と一括入力の未実装範囲を明記
+- `docs/00-開発状況と残課題.md`: 実装済み内容と実機確認項目を追加
+
+### 影響する画面・機能
+- 観劇の`公演・チケットを登録`にある抽選／先着／取得済みのチケット情報
+- 同日程の別申込保存とチケット管理の申込まとめSectionは保存形式を維持
+- チケット単体編集は申込まとめ入力だけを非表示にし、既存の自動名と共通IDは保持
+
+### 確認結果（実機 / ビルド）
+- iOS Simulator向け署名なしDebug全体ビルド成功
+- 新規エラーなし。既存の`AddTicketPlanView` MainActor警告2件のみ
+
+### 既知のリスク・残課題
+- 実機で抽選／先着／取得済みの初期折りたたみと各入力欄を確認する
+- 長い申込枠・購入先、OCR候補反映後の要約、小幅端末、Dynamic Typeを確認する
+- Apple Intelligenceによる複数公演の抽出・確認・重複除外・一括生成は未実装
+## 2026-08-03 個別詳細メニューの不明な`?`表示を修正
+
+### 変更概要
+- 個別の鑑賞記録を含む記録詳細の右上メニューで、`編集 / この記録だけ削除`を標準`Label`とSF Symbolsへ変更した
+- 同じ構造を持つ対象詳細、予定詳細、準備項目メニューとチケットのコンテキストメニューも標準ラベルへ統一した
+- 通常画面上では従来どおりPhosphorアイコンを使い、ネイティブメニュー内だけシステム描画へ限定した
+
+### 変更意図
+- ネイティブ`Menu`が独自フォントの文字グリフViewを再構成した際に、アイコンが`?`四角へ化け、操作名も表示されない問題を防ぐため
+- 編集・削除等の処理や削除範囲を変えず、システムメニューで保証されるアイコンと文字表示へ戻すため
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 記録詳細の編集・単回削除メニューを標準ラベル化
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 対象詳細の編集・代表写真・非表示・削除メニューを標準ラベル化
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 予定詳細とチケットのメニュー項目を標準ラベル化
+- `favorecoAPP/favorecoAPP/Views/PlanPreparationChecklistView.swift`: 準備項目の編集・削除メニューを標準ラベル化
+- `favoreco/CLAUDE.md`、`docs/00-開発状況と残課題.md`: ネイティブメニューのアイコン規則と実機確認項目を更新
+
+### 影響する画面・機能
+- 記録詳細、対象詳細、予定詳細の右上メニュー
+- 予定詳細内のチケットコンテキストメニュー、準備項目メニュー
+- 編集、代表写真、非表示、削除、状態更新等の実行処理と保存データには変更なし
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- iOS Simulator向け署名なしDebug全体ビルド成功
+
+### 既知のリスク・残課題
+- 実機で右上メニューに日本語の項目名と鉛筆／ゴミ箱等が表示され、`?`四角が消えることを確認する
+- 編集・キャンセル・単回削除確認を操作し、処理範囲が従来どおりであることを確認する
+
+## 2026-08-03 チケット一括登録の候補確認・重複除外・一括保存基盤を追加
+
+### 変更概要
+- Vision OCRの結果を直接フォームへ入れず、複数候補を選択する`画像から入力`確認シートを追加した
+- 最大2枚の画像が同一日程らしい場合は1候補へ統合し、異なる日時が明確な場合は画像ごとの複数候補へ分けた
+- 既存Plan／TicketAttemptと日時・会場・購入先等が一致する候補を登録済みとして選択不可にした
+- 選択した同日程候補は複数TicketAttempt、別日程候補は同じExperienceEventの複数Planとして1回の保存で作成した
+- 別日程を保存前に確認・削除できる一覧をフォームへ追加し、画像再読取時は以前の画像由来候補だけを置換するようにした
+
+### 変更意図
+- Apple Intelligence、URL解析、Vision OCRのいずれから候補が返っても、同じ確認・重複判定・保存経路を利用できるようにするため
+- AIやOCRの誤認識を無確認で保存せず、候補数が増えても利用者が登録対象を制御できるようにするため
+- 同一公演の複数日程・同一日程の複数申込を、既存のPlan／TicketAttempt正規化構造のまま一括登録するため
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 候補配列、確認シート、重複判定、別日程確認、一括保存を実装
+- `favoreco/CLAUDE.md`: 現在の画像一括登録仕様とApple Intelligence未接続範囲を更新
+- `docs/spec-A8-チケット管理・通知.md`: OCR／将来解析器で共用する候補パイプラインを仕様化
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響する画面・機能
+- `公演・チケットを登録`の画像OCR、候補確認、保存
+- 同一公演の複数Plan、同一Planの複数TicketAttempt、内部申込グループ
+- 一括保存した各Plan／TicketAttemptの通知予約、Coming Up、Ticket Management
+- 手入力だけの登録、既存Planへの単一申込追加は従来経路を維持
+
+### 確認結果（実機 / ビルド）
+- `AddTicketPlanView.swift`のSwift構文解析成功
+- `git diff --check`成功
+- iOS Simulator向け署名なしDebug全体ビルド成功
+- 新規エラーなし。既存の`AddTicketPlanView` MainActor警告2件のみ
+
+### 既知のリスク・残課題
+- 実機で1枚、同一日程2枚、別日時2枚、全候補解除、候補削除と再読取を確認する
+- 既存重複が正しく除外され、同じ日時でも購入先が異なる申込を誤って除外しないことを確認する
+- 一括保存後にComing Up、Ticket Management、申込グループ、各通知が重複せず一致することを確認する
+- Apple Intelligence解析器と案内文／URL入力は未接続
+
+## 2026-08-03 チケットタグを個別削除できるカプセル入力へ変更
+
+### 変更概要
+- チケット登録・編集で共用するタグ欄を、複数行テキスト表示から折り返しカプセル表示へ変更した
+- 改行確定または複数行貼り付けでタグを追加し、各カプセル内の×から1件ずつ削除できるようにした
+- タグ欄に表示されていた通常文字入力用の一括削除×を廃止した
+
+### 変更意図
+- 入力済みの各行を独立したタグとして認識でき、誤って全タグを消さず対象だけを削除できるようにするため
+- 登録と編集で同じ操作・見た目を使い、保存済み値とプレースホルダーを明確に区別するため
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/TheaterPerformanceType.swift`: 共通`TicketTagInputField`へカプセル配置、追加、個別削除を実装
+- `favoreco/CLAUDE.md`: 現在のタグ入力仕様を更新
+- `docs/spec-A8-チケット管理・通知.md`: チケット登録・編集のタグ操作を仕様化
+- `docs/15-画面情報設計.md`: 通常の一括削除×に対するタグ欄の例外を追記
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追加
+
+### 影響する画面・機能
+- `チケットスケジュール`／`チケットを手配する`のタグ・メモSection
+- チケット単体編集のタグ・メモSection
+- `TicketAttempt.unitFieldsRaw`へのタグ保存と再編集表示
+
+### 確認結果（実機 / ビルド）
+- `TheaterPerformanceType.swift`のSwift構文解析成功
+- `git diff --check`成功
+- iOS Simulator向け署名なしDebug全体ビルド成功
+- 新規エラーなし。既存の`AddTicketPlanView` MainActor警告2件のみ
+
+### 既知のリスク・残課題
+- 実機で日本語キーボードの改行確定、複数行貼り付け、長いタグの折り返し、各×のタップ範囲を確認する
+- タグを保存後に再編集し、順序と個数が維持されることを確認する
+
+## 2026-08-03 グッズ種別を11種へ拡張しトップ絞り込みへ接続
+
+### 変更概要
+- 組み込み`random_goods`の利用者向け名称を`ランダムグッズ`から`Goods`へ変更し、内部キーと保存済みシリーズを維持した
+- 種別を`カプセルトイ・ガチャ / アクリルスタンド / アクリルキーホルダー・チャーム / 缶バッジ / ブロマイド・写真 / カード / ステッカー・シール / ぬいぐるみ・マスコット / キーホルダー・ストラップ / フィギュア / その他`の11種へ拡張した
+- シリーズ登録とシリーズ情報編集で同じ種別Pickerを使い、Series一覧の横スクロールフィルターで2列グリッドを絞り込むようにした
+- 一覧カードへ種別を表示し、選択種別0件には専用空状態と追加入口を表示した
+- 未知または空の旧種別キーは`その他`として表示・絞り込みできる後方互換解決を追加した
+
+### 変更意図
+- 公演・作品ジャンルを問わず、よく収集するグッズを同じページへシリーズ単位で積み上げられるようにするため
+- `コレクション`より対象範囲が明確な英字名`Goods`を利用者向け名称とし、通常販売品もランダム品も扱えるようにするため
+- 保存済みraw値を変更せず、既存利用者のシリーズ、ラインナップ、所持数、履歴を失わず分類を拡張するため
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Models/CollectibleModels.swift`: 11種の安定raw値、長短表示名、旧値解決を追加
+- `favorecoAPP/favorecoAPP/Views/CollectibleSeriesViews.swift`: 登録／編集共通フォーム、種別フィルター、カード種別、0件状態を実装
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: グッズシリーズ専用編集フォームへ接続
+- `favorecoAPP/favorecoAPP/Services/CategoryPresetSeeder.swift`: 組み込み表示名を`Goods`へ更新
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: グッズHeroの表示名を更新
+- `favorecoAPP/favorecoAPPTests/CollectibleKindTests.swift`: 種別順、旧raw値、未知値フォールバックの回帰テストを追加
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`: 現行仕様と実機確認項目を更新
+
+### 影響する画面・機能
+- 初回ジャンル選択、ジャンル列、グッズジャンルトップの表示名
+- グッズシリーズの新規登録、シリーズ情報編集、Series一覧フィルター、シリーズカード
+- シリーズ詳細のラインナップ、所持・ダブり・未入手・支出、入手／手放し履歴は変更しない
+- JSON／完全／自動バックアップとCloudKitは既存`ExperienceEvent.subTypeKey`を継続利用し、schema変更なし
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- iOS Simulator向け署名なしDebug `build-for-testing`成功し、新規XCTestがテストターゲットへ組み込まれることを確認
+- CoreSimulatorServiceが切断されていたためXCTest実行は未実施
+- 新規エラーなし。既存の`AddTicketPlanView` MainActor警告2件のみ
+
+### 既知のリスク・残課題
+- 実機で11種の選択・保存・再編集、`すべて`と各種別、選択種別0件の空状態を確認する
+- 旧6種の既存シリーズと種別未設定シリーズが、それぞれ元種別または`その他`へ表示されることを確認する
+- 小幅端末とDynamic Typeで横フィルター、長い種別名、2列カードの高さと省略を確認する
+## 2026-08-04: 進捗更新後の申込追跡とチケット表示切替
+
+### 変更概要
+- チケット管理から開いた個別`進捗管理`で状態更新に成功したら、シートを閉じて同じTicketAttemptへ自動スクロールするようにした
+- 更新したカードを1.4秒だけアクセント枠で強調し、移動先を見失わないようにした
+- 更新後に現在の状態フィルターから外れる場合だけ`すべて`へ戻し、検索語が不一致になった場合だけ検索を解除する
+- 一覧上部へ`公演ごと / 期限が近い順 / 進捗ごと`の小型表示メニューを追加した
+- 公演ごとを初期値、期限順を次対応期限の昇順、進捗ごとを取得工程順のSection表示とした
+
+### 変更意図
+- 状態更新でカードの所属Sectionや並び順が変わっても、操作したチケットの更新結果をすぐ確認できるようにするため
+- 状態フィルターと一覧の見方を分離し、同じ対象集合を公演、期限、進捗の3軸で確認できるようにするため
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TicketOverviewView.swift`: 表示メニュー、グループ構成、IDスクロール、更新カード強調を追加
+- `favorecoAPP/favorecoAPP/Views/TicketQuickActionSheet.swift`: チケット管理へ状態更新済み申込を返してシートを閉じるコールバックを追加
+- `favoreco/CLAUDE.md` / `docs/spec-A8-チケット管理・通知.md` / `docs/15-画面情報設計.md`: 現行の表示切替と更新後追跡仕様を反映
+- `docs/00-開発状況と残課題.md`: 実装状況と実機確認項目を更新
+
+### 影響する画面・機能
+- チケット管理一覧のSection構成と表示方法メニュー
+- チケット管理一覧から開く個別`進捗管理`の状態更新後動作
+- Home・ジャンルトップから開く個別`進捗管理`は従来の参加日設定誘導を維持
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftファイルの構文解析成功
+- `git diff --check`成功
+- iOS Simulator向け署名なしDebug全体ビルド成功
+- 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
+
+### 既知のリスク・残課題
+- 実機で各表示方法、一覧上端／中央／下端の更新、状態フィルター内に残る更新／対象外へ移る更新、検索中の更新を確認する
+- 0件、1件、大量件数、長いSection名、小幅端末、Dynamic Typeで表示メニューとスクロール位置を確認する

@@ -1267,9 +1267,12 @@ enum HomeUpcomingHeroMetrics {
     static let actionHeight: CGFloat = 30
     static let embeddedPadding: CGFloat = 2
     static let embeddedTrailingInset: CGFloat = 4
-    static let embeddedContentHeight: CGFloat = 204
-    static let embeddedPosterHeight: CGFloat = embeddedContentHeight - actionHeight
+    static let embeddedBottomRowOffset: CGFloat = 6
+    static let embeddedContentHeight: CGFloat = 210
+    static let embeddedPosterHeight: CGFloat = 174
     static let embeddedCardHeight: CGFloat = embeddedContentHeight + (embeddedPadding * 2)
+    static let embeddedPageMaskWidth: CGFloat = embeddedPadding + posterWidth + spacing
+    static let embeddedPageMaskHeight: CGFloat = embeddedPadding + embeddedBottomRowOffset + actionHeight
 }
 
 struct HomeUpcomingHeroLayout: Layout {
@@ -1455,6 +1458,7 @@ struct HomeUpcomingHeroDetails<Actions: View>: View {
             HomePickupURLRow(urlString: officialURLString, tint: tint)
 
             actions
+                .padding(.top, isEmbedded ? HomeUpcomingHeroMetrics.embeddedBottomRowOffset : 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -1609,6 +1613,54 @@ nonisolated enum HomeTicketDeadlineUrgency: Equatable {
     }
 }
 
+private struct HomeTicketCardShape: Shape {
+    static let separatorX: CGFloat = 150.5
+
+    func path(in rect: CGRect) -> Path {
+        let corner: CGFloat = 9
+        let notchHalfWidth: CGFloat = 7
+        let notchDepth: CGFloat = 7
+        let separator = min(
+            max(rect.minX + corner + notchHalfWidth, rect.minX + Self.separatorX),
+            rect.maxX - corner - notchHalfWidth
+        )
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + corner, y: rect.minY))
+        path.addLine(to: CGPoint(x: separator - notchHalfWidth, y: rect.minY))
+        path.addLine(to: CGPoint(x: separator, y: rect.minY + notchDepth))
+        path.addLine(to: CGPoint(x: separator + notchHalfWidth, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - corner, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + corner))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - corner))
+        path.addLine(to: CGPoint(x: rect.maxX - corner, y: rect.maxY))
+        path.addLine(to: CGPoint(x: separator + notchHalfWidth, y: rect.maxY))
+        path.addLine(to: CGPoint(x: separator, y: rect.maxY - notchDepth))
+        path.addLine(to: CGPoint(x: separator - notchHalfWidth, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX + corner, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - corner))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + corner))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct HomeTicketPerforation: View {
+    let color: Color
+
+    var body: some View {
+        Path { path in
+            path.move(to: CGPoint(x: 0.5, y: 0))
+            path.addLine(to: CGPoint(x: 0.5, y: 86))
+        }
+        .stroke(
+            color,
+            style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [3, 3])
+        )
+        .frame(width: 1, height: 86)
+    }
+}
+
 struct HomeTicketScheduleCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
@@ -1656,17 +1708,10 @@ struct HomeTicketScheduleCard: View {
 
     private var deadlineLabel: String {
         if isAttendanceScheduleAction { return "参加日" }
-        if item.title.contains("申込・発売") {
-            guard let attempt else { return "チケ発売" }
-            return TicketProgressTimeline.usesLotteryFlow(attempt) ? "抽選申込" : "チケ発売"
-        }
-        if item.title.contains("当落") { return "抽選当落" }
-        if item.title.contains("入金") || item.title.contains("支払") { return "チケ支払" }
-        if item.title.contains("受取") || item.title.contains("取得") { return "チケ取得" }
-        if item.title.contains("発売") { return "チケ発売" }
-        if item.title.contains("購入") { return "チケ発売" }
-        if item.title.contains("申込") { return "抽選申込" }
-        return item.title
+        return TicketProgressPresentation.deadlineLabel(
+            forActionTitle: item.title,
+            attempt: attempt
+        )
     }
 
     private var isAttendanceScheduleAction: Bool {
@@ -1728,9 +1773,7 @@ struct HomeTicketScheduleCard: View {
     private var urgencyColor: Color {
         switch urgency {
         case .undated, .normal:
-            return colorScheme == .dark
-                ? Color(hex: "#D7CFBE")
-                : Color(hex: "#243247")
+            return cardPrimaryTextColor
         case .tomorrow:
             return Color(hex: "#D8555F")
         case .today:
@@ -1741,24 +1784,30 @@ struct HomeTicketScheduleCard: View {
     }
 
     private var statusColor: Color {
-        TicketProgressColorPalette.color(
-            forDeadlineLabel: deadlineLabel,
-            fallback: item.tint
-        )
+        guard let visualStage else { return item.tint }
+        return TicketProgressColorPalette.color(for: visualStage)
     }
 
-    private var entryMethodColor: Color {
-        guard let attempt else { return item.tint }
-        switch attempt.entryRouteKey {
-        case "fanClub", "official", "lottery", "card", "generalLottery":
-            return Color(hex: "#8E3657")
-        case "presale", "general", "sameDay":
-            return Color(hex: "#247E85")
-        case "resale":
-            return Color(hex: "#B66A32")
-        default:
-            return item.tint
-        }
+    private var visualStage: TicketProgressVisualStage? {
+        TicketProgressColorPalette.visualStage(forDeadlineLabel: deadlineLabel)
+    }
+
+    private var cardSurfaceColor: Color {
+        guard let visualStage else { return Color(.systemBackground) }
+        return TicketProgressColorPalette.surface(for: visualStage)
+    }
+
+    private var cardTextColor: Color {
+        guard let visualStage else { return Color.primary }
+        return TicketProgressColorPalette.text(for: visualStage)
+    }
+
+    private var cardPrimaryTextColor: Color {
+        Color.adaptive(lightHex: "#172936", darkHex: "#FFFDF8")
+    }
+
+    private var cardSecondaryTextColor: Color {
+        Color.adaptive(lightHex: "#304957", darkHex: "#DCE7ED")
     }
 
     private var cardBorderWidth: CGFloat {
@@ -1815,10 +1864,8 @@ struct HomeTicketScheduleCard: View {
     }
 
     private var undatedSupplementColor: Color {
-        guard !isAttendanceScheduleAction else { return .secondary }
-        return colorScheme == .dark
-            ? Color(hex: "#FF7584")
-            : Color(hex: "#C9364F")
+        guard !isAttendanceScheduleAction else { return cardSecondaryTextColor }
+        return TicketProgressColorPalette.warning
     }
 
     var body: some View {
@@ -1848,33 +1895,22 @@ struct HomeTicketScheduleCard: View {
             deadlineBlock
                 .frame(width: 70, alignment: .center)
 
-            Rectangle()
-                .fill(Color.primary.opacity(0.12))
-                .frame(width: 1, height: 86)
+            HomeTicketPerforation(color: cardSecondaryTextColor.opacity(0.32))
                 .padding(.trailing, 6)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
                     if let entryRouteBadgeTitle {
-                        ticketMetadataBadge(
-                            entryRouteBadgeTitle,
-                            backgroundColor: entryMethodColor
-                        )
+                        ticketMetadataBadge(entryRouteBadgeTitle, role: .entryRoute)
                         .fixedSize(horizontal: true, vertical: false)
                         .layoutPriority(2)
                     }
                     if let ticketSiteBadgeTitle {
-                        ticketMetadataBadge(
-                            ticketSiteBadgeTitle,
-                            backgroundColor: entryMethodColor
-                        )
+                        ticketMetadataBadge(ticketSiteBadgeTitle, role: .ticketSite)
                         .layoutPriority(1)
                     }
                     if entryRouteBadgeTitle == nil, ticketSiteBadgeTitle == nil {
-                        ticketMetadataBadge(
-                            "チケット",
-                            backgroundColor: entryMethodColor
-                        )
+                        ticketMetadataBadge("チケット", role: .entryRoute)
                     }
                     Spacer(minLength: 0)
                 }
@@ -1884,17 +1920,21 @@ struct HomeTicketScheduleCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(eventTitle)
                         .font(FavorecoTypography.jpSerif(16, weight: .semibold, relativeTo: .headline))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(cardPrimaryTextColor)
                         .lineLimit(2)
                         .offset(y: 1)
 
                     FavorecoIconLabel(
                         scheduleText,
                         systemImage: "calendar",
-                        iconSize: 13
+                        iconSize: 15
                     )
                         .font(FavorecoTypography.captionStrong)
-                        .foregroundStyle(plan?.hasConfirmedSchedule == true ? Color.primary.opacity(0.72) : .orange)
+                        .foregroundStyle(
+                            plan?.hasConfirmedSchedule == true
+                                ? cardSecondaryTextColor
+                                : TicketProgressColorPalette.warning
+                        )
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                 }
@@ -1904,36 +1944,36 @@ struct HomeTicketScheduleCard: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(cardSecondaryTextColor)
         }
         .padding(8)
         .frame(maxWidth: .infinity, minHeight: 106, alignment: .leading)
         .background {
             ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(.systemBackground))
+                HomeTicketCardShape()
+                    .fill(cardSurfaceColor)
                     .shadow(
                         color: displayedCardShadowColor,
                         radius: displayedCardShadowRadius,
                         y: 2
                     )
                 if urgency == .overdue {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(urgencyColor.opacity(colorScheme == .dark ? 0.22 : 0.10))
+                    HomeTicketCardShape()
+                        .fill(TicketProgressColorPalette.warning.opacity(colorScheme == .dark ? 0.20 : 0.10))
                 }
             }
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            HomeTicketCardShape()
                 .stroke(
                     urgency == .normal || urgency == .undated
-                        ? urgencyColor.opacity(0.22)
+                        ? statusColor.opacity(0.42)
                         : urgencyColor,
                     lineWidth: cardBorderWidth
                 )
         }
         .offset(x: todayShakeOffset)
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(HomeTicketCardShape())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             item.showsDueDate
@@ -2041,17 +2081,17 @@ struct HomeTicketScheduleCard: View {
 
                 HStack(spacing: 0) {
                     Text(FavorecoDateText.monthDay(item.dueDate))
-                        .font(FavorecoTypography.latinDisplay(14, weight: .bold, relativeTo: .caption))
+                        .font(FavorecoTypography.latinDisplay(15, weight: .bold, relativeTo: .caption))
                         .monospacedDigit()
                     Text("(\(shortWeekday))")
-                        .font(FavorecoTypography.jpSerif(11, weight: .bold, relativeTo: .caption2))
+                        .font(FavorecoTypography.jpSerif(12, weight: .bold, relativeTo: .caption2))
                 }
-                .foregroundStyle(.primary.opacity(0.78))
+                .foregroundStyle(cardSecondaryTextColor)
                 .lineLimit(1)
 
                 Text(FavorecoDateText.time(item.dueDate))
-                    .font(FavorecoTypography.latinDisplay(14, weight: .bold, relativeTo: .caption))
-                    .foregroundStyle(.primary.opacity(0.78))
+                    .font(FavorecoTypography.latinDisplay(15, weight: .bold, relativeTo: .caption))
+                    .foregroundStyle(cardSecondaryTextColor)
                     .monospacedDigit()
                     .lineLimit(1)
             } else {
@@ -2061,7 +2101,7 @@ struct HomeTicketScheduleCard: View {
                         weight: .semibold,
                         relativeTo: .title3
                     ))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(cardPrimaryTextColor)
                     .padding(.vertical, 5)
 
                 Text(deadlineSupplement)
@@ -2079,22 +2119,30 @@ struct HomeTicketScheduleCard: View {
             .replacingOccurrences(of: "曜", with: "")
     }
 
-    private func ticketMetadataBadge(
-        _ title: String,
-        backgroundColor: Color
-    ) -> some View {
-        Text(title)
+    private func ticketMetadataBadge(_ title: String, role: HomeTicketMetadataRole) -> some View {
+        let foreground = role == .entryRoute
+            ? TicketProgressColorPalette.entryRouteChipText
+            : TicketProgressColorPalette.metadataChipText
+        let border = role == .entryRoute
+            ? TicketProgressColorPalette.entryRouteChipBorder
+            : TicketProgressColorPalette.metadataChipBorder
+
+        return Text(title)
             .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
-            .foregroundStyle(TheaterCategoryStyle.ivory)
+            .foregroundStyle(foreground)
             .lineLimit(1)
             .minimumScaleFactor(0.72)
             .allowsTightening(true)
             .padding(.horizontal, 4)
             .frame(height: 20)
             .background(
-                backgroundColor,
+                TicketProgressColorPalette.metadataChipSurface.opacity(colorScheme == .dark ? 0.92 : 0.84),
                 in: RoundedRectangle(cornerRadius: 4, style: .continuous)
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(border.opacity(role == .entryRoute ? 0.78 : 0.24), lineWidth: 0.7)
+            }
     }
 
     private func ticketHorizontalStatusBadge(
@@ -2114,6 +2162,11 @@ struct HomeTicketScheduleCard: View {
             )
             .accessibilityHidden(true)
     }
+}
+
+private enum HomeTicketMetadataRole {
+    case entryRoute
+    case ticketSite
 }
 
 private struct HomeMiniStatCell: View {
@@ -2172,10 +2225,10 @@ private struct AttentionRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
-                    .font(FavorecoTypography.bodyStrong)
+                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
                     .lineLimit(1)
                 Text(item.subtitle)
-                    .font(FavorecoTypography.caption)
+                    .font(FavorecoTypography.jpSans(11, relativeTo: .caption))
                     .foregroundStyle(.secondary)
             }
 

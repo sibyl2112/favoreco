@@ -46,6 +46,7 @@ struct CreateEntryMenuRequest: Identifiable, Equatable {
 
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @AppStorage(AppStorageKeys.defaultGenreMode) private var defaultGenreMode = "lastUsed"
     @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
@@ -205,6 +206,7 @@ struct MainTabView: View {
                 .tag(MainTab.stats)
         }
         .environmentObject(createEntryContextRouter)
+        .tint(selectedTab == .records ? themePalette.emotionTint : themePalette.globalTint)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
         .sheet(item: $presentedCreateMenuRequest, onDismiss: openPendingCreateAction) { request in
@@ -638,6 +640,7 @@ private enum RecordEntryDestination: Identifiable {
 
 private struct TheaterMemoryTargetSelectionView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \Plan.startsAt, order: .reverse) private var allPlans: [Plan]
 
     let category: RecordCategory
@@ -725,6 +728,8 @@ private struct TheaterMemoryTargetSelectionView: View {
                 }
             }
         }
+        .favorecoAppAppearance()
+        .tint(themePalette.globalTint)
     }
 
     private func theaterMemoryPlanRow(
@@ -736,7 +741,7 @@ private struct TheaterMemoryTargetSelectionView: View {
                 systemName: isRecorded ? "checkmark.circle.fill" : "calendar",
                 size: 19
             )
-            .foregroundStyle(isRecorded ? Color.green : Color.accentColor)
+            .foregroundStyle(isRecorded ? Color.green : themePalette.globalTint)
             .frame(width: 28)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -1020,6 +1025,7 @@ private struct CreateEntryMenuDefinition {
 
 private struct CreateEntryMenuView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.favorecoThemePalette) private var themePalette
     let canCreateRecord: Bool
     let definition: CreateEntryMenuDefinition
     let onSelect: (CreateAction) -> Void
@@ -1059,10 +1065,14 @@ private struct CreateEntryMenuView: View {
                 }
             }
         }
+        .favorecoAppAppearance()
+        .tint(themePalette.globalTint)
     }
 }
 
 private struct CreateEntryButton: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+
     let title: String
     let detail: String
     let systemImage: String
@@ -1074,7 +1084,7 @@ private struct CreateEntryButton: View {
             HStack(spacing: 14) {
                 FavorecoIcon(systemName: systemImage, size: 20)
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(themePalette.globalTint)
                     .frame(width: 36, height: 36)
 
                 VStack(alignment: .leading, spacing: 2) {

@@ -4,20 +4,47 @@ import PhotosUI
 import UIKit
 
 struct AddCollectibleSeriesView: View {
-    let category: RecordCategory
+    private let category: RecordCategory?
+    private let editingSeries: ExperienceEvent?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var title = ""
-    @State private var kind = CollectibleKind.capsuleToy
-    @State private var maker = ""
-    @State private var releaseText = ""
-    @State private var lineupCount = 1
-    @State private var officialURL = ""
-    @State private var memo = ""
-    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var title: String
+    @State private var kind: CollectibleKind
+    @State private var maker: String
+    @State private var releaseText: String
+    @State private var lineupCount: Int
+    @State private var officialURL: String
+    @State private var memo: String
+    @State private var selectedPhoto: PhotosPickerItem? = nil
     @State private var imageData: Data?
-    @State private var errorMessage: String?
+    @State private var errorMessage: String? = nil
+
+    init(category: RecordCategory) {
+        self.category = category
+        editingSeries = nil
+        _title = State(initialValue: "")
+        _kind = State(initialValue: .capsuleToy)
+        _maker = State(initialValue: "")
+        _releaseText = State(initialValue: "")
+        _lineupCount = State(initialValue: 1)
+        _officialURL = State(initialValue: "")
+        _memo = State(initialValue: "")
+        _imageData = State(initialValue: nil)
+    }
+
+    init(series: ExperienceEvent) {
+        category = series.category
+        editingSeries = series
+        _title = State(initialValue: series.title)
+        _kind = State(initialValue: CollectibleKind.resolved(from: series.subTypeKey))
+        _maker = State(initialValue: series.organizerNameSnapshot)
+        _releaseText = State(initialValue: series.seriesName)
+        _lineupCount = State(initialValue: max(1, (series.collectibleItems ?? []).count))
+        _officialURL = State(initialValue: series.officialURL)
+        _memo = State(initialValue: series.memo)
+        _imageData = State(initialValue: series.eyecatchData)
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,7 +58,9 @@ struct AddCollectibleSeriesView: View {
                     }
                     TextField("メーカー・発売元（任意）", text: $maker)
                     TextField("発売時期（任意）", text: $releaseText)
-                    Stepper("全 \(lineupCount) 種類", value: $lineupCount, in: 1...100)
+                    if editingSeries == nil {
+                        Stepper("全 \(lineupCount) 種類", value: $lineupCount, in: 1...100)
+                    }
                 }
 
                 Section("画像") {
@@ -56,7 +85,7 @@ struct AddCollectibleSeriesView: View {
                         .lineLimit(3...6)
                 }
             }
-            .navigationTitle("シリーズを追加")
+            .navigationTitle(editingSeries == nil ? "シリーズを追加" : "シリーズを編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -83,6 +112,23 @@ struct AddCollectibleSeriesView: View {
 
     private func save() {
         let now = Date()
+        if let editingSeries {
+            editingSeries.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            editingSeries.seriesName = releaseText.trimmingCharacters(in: .whitespacesAndNewlines)
+            editingSeries.subTypeKey = kind.rawValue
+            editingSeries.organizerNameSnapshot = maker.trimmingCharacters(in: .whitespacesAndNewlines)
+            editingSeries.officialURL = officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            editingSeries.memo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
+            editingSeries.eyecatchData = imageData
+            editingSeries.updatedAt = now
+            saveContext(errorMessage: "シリーズを更新できませんでした。もう一度お試しください。")
+            return
+        }
+
+        guard let category else {
+            errorMessage = "保存先のグッズジャンルを確認できませんでした。"
+            return
+        }
         let event = ExperienceEvent(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             seriesName: releaseText.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -101,12 +147,16 @@ struct AddCollectibleSeriesView: View {
         }
         category.isArchived = false
         category.updatedAt = now
+        saveContext(errorMessage: "シリーズを保存できませんでした。もう一度お試しください。")
+    }
+
+    private func saveContext(errorMessage: String) {
         do {
             try modelContext.save()
             dismiss()
         } catch {
             modelContext.rollback()
-            errorMessage = "シリーズを保存できませんでした。もう一度お試しください。"
+            self.errorMessage = errorMessage
         }
     }
 }
@@ -115,11 +165,37 @@ struct CollectibleCategorySeriesGrid: View {
     let events: [ExperienceEvent]
     let tint: Color
     let onAdd: () -> Void
+    @State private var selectedKind: CollectibleKind?
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
+
+    private var activeEvents: [ExperienceEvent] {
+        events
+            .filter { !$0.isArchived }
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private var filteredEvents: [ExperienceEvent] {
+        guard let selectedKind else { return activeEvents }
+        return activeEvents.filter {
+            CollectibleKind.resolved(from: $0.subTypeKey) == selectedKind
+        }
+    }
+
+    init(
+        events: [ExperienceEvent],
+        tint: Color,
+        onAdd: @escaping () -> Void,
+        selectedKind: CollectibleKind? = nil
+    ) {
+        self.events = events
+        self.tint = tint
+        self.onAdd = onAdd
+        _selectedKind = State(initialValue: selectedKind)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -139,29 +215,81 @@ struct CollectibleCategorySeriesGrid: View {
                     .tint(tint)
             }
 
-            if events.isEmpty {
+            if activeEvents.isEmpty {
                 ContentUnavailableView {
                     FavorecoIconLabel("シリーズはまだありません", systemImage: "shippingbox", iconSize: 20)
                 } description: {
-                    Text("カプセルトイやランダムグッズの全種類を登録して、収集状況を残しましょう。")
+                    Text("よく集めるグッズをシリーズとして登録し、種類別の収集状況を残しましょう。")
                 } actions: {
                     Button("最初のシリーズを追加", action: onAdd)
                         .buttonStyle(.borderedProminent)
                         .tint(tint)
                 }
             } else {
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(events.filter { !$0.isArchived }.sorted { $0.updatedAt > $1.updatedAt }) { event in
-                        NavigationLink {
-                            EventDetailView(event: event)
-                        } label: {
-                            CollectibleSeriesCard(event: event, tint: tint)
+                CollectibleKindFilterBar(selection: $selectedKind, tint: tint)
+
+                if filteredEvents.isEmpty {
+                    ContentUnavailableView {
+                        FavorecoIconLabel("該当するシリーズはありません", systemImage: "shippingbox", iconSize: 20)
+                    } description: {
+                        Text("別の種別を選ぶか、新しいシリーズを追加してください。")
+                    } actions: {
+                        Button("シリーズを追加", action: onAdd)
+                            .buttonStyle(.borderedProminent)
+                            .tint(tint)
+                    }
+                } else {
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(filteredEvents) { event in
+                            NavigationLink {
+                                EventDetailView(event: event)
+                            } label: {
+                                CollectibleSeriesCard(event: event, tint: tint)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
         }
+    }
+}
+
+private struct CollectibleKindFilterBar: View {
+    @Binding var selection: CollectibleKind?
+    let tint: Color
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                filterButton(title: "すべて", kind: nil)
+                ForEach(CollectibleKind.allCases) { kind in
+                    filterButton(title: kind.shortDisplayName, kind: kind)
+                }
+            }
+        }
+        .scrollIndicators(.hidden)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("グッズ種別")
+    }
+
+    private func filterButton(title: String, kind: CollectibleKind?) -> some View {
+        let isSelected = selection == kind
+        return Button {
+            selection = kind
+        } label: {
+            Text(title)
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(isSelected ? Color.white : tint)
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .background(
+                    isSelected ? tint : tint.opacity(0.10),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -188,6 +316,10 @@ private struct CollectibleSeriesCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             Text(event.title).font(.subheadline.bold()).lineLimit(2)
+            Text(CollectibleKind.resolved(from: event.subTypeKey).displayName)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             ProgressView(value: summary.progress).tint(tint)
             HStack {
                 Text("\(summary.collectedCount)/\(summary.targetCount)種類")

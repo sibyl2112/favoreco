@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 
 struct FavoView: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \FavoPin.sortOrder) private var favoPins: [FavoPin]
     @Query(sort: \FavoriteProfile.sortOrder) private var profiles: [FavoriteProfile]
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
@@ -48,6 +49,7 @@ struct FavoView: View {
                 .background(.ultraThinMaterial)
             }
             .background(Color(.systemGroupedBackground))
+            .tint(themePalette.emotionTint)
             .toolbar(.hidden, for: .navigationBar)
         }
     }

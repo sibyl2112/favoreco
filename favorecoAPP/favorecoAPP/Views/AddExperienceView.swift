@@ -51,12 +51,16 @@ struct AddExperienceView: View {
         if preparedDraft.subTypeKey.isEmpty {
             switch category.templateKey {
             case "theater": preparedDraft.subTypeKey = TheaterPerformanceType.play.rawValue
+            case "movie": preparedDraft.subTypeKey = ScreenWorkType.movie.rawValue
             case "theme_park": preparedDraft.subTypeKey = OutingFacilityType.themePark.rawValue
             case "nature_living": preparedDraft.subTypeKey = OutingFacilityType.natureOther.rawValue
             default: break
             }
         }
         _draft = State(initialValue: preparedDraft)
+        if category.templateKey == "movie" {
+            _expandedUnitIDs = State(initialValue: ["basic", "photos", "memo"])
+        }
     }
 
     var body: some View {
@@ -65,6 +69,14 @@ struct AddExperienceView: View {
                 if category.templateKey == "theater" {
                     Section {
                         TheaterUnifiedFormIntroduction(entry: .visitCreation)
+                    }
+                }
+                if category.templateKey == "movie" {
+                    Section("作品区分") {
+                        ScreenWorkTypeAndSeasonEditor(
+                            typeKey: $draft.subTypeKey,
+                            seasonNumber: $draft.screenWorkSeasonNumber
+                        )
                     }
                 }
                 Section("入力ユニット") {
@@ -176,6 +188,11 @@ struct AddExperienceView: View {
                     supportsPerformanceTime: category.usesOpeningTime,
                     supportsStyles: category.templateKey == "theater",
                     usesExplicitTheaterLayout: category.templateKey == "theater",
+                    datePrecision: screenWorkDatePrecision(
+                        for: draft.subTypeKey,
+                        category: category
+                    ),
+                    usesSimpleScreenWorkLayout: category.templateKey == "movie",
                     ratingText: draft.ratingLabel,
                     onSelectPlace: { draft.apply(placeMaster: $0) },
                     onSelectPublicPlace: { draft.apply(publicPlace: $0) },
@@ -485,9 +502,14 @@ struct EditExperienceView: View {
         self.visit = visit
         _draft = State(initialValue: AddExperienceDraft(visit: visit))
         let isTheater = visit.event?.category?.templateKey == "theater"
-        var initialUnits: Set<String> = isTheater
-            ? ["basic", "ticketPlan", "people", "photos"]
-            : ["basic", "people", "photos", "officialInfo", "memo"]
+        let isScreenWork = visit.event?.category?.templateKey == "movie"
+        var initialUnits: Set<String> = if isTheater {
+            ["basic", "ticketPlan", "people", "photos"]
+        } else if isScreenWork {
+            ["basic", "photos", "memo"]
+        } else {
+            ["basic", "people", "photos", "officialInfo", "memo"]
+        }
         if isTheater, !visit.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             initialUnits.insert("memo")
         }
@@ -515,6 +537,14 @@ struct EditExperienceView: View {
                 if isTheaterVisit {
                     Section {
                         TheaterUnifiedFormIntroduction(entry: .visitEditing)
+                    }
+                }
+                if category?.templateKey == "movie" {
+                    Section("作品区分") {
+                        ScreenWorkTypeAndSeasonEditor(
+                            typeKey: $draft.subTypeKey,
+                            seasonNumber: $draft.screenWorkSeasonNumber
+                        )
                     }
                 }
                 Section("入力ユニット") {
@@ -661,6 +691,11 @@ struct EditExperienceView: View {
                         usesMapSearchAssist: usesMapSearchAssist,
                         supportsPerformanceTime: category?.usesOpeningTime == true,
                         supportsStyles: false,
+                        datePrecision: screenWorkDatePrecision(
+                            for: draft.subTypeKey,
+                            category: category
+                        ),
+                        usesSimpleScreenWorkLayout: category?.templateKey == "movie",
                         ratingText: draft.ratingLabel,
                         onSelectPlace: { draft.apply(placeMaster: $0) },
                         onSelectPublicPlace: { draft.apply(publicPlace: $0) },
@@ -960,6 +995,8 @@ struct AddVisitView: View {
     @State private var savedVisit: Visit?
     @State private var isShowingSavedDetail = false
     @State private var saveErrorMessage: String?
+    @State private var screenWorkTypeKey: String
+    @State private var screenWorkSeasonNumber: Int
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: event.category)
@@ -979,6 +1016,11 @@ struct AddVisitView: View {
             preparedDraft.eyecatchAspectRatioKey = EyecatchAspectRatio.resolved(for: event).key
         }
         _draft = State(initialValue: preparedDraft)
+        _screenWorkTypeKey = State(initialValue: event.screenWorkType.rawValue)
+        _screenWorkSeasonNumber = State(initialValue: event.screenWorkSeasonNumber)
+        if event.category?.templateKey == "movie" {
+            _expandedUnitIDs = State(initialValue: ["basic", "photos", "memo"])
+        }
     }
 
     var body: some View {
@@ -987,6 +1029,14 @@ struct AddVisitView: View {
                 if event.category?.templateKey == "theater" {
                     Section {
                         TheaterUnifiedFormIntroduction(entry: .visitCreation)
+                    }
+                }
+                if event.category?.templateKey == "movie" {
+                    Section("作品区分") {
+                        ScreenWorkTypeAndSeasonEditor(
+                            typeKey: $screenWorkTypeKey,
+                            seasonNumber: $screenWorkSeasonNumber
+                        )
                     }
                 }
                 Section("入力ユニット") {
@@ -1110,6 +1160,11 @@ struct AddVisitView: View {
                     supportsPerformanceTime: event.category?.usesOpeningTime == true,
                     supportsStyles: event.category?.templateKey == "theater",
                     usesExplicitTheaterLayout: event.category?.templateKey == "theater",
+                    datePrecision: screenWorkDatePrecision(
+                        for: screenWorkTypeKey,
+                        category: event.category
+                    ),
+                    usesSimpleScreenWorkLayout: event.category?.templateKey == "movie",
                     ratingText: draft.ratingLabel,
                     onSelectPlace: { draft.apply(placeMaster: $0) },
                     onSelectPublicPlace: { draft.apply(publicPlace: $0) },
@@ -1248,6 +1303,12 @@ struct AddVisitView: View {
         )
 
         event.stateKey = "active"
+        if event.category?.templateKey == "movie" {
+            event.applyScreenWorkClassification(
+                typeKey: screenWorkTypeKey,
+                seasonNumber: screenWorkSeasonNumber
+            )
+        }
         if event.category?.templateKey == "book" {
             var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
             eventFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
@@ -1325,6 +1386,7 @@ struct AddExperienceDraft {
     var title: String = ""
     var seriesName: String = ""
     var subTypeKey: String = ""
+    var screenWorkSeasonNumber: Int = 0
     var performanceTypeCustomName: String = ""
     var officialURL: String = ""
     var socialLinksText: String = ""
@@ -1358,6 +1420,10 @@ struct AddExperienceDraft {
         subTypeKey = visit.event?.subTypeKey ?? ""
         officialURL = visit.event?.officialURL ?? ""
         let eventFields = VisitUnitFields(rawValue: visit.event?.unitFieldsRaw ?? "")
+        if visit.event?.category?.templateKey == "movie" {
+            subTypeKey = ScreenWorkType.resolved(from: subTypeKey).rawValue
+            screenWorkSeasonNumber = eventFields.screenWorkSeasonNumber
+        }
         performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
         socialLinksText = eventFields.socialLinks.joined(separator: "\n")
         eventSubtitle = eventFields.eventSubtitle
@@ -1538,6 +1604,10 @@ struct AddExperienceDraft {
                 key: subTypeKey,
                 input: performanceTypeCustomName
             ),
+            screenWorkSeasonNumber: category?.templateKey == "movie"
+                && ScreenWorkType.resolved(from: subTypeKey).supportsSeason
+                ? screenWorkSeasonNumber
+                : 0,
             eyecatchAspectRatioKey: category?.templateKey == "book"
                 ? (eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.hardcoverBook.key : eyecatchAspectRatioKey)
                 : ""
@@ -1612,6 +1682,8 @@ func applyTargetChangesFromExperienceEdit(
             plan.category = destination
             plan.updatedAt = now
         }
+    } else if event.category?.templateKey == "movie" {
+        event.subTypeKey = ScreenWorkType.resolved(from: draft.subTypeKey).rawValue
     }
     event.officialURL = draft.trimmedOfficialURL
     var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
@@ -1620,8 +1692,21 @@ func applyTargetChangesFromExperienceEdit(
     if event.category?.templateKey == "book" {
         eventFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
     }
+    if event.category?.templateKey == "movie" {
+        eventFields.screenWorkSeasonNumber = ScreenWorkType.resolved(from: draft.subTypeKey).supportsSeason
+            ? draft.screenWorkSeasonNumber
+            : 0
+    }
     event.unitFieldsRaw = eventFields.encodedRawValue
     event.updatedAt = now
+}
+
+private func screenWorkDatePrecision(
+    for subTypeKey: String,
+    category: RecordCategory?
+) -> ExperienceDatePrecision {
+    guard category?.templateKey == "movie" else { return .day }
+    return ScreenWorkType.resolved(from: subTypeKey) == .movie ? .day : .year
 }
 
 private func outingCategory(

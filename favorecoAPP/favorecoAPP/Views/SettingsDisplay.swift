@@ -9,9 +9,9 @@ struct DisplaySettingsView: View {
     @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
     @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
-    @AppStorage(AppStorageKeys.baseTheme) private var baseThemeRaw = FavorecoBaseTheme.skyBlue.rawValue
+    @AppStorage(AppStorageKeys.baseTheme) private var baseThemeRaw = FavorecoBaseTheme.favoNeon.rawValue
     @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
-    @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#147C88"
+    @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#256F9C"
 
     var body: some View {
         Form {
@@ -46,9 +46,21 @@ struct DisplaySettingsView: View {
                         Label {
                             Text(theme.name)
                         } icon: {
-                            Circle()
-                                .fill(Color(hex: theme.accentHex))
-                                .frame(width: 14, height: 14)
+                            HStack(spacing: -2) {
+                                Circle()
+                                    .fill(Color.adaptive(
+                                        lightHex: theme.accentHex,
+                                        darkHex: theme.darkAccentHex
+                                    ))
+                                    .frame(width: 10, height: 10)
+                                Circle()
+                                    .fill(Color.adaptive(
+                                        lightHex: theme.emotionHex,
+                                        darkHex: theme.darkEmotionHex
+                                    ))
+                                    .frame(width: 10, height: 10)
+                            }
+                            .accessibilityHidden(true)
                         }
                         .tag(theme.rawValue)
                     }
@@ -82,7 +94,7 @@ struct DisplaySettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text("ベーステーマはHomeの背景・操作色・文字の墨色へ反映します。標準ではジャンル固有色を維持し、全体統一では操作色を選んだ色へ揃えます。")
+                Text(themeDescription)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -100,6 +112,27 @@ struct DisplaySettingsView: View {
     private var effectiveThemeMode: FavorecoThemeMode {
         guard purchaseManager.currentPlan.includesLocalFullFeatures else { return .categoryAccent }
         return FavorecoThemeMode(rawValue: themeModeRaw) ?? .categoryAccent
+    }
+
+    private var selectedBaseTheme: FavorecoBaseTheme {
+        FavorecoBaseTheme(rawValue: baseThemeRaw) ?? .favoNeon
+    }
+
+    private var themeDescription: String {
+        let paletteDescription: String
+        switch selectedBaseTheme {
+        case .favoNeon:
+            paletteDescription = "エアリーティールはライトで青寄りのクリアブルー、ダークで明るいアクアを操作色にし、FAVOの感情表現をピンクで示します。"
+        case .earthGlass:
+            paletteDescription = "アースグラスはセージを操作、クレイをFAVOの感情表現に使います。"
+        case .limeEditorial:
+            paletteDescription = "ライムエディトリアルはライムを操作、コバルトをFAVOの感情表現に使います。"
+        case .skyBlue:
+            paletteDescription = "スカイブルーは澄んだ青を操作色に使います。"
+        case .redMagenta:
+            paletteDescription = "赤マゼンタは落ち着いた赤を操作色に使います。"
+        }
+        return "ベーステーマはHomeの背景・操作色・文字の墨色へ反映します。\(paletteDescription)標準ではジャンル固有色を維持し、全体統一では操作色を選んだ色へ揃えます。"
     }
 
     private var effectiveFontStyle: AppFontStyle {

@@ -122,6 +122,10 @@ enum SampleDataSeeder {
                 let aspectRatioKey = sampleAspectRatioKey(for: category)
                 let unitFields = VisitUnitFields(
                     ocrText: sampleOCRText(for: category, title: definition.title),
+                    screenWorkSeasonNumber: sampleScreenWorkSeasonNumber(
+                        for: category,
+                        index: sampleIndex
+                    ),
                     eyecatchAspectRatioKey: aspectRatioKey,
                     goshuinBookSizeKey: category.templateKey == "goshuin" ? GoshuinBookSize.standard.key : "",
                     advancedEntries: sampleAdvancedEntries(for: category, index: sampleIndex)
@@ -836,8 +840,22 @@ enum SampleDataSeeder {
             return [OutingFacilityType.aquarium, .zoo, .botanicalGarden][index % 3].rawValue
         case "outing_facility":
             return OutingFacilityType.facilityOther.rawValue
+        case "movie":
+            return [ScreenWorkType.movie, .drama, .anime][index % 3].rawValue
         default:
             return ""
+        }
+    }
+
+    private static func sampleScreenWorkSeasonNumber(
+        for category: RecordCategory,
+        index: Int
+    ) -> Int {
+        guard category.templateKey == "movie" else { return 0 }
+        switch ScreenWorkType.resolved(from: sampleSubTypeKey(for: category, index: index)) {
+        case .movie: return 0
+        case .drama: return 1
+        case .anime: return 2
         }
     }
 

@@ -7,6 +7,7 @@ struct HomeAttentionSection: View {
     let items: [HomeAttentionItem]
     let onShowAll: () -> Void
     let onSelectTicket: (TicketAttempt) -> Void
+    @State private var showsAllItems = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -46,7 +47,10 @@ struct HomeAttentionSection: View {
                 .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
                 .background(.background, in: Capsule())
             } else {
-                ForEach(items.prefix(3)) { item in
+                ForEach(items.prefix(HomeAttentionDisplay.visibleCount(
+                    total: items.count,
+                    isExpanded: showsAllItems
+                ))) { item in
                     if let attempt = item.attempt {
                         Button {
                             onSelectTicket(attempt)
@@ -65,7 +69,54 @@ struct HomeAttentionSection: View {
                         HomeTicketScheduleCard(item: item)
                     }
                 }
+
+                if items.count > HomeAttentionDisplay.collapsedLimit {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            showsAllItems.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(
+                                showsAllItems
+                                    ? "閉じる"
+                                    : "さらに見る（残り\(HomeAttentionDisplay.hiddenCount(total: items.count))件）"
+                            )
+                            FavorecoIcon(
+                                systemName: showsAllItems ? "chevron.up" : "chevron.down",
+                                size: 11
+                            )
+                        }
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(themePalette.globalTint)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        showsAllItems
+                            ? "Ticket Scheduleを3件表示へ戻す"
+                            : "残り\(HomeAttentionDisplay.hiddenCount(total: items.count))件を表示"
+                    )
+                }
             }
         }
+        .onChange(of: items.count) { _, itemCount in
+            if itemCount <= HomeAttentionDisplay.collapsedLimit {
+                showsAllItems = false
+            }
+        }
+    }
+}
+
+enum HomeAttentionDisplay {
+    static let collapsedLimit = 3
+
+    static func visibleCount(total: Int, isExpanded: Bool) -> Int {
+        max(0, isExpanded ? total : min(total, collapsedLimit))
+    }
+
+    static func hiddenCount(total: Int) -> Int {
+        max(0, total - collapsedLimit)
     }
 }

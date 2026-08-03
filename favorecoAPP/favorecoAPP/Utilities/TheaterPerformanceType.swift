@@ -195,6 +195,9 @@ struct ExplicitFormTextField: View {
     var reservesLineSpace = false
     var labelLineLimit = 1
     var labelNote = ""
+    var focusesFromWholeRow = false
+
+    @FocusState private var isFocused: Bool
 
     private var isOptional: Bool {
         title.contains("任意") || prompt.contains("任意")
@@ -248,6 +251,11 @@ struct ExplicitFormTextField: View {
         .padding(.top, ExplicitFormMetrics.rowTopPadding)
         .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
         .frame(minHeight: minimumRowHeight, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard focusesFromWholeRow else { return }
+            isFocused = true
+        }
         .listRowInsets(
             EdgeInsets(
                 top: 0,
@@ -296,6 +304,7 @@ struct ExplicitFormTextField: View {
         )
         .font(FavorecoTypography.jpSans(effectiveInputFontSize, weight: .regular, relativeTo: .body))
         .frame(minHeight: 27, alignment: .topLeading)
+        .focused($isFocused)
     }
 
     private func removingOptionalNotation(from value: String) -> String {
@@ -394,18 +403,212 @@ struct ExplicitFormFieldTitle: View {
 
 struct TicketTagInputField: View {
     @Binding var text: String
+    @State private var committedTags: [String]
+    @State private var pendingTag = ""
+    @FocusState private var isInputFocused: Bool
+
+    init(text: Binding<String>) {
+        _text = text
+        _committedTags = State(
+            initialValue: TicketAttemptUnitFields.normalizedTagNames(from: text.wrappedValue)
+        )
+    }
+
+    private var tags: [String] {
+        committedTags
+    }
+
+    private var canAddAnotherTag: Bool {
+        tags.count < 12
+    }
 
     var body: some View {
-        ExplicitFormTextField(
-            title: "タグ（任意）",
-            prompt: "1行に1件入力",
-            text: $text,
-            axis: .vertical,
-            minimumLines: 3,
-            maximumLines: 6,
-            labelStyle: .horizontal,
-            labelNote: "改行すると次のタグを追加します"
-        )
+        VStack(alignment: .leading, spacing: 6) {
+            ExplicitFormFieldTitle(
+                title: "タグ",
+                isOptional: true,
+                isRequired: false,
+                note: "改行すると追加します"
+            )
+
+            if !tags.isEmpty {
+                TicketTagCapsuleLayout(horizontalSpacing: 6, verticalSpacing: 6) {
+                    ForEach(tags, id: \.self) { tag in
+                        tagCapsule(tag)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            TextField(
+                "タグ",
+                text: $pendingTag,
+                prompt: Text(canAddAnotherTag ? "タグを入力" : "最大12件まで")
+                    .foregroundStyle(Color.secondary.opacity(0.7))
+            )
+            .font(
+                FavorecoTypography.jpSans(
+                    ExplicitFormMetrics.inputFontSize,
+                    weight: .regular,
+                    relativeTo: .body
+                )
+            )
+            .focused($isInputFocused)
+            .submitLabel(.return)
+            .disabled(!canAddAnotherTag)
+            .onSubmit(commitPendingTag)
+            .onChange(of: pendingTag) { _, newValue in
+                if newValue.contains("\n") || newValue.contains("\r") {
+                    commitPastedTagLines(newValue)
+                } else {
+                    synchronizeBinding()
+                }
+            }
+            .frame(minHeight: 27, alignment: .leading)
+        }
+        .padding(.top, ExplicitFormMetrics.rowTopPadding)
+        .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
+        .frame(minHeight: ExplicitFormMetrics.rowMinimumHeight, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard canAddAnotherTag else { return }
+            isInputFocused = true
+        }
+        .onChange(of: text) { _, newValue in
+            guard newValue != currentBindingText else { return }
+            committedTags = TicketAttemptUnitFields.normalizedTagNames(from: newValue)
+            pendingTag = ""
+        }
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+    }
+
+    private func tagCapsule(_ tag: String) -> some View {
+        HStack(spacing: 3) {
+            Text(tag)
+                .font(FavorecoTypography.jpSans(13, weight: .medium, relativeTo: .subheadline))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 240, alignment: .leading)
+
+            Button {
+                remove(tag)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("「\(tag)」を削除")
+        }
+        .foregroundStyle(Color.accentColor)
+        .padding(.leading, 10)
+        .padding(.trailing, 4)
+        .padding(.vertical, 4)
+        .background(Color.accentColor.opacity(0.10), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(Color.accentColor.opacity(0.34), lineWidth: 0.8)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func commitPendingTag() {
+        let value = pendingTag
+        pendingTag = ""
+        appendTags(from: value)
+    }
+
+    private func commitPastedTagLines(_ value: String) {
+        pendingTag = ""
+        appendTags(from: value)
+    }
+
+    private func appendTags(from value: String) {
+        guard canAddAnotherTag else { return }
+        let combined = ([committedTags.joined(separator: "\n"), value])
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        committedTags = TicketAttemptUnitFields.normalizedTagNames(from: combined)
+        synchronizeBinding()
+    }
+
+    private func remove(_ tag: String) {
+        committedTags.removeAll { $0 == tag }
+        synchronizeBinding()
+    }
+
+    private func synchronizeBinding() {
+        text = currentBindingText
+    }
+
+    private var currentBindingText: String {
+        ([committedTags.joined(separator: "\n"), pendingTag])
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+}
+
+private struct TicketTagCapsuleLayout: Layout {
+    let horizontalSpacing: CGFloat
+    let verticalSpacing: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let width = proposal.width ?? .greatestFiniteMagnitude
+        let result = layout(subviews: subviews, width: width)
+        return CGSize(width: proposal.width ?? result.width, height: result.height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + verticalSpacing
+                rowHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: x, y: y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(size)
+            )
+            x += size.width + horizontalSpacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+
+    private func layout(subviews: Subviews, width: CGFloat) -> (width: CGFloat, height: CGFloat) {
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var usedWidth: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + verticalSpacing
+                rowHeight = 0
+            }
+            usedWidth = max(usedWidth, x + size.width)
+            x += size.width + horizontalSpacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return (usedWidth, subviews.isEmpty ? 0 : y + rowHeight)
     }
 }
 

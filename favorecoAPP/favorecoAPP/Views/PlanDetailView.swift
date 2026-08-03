@@ -258,26 +258,26 @@ struct PlanDetailView: View {
         Button {
             isShowingEditPlan = true
         } label: {
-            FavorecoIconLabel("予定を編集", systemImage: "pencil", iconSize: 17)
+            Label("予定を編集", systemImage: "pencil")
         }
 
         Button {
             isShowingAddAttempt = true
         } label: {
-            FavorecoIconLabel("チケットを追加", systemImage: "ticket", iconSize: 17)
+            Label("チケットを追加", systemImage: "ticket")
         }
 
         Button {
             calendarDraft = makeCalendarDraft()
         } label: {
-            FavorecoIconLabel("カレンダーに追加", systemImage: "calendar.badge.plus", iconSize: 17)
+            Label("カレンダーに追加", systemImage: "calendar.badge.plus")
         }
 
         if let destination = preferredOpenDestination {
             Button {
                 openURL(destination.url)
             } label: {
-                FavorecoIconLabel(destination.label, systemImage: "safari", iconSize: 17)
+                Label(destination.label, systemImage: "safari")
             }
         }
 
@@ -288,17 +288,16 @@ struct PlanDetailView: View {
                 prepareRecordEntry()
             }
         } label: {
-            FavorecoIconLabel(
+            Label(
                 plan.visit == nil ? "参加記録を入力" : "参加記録を開く",
-                systemImage: "sparkles",
-                iconSize: 17
+                systemImage: "sparkles"
             )
         }
 
         Button(role: .destructive) {
             isShowingDeleteConfirmation = true
         } label: {
-            FavorecoIconLabel("予定を削除", systemImage: "trash", iconSize: 17)
+            Label("予定を削除", systemImage: "trash")
         }
     }
 
@@ -941,7 +940,7 @@ struct PlanDetailView: View {
                         Button {
                             editingAttempt = attempt
                         } label: {
-                            FavorecoIconLabel("チケットを編集", systemImage: "pencil", iconSize: 17)
+                            Label("チケットを編集", systemImage: "pencil")
                         }
 
                         let transitions = TicketStatusTransitionDefinition.transitions(for: attempt)
@@ -951,7 +950,7 @@ struct PlanDetailView: View {
                                 Button {
                                     updateAttemptStatus(attempt, to: transition.targetStatusKey)
                                 } label: {
-                                    FavorecoIconLabel(transition.title, systemImage: transition.systemImage)
+                                    Label(transition.title, systemImage: transition.systemImage)
                                 }
                             }
                         }

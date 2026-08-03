@@ -12,8 +12,9 @@ struct TicketOverviewView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var attempts: [TicketAttempt]
-    @State private var selectedFilter: TicketOverviewFilter = .needsAction
+    @State private var selectedFilter: TicketOverviewFilter
     @State private var selectedCategoryID: UUID?
+    @State private var groupingMode: TicketOverviewGroupingMode = .performance
     @State private var statusUpdateError = ""
     @State private var searchText = ""
     @State private var isShowingAddTicketPlan = false
@@ -22,10 +23,16 @@ struct TicketOverviewView: View {
     @State private var attemptPendingArchive: TicketAttempt?
     @State private var statusActionAttempt: TicketAttempt?
     @State private var schedulePlan: Plan?
+    @State private var pendingRevealAttemptID: UUID?
+    @State private var highlightedAttemptID: UUID?
     let showsCloseButton: Bool
 
-    init(showsCloseButton: Bool = false) {
+    init(
+        showsCloseButton: Bool = false,
+        initialFilter: TicketOverviewFilter = .needsAction
+    ) {
         self.showsCloseButton = showsCloseButton
+        _selectedFilter = State(initialValue: initialFilter)
     }
 
     private var activeAttempts: [TicketAttempt] {
@@ -75,36 +82,22 @@ struct TicketOverviewView: View {
     }
 
     private var displayGroups: [TicketOverviewDisplayGroup] {
-        switch selectedFilter {
-        case .all:
+        switch groupingMode {
+        case .performance:
             return applicationDisplayGroups
-        case .needsAction:
-            return groupedAttempts { attempt in
-                needsActionGroup(for: attempt)
-            }
-        case .planning:
-            return groupedAttempts { attempt in
-                progressGroup(for: attempt)
-            }
-        case .acquired:
-            return groupedAttempts { attempt in
-                attempt.plan?.hasConfirmedSchedule == true
-                    ? ("schedule-confirmed", "参加日確定")
-                    : ("schedule-undated", "参加日未定")
-            }
-        case .completed:
-            return groupedAttempts { attempt in
-                let title = TicketStatusDefinition.name(for: attempt.statusKey)
-                return ("completed-\(attempt.statusKey)", title)
-            }
-        case .archived:
+        case .deadline:
             return [
                 TicketOverviewDisplayGroup(
-                    id: "archived",
-                    title: "非表示の申込",
+                    id: "deadline-order",
+                    title: "期限が近い順",
                     attempts: filteredAttempts
                 ),
             ]
+        case .progress:
+            return groupedAttempts { attempt in
+                progressGroup(for: attempt)
+            }
+            .sorted { progressGroupRank($0.id) < progressGroupRank($1.id) }
         }
     }
 
@@ -182,42 +175,78 @@ struct TicketOverviewView: View {
             return ("other-action", "その他の対応")
         }
 
-        if action.title.contains("当落") {
+        let deadlineLabel = TicketProgressPresentation.deadlineLabel(
+            forActionTitle: action.title,
+            attempt: attempt
+        )
+        if deadlineLabel == "抽選当落" {
             return ("result-action", "当落確認")
         }
-        if action.title.contains("入金") || action.title.contains("支払") {
+        if deadlineLabel == "チケ支払" {
             return ("payment-action", "入金・支払")
         }
-        if action.title.contains("受取") || action.title.contains("取得") {
-            return ("acquired-action", "チケット取得")
+        if deadlineLabel == "チケ受取" || deadlineLabel == "チケ取得" {
+            return ("acquired-action", "チケット受取")
         }
-        if action.title.contains("発売") {
+        if deadlineLabel == "チケ発売" {
             return ("sale-action", "発売・購入")
         }
-        if action.title.contains("申込") {
+        if deadlineLabel == "抽選申込" {
             return ("application-action", "抽選申込")
         }
         return ("other-action", "その他の対応")
     }
 
     private func progressGroup(for attempt: TicketAttempt) -> (key: String, title: String) {
+        switch attempt.statusKey {
+        case "lost":
+            return ("progress-lost", "落選")
+        case "skipped":
+            return ("progress-skipped", "見送り")
+        case "attended":
+            return ("progress-attended", "参加済み")
+        case "issued":
+            return attempt.plan?.hasConfirmedSchedule == false
+                ? ("progress-issued-undated", "受取済み・参加日未定")
+                : ("progress-issued", "受取済み")
+        default:
+            break
+        }
         guard let plan = attempt.plan else {
             return ("progress-other", "その他の進捗")
         }
         let stages = TicketProgressTimeline.stages(for: attempt, plan: plan)
         let currentIndex = TicketProgressTimeline.currentIndex(for: attempt, stages: stages)
         guard stages.indices.contains(currentIndex) else {
-            return ("progress-complete", "取得完了")
+            return ("progress-complete", "受取完了")
         }
         switch stages[currentIndex].kind {
         case .entry:
-            return ("progress-entry", stages[currentIndex].title == "発売" ? "発売・購入" : "抽選申込")
+            return stages[currentIndex].title == "発売"
+                ? ("progress-sale", "発売・購入")
+                : ("progress-application", "抽選申込")
         case .result:
             return ("progress-result", "当落待ち")
         case .payment:
             return ("progress-payment", "入金・支払")
         case .acquired:
-            return ("progress-acquired", "チケット取得")
+            return ("progress-acquired", "チケット受取")
+        }
+    }
+
+    private func progressGroupRank(_ id: String) -> Int {
+        switch id {
+        case "progress-application": 0
+        case "progress-sale": 1
+        case "progress-result": 2
+        case "progress-payment": 3
+        case "progress-acquired": 4
+        case "progress-complete", "progress-issued-undated": 5
+        case "progress-issued": 6
+        case "progress-attended": 7
+        case "progress-lost": 8
+        case "progress-skipped": 9
+        default: 10
         }
     }
 
@@ -249,7 +278,8 @@ struct TicketOverviewView: View {
     }
 
     var body: some View {
-        List {
+        ScrollViewReader { scrollProxy in
+            List {
             Section {
                 TicketOverviewSearchField(text: $searchText)
 
@@ -278,6 +308,14 @@ struct TicketOverviewView: View {
                             }
                         }
                     }
+                }
+
+                HStack {
+                    Text("表示")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(TicketOverviewStyle.secondaryText)
+                    Spacer()
+                    groupingMenu
                 }
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -311,114 +349,117 @@ struct TicketOverviewView: View {
                 ForEach(displayGroups) { group in
                     Section {
                         ForEach(group.attempts) { attempt in
-                            ticketCard(for: attempt)
-                                .listRowInsets(
-                                    EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16)
-                                )
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
+                            ticketCardListRow(for: attempt)
                         }
                     } header: {
                         overviewSectionHeader(
                             title: group.headerTitle(
                                 fallback: selectedFilter.title,
-                                showsIndividualLabel: selectedFilter == .all
+                                showsIndividualLabel: groupingMode == .performance
                                     && applicationDisplayGroups.count > 1
                             ),
-                            count: group.attempts.count
+                            count: group.attempts.count,
+                            tint: groupHeaderTint(for: group)
                         )
                     }
                 }
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(TicketOverviewStyle.canvas)
-        .tint(TicketOverviewStyle.accent)
-        .environment(\.colorScheme, .light)
-        .preferredColorScheme(.light)
-        .navigationTitle("チケット管理")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(TicketOverviewStyle.canvas, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.light, for: .navigationBar)
-        .onChange(of: genreOptions.map(\.id)) { _, categoryIDs in
-            if let selectedCategoryID, !categoryIDs.contains(selectedCategoryID) {
-                self.selectedCategoryID = nil
-            }
-        }
-        .toolbar {
-            if showsCloseButton {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
+            .scrollContentBackground(.hidden)
+            .background(TicketOverviewStyle.canvas)
+            .tint(TicketOverviewStyle.accent)
+            .environment(\.colorScheme, .light)
+            .preferredColorScheme(.light)
+            .navigationTitle("チケット管理")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(TicketOverviewStyle.canvas, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .onChange(of: genreOptions.map(\.id)) { _, categoryIDs in
+                if let selectedCategoryID, !categoryIDs.contains(selectedCategoryID) {
+                    self.selectedCategoryID = nil
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isShowingAddTicketPlan = true
-                } label: {
-                    FavorecoIcon(systemName: "plus", size: 17)
-                }
-                .accessibilityLabel("申込・発売を登録")
-            }
-        }
-        .sheet(isPresented: $isShowingAddTicketPlan) {
-            AddTicketPlanView()
-        }
-        .sheet(item: $editingAttempt) { attempt in
-            if let plan = attempt.plan {
-                EditTicketAttemptView(plan: plan, attempt: attempt)
-            }
-        }
-        .sheet(item: $quickActionAttempt) { attempt in
-            TicketQuickActionSheet(attempt: attempt)
-        }
-        .sheet(item: $schedulePlan) { plan in
-            TicketAttendanceScheduleSheet(plan: plan)
-        }
-        .confirmationDialog(
-            "チケットの状態を更新",
-            isPresented: Binding(
-                get: { statusActionAttempt != nil },
-                set: { if !$0 { statusActionAttempt = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            if let attempt = statusActionAttempt {
-                ForEach(TicketStatusTransitionDefinition.transitions(for: attempt)) { transition in
-                    Button(transition.title) {
-                        updateStatus(attempt, to: transition.targetStatusKey)
-                        statusActionAttempt = nil
+            .toolbar {
+                if showsCloseButton {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("閉じる") { dismiss() }
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isShowingAddTicketPlan = true
+                    } label: {
+                        FavorecoIcon(systemName: "plus", size: 17)
+                    }
+                    .accessibilityLabel("申込・発売を登録")
+                }
             }
-            Button("キャンセル", role: .cancel) {
-                statusActionAttempt = nil
+            .sheet(isPresented: $isShowingAddTicketPlan) {
+                AddTicketPlanView()
             }
-        }
-        .confirmationDialog(
-            "この申込を非表示にしますか？",
-            isPresented: Binding(
-                get: { attemptPendingArchive != nil },
-                set: { if !$0 { attemptPendingArchive = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("申込を非表示", role: .destructive) {
-                archivePendingAttempt()
+            .sheet(item: $editingAttempt) { attempt in
+                if let plan = attempt.plan {
+                    EditTicketAttemptView(plan: plan, attempt: attempt)
+                }
             }
-            Button("キャンセル", role: .cancel) {
-                attemptPendingArchive = nil
+            .sheet(item: $quickActionAttempt) { attempt in
+                TicketQuickActionSheet(attempt: attempt) { updatedAttempt in
+                    prepareToReveal(updatedAttempt)
+                }
             }
-        } message: {
-            Text("予定本体と他の申込は残り、この申込の予約済み通知だけを解除します。")
-        }
-        .alert("状態を更新できませんでした", isPresented: Binding(
-            get: { !statusUpdateError.isEmpty },
-            set: { if !$0 { statusUpdateError = "" } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(statusUpdateError)
+            .sheet(item: $schedulePlan) { plan in
+                TicketAttendanceScheduleSheet(plan: plan)
+            }
+            .confirmationDialog(
+                "チケットの状態を更新",
+                isPresented: Binding(
+                    get: { statusActionAttempt != nil },
+                    set: { if !$0 { statusActionAttempt = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                if let attempt = statusActionAttempt {
+                    ForEach(TicketStatusTransitionDefinition.transitions(for: attempt)) { transition in
+                        Button(transition.title) {
+                            updateStatus(attempt, to: transition.targetStatusKey)
+                            statusActionAttempt = nil
+                        }
+                    }
+                }
+                Button("キャンセル", role: .cancel) {
+                    statusActionAttempt = nil
+                }
+            }
+            .confirmationDialog(
+                "この申込を非表示にしますか？",
+                isPresented: Binding(
+                    get: { attemptPendingArchive != nil },
+                    set: { if !$0 { attemptPendingArchive = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("申込を非表示", role: .destructive) {
+                    archivePendingAttempt()
+                }
+                Button("キャンセル", role: .cancel) {
+                    attemptPendingArchive = nil
+                }
+            } message: {
+                Text("予定本体と他の申込は残り、この申込の予約済み通知だけを解除します。")
+            }
+            .alert("状態を更新できませんでした", isPresented: Binding(
+                get: { !statusUpdateError.isEmpty },
+                set: { if !$0 { statusUpdateError = "" } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(statusUpdateError)
+            }
+            .onChange(of: quickActionAttempt?.id) { previousID, currentID in
+                guard previousID != nil, currentID == nil else { return }
+                revealPendingAttempt(using: scrollProxy)
+            }
         }
     }
 
@@ -426,18 +467,93 @@ struct TicketOverviewView: View {
         attempt.plan?.category ?? attempt.plan?.event?.category
     }
 
-    private func overviewSectionHeader(title: String, count: Int) -> some View {
+    private func overviewSectionHeader(
+        title: String,
+        count: Int,
+        tint: Color = TicketOverviewStyle.text
+    ) -> some View {
         HStack {
             Text(title)
                 .font(FavorecoTypography.jpSans(16, weight: .semibold, relativeTo: .headline))
-                .foregroundStyle(TicketOverviewStyle.text)
+                .foregroundStyle(tint)
                 .textCase(nil)
             Spacer()
             Text("\(count)件")
                 .font(FavorecoTypography.caption)
-                .foregroundStyle(TicketOverviewStyle.secondaryText)
+                .foregroundStyle(tint.opacity(0.86))
                 .textCase(nil)
         }
+    }
+
+    private var groupingMenu: some View {
+        Menu {
+            ForEach(TicketOverviewGroupingMode.allCases) { mode in
+                Button {
+                    groupingMode = mode
+                } label: {
+                    Label(mode.title, systemImage: groupingMode == mode ? "checkmark" : mode.systemImage)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                FavorecoIcon(systemName: groupingMode.systemImage, size: 14)
+                Text(groupingMode.title)
+                FavorecoIcon(systemName: "chevron.down", size: 10)
+            }
+            .font(FavorecoTypography.captionStrong)
+            .foregroundStyle(TicketOverviewStyle.accent)
+            .padding(.horizontal, 11)
+            .frame(height: 32)
+            .background(TicketOverviewStyle.accent.opacity(0.08), in: Capsule())
+            .overlay {
+                Capsule().stroke(TicketOverviewStyle.accent.opacity(0.24), lineWidth: 0.8)
+            }
+        }
+        .accessibilityLabel("表示方法")
+        .accessibilityValue(groupingMode.title)
+    }
+
+    private func groupHeaderTint(for group: TicketOverviewDisplayGroup) -> Color {
+        switch group.id {
+        case "input-required", "schedule-undated":
+            return TicketProgressColorPalette.warning
+        case "application-action", "progress-application":
+            if group.title?.contains("発売") == true {
+                return TicketProgressColorPalette.color(for: .sale)
+            }
+            return TicketProgressColorPalette.color(for: .application)
+        case "sale-action", "progress-sale":
+            return TicketProgressColorPalette.color(for: .sale)
+        case "result-action", "progress-result":
+            return TicketProgressColorPalette.color(for: .result)
+        case "payment-action", "progress-payment":
+            return TicketProgressColorPalette.color(for: .payment)
+        case "acquired-action", "progress-acquired", "progress-complete",
+             "progress-issued-undated", "progress-issued", "progress-attended", "schedule-confirmed":
+            return TicketProgressColorPalette.color(for: .acquired)
+        case "progress-lost", "progress-skipped":
+            return TicketOverviewStyle.closeAction
+        default:
+            return selectedFilter == .acquired
+                ? TicketProgressColorPalette.color(for: .acquired)
+                : TicketOverviewStyle.text
+        }
+    }
+
+    private func ticketCardListRow(for attempt: TicketAttempt) -> some View {
+        ticketCard(for: attempt)
+            .id(attempt.id)
+            .overlay {
+                if highlightedAttemptID == attempt.id {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(TicketOverviewStyle.accent, lineWidth: 2)
+                        .padding(-2)
+                        .allowsHitTesting(false)
+                }
+            }
+            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
     }
 
     @ViewBuilder
@@ -455,15 +571,16 @@ struct TicketOverviewView: View {
                     Button {
                         restore(attempt)
                     } label: {
-                        Label("再表示", systemImage: "arrow.uturn.left.circle")
+                        Label("再表示", systemImage: "arrow.uturn.left")
+                            .foregroundStyle(Color.white)
                     }
-                    .tint(.green)
+                    .tint(TicketOverviewStyle.advanceAction)
                 }
         } else if attempt.plan != nil {
             Button {
                 quickActionAttempt = attempt
             } label: {
-                TicketOverviewRow(attempt: attempt, showsSwipeHints: true)
+                TicketOverviewRow(attempt: attempt)
             }
             .buttonStyle(.plain)
             .contextMenu {
@@ -473,9 +590,10 @@ struct TicketOverviewView: View {
                 Button {
                     statusActionAttempt = attempt
                 } label: {
-                    Label("進める", systemImage: "arrow.right.circle")
+                    Label("進める", systemImage: "arrow.right")
+                        .foregroundStyle(Color.white)
                 }
-                .tint(TicketOverviewStyle.advancePeek)
+                .tint(TicketOverviewStyle.advanceAction)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
@@ -483,15 +601,18 @@ struct TicketOverviewView: View {
                 } label: {
                     Label(
                         attempt.statusKey == "waitingResult" ? "落選" : "見送り",
-                        systemImage: "xmark.circle"
+                        systemImage: "xmark"
                     )
+                    .foregroundStyle(Color.white)
                 }
+                .tint(TicketOverviewStyle.closeAction)
                 Button {
                     editingAttempt = attempt
                 } label: {
-                    FavorecoIconLabel("編集", systemImage: "pencil", iconSize: 17)
+                    Label("編集", systemImage: "pencil")
+                        .foregroundStyle(Color.white)
                 }
-                .tint(TicketOverviewStyle.accent)
+                .tint(TicketOverviewStyle.editAction)
             }
             .accessibilityHint(
                 "右へスワイプすると状態を進め、左へスワイプすると編集または見送りにできます"
@@ -624,6 +745,36 @@ struct TicketOverviewView: View {
         }
     }
 
+    private func prepareToReveal(_ attempt: TicketAttempt) {
+        if !selectedFilter.includes(attempt) {
+            selectedFilter = .all
+        }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty, !matchesSearch(attempt, query: query) {
+            searchText = ""
+        }
+        pendingRevealAttemptID = attempt.id
+    }
+
+    private func revealPendingAttempt(using proxy: ScrollViewProxy) {
+        guard let attemptID = pendingRevealAttemptID else { return }
+        pendingRevealAttemptID = nil
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            withAnimation(.easeInOut(duration: 0.28)) {
+                proxy.scrollTo(attemptID, anchor: .center)
+            }
+            highlightedAttemptID = attemptID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                if highlightedAttemptID == attemptID {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        highlightedAttemptID = nil
+                    }
+                }
+            }
+        }
+    }
+
     private func close(_ attempt: TicketAttempt) {
         updateStatus(
             attempt,
@@ -664,13 +815,39 @@ private enum TicketOverviewStyle {
     static let accent = Color(hex: "#B04464")
     static let text = Color(hex: "#302A2D")
     static let secondaryText = Color(hex: "#746B70")
-    static let advancePeek = Color(hex: "#4AAE70")
-    static let editPeek = Color(hex: "#D95561")
+    static let advanceAction = Color(hex: "#2F9FB0")
+    static let editAction = Color(hex: "#578BC2")
+    static let closeAction = Color(hex: "#D65C7A")
 }
 
-private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
+private enum TicketOverviewGroupingMode: String, CaseIterable, Identifiable {
+    case performance
+    case deadline
+    case progress
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .performance: "公演ごと"
+        case .deadline: "期限が近い順"
+        case .progress: "進捗ごと"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .performance: "rectangle.3.group"
+        case .deadline: "calendar.badge.clock"
+        case .progress: "chart.bar.xaxis"
+        }
+    }
+}
+
+enum TicketOverviewFilter: String, CaseIterable, Identifiable {
     case all
     case needsAction
+    case undated
     case planning
     case acquired
     case completed
@@ -682,8 +859,9 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: "すべて"
         case .needsAction: "要対応"
+        case .undated: "参加日未定"
         case .planning: "進行中"
-        case .acquired: "取得済み"
+        case .acquired: "受取済み"
         case .completed: "終了"
         case .archived: "非表示"
         }
@@ -693,6 +871,7 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: "ticket"
         case .needsAction: "bell.badge"
+        case .undated: "calendar.badge.exclamationmark"
         case .planning: "hourglass"
         case .acquired: "ticket.fill"
         case .completed: "checkmark.circle"
@@ -704,8 +883,9 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: "チケット情報はありません"
         case .needsAction: "対応が必要なチケットはありません"
+        case .undated: "参加日未定のチケットはありません"
         case .planning: "進行中のチケットはありません"
-        case .acquired: "取得済みのチケットはありません"
+        case .acquired: "受取済みのチケットはありません"
         case .completed: "終了したチケットはありません"
         case .archived: "非表示のチケットはありません"
         }
@@ -715,6 +895,8 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         switch self {
         case .needsAction:
             "申込締切、当落発表、入金締切、チケット受取開始が近づくとここに表示されます。"
+        case .undated:
+            "参加日が決まったチケットは Coming Up に表示されます。"
         case .archived:
             "個別に非表示にした申込を、ここから再表示できます。"
         default:
@@ -729,8 +911,15 @@ private enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         case .needsAction:
             return TicketNextActionDefinition.nextAction(for: attempt) != nil
                 || TicketInputIssueDefinition.issue(for: attempt) != nil
+                || [
+                    "beforeApply", "onSaleSoon", "waitingResult",
+                    "won", "waitingPayment", "waitingIssue",
+                ].contains(attempt.statusKey)
                 || (["waitingIssue", "issued"].contains(attempt.statusKey)
                     && attempt.plan?.hasConfirmedSchedule == false)
+        case .undated:
+            return attempt.plan?.hasConfirmedSchedule == false
+                && !["interested", "lost", "attended", "skipped"].contains(attempt.statusKey)
         case .planning:
             return [
                 "interested", "beforeApply", "onSaleSoon",
@@ -781,7 +970,7 @@ private struct TicketOverviewSearchField: View {
             FavorecoIcon(systemName: "magnifyingglass", size: 17)
                 .foregroundStyle(.secondary)
 
-            TextField("公演名・申込まとめ・プレイガイドを検索", text: $text)
+            TextField("公演名・申込先・プレイガイドを検索", text: $text)
                 .font(FavorecoTypography.body)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -807,9 +996,72 @@ private struct TicketOverviewSearchField: View {
     }
 }
 
+private struct TicketOverviewCardShape: Shape {
+    private let cornerCut: CGFloat = 9
+    private let notchDepth: CGFloat = 8
+    private let notchHalfHeight: CGFloat = 8
+    private let notchCenterY: CGFloat = 104
+    private let circleControlRatio: CGFloat = 0.552_284_8
+
+    func path(in rect: CGRect) -> Path {
+        let width = rect.width
+        let height = rect.height
+        let centerY = min(max(cornerCut + notchHalfHeight, notchCenterY), height - cornerCut - notchHalfHeight)
+        var path = Path()
+
+        path.move(to: CGPoint(x: cornerCut, y: 0))
+        path.addLine(to: CGPoint(x: width - cornerCut, y: 0))
+        path.addLine(to: CGPoint(x: width, y: cornerCut))
+        path.addLine(to: CGPoint(x: width, y: centerY - notchHalfHeight))
+        path.addCurve(
+            to: CGPoint(x: width - notchDepth, y: centerY),
+            control1: CGPoint(x: width - notchDepth * circleControlRatio, y: centerY - notchHalfHeight),
+            control2: CGPoint(x: width - notchDepth, y: centerY - notchHalfHeight * circleControlRatio)
+        )
+        path.addCurve(
+            to: CGPoint(x: width, y: centerY + notchHalfHeight),
+            control1: CGPoint(x: width - notchDepth, y: centerY + notchHalfHeight * circleControlRatio),
+            control2: CGPoint(x: width - notchDepth * circleControlRatio, y: centerY + notchHalfHeight)
+        )
+        path.addLine(to: CGPoint(x: width, y: height - cornerCut))
+        path.addLine(to: CGPoint(x: width - cornerCut, y: height))
+        path.addLine(to: CGPoint(x: cornerCut, y: height))
+        path.addLine(to: CGPoint(x: 0, y: height - cornerCut))
+        path.addLine(to: CGPoint(x: 0, y: centerY + notchHalfHeight))
+        path.addCurve(
+            to: CGPoint(x: notchDepth, y: centerY),
+            control1: CGPoint(x: notchDepth * circleControlRatio, y: centerY + notchHalfHeight),
+            control2: CGPoint(x: notchDepth, y: centerY + notchHalfHeight * circleControlRatio)
+        )
+        path.addCurve(
+            to: CGPoint(x: 0, y: centerY - notchHalfHeight),
+            control1: CGPoint(x: notchDepth, y: centerY - notchHalfHeight * circleControlRatio),
+            control2: CGPoint(x: notchDepth * circleControlRatio, y: centerY - notchHalfHeight)
+        )
+        path.addLine(to: CGPoint(x: 0, y: cornerCut))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct TicketOverviewPerforation: View {
+    let color: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            Path { path in
+                path.move(to: CGPoint(x: 8, y: 0.5))
+                path.addLine(to: CGPoint(x: max(8, proxy.size.width - 8), y: 0.5))
+            }
+            .stroke(color, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        }
+        .frame(height: 1)
+        .allowsHitTesting(false)
+    }
+}
+
 private struct TicketOverviewRow: View {
     let attempt: TicketAttempt
-    var showsSwipeHints = false
 
     private var plan: Plan? { attempt.plan }
     private var nextAction: TicketNextActionDefinition? {
@@ -876,29 +1128,30 @@ private struct TicketOverviewRow: View {
     }
     private var deadlineLabel: String {
         if ["waitingIssue", "issued", "attended"].contains(attempt.statusKey) {
-            return "チケ取得"
+            return "チケ受取"
         }
         let source = nextAction?.title ?? inputIssue?.title ?? actionTitle ?? ""
-        if source.contains("当落") { return "抽選当落" }
-        if source.contains("入金") || source.contains("支払") { return "チケ支払" }
-        if source.contains("受取") || source.contains("取得") { return "チケ取得" }
-        if source.contains("発売") || source.contains("購入") { return "チケ発売" }
-        if source.contains("申込") { return "抽選申込" }
-        if source.contains("参加日") { return "参加日" }
+        let resolvedLabel = TicketProgressPresentation.deadlineLabel(
+            forActionTitle: source,
+            attempt: attempt
+        )
+        if TicketProgressColorPalette.visualStage(forDeadlineLabel: resolvedLabel) != nil {
+            return resolvedLabel
+        }
         if stages.indices.contains(currentStageIndex) {
             let stage = stages[currentStageIndex]
             return switch stage.kind {
             case .entry: stage.title == "発売" ? "チケ発売" : "抽選申込"
             case .result: "抽選当落"
             case .payment: "チケ支払"
-            case .acquired: "チケ取得"
+            case .acquired: "チケ受取"
             }
         }
         return "チケット"
     }
     private var terminalHeadline: String? {
         switch attempt.statusKey {
-        case "issued": "取得済み"
+        case "issued": "受取済み"
         case "attended": "参加済み"
         case "lost": "落選"
         case "skipped": "見送り"
@@ -906,31 +1159,31 @@ private struct TicketOverviewRow: View {
         }
     }
     private var deadlineStatusColor: Color {
-        TicketProgressColorPalette.color(
+        guard let visualStage = TicketProgressColorPalette.visualStage(
+            forDeadlineLabel: deadlineLabel
+        ) else { return categoryColor }
+        return TicketProgressColorPalette.color(for: visualStage)
+    }
+    private var cardSurfaceColor: Color {
+        TicketProgressColorPalette.surface(
             forDeadlineLabel: deadlineLabel,
-            fallback: categoryColor
+            fallback: TicketOverviewStyle.surface
         )
     }
-    private var entryMethodColor: Color {
-        switch attempt.entryRouteKey {
-        case "fanClub", "official", "lottery", "card", "generalLottery":
-            return TicketProgressColorPalette.application
-        case "presale", "general", "sameDay":
-            return TicketProgressColorPalette.payment
-        case "resale":
-            return Color(hex: "#B66A32")
-        default:
-            return TicketOverviewStyle.accent
-        }
+    private var cardTextColor: Color {
+        TicketProgressColorPalette.text(
+            forDeadlineLabel: deadlineLabel,
+            fallback: TicketOverviewStyle.text
+        )
     }
     private func taskTitle(for action: TicketNextActionDefinition) -> String {
         switch action.title {
         case "申込・発売開始":
-            return TicketProgressTimeline.usesLotteryFlow(attempt) ? "申込を開始する" : "購入する"
+            return TicketProgressTimeline.usesLotteryFlow(attempt) ? "抽選に申し込む" : "チケットを購入する"
         case "申込締切":
-            return "申込を完了する"
+            return "抽選に申し込む"
         case "申込締切超過":
-            return "申込状況を更新"
+            return "申込状況を確認"
         case "当落発表", "当落を確認":
             return "当落結果を入力"
         case "入金締切":
@@ -940,27 +1193,14 @@ private struct TicketOverviewRow: View {
         case "チケット受取開始", "チケットを受け取る":
             return "チケットを受け取る"
         case "発売開始済み":
-            return "購入状況を更新"
+            return "購入状況を確認"
         default:
             return action.title
         }
     }
 
     var body: some View {
-        ZStack {
-            if showsSwipeHints {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(TicketOverviewStyle.advancePeek)
-                    .padding(.horizontal, 6)
-                    .offset(x: -6)
-
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(TicketOverviewStyle.editPeek)
-                    .padding(.horizontal, 6)
-                    .offset(x: 6)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .center, spacing: 4) {
                     VStack(spacing: 4) {
                         overviewBadge(deadlineLabel, color: deadlineStatusColor)
@@ -986,33 +1226,35 @@ private struct TicketOverviewRow: View {
                         requiresInput: inputIssue != nil,
                         isAttendanceUndated: actionTitle == "参加日を設定",
                         isOverdue: nextAction?.isOverdue == true,
-                        fallbackHeadline: terminalHeadline
+                        fallbackHeadline: terminalHeadline,
+                        textColor: cardTextColor,
+                        secondaryTextColor: cardTextColor.opacity(0.72)
                     )
-                    .frame(width: 68)
+                    .frame(width: 70)
 
                     Rectangle()
-                        .fill(TicketOverviewStyle.text.opacity(0.12))
+                        .fill(cardTextColor.opacity(0.14))
                         .frame(width: 1, height: 84)
-                        .padding(.trailing, 5)
+                        .padding(.trailing, 6)
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 4) {
                             if let entryRouteBadgeTitle {
-                                overviewBadge(entryRouteBadgeTitle, color: entryMethodColor)
+                                overviewMetadataBadge(entryRouteBadgeTitle, role: .entryRoute)
                             }
                             if let ticketSiteBadgeTitle {
-                                overviewBadge(ticketSiteBadgeTitle, color: entryMethodColor)
+                                overviewMetadataBadge(ticketSiteBadgeTitle, role: .ticketSite)
                             }
                             if entryRouteBadgeTitle == nil, ticketSiteBadgeTitle == nil {
-                                overviewBadge("チケット", color: entryMethodColor)
+                                overviewMetadataBadge("チケット", role: .entryRoute)
                             }
                             Spacer(minLength: 0)
                         }
 
                         Text(plan?.title.isEmpty == false ? plan?.title ?? "予定" : "予定")
-                            .font(FavorecoTypography.jpSerif(16, weight: .semibold, relativeTo: .headline))
-                            .foregroundStyle(TicketOverviewStyle.text)
-                            .lineLimit(2)
+                            .font(FavorecoTypography.jpSerif(12, weight: .semibold, relativeTo: .headline))
+                            .foregroundStyle(cardTextColor)
+                            .lineLimit(2, reservesSpace: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         if let plan {
@@ -1023,13 +1265,13 @@ private struct TicketOverviewRow: View {
                                 systemImage: plan.hasConfirmedSchedule
                                     ? "calendar"
                                     : "calendar.badge.exclamationmark",
-                                iconSize: 12
+                                iconSize: 16
                             )
                             .font(FavorecoTypography.captionStrong)
                             .foregroundStyle(
                                 plan.hasConfirmedSchedule
-                                    ? TicketOverviewStyle.secondaryText
-                                    : Color.orange
+                                    ? cardTextColor.opacity(0.72)
+                                    : TicketProgressColorPalette.warning
                             )
                             .lineLimit(1)
                             .minimumScaleFactor(0.76)
@@ -1039,22 +1281,33 @@ private struct TicketOverviewRow: View {
 
                     Image(systemName: "chevron.right")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(cardTextColor.opacity(0.58))
                         .frame(minHeight: 84)
                 }
+                .frame(height: 88)
+                .padding(8)
+                .background(cardSurfaceColor)
 
                 if !stages.isEmpty {
                     TicketProgressTimelineView(
                         stages: stages,
                         currentIndex: currentStageIndex,
                         nodeBackground: TicketOverviewStyle.surface,
-                        secondaryTextColor: TicketOverviewStyle.secondaryText
+                        secondaryTextColor: TicketOverviewStyle.secondaryText,
+                        currentTint: deadlineStatusColor,
+                        completedTint: TicketProgressColorPalette.completedNeutral,
+                        nodeDiameter: 30,
+                        nodeTextSize: 8,
+                        emphasizesCurrentDate: true
                     )
+                    .padding(.horizontal, 8)
                     .padding(.top, 7)
+                    .padding(.bottom, 7)
+                    .background(TicketOverviewStyle.surface)
                     .overlay(alignment: .top) {
-                        Rectangle()
-                            .fill(TicketOverviewStyle.text.opacity(0.10))
-                            .frame(height: 1)
+                        TicketOverviewPerforation(
+                            color: deadlineStatusColor.opacity(0.34)
+                        )
                     }
                 }
 
@@ -1063,26 +1316,25 @@ private struct TicketOverviewRow: View {
                     fallbackTitle: TicketStatusDefinition.name(for: attempt.statusKey),
                     systemImage: actionSystemImage,
                     actionDate: actionDate,
-                    isOverdue: nextAction?.isOverdue == true
+                    isOverdue: nextAction?.isOverdue == true,
+                    normalColor: cardTextColor
                 )
-            }
-            .padding(8)
-            .background(
-                TicketOverviewStyle.surface,
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(TicketOverviewStyle.text.opacity(0.12), lineWidth: 0.8)
-            }
-            .padding(.horizontal, showsSwipeHints ? 6 : 0)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+                .background(TicketOverviewStyle.surface)
         }
-        .contentShape(Rectangle())
+        .background(TicketOverviewStyle.surface)
+        .clipShape(TicketOverviewCardShape())
+        .overlay {
+            TicketOverviewCardShape()
+                .stroke(deadlineStatusColor.opacity(0.46), lineWidth: 1)
+        }
+        .contentShape(TicketOverviewCardShape())
         .accessibilityElement(children: .combine)
     }
 
     private func overviewBadge(_ title: String, color: Color) -> some View {
-        Text(title)
+        return Text(title)
             .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
             .foregroundStyle(Color.white)
             .lineLimit(1)
@@ -1091,6 +1343,36 @@ private struct TicketOverviewRow: View {
             .frame(height: 20)
             .background(color, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
     }
+
+    private func overviewMetadataBadge(_ title: String, role: TicketOverviewMetadataRole) -> some View {
+        let foreground = role == .entryRoute
+            ? TicketProgressColorPalette.entryRouteChipText
+            : TicketProgressColorPalette.metadataChipText
+        let border = role == .entryRoute
+            ? TicketProgressColorPalette.entryRouteChipBorder
+            : TicketProgressColorPalette.metadataChipBorder
+
+        return Text(title)
+            .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+            .foregroundStyle(foreground)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .padding(.horizontal, 6)
+            .frame(height: 20)
+            .background(
+                TicketProgressColorPalette.metadataChipSurface.opacity(0.86),
+                in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(border.opacity(role == .entryRoute ? 0.78 : 0.24), lineWidth: 0.7)
+            }
+    }
+}
+
+private enum TicketOverviewMetadataRole {
+    case entryRoute
+    case ticketSite
 }
 
 private struct TicketOverviewDeadlineBlock: View {
@@ -1099,6 +1381,8 @@ private struct TicketOverviewDeadlineBlock: View {
     let isAttendanceUndated: Bool
     let isOverdue: Bool
     let fallbackHeadline: String?
+    let textColor: Color
+    let secondaryTextColor: Color
 
     private var daysRemaining: Int? {
         guard let date else { return nil }
@@ -1115,7 +1399,16 @@ private struct TicketOverviewDeadlineBlock: View {
     }
 
     private var emphasisColor: Color {
-        hasExpired ? Color(hex: "#C9364F") : TicketOverviewStyle.text
+        hasExpired ? TicketProgressColorPalette.warning : textColor
+    }
+
+    private var imminentUrgencyColor: Color? {
+        guard !hasExpired else { return nil }
+        switch daysRemaining {
+        case 0: return Color(hex: "#E43D4C")
+        case 1: return Color(hex: "#D8555F")
+        default: return nil
+        }
     }
 
     var body: some View {
@@ -1126,14 +1419,14 @@ private struct TicketOverviewDeadlineBlock: View {
                         Text("あ")
                         Text("と")
                     }
-                    .font(FavorecoTypography.jpSerif(10, weight: .semibold, relativeTo: .caption2))
+                    .font(FavorecoTypography.jpSerif(9, weight: .semibold, relativeTo: .caption2))
 
                     HStack(alignment: .firstTextBaseline, spacing: 0) {
                         Text("\(daysRemaining)")
                             .font(FavorecoTypography.latinDisplay(30, weight: .bold, relativeTo: .title2))
                             .monospacedDigit()
                         Text("日")
-                            .font(FavorecoTypography.jpSerif(10, weight: .semibold, relativeTo: .caption2))
+                            .font(FavorecoTypography.jpSerif(9, weight: .semibold, relativeTo: .caption2))
                     }
                     .fixedSize(horizontal: true, vertical: false)
                 }
@@ -1149,14 +1442,18 @@ private struct TicketOverviewDeadlineBlock: View {
                     .lineLimit(hasExpired ? 2 : 1)
                     .minimumScaleFactor(0.72)
                     .frame(height: 38)
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(imminentUrgencyColor ?? emphasisColor)
             }
 
             if let date {
                 Text(FavorecoDateText.compactDate(date))
                     .font(FavorecoTypography.jpSerif(11, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(secondaryTextColor)
                     .lineLimit(1)
                 Text(FavorecoDateText.time(date))
                     .font(FavorecoTypography.latinDisplay(12, weight: .bold, relativeTo: .caption))
+                    .foregroundStyle(secondaryTextColor)
                     .monospacedDigit()
                     .lineLimit(1)
             } else {
@@ -1168,8 +1465,8 @@ private struct TicketOverviewDeadlineBlock: View {
                     .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
                     .foregroundStyle(
                         fallbackHeadline != nil || isAttendanceUndated
-                            ? TicketOverviewStyle.secondaryText
-                            : Color(hex: "#C9364F")
+                            ? secondaryTextColor
+                            : TicketProgressColorPalette.warning
                     )
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
@@ -1199,24 +1496,27 @@ private struct TicketOverviewNextActionRow: View {
     let systemImage: String
     let actionDate: Date?
     let isOverdue: Bool
+    let normalColor: Color
 
     private var urgencyColor: Color {
-        if isOverdue || (actionDate.map { $0 < Date() } == true) { return .red }
-        if actionDate == nil { return .orange }
-        return .primary
+        if isOverdue || (actionDate.map { $0 < Date() } == true) {
+            return TicketProgressColorPalette.warning
+        }
+        if actionDate == nil { return TicketProgressColorPalette.warning }
+        return normalColor
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            FavorecoIcon(systemName: systemImage, size: 15)
+            FavorecoIcon(systemName: systemImage, size: 17)
                 .foregroundStyle(urgencyColor)
-                .frame(width: 24, height: 24)
+                .frame(width: 28, height: 28)
                 .background(urgencyColor.opacity(0.10), in: Circle())
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(actionTitle == nil ? "現在の状態" : "次にやること")
-                    .font(FavorecoTypography.jpSans(9, weight: .medium, relativeTo: .caption2))
-                    .foregroundStyle(.secondary)
+                    .font(FavorecoTypography.jpSans(8, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(TicketOverviewStyle.text.opacity(0.72))
 
                 Text(actionTitle ?? fallbackTitle)
                     .font(FavorecoTypography.captionStrong)
@@ -1229,7 +1529,7 @@ private struct TicketOverviewNextActionRow: View {
 
             if let actionDate {
                 Text(FavorecoDateText.compactDateTime(actionDate))
-                    .font(FavorecoTypography.captionStrong)
+                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .caption))
                     .foregroundStyle(urgencyColor)
                     .monospacedDigit()
                     .lineLimit(1)

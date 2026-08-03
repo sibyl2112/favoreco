@@ -27,7 +27,7 @@ struct TicketFlowDefinition: Identifiable, Hashable {
         TicketFlowDefinition(
             key: "lotteryPlanned",
             name: "抽選に申し込む",
-            description: "申込枠、名義、申込先と抽選日程を登録",
+            description: "締切・当落・入金など、次に必要な日程を登録",
             defaultStatusKey: "beforeApply",
             defaultEntryRouteKey: "lottery"
         ),
@@ -40,7 +40,7 @@ struct TicketFlowDefinition: Identifiable, Hashable {
         ),
         TicketFlowDefinition(
             key: "acquired",
-            name: "チケットを取得済み",
+            name: "チケットを受取済み",
             description: "手元にあるチケットの購入先や内容を記録",
             defaultStatusKey: "issued",
             defaultEntryRouteKey: "other"
@@ -93,7 +93,7 @@ nonisolated struct TicketStatusDefinition: Identifiable, Hashable {
         TicketStatusDefinition(key: "lost", name: "落選", attentionLevel: "none"),
         TicketStatusDefinition(key: "waitingPayment", name: "入金待ち", attentionLevel: "high"),
         TicketStatusDefinition(key: "waitingIssue", name: "取得処理中", attentionLevel: "medium"),
-        TicketStatusDefinition(key: "issued", name: "取得済み", attentionLevel: "low"),
+        TicketStatusDefinition(key: "issued", name: "受取済み", attentionLevel: "low"),
         TicketStatusDefinition(key: "attended", name: "参加済み", attentionLevel: "none"),
         TicketStatusDefinition(key: "skipped", name: "見送り", attentionLevel: "none"),
     ]
@@ -452,7 +452,7 @@ enum TicketProgressTimeline {
         stages.append(
             TicketProgressStage(
                 kind: .acquired,
-                title: "取得",
+                title: "受取",
                 date: availableDate(attempt.issueStartAt)
             )
         )
@@ -528,7 +528,7 @@ enum TicketProgressTimeline {
             || ["waitingResult", "lost"].contains(attempt.statusKey)
     }
 
-    private static func hasPaymentStage(_ attempt: TicketAttempt) -> Bool {
+    static func hasPaymentStage(_ attempt: TicketAttempt) -> Bool {
         attempt.paymentDeadlineAt != Date.distantPast
             || attempt.paidAt != Date.distantPast
             || ["won", "waitingPayment"].contains(attempt.statusKey)
@@ -564,6 +564,46 @@ enum TicketProgressTimeline {
         case .payment: 2
         case .acquired: 3
         }
+    }
+}
+
+enum TicketProgressPresentation {
+    static func currentStageLabel(for attempt: TicketAttempt) -> String {
+        switch attempt.statusKey {
+        case "beforeApply":
+            return usesLotteryFlow(attempt) ? "抽選申込" : "発売待ち"
+        case "onSaleSoon": return "発売待ち"
+        case "waitingResult": return "当落待ち"
+        case "won": return "支払い"
+        case "waitingPayment": return "支払い待ち"
+        case "waitingIssue": return "受取待ち"
+        case "issued": return "受取済み"
+        case "lost": return "落選"
+        case "skipped": return "見送り"
+        case "attended": return "参加済み"
+        default: return TicketStatusDefinition.name(for: attempt.statusKey)
+        }
+    }
+
+    private static func usesLotteryFlow(_ attempt: TicketAttempt) -> Bool {
+        TicketProgressTimeline.usesLotteryFlow(attempt)
+    }
+
+    static func deadlineLabel(
+        forActionTitle title: String,
+        attempt: TicketAttempt?
+    ) -> String {
+        if title.contains("申込・発売") {
+            guard let attempt else { return "チケ発売" }
+            return TicketProgressTimeline.usesLotteryFlow(attempt) ? "抽選申込" : "チケ発売"
+        }
+        if title.contains("当落") { return "抽選当落" }
+        if title.contains("入金") || title.contains("支払") { return "チケ支払" }
+        if title.contains("受取") || title.contains("取得") { return "チケ受取" }
+        if title.contains("発売") || title.contains("購入") { return "チケ発売" }
+        if title.contains("申込") { return "抽選申込" }
+        if title.contains("参加日") { return "参加日" }
+        return title
     }
 }
 
@@ -726,6 +766,8 @@ struct TicketInputIssueDefinition {
             TicketInputIssueDefinition(title: "発売開始を設定", systemImage: "calendar.badge.exclamationmark", priority: 1)
         case "waitingResult" where attempt.resultAnnounceAt == Date.distantPast:
             TicketInputIssueDefinition(title: "当落発表日を設定", systemImage: "calendar.badge.exclamationmark", priority: 2)
+        case "won" where attempt.paymentDeadlineAt == Date.distantPast:
+            TicketInputIssueDefinition(title: "支払締切を設定", systemImage: "calendar.badge.exclamationmark", priority: 3)
         case "waitingPayment" where attempt.paymentDeadlineAt == Date.distantPast:
             TicketInputIssueDefinition(title: "支払締切を設定", systemImage: "calendar.badge.exclamationmark", priority: 3)
         case "waitingIssue" where attempt.issueStartAt == Date.distantPast:
@@ -757,7 +799,7 @@ struct TicketStatusTransitionDefinition: Identifiable, Hashable {
             ]
         case "onSaleSoon":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "取得済みにする", systemImage: "checkmark.circle"),
+                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "チケットを受け取った", systemImage: "checkmark.circle"),
                 TicketStatusTransitionDefinition(targetStatusKey: "skipped", title: "見送りにする", systemImage: "xmark.circle"),
             ]
         case "waitingResult":
@@ -767,16 +809,15 @@ struct TicketStatusTransitionDefinition: Identifiable, Hashable {
             ]
         case "won":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "waitingPayment", title: "支払待ちにする", systemImage: "yensign.circle"),
-                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "支払済み・取得済みにする", systemImage: "checkmark.circle.fill"),
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingPayment", title: "支払いへ進む", systemImage: "yensign.circle"),
             ]
         case "waitingPayment":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "支払済み・取得済みにする", systemImage: "checkmark.circle.fill"),
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingIssue", title: "支払い済みにする", systemImage: "checkmark.circle.fill"),
             ]
         case "waitingIssue":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "取得済みにする", systemImage: "checkmark.circle.fill"),
+                TicketStatusTransitionDefinition(targetStatusKey: "issued", title: "チケットを受け取った", systemImage: "checkmark.circle.fill"),
             ]
         case "lost", "skipped":
             return [
@@ -784,6 +825,30 @@ struct TicketStatusTransitionDefinition: Identifiable, Hashable {
             ]
         default:
             return []
+        }
+    }
+
+    static func previousStatusKey(for attempt: TicketAttempt) -> String? {
+        switch attempt.statusKey {
+        case "waitingResult":
+            return "beforeApply"
+        case "lost":
+            return "waitingResult"
+        case "won", "waitingPayment":
+            return "waitingResult"
+        case "waitingIssue":
+            if TicketProgressTimeline.hasPaymentStage(attempt) {
+                return "waitingPayment"
+            }
+            return TicketProgressTimeline.usesLotteryFlow(attempt) ? "waitingResult" : "onSaleSoon"
+        case "issued":
+            return "waitingIssue"
+        case "attended":
+            return "issued"
+        case "skipped":
+            return TicketProgressTimeline.usesLotteryFlow(attempt) ? "beforeApply" : "onSaleSoon"
+        default:
+            return nil
         }
     }
 }

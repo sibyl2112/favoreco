@@ -1,6 +1,11 @@
 import MapKit
 import SwiftUI
 
+enum ExperienceDatePrecision {
+    case day
+    case year
+}
+
 struct ExperienceBasicUnitEditor: View {
     @StateObject private var publicPlaceStore = PublicPlaceCatalogStore.shared
     let template: CategoryRecordTemplate
@@ -22,6 +27,8 @@ struct ExperienceBasicUnitEditor: View {
     let supportsPerformanceTime: Bool
     let supportsStyles: Bool
     let usesExplicitTheaterLayout: Bool
+    let datePrecision: ExperienceDatePrecision
+    let usesSimpleScreenWorkLayout: Bool
     let ratingText: String
     let onSelectPlace: (PlaceMaster) -> Void
     let onSelectPublicPlace: (PublicPlaceSelectionDraft) -> Void
@@ -45,6 +52,8 @@ struct ExperienceBasicUnitEditor: View {
         supportsPerformanceTime: Bool,
         supportsStyles: Bool,
         usesExplicitTheaterLayout: Bool = false,
+        datePrecision: ExperienceDatePrecision = .day,
+        usesSimpleScreenWorkLayout: Bool = false,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
         onSelectPublicPlace: @escaping (PublicPlaceSelectionDraft) -> Void,
@@ -69,6 +78,8 @@ struct ExperienceBasicUnitEditor: View {
         self.supportsPerformanceTime = supportsPerformanceTime
         self.supportsStyles = supportsStyles
         self.usesExplicitTheaterLayout = usesExplicitTheaterLayout
+        self.datePrecision = datePrecision
+        self.usesSimpleScreenWorkLayout = usesSimpleScreenWorkLayout
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
         self.onSelectPublicPlace = onSelectPublicPlace
@@ -93,6 +104,8 @@ struct ExperienceBasicUnitEditor: View {
         supportsPerformanceTime: Bool,
         supportsStyles: Bool,
         usesExplicitTheaterLayout: Bool = false,
+        datePrecision: ExperienceDatePrecision = .day,
+        usesSimpleScreenWorkLayout: Bool = false,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
         onSelectPublicPlace: @escaping (PublicPlaceSelectionDraft) -> Void,
@@ -117,6 +130,8 @@ struct ExperienceBasicUnitEditor: View {
         self.supportsPerformanceTime = supportsPerformanceTime
         self.supportsStyles = supportsStyles
         self.usesExplicitTheaterLayout = usesExplicitTheaterLayout
+        self.datePrecision = datePrecision
+        self.usesSimpleScreenWorkLayout = usesSimpleScreenWorkLayout
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
         self.onSelectPublicPlace = onSelectPublicPlace
@@ -134,7 +149,17 @@ struct ExperienceBasicUnitEditor: View {
 
     @ViewBuilder
     private var targetFields: some View {
-        if usesExplicitTheaterLayout, let editableTitle, let editableSeriesName {
+        if usesSimpleScreenWorkLayout, let editableTitle {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(template.targetSectionTitle)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                TextField(template.titlePlaceholder, text: editableTitle)
+            }
+        } else if usesSimpleScreenWorkLayout {
+            Text(existingTitle.isEmpty ? "映像作品" : existingTitle)
+                .font(FavorecoTypography.bodyStrong)
+        } else if usesExplicitTheaterLayout, let editableTitle, let editableSeriesName {
             VStack(alignment: .leading, spacing: 0) {
                 ExplicitFormTextField(
                     title: "公演名",
@@ -197,11 +222,20 @@ struct ExperienceBasicUnitEditor: View {
     }
 
     private var standardVisitFields: some View {
+        if usesSimpleScreenWorkLayout {
+            return AnyView(simpleScreenWorkVisitFields)
+        }
+
+        return AnyView(
         VStack(alignment: .leading, spacing: 12) {
             Text(template.visitSectionTitle)
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
-            DatePicker(template.dateLabel, selection: $visitedAt, displayedComponents: .date)
+            if datePrecision == .year {
+                YearOnlyPicker(selection: $visitedAt)
+            } else {
+                DatePicker(template.dateLabel, selection: $visitedAt, displayedComponents: .date)
+            }
             if supportsPerformanceTime {
                 DatePicker("開演", selection: $visitedAt, displayedComponents: .hourAndMinute)
                 DatePicker("終演", selection: $endedAt, in: visitedAt..., displayedComponents: .hourAndMinute)
@@ -266,6 +300,24 @@ struct ExperienceBasicUnitEditor: View {
             guard supportsPerformanceTime else { return }
             let duration = max(endedAt.timeIntervalSince(oldValue), 0)
             endedAt = newValue.addingTimeInterval(duration)
+        }
+        )
+    }
+
+    private var simpleScreenWorkVisitFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(template.visitSectionTitle)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+
+            if datePrecision == .year {
+                YearOnlyPicker(selection: $visitedAt)
+            } else {
+                DatePicker(template.dateLabel, selection: $visitedAt, displayedComponents: .date)
+                TextField("映画館（任意）", text: $venueName)
+            }
+
+            ratingSlider
         }
     }
 
@@ -575,6 +627,83 @@ struct ExperienceBasicUnitEditor: View {
             .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "　", with: "")
+    }
+}
+
+struct ScreenWorkTypeAndSeasonEditor: View {
+    @Binding var typeKey: String
+    @Binding var seasonNumber: Int
+
+    private var selection: Binding<ScreenWorkType> {
+        Binding(
+            get: { ScreenWorkType.resolved(from: typeKey) },
+            set: { type in
+                typeKey = type.rawValue
+                if !type.supportsSeason {
+                    seasonNumber = 0
+                }
+            }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("種別", selection: selection) {
+                ForEach(ScreenWorkType.allCases) { type in
+                    Text(type.displayName).tag(type)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if selection.wrappedValue.supportsSeason {
+                Picker("シーズン", selection: $seasonNumber) {
+                    Text("なし").tag(0)
+                    ForEach(1...10, id: \.self) { number in
+                        Text("シーズン\(number)").tag(number)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+        }
+    }
+}
+
+private struct YearOnlyPicker: View {
+    @Binding var selection: Date
+
+    private let calendar = Calendar.current
+
+    private var selectedYear: Binding<Int> {
+        Binding(
+            get: { calendar.component(.year, from: selection) },
+            set: { newYear in
+                let oldComponents = calendar.dateComponents([.month, .day, .hour, .minute, .second], from: selection)
+                var components = DateComponents()
+                components.year = newYear
+                components.month = oldComponents.month
+                components.day = oldComponents.day
+                components.hour = oldComponents.hour
+                components.minute = oldComponents.minute
+                components.second = oldComponents.second
+                if let updated = calendar.date(from: components) {
+                    selection = updated
+                }
+            }
+        )
+    }
+
+    private var years: [Int] {
+        let currentYear = calendar.component(.year, from: Date())
+        return Array(stride(from: currentYear + 1, through: 1900, by: -1))
+    }
+
+    var body: some View {
+        Picker("鑑賞年", selection: selectedYear) {
+            ForEach(years, id: \.self) { year in
+                Text("\(year)年").tag(year)
+            }
+        }
+        .pickerStyle(.menu)
     }
 }
 

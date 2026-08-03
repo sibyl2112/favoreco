@@ -4,13 +4,23 @@ import SwiftData
 struct TicketQuickActionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.favorecoThemePalette) private var themePalette
 
     let attempt: TicketAttempt
+    let onStatusUpdated: ((TicketAttempt) -> Void)?
 
     @State private var updateError = ""
     @State private var isShowingSchedule = false
     @State private var editingAttempt: TicketAttempt?
+
+    init(
+        attempt: TicketAttempt,
+        onStatusUpdated: ((TicketAttempt) -> Void)? = nil
+    ) {
+        self.attempt = attempt
+        self.onStatusUpdated = onStatusUpdated
+    }
 
     private var plan: Plan? { attempt.plan }
 
@@ -43,19 +53,6 @@ struct TicketQuickActionSheet: View {
         return title
     }
 
-    private var entryMethodColor: Color {
-        switch attempt.entryRouteKey {
-        case "fanClub", "official", "lottery", "card", "generalLottery":
-            return Color(hex: "#8E3657")
-        case "presale", "general", "sameDay":
-            return Color(hex: "#247E85")
-        case "resale":
-            return Color(hex: "#B66A32")
-        default:
-            return tint
-        }
-    }
-
     private var visibleActionCount: Int {
         guard let plan else { return 0 }
         return TicketStatusTransitionDefinition.transitions(for: attempt).count
@@ -85,21 +82,21 @@ struct TicketQuickActionSheet: View {
                                     ticketMetadataBadge(
                                         entryRouteBadgeTitle,
                                         systemImage: "ticket",
-                                        backgroundColor: entryMethodColor
+                                        role: .entryRoute
                                     )
                                 }
                                 if let ticketSiteBadgeTitle {
                                     ticketMetadataBadge(
                                         ticketSiteBadgeTitle,
                                         systemImage: "safari",
-                                        backgroundColor: entryMethodColor
+                                        role: .ticketSite
                                     )
                                 }
                                 if entryRouteBadgeTitle == nil, ticketSiteBadgeTitle == nil {
                                     ticketMetadataBadge(
                                         "チケット",
                                         systemImage: "ticket",
-                                        backgroundColor: entryMethodColor
+                                        role: .entryRoute
                                     )
                                 }
                             }
@@ -135,7 +132,7 @@ struct TicketQuickActionSheet: View {
                                 Button {
                                     editingAttempt = attempt
                                 } label: {
-                                    FavorecoIcon(systemName: "pencil", size: 14)
+                                    FavorecoIcon(systemName: "pencil", size: 16)
                                         .frame(width: 34, height: 30)
                                         .background(tint.opacity(0.10), in: Capsule())
                                 }
@@ -147,11 +144,21 @@ struct TicketQuickActionSheet: View {
                         }
 
                         if let item {
+                            HStack(spacing: 6) {
+                                Text("現在の工程")
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(TicketProgressPresentation.currentStageLabel(for: attempt))
+                                    .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .caption))
+                                    .foregroundStyle(currentStageColor(for: item))
+                            }
+
                             TicketProgressTimelineView(
                                 stages: item.stages,
                                 currentIndex: item.currentStageIndex,
                                 nodeBackground: Color(.secondarySystemGroupedBackground),
-                                secondaryTextColor: .secondary
+                                secondaryTextColor: .secondary,
+                                completedTint: TicketProgressColorPalette.completedNeutral
                             )
                         }
 
@@ -164,8 +171,10 @@ struct TicketQuickActionSheet: View {
                                 isShowingSchedule = true
                             } label: {
                                 compactButtonLabel("参加日を設定", systemImage: "calendar.badge.plus")
+                                    .foregroundStyle(prominentButtonForeground)
                             }
                             .buttonStyle(.borderedProminent)
+                            .tint(themePalette.prominentAction)
                             .controlSize(.small)
                         }
 
@@ -230,20 +239,31 @@ struct TicketQuickActionSheet: View {
     private func ticketMetadataBadge(
         _ title: String,
         systemImage: String,
-        backgroundColor: Color
+        role: TicketMetadataRole
     ) -> some View {
-        FavorecoIconLabel(title, systemImage: systemImage, iconSize: 10)
+        let foreground = role == .entryRoute
+            ? TicketProgressColorPalette.entryRouteChipText
+            : TicketProgressColorPalette.metadataChipText
+        let border = role == .entryRoute
+            ? TicketProgressColorPalette.entryRouteChipBorder
+            : TicketProgressColorPalette.metadataChipBorder
+
+        return FavorecoIconLabel(title, systemImage: systemImage, iconSize: 14)
             .font(FavorecoTypography.jpSans(10, weight: .semibold, relativeTo: .caption2))
-            .foregroundStyle(TheaterCategoryStyle.ivory)
+            .foregroundStyle(foreground)
             .lineLimit(1)
             .minimumScaleFactor(0.72)
             .allowsTightening(true)
-            .padding(.horizontal, 6)
-            .frame(height: 22)
+            .padding(.horizontal, 7)
+            .frame(height: 24)
             .background(
-                backgroundColor,
+                TicketProgressColorPalette.metadataChipSurface,
                 in: RoundedRectangle(cornerRadius: 4, style: .continuous)
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(border.opacity(0.78), lineWidth: 0.8)
+            }
     }
 
     @ViewBuilder
@@ -297,12 +317,21 @@ struct TicketQuickActionSheet: View {
                             transition.title,
                             systemImage: transition.systemImage
                         )
+                        .foregroundStyle(prominentButtonForeground)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(themePalette.prominentAction)
                     .controlSize(.small)
                 }
             }
         }
+    }
+
+    private func currentStageColor(for item: CategoryTicketProgressItem) -> Color {
+        guard item.currentStageIndex < item.stages.count else {
+            return TicketProgressColorPalette.color(for: .acquired)
+        }
+        return TicketProgressColorPalette.color(for: item.stages[item.currentStageIndex])
     }
 
     private func compactButtonLabel(
@@ -324,6 +353,10 @@ struct TicketQuickActionSheet: View {
             .frame(maxWidth: .infinity, minHeight: 26)
     }
 
+    private var prominentButtonForeground: Color {
+        themePalette.prominentActionForeground(for: colorScheme)
+    }
+
     private func update(to statusKey: String) {
         do {
             try TicketAttemptStatusUpdater.update(
@@ -331,6 +364,11 @@ struct TicketQuickActionSheet: View {
                 to: statusKey,
                 in: modelContext
             )
+            if let onStatusUpdated {
+                onStatusUpdated(attempt)
+                dismiss()
+                return
+            }
             if TicketAttendanceScheduleRequirement.shouldPrompt(
                 afterTransitionTo: statusKey,
                 plan: plan
@@ -343,4 +381,9 @@ struct TicketQuickActionSheet: View {
             updateError = error.localizedDescription
         }
     }
+}
+
+private enum TicketMetadataRole {
+    case entryRoute
+    case ticketSite
 }

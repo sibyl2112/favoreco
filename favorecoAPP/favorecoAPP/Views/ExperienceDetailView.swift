@@ -674,13 +674,13 @@ struct ExperienceDetailView: View {
                 Button {
                     isShowingEdit = true
                 } label: {
-                    FavorecoIconLabel("編集", systemImage: "pencil")
+                    Label("編集", systemImage: "pencil")
                 }
 
                 Button(role: .destructive) {
                     isShowingDeleteConfirmation = true
                 } label: {
-                    FavorecoIconLabel("この記録だけ削除", systemImage: "trash")
+                    Label("この記録だけ削除", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis")

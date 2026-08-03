@@ -13,6 +13,7 @@ import UserNotifications
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.favorecoThemePalette) private var themePalette
 
     var body: some View {
         NavigationStack {
@@ -99,5 +100,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .favorecoAppAppearance()
+        .tint(themePalette.globalTint)
     }
 }

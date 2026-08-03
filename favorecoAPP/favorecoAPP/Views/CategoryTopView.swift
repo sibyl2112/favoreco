@@ -40,6 +40,7 @@ struct CategoryTopView: View {
     @State private var selectedFeatureCarouselIndex = 0
     @State private var selectedGoshuinHeroIndex = 0
     @State private var libraryLayoutModes: [String: CategoryLibraryLayoutMode]
+    @State private var screenWorkFilter: ScreenWorkFilter = .all
     @State private var isShowingAllUpcomingPlans = false
     @State private var isShowingAllTheaterVisits = false
     @State private var isShowingArchivedTheaterEvents = false
@@ -100,6 +101,13 @@ struct CategoryTopView: View {
                             .id(CategoryScrollAnchor.top)
 
                         VStack(alignment: .leading, spacing: 24) {
+                            if activeCategory.templateKey == "movie" {
+                                ScreenWorkFilterBar(
+                                    selection: $screenWorkFilter,
+                                    tint: categoryAccent(activeCategory)
+                                )
+                            }
+
                             Group {
                                 if activeCategory.templateKey == "goshuin" {
                                     goshuinHero(category: activeCategory, snapshot: snapshot)
@@ -262,7 +270,7 @@ struct CategoryTopView: View {
                     .frame(width: 48, height: 48)
                     .background(categoryAccent(category).opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("ランダムグッズ")
+                    Text("Goods")
                         .font(FavorecoTypography.jpSerif(25, weight: .bold, relativeTo: .title2))
                     Text(snapshot.events.isEmpty ? "シリーズを登録して、何種類・何個集まったか残せます。" : "全 \(snapshot.eventCount) シリーズ・\(collected)/\(target) 種類・ダブり \(duplicates) 個")
                         .font(FavorecoTypography.body)
@@ -453,9 +461,9 @@ struct CategoryTopView: View {
             ]
         case "movie":
             values = [
-                ("映画", "\(snapshot.eventCount)", "本", "総作品数"),
-                ("鑑賞済み", "\(snapshot.visitCount)", "本", "総鑑賞数"),
-                ("観たい", "\(snapshot.interestedEventCount)", "本", "鑑賞候補"),
+                ("映像作品", "\(snapshot.eventCount)", "作品", "総作品数"),
+                ("鑑賞済み", "\(snapshot.visitCount)", "作品", "総鑑賞数"),
+                ("観たい", "\(snapshot.interestedEventCount)", "作品", "鑑賞候補"),
             ]
         case "museum":
             let visits = resolvedVisits(in: snapshot)
@@ -780,6 +788,8 @@ struct CategoryTopView: View {
                     && plan.hasConfirmedSchedule
                     && plan.startsAt >= now
                     && (plan.category ?? plan.event?.category)?.id == category.id
+                    && (category.templateKey != "movie"
+                        || plan.event.map { screenWorkFilter.includes($0.screenWorkType) } != false)
             }
             .sorted { $0.startsAt < $1.startsAt }
     }
@@ -792,11 +802,17 @@ struct CategoryTopView: View {
                     && plan.hasConfirmedSchedule
                     && plan.startsAt >= now
                     && (plan.category ?? plan.event?.category)?.id == category.id
+                    && (category.templateKey != "movie"
+                        || plan.event.map { screenWorkFilter.includes($0.screenWorkType) } != false)
             }
             .sorted { $0.startsAt < $1.startsAt }
         let plannedEventIDs = Set(upcomingPlans.compactMap { $0.event?.id })
         let interestedEvents = resolvedEvents(in: snapshot, category: category)
-            .filter { $0.stateKey == "interested" && !plannedEventIDs.contains($0.id) }
+            .filter {
+                $0.stateKey == "interested"
+                    && !plannedEventIDs.contains($0.id)
+                    && (category.templateKey != "movie" || screenWorkFilter.includes($0.screenWorkType))
+            }
             .sorted { $0.updatedAt > $1.updatedAt }
 
         let planItems = upcomingPlans.map(CategoryFeatureItem.plan)
@@ -825,9 +841,9 @@ struct CategoryTopView: View {
         switch category.templateKey {
         case "movie":
             return [
-                MiniStatisticsItem(title: "総鑑賞数", value: "\(snapshot.visitCount)", unit: "本", icon: "movieclapper"),
-                MiniStatisticsItem(title: "年間数", value: "\(yearVisits.count)", unit: "本", icon: "calendar"),
-                MiniStatisticsItem(title: "観たい", value: "\(snapshot.interestedEventCount)", unit: "本", icon: "bookmark"),
+                MiniStatisticsItem(title: "総鑑賞数", value: "\(snapshot.visitCount)", unit: "作品", icon: "movieclapper"),
+                MiniStatisticsItem(title: "年間数", value: "\(yearVisits.count)", unit: "作品", icon: "calendar"),
+                MiniStatisticsItem(title: "観たい", value: "\(snapshot.interestedEventCount)", unit: "作品", icon: "bookmark"),
                 MiniStatisticsItem(title: "レビュー", value: movieReviewText, unit: movieReviewText == "-" ? "" : "点", icon: "text.bubble"),
             ]
         case "book":
@@ -1201,7 +1217,10 @@ struct CategoryTopView: View {
         showsPerformanceLog: Bool = false
     ) -> some View {
         let selectedLayout = libraryLayoutMode(for: category)
-        let items = categoryLibraryItems(category: category, snapshot: snapshot)
+        let allItems = categoryLibraryItems(category: category, snapshot: snapshot)
+        let items = category.templateKey == "movie"
+            ? allItems.filter { screenWorkFilter.includes($0.event.screenWorkType) }
+            : allItems
         let showsPlanningSections = ["theater", "live", "museum", "movie"].contains(category.templateKey)
         let separatesInterests = showsPlanningSections
         let showsBookSections = category.templateKey == "book"
@@ -1321,7 +1340,7 @@ struct CategoryTopView: View {
 
                 Spacer(minLength: 4)
 
-                if category.templateKey != "live" {
+                if category.templateKey != "live" && category.templateKey != "movie" {
                     CategoryLibraryLayoutPicker(
                         selection: Binding(
                             get: { libraryLayoutMode(for: category) },
@@ -1423,7 +1442,7 @@ struct CategoryTopView: View {
         case "theater": "公演を追加"
         case "live": "ライブを追加"
         case "museum": "展示を追加"
-        case "movie": "映画を追加"
+        case "movie": "作品を追加"
         case "book": "本を追加"
         default: "追加する"
         }
@@ -1470,6 +1489,9 @@ struct CategoryTopView: View {
     }
 
     private func libraryLayoutMode(for category: RecordCategory) -> CategoryLibraryLayoutMode {
+        if category.templateKey == "movie" {
+            return .gallery
+        }
         if category.templateKey == "live" {
             return .banner
         }
@@ -1481,6 +1503,10 @@ struct CategoryTopView: View {
         _ mode: CategoryLibraryLayoutMode,
         for category: RecordCategory
     ) {
+        guard category.templateKey != "movie" else {
+            libraryLayoutModes[category.templateKey] = .gallery
+            return
+        }
         guard category.templateKey != "live" else {
             libraryLayoutModes[category.templateKey] = .banner
             return
@@ -1494,7 +1520,7 @@ struct CategoryTopView: View {
         case "theater": "Productions"
         case "live": "Live History"
         case "museum": "Exhibitions"
-        case "movie": "Movies"
+        case "movie": "Library"
         case "sake": "Drinks"
         case "theme_park": "Destinations"
         case "nature_living", "outing_facility": "Places"
@@ -1507,7 +1533,7 @@ struct CategoryTopView: View {
         switch category.templateKey {
         case "museum": "これから・気になる展示"
         case "live": "これから・気になるライブ"
-        case "movie": "これから・気になる映画"
+        case "movie": "これから・気になる作品"
         case "sake": "これから・気になるお酒"
         case "theme_park": "これから・気になる施設"
         case "nature_living": "これから・気になる自然・いきもの"
@@ -1533,9 +1559,9 @@ struct CategoryTopView: View {
         case ("museum", "Coming Up"): "展示予定"
         case ("museum", "Interests"): "気になる展示"
         case ("museum", "Exhibitions"): "展示・イベント"
-        case ("movie", "Coming Up"): "映画予定"
-        case ("movie", "Interests"): "気になる映画"
-        case ("movie", "Movies"): "映画"
+        case ("movie", "Coming Up"): "映像作品予定"
+        case ("movie", "Interests"): "観たい作品"
+        case ("movie", "Library"): "映像作品"
         case ("sake", "Drinks"): "お酒"
         case ("theme_park", "Destinations"): "施設"
         case ("nature_living", "Places"), ("outing_facility", "Places"): "施設"
@@ -2726,7 +2752,10 @@ struct CategoryTicketProgressSection: View {
         }
         .sheet(isPresented: $isShowingTicketOverview) {
             NavigationStack {
-                TicketOverviewView(showsCloseButton: true)
+                TicketOverviewView(
+                    showsCloseButton: true,
+                    initialFilter: usesTheaterStyle ? .undated : .needsAction
+                )
             }
         }
     }
@@ -2825,7 +2854,8 @@ struct CategoryTicketProgressCard: View {
                 stages: item.stages,
                 currentIndex: item.currentStageIndex,
                 nodeBackground: cardBackground,
-                secondaryTextColor: secondaryTextColor
+                secondaryTextColor: secondaryTextColor,
+                completedTint: TicketProgressColorPalette.completedNeutral
             )
         }
         .padding(9)
@@ -2869,20 +2899,34 @@ struct TicketProgressTimelineView: View {
     let currentIndex: Int
     let nodeBackground: Color
     let secondaryTextColor: Color
-
-    private let nodeDiameter: CGFloat = 34
+    var currentTint: Color? = nil
+    var completedTint: Color? = nil
+    var nodeDiameter: CGFloat = 34
+    var nodeTextSize: CGFloat = 9
+    var emphasizesCurrentDate = false
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Array(stages.enumerated()), id: \.element.id) { index, stage in
                 GeometryReader { geometry in
                     let stageColor = TicketProgressColorPalette.color(for: stage)
+                    let state = nodeState(at: index)
+                    let nodeTint = switch state {
+                    case .completed: completedTint ?? stageColor
+                    case .current: currentTint ?? stageColor
+                    case .future: stageColor
+                    }
+                    let dateWeight: Font.Weight = emphasizesCurrentDate
+                        && state == .current
+                        && stage.date != nil
+                        ? .semibold
+                        : .medium
                     ZStack(alignment: .top) {
                         if index < stages.count - 1 {
                             TicketProgressConnectorShape()
                                 .stroke(
                                     index < currentIndex
-                                        ? stageColor
+                                        ? (completedTint ?? stageColor)
                                         : secondaryTextColor.opacity(0.54),
                                     style: StrokeStyle(
                                         lineWidth: 1.5,
@@ -2900,10 +2944,11 @@ struct TicketProgressTimelineView: View {
                         VStack(spacing: 3) {
                             TicketProgressNode(
                                 title: stage.title,
-                                state: nodeState(at: index),
-                                tint: stageColor,
+                                state: state,
+                                tint: nodeTint,
                                 background: nodeBackground,
-                                diameter: nodeDiameter
+                                diameter: nodeDiameter,
+                                textSize: nodeTextSize
                             )
 
                             Group {
@@ -2913,7 +2958,7 @@ struct TicketProgressTimelineView: View {
                                     Text("—")
                                 }
                             }
-                                .font(FavorecoTypography.jpSans(9, weight: .medium, relativeTo: .caption2))
+                                .font(FavorecoTypography.jpSans(9, weight: dateWeight, relativeTo: .caption2))
                                 .foregroundStyle(secondaryTextColor)
                                 .lineLimit(1)
                         }
@@ -2946,26 +2991,21 @@ private struct TicketProgressNode: View {
     let tint: Color
     let background: Color
     let diameter: CGFloat
+    let textSize: CGFloat
 
     var body: some View {
         ZStack {
             Circle()
-                .fill(state == .completed ? tint : background)
+                .fill(state == .future ? background : tint)
 
-            if state == .current {
-                Circle()
-                    .stroke(tint, lineWidth: 2)
-                Circle()
-                    .stroke(tint, lineWidth: 1)
-                    .padding(3.5)
-            } else if state == .future {
+            if state == .future {
                 Circle()
                     .stroke(Color.secondary.opacity(0.52), lineWidth: 1.5)
             }
 
             Text(title)
-                .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
-                .foregroundStyle(state == .completed ? Color.white : (state == .current ? tint : Color.primary))
+                .font(FavorecoTypography.jpSans(textSize, weight: .semibold, relativeTo: .caption2))
+                .foregroundStyle(state == .future ? Color.primary : Color.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
@@ -3027,6 +3067,14 @@ private struct CategoryLibraryItem: Identifiable {
         return FavorecoDateText.compactDateWithHalfWidthWeekday(displayDate)
     }
 
+    var screenWorkDateText: String {
+        guard let displayDate else { return "—" }
+        if event.screenWorkType == .movie {
+            return FavorecoDateText.compactDateWithHalfWidthWeekday(displayDate)
+        }
+        return "\(Calendar.current.component(.year, from: displayDate))年"
+    }
+
     var galleryDateColor: Color {
         guard let displayDate else { return .secondary }
         switch FavorecoDateText.weekdayNumber(displayDate) {
@@ -3064,6 +3112,16 @@ private struct CategoryLibraryItem: Identifiable {
 
     var accessibilitySummary: String {
         "\(title)、評価\(ratingText)、\(dateText)"
+    }
+
+    var screenWorkAccessibilitySummary: String {
+        let typeAndSeason = [event.screenWorkType.displayName, event.screenWorkSeasonLabel]
+            .filter { !$0.isEmpty }
+            .joined(separator: "、")
+        let rating = ratingValue.map { "評価\(String(format: "%.1f", $0))" } ?? "評価なし"
+        return [title, typeAndSeason, screenWorkDateText, rating]
+            .filter { !$0.isEmpty && $0 != "—" }
+            .joined(separator: "、")
     }
 
     var productionTypeText: String {
@@ -3136,7 +3194,7 @@ private struct CategoryLibraryItem: Identifiable {
                 case "won": return "当選"
                 case "waitingPayment": return "入金待ち"
                 case "waitingIssue": return "取得処理中"
-                case "issued": return "取得済み"
+                case "issued": return "受取済み"
                 default: return TicketStatusDefinition.name(for: attempt.statusKey)
                 }
             }
@@ -3216,27 +3274,30 @@ private struct CategoryLibraryItem: Identifiable {
 
 private struct CategoryGalleryMetadata: View {
     let item: CategoryLibraryItem
+    let category: RecordCategory
     let tint: Color
 
     var body: some View {
         HStack(alignment: .center, spacing: 3) {
-            Text(item.galleryDateText)
+            Text(category.templateKey == "movie" ? item.screenWorkDateText : item.galleryDateText)
                 .foregroundStyle(item.galleryDateColor)
                 .minimumScaleFactor(0.72)
 
-            Spacer(minLength: 1)
+            if category.templateKey != "movie" || item.ratingValue != nil {
+                Spacer(minLength: 1)
 
-            Rectangle()
-                .fill(tint.opacity(0.34))
-                .frame(width: 0.6, height: 11)
+                Rectangle()
+                    .fill(tint.opacity(0.34))
+                    .frame(width: 0.6, height: 11)
 
-            Spacer(minLength: 1)
+                Spacer(minLength: 1)
 
-            HStack(spacing: 2) {
-                Image(systemName: item.ratingSymbol)
-                Text(item.ratingText)
+                HStack(spacing: 2) {
+                    Image(systemName: item.ratingSymbol)
+                    Text(item.ratingText)
+                }
+                .foregroundStyle(item.ratingColor)
             }
-            .foregroundStyle(item.ratingColor)
         }
         .font(FavorecoTypography.jpSans(9.5, weight: .medium, relativeTo: .caption2))
         .lineLimit(1)
@@ -3383,6 +3444,34 @@ private struct MovieCompactLibraryCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(item.accessibilitySummary)
+    }
+}
+
+private struct ScreenWorkFilterBar: View {
+    @Binding var selection: ScreenWorkFilter
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(ScreenWorkFilter.allCases) { filter in
+                Button {
+                    selection = filter
+                } label: {
+                    Text(filter.displayName)
+                        .font(FavorecoTypography.jpSans(12, weight: selection == filter ? .semibold : .regular, relativeTo: .caption))
+                        .foregroundStyle(selection == filter ? Color.white : tint)
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .background(
+                            selection == filter ? tint : tint.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == filter ? .isSelected : [])
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("映像作品の分類")
     }
 }
 
@@ -3571,9 +3660,11 @@ private struct CategoryLibraryGallery: View {
                     VStack(alignment: .leading, spacing: 0) {
                         CategoryLibraryArtwork(item: item, category: category)
 
-                        if !showsProductionMetadata {
+                        if !showsProductionMetadata,
+                           category.templateKey != "movie" || item.displayDate != nil || item.ratingValue != nil {
                             CategoryGalleryMetadata(
                                 item: item,
+                                category: category,
                                 tint: tint
                             )
                         }
@@ -3589,7 +3680,9 @@ private struct CategoryLibraryGallery: View {
                 .accessibilityLabel(
                     showsProductionMetadata
                         ? item.productionAccessibilitySummary
-                        : item.accessibilitySummary
+                        : category.templateKey == "movie"
+                            ? item.screenWorkAccessibilitySummary
+                            : item.accessibilitySummary
                 )
             }
         }
@@ -3863,6 +3956,18 @@ private struct CategoryLibraryArtwork: View {
         }
         .aspectRatio(aspectRatio, contentMode: .fit)
         .clipped()
+        .overlay(alignment: .bottomTrailing) {
+            if category.templateKey == "movie", !item.event.screenWorkSeasonLabel.isEmpty {
+                Text(item.event.screenWorkSeasonLabel)
+                    .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .frame(height: 20)
+                    .background(.black.opacity(0.78))
+                    .padding(5)
+            }
+        }
     }
 }
 
@@ -4586,51 +4691,37 @@ private struct TheaterComingUpPlanCard: View {
                         .foregroundStyle(TheaterCategoryStyle.gold)
 
                     ForEach(Array(activeAttempts.enumerated()), id: \.element.id) { index, attempt in
-                        HStack(alignment: .top, spacing: 8) {
-                            VStack(spacing: 3) {
-                                Circle()
-                                    .fill(tint)
-                                    .frame(width: 7, height: 7)
-                                if index < activeAttempts.count - 1 {
-                                    Rectangle()
-                                        .fill(TheaterCategoryStyle.gold.opacity(0.38))
-                                        .frame(width: 1)
-                                        .frame(maxHeight: .infinity)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                theaterProgressMetadata(for: attempt)
+                                Spacer(minLength: 6)
+                                Button {
+                                    editingProgressAttempt = attempt
+                                } label: {
+                                    FavorecoIcon(systemName: "pencil", size: 16)
+                                        .foregroundStyle(tint)
+                                        .frame(width: 32, height: 32)
                                 }
+                                .buttonStyle(.plain)
+                                .contentShape(Circle())
+                                .accessibilityLabel("このチケットスケジュールの日付を編集")
                             }
-                            .frame(width: 10)
-                            .padding(.top, 5)
 
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(spacing: 6) {
-                                    theaterProgressMetadata(for: attempt)
-                                    Spacer(minLength: 6)
-                                    Button {
-                                        editingProgressAttempt = attempt
-                                    } label: {
-                                        FavorecoIcon(systemName: "pencil", size: 12)
-                                            .foregroundStyle(tint)
-                                            .frame(width: 24, height: 24)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("このチケットスケジュールの日付を編集")
-                                }
+                            let item = CategoryTicketProgressItem(
+                                plan: displayPlan,
+                                attempt: attempt
+                            )
+                            TicketProgressTimelineView(
+                                stages: item.stages,
+                                currentIndex: item.currentStageIndex,
+                                nodeBackground: TheaterCategoryStyle.tileBackground,
+                                secondaryTextColor: TheaterCategoryStyle.ivory.opacity(0.62),
+                                completedTint: TicketProgressColorPalette.completedNeutral
+                            )
 
-                                let item = CategoryTicketProgressItem(
-                                    plan: displayPlan,
-                                    attempt: attempt
-                                )
-                                TicketProgressTimelineView(
-                                    stages: item.stages,
-                                    currentIndex: item.currentStageIndex,
-                                    nodeBackground: TheaterCategoryStyle.tileBackground,
-                                    secondaryTextColor: TheaterCategoryStyle.ivory.opacity(0.62)
-                                )
-
-                                if index < activeAttempts.count - 1 {
-                                    Divider()
-                                        .overlay(TheaterCategoryStyle.gold.opacity(0.22))
-                                }
+                            if index < activeAttempts.count - 1 {
+                                Divider()
+                                    .overlay(TheaterCategoryStyle.gold.opacity(0.22))
                             }
                         }
                     }
@@ -4712,7 +4803,7 @@ private struct TheaterComingUpPlanCard: View {
 
     private var ticketAcquisitionChip: some View {
         let color = hasAcquiredTicket ? TheaterCategoryStyle.ivory.opacity(0.78) : Color(red: 0.94, green: 0.43, blue: 0.52)
-        return Text(hasAcquiredTicket ? "取得済み" : "チケット未取得")
+        return Text(hasAcquiredTicket ? "受取済み" : "チケット未受取")
             .font(FavorecoTypography.captionStrong)
             .foregroundStyle(color)
             .lineLimit(1)
@@ -4729,25 +4820,50 @@ private struct TheaterComingUpPlanCard: View {
     @ViewBuilder
     private func theaterProgressMetadata(for attempt: TicketAttempt) -> some View {
         HStack(spacing: 5) {
-            Label(
+            theaterProgressMetadataChip(
                 TicketEntryRouteDefinition.name(for: attempt.entryRouteKey),
-                systemImage: "ticket"
+                isEntryRoute: true
             )
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(TheaterCategoryStyle.ivory.opacity(0.72))
-            .lineLimit(1)
 
             if !attempt.ticketSite.isEmpty {
-                Text(attempt.ticketSite)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(TheaterCategoryStyle.ivory.opacity(0.58))
-                    .lineLimit(1)
+                theaterProgressMetadataChip(
+                    attempt.ticketSite,
+                    isEntryRoute: false
+                )
             }
         }
     }
 
+    private func theaterProgressMetadataChip(
+        _ title: String,
+        isEntryRoute: Bool
+    ) -> some View {
+        let foreground = isEntryRoute
+            ? TicketProgressColorPalette.entryRouteChipText
+            : TicketProgressColorPalette.metadataChipText
+        let border = isEntryRoute
+            ? TicketProgressColorPalette.entryRouteChipBorder
+            : TicketProgressColorPalette.metadataChipBorder
+
+        return Text(title)
+            .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+            .foregroundStyle(foreground)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .padding(.horizontal, 6)
+            .frame(height: 20)
+            .background(
+                TicketProgressColorPalette.metadataChipSurface.opacity(0.86),
+                in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(border.opacity(isEntryRoute ? 0.78 : 0.24), lineWidth: 0.7)
+            }
+    }
+
     private func theaterActionLabel(_ title: String, systemImage: String) -> some View {
-        FavorecoIconLabel(title, systemImage: systemImage, iconSize: 12)
+        FavorecoIconLabel(title, systemImage: systemImage, iconSize: 16)
             .font(FavorecoTypography.captionStrong)
             .foregroundStyle(tint)
             .lineLimit(1)
@@ -4824,7 +4940,8 @@ private struct CategoryComingUpRow: View {
                     stages: item.stages,
                     currentIndex: item.currentStageIndex,
                     nodeBackground: cardBackground,
-                    secondaryTextColor: secondaryTextColor
+                    secondaryTextColor: secondaryTextColor,
+                    completedTint: TicketProgressColorPalette.completedNeutral
                 )
             }
             .padding(10)

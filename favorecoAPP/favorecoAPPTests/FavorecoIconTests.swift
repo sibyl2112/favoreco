@@ -21,6 +21,8 @@ final class FavorecoIconTests: XCTestCase {
             "safari",
             "doc.viewfinder",
             "link.badge.plus",
+            "bookmark",
+            "photo.on.rectangle.angled",
         ].forEach { systemName in
             XCTAssertNotNil(
                 PhosphorIconGlyph.glyph(for: systemName),

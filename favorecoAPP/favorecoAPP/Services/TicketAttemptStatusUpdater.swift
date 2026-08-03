@@ -17,11 +17,15 @@ enum TicketAttemptStatusUpdater {
     ) throws {
         guard attempt.statusKey != statusKey, let plan = attempt.plan else { return }
 
+        let previousStatusKey = attempt.statusKey
         let now = Date()
         attempt.statusKey = statusKey
         attempt.updatedAt = now
+        if statusKey == "waitingIssue", attempt.paidAt == Date.distantPast {
+            attempt.paidAt = now
+        }
         if statusKey == "issued" {
-            if attempt.paidAt == Date.distantPast {
+            if previousStatusKey != "waitingIssue", attempt.paidAt == Date.distantPast {
                 attempt.paidAt = now
             }
             if attempt.issuedAt == Date.distantPast {
@@ -53,6 +57,27 @@ enum TicketAttemptStatusUpdater {
                 await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
             }
         }
+    }
+
+    static func moveBackOneStage(
+        attempt: TicketAttempt,
+        in modelContext: ModelContext
+    ) throws {
+        guard let previousStatusKey = TicketStatusTransitionDefinition.previousStatusKey(for: attempt) else {
+            return
+        }
+
+        switch previousStatusKey {
+        case "beforeApply", "onSaleSoon", "waitingResult", "won", "waitingPayment":
+            attempt.paidAt = .distantPast
+            attempt.issuedAt = .distantPast
+        case "waitingIssue":
+            attempt.issuedAt = .distantPast
+        default:
+            break
+        }
+
+        try update(attempt: attempt, to: previousStatusKey, in: modelContext)
     }
 
     static func archive(

@@ -10,11 +10,12 @@ import SwiftData
 
 struct ContentView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
+    @Environment(\.colorScheme) private var systemColorScheme
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
-    @AppStorage(AppStorageKeys.baseTheme) private var baseThemeRaw = FavorecoBaseTheme.skyBlue.rawValue
+    @AppStorage(AppStorageKeys.baseTheme) private var baseThemeRaw = FavorecoBaseTheme.favoNeon.rawValue
     @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
-    @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#147C88"
+    @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#256F9C"
     @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
     @AppStorage(AppStorageKeys.fontWeight) private var fontWeightRaw = AppFontWeight.standard.rawValue
     @AppStorage(AppStorageKeys.lastSeenReleaseVersion) private var lastSeenReleaseVersion = ""
@@ -46,6 +47,10 @@ struct ContentView: View {
         .modifier(AppTextSizeModifier())
         .environment(\.locale, Locale(identifier: "ja_JP"))
         .preferredColorScheme(appearanceMode.colorScheme)
+        .environment(
+            \.favorecoAppColorScheme,
+            appearanceMode.colorScheme ?? systemColorScheme
+        )
         .environment(\.favorecoThemePalette, effectiveThemePalette)
         .tint(effectiveThemePalette.globalTint)
         .animation(nil, value: fontStyleRaw)
@@ -75,7 +80,7 @@ struct ContentView: View {
     }
 
     private var effectiveThemePalette: FavorecoThemePalette {
-        let baseTheme = FavorecoBaseTheme(rawValue: baseThemeRaw) ?? .skyBlue
+        let baseTheme = FavorecoBaseTheme(rawValue: baseThemeRaw) ?? .favoNeon
         let mode = FavorecoThemeMode(rawValue: themeModeRaw) ?? .categoryAccent
         guard purchaseManager.currentPlan.includesLocalFullFeatures, mode == .unified else {
             return FavorecoThemePalette(

@@ -11,6 +11,8 @@ import SwiftData
 struct EditTicketAttemptView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var allAttempts: [TicketAttempt]
 
@@ -21,6 +23,7 @@ struct EditTicketAttemptView: View {
     @State private var validationError = ""
     @State private var operationError = ""
     @State private var isShowingArchiveConfirmation = false
+    @State private var isShowingProgressRewindConfirmation = false
 
     init(plan: Plan, attempt: TicketAttempt? = nil, prioritizesDates: Bool = false) {
         self.plan = plan
@@ -68,24 +71,30 @@ struct EditTicketAttemptView: View {
         editingAttempt == nil ? "チケットを追加" : "チケットを編集"
     }
 
-    private var saveAccentColor: Color {
-        if plan.category?.templateKey == "theater" {
-            return TheaterCategoryStyle.gold
-        }
-        return plan.category.map { Color(hex: $0.colorHex) } ?? Color.accentColor
-    }
-
-    private var saveForegroundColor: Color {
-        plan.category?.templateKey == "theater"
-            ? TheaterCategoryStyle.black
-            : .white
-    }
-
     var body: some View {
         NavigationStack {
             Form {
                 if prioritizesDates {
                     dateFieldsSection
+
+                    if let editingAttempt,
+                       TicketStatusTransitionDefinition.previousStatusKey(for: editingAttempt) != nil {
+                        Section("進捗の修正") {
+                            Button(role: .destructive) {
+                                isShowingProgressRewindConfirmation = true
+                            } label: {
+                                FavorecoIconLabel(
+                                    "進捗を1つ前の工程に戻す",
+                                    systemImage: "arrow.uturn.backward",
+                                    iconSize: 16
+                                )
+                            }
+
+                            Text("当落や支払い、受取の記録を間違えた場合に使います。工程日は変更しません。")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 Section("チケット情報") {
@@ -106,19 +115,6 @@ struct EditTicketAttemptView: View {
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, ExplicitFormMetrics.rowTopPadding)
-
-                    if draft.showsApplicationGroup {
-                        ExplicitFormTextField(
-                            title: "申込まとめ（任意）",
-                            prompt: "例：あの夏｜7/31 東京公演",
-                            text: $draft.applicationGroupName,
-                            labelStyle: .horizontal
-                        )
-                        Text("同じ日程の別サイト申込や、ツアーの複数日程をまとめます。申込枠と購入先はこの申込だけに保存されます。")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.vertical, ExplicitFormMetrics.rowTopPadding)
-                    }
 
                     if draft.showsEntryRoute {
                         ExplicitFormControlRow(title: draft.entryRouteLabel) {
@@ -291,10 +287,12 @@ struct EditTicketAttemptView: View {
                     } label: {
                         Text("保存")
                             .font(FavorecoTypography.bodyStrong)
-                            .foregroundStyle(saveForegroundColor)
+                            .foregroundStyle(
+                                themePalette.prominentActionForeground(for: colorScheme)
+                            )
                             .padding(.horizontal, 13)
                             .frame(height: 34)
-                            .background(saveAccentColor, in: Capsule())
+                            .background(themePalette.prominentAction, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -318,6 +316,18 @@ struct EditTicketAttemptView: View {
                 Button("キャンセル", role: .cancel) {}
             } message: {
                 Text("予定本体と他のチケット情報は残り、この項目の予約済み通知だけを解除します。")
+            }
+            .confirmationDialog(
+                "進捗を1つ前の工程に戻しますか？",
+                isPresented: $isShowingProgressRewindConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("1つ前の工程に戻す", role: .destructive) {
+                    moveProgressBackOneStage()
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("現在の進捗と、その工程より後に記録された完了日時を修正します。申込枠・販売サイト・保存済みの工程日は削除されません。この画面でまだ保存していない変更は反映されません。")
             }
             .alert("操作を完了できませんでした", isPresented: Binding(
                 get: { !operationError.isEmpty },
@@ -427,6 +437,20 @@ struct EditTicketAttemptView: View {
         } catch {
             operationError = "申込を非表示にできませんでした。もう一度お試しください。"
             assertionFailure("Failed to archive ticket attempt: \(error)")
+        }
+    }
+
+    private func moveProgressBackOneStage() {
+        guard let editingAttempt else { return }
+        do {
+            try TicketAttemptStatusUpdater.moveBackOneStage(
+                attempt: editingAttempt,
+                in: modelContext
+            )
+            dismiss()
+        } catch {
+            operationError = "進捗を戻せませんでした。もう一度お試しください。"
+            assertionFailure("Failed to rewind ticket progress: \(error)")
         }
     }
 
@@ -601,10 +625,6 @@ private struct TicketAttemptDraft {
     }
 
     var showsEntryRoute: Bool {
-        flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
-    }
-
-    var showsApplicationGroup: Bool {
         flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
     }
 

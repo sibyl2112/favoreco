@@ -3,23 +3,53 @@ import SwiftData
 
 nonisolated enum CollectibleKind: String, CaseIterable, Identifiable {
     case capsuleToy = "capsule_toy"
+    case acrylicStand = "acrylic_stand"
     case acrylicKeychain = "acrylic_keychain"
     case canBadge = "can_badge"
     case bromide = "bromide"
+    case card
     case sticker
+    case plush
+    case keychainStrap = "keychain_strap"
+    case figure
     case other
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .capsuleToy: "カプセルトイ"
-        case .acrylicKeychain: "アクリルキーホルダー"
+        case .capsuleToy: "カプセルトイ・ガチャ"
+        case .acrylicStand: "アクリルスタンド"
+        case .acrylicKeychain: "アクリルキーホルダー・チャーム"
         case .canBadge: "缶バッジ"
-        case .bromide: "ブロマイド・カード"
-        case .sticker: "ステッカー"
+        case .bromide: "ブロマイド・写真"
+        case .card: "カード"
+        case .sticker: "ステッカー・シール"
+        case .plush: "ぬいぐるみ・マスコット"
+        case .keychainStrap: "キーホルダー・ストラップ"
+        case .figure: "フィギュア"
         case .other: "その他"
         }
+    }
+
+    var shortDisplayName: String {
+        switch self {
+        case .capsuleToy: "ガチャ"
+        case .acrylicStand: "アクスタ"
+        case .acrylicKeychain: "アクキー"
+        case .canBadge: "缶バッジ"
+        case .bromide: "ブロマイド"
+        case .card: "カード"
+        case .sticker: "ステッカー"
+        case .plush: "ぬい・マスコット"
+        case .keychainStrap: "キーホルダー"
+        case .figure: "フィギュア"
+        case .other: "その他"
+        }
+    }
+
+    static func resolved(from rawValue: String) -> CollectibleKind {
+        CollectibleKind(rawValue: rawValue) ?? .other
     }
 }
 

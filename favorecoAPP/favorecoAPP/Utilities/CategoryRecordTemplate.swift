@@ -141,15 +141,15 @@ struct CategoryRecordTemplate {
             )
         case "movie":
             return CategoryRecordTemplate(
-                targetSectionTitle: "映画",
-                titlePlaceholder: "映画タイトル",
-                seriesPlaceholder: "シリーズ・上映企画（任意）",
-                visitSectionTitle: "鑑賞した回",
+                targetSectionTitle: "映像作品",
+                titlePlaceholder: "作品タイトル",
+                seriesPlaceholder: "シリーズ（任意）",
+                visitSectionTitle: "鑑賞した記録",
                 dateLabel: "鑑賞日",
-                venuePlaceholder: "映画館・スクリーン（任意）",
+                venuePlaceholder: "映画館・場所（任意）",
                 ratingLabel: "評価",
-                memoSectionTitle: "映画メモ",
-                memoPlaceholder: "印象に残った場面、音響、上映形式など"
+                memoSectionTitle: "作品メモ",
+                memoPlaceholder: "印象に残ったことや感想"
             )
         case "sake":
             return CategoryRecordTemplate(

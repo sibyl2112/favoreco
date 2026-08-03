@@ -101,6 +101,127 @@ final class TicketWorkflowTests: XCTestCase {
         XCTAssertEqual(CategoryTicketProgressItem.activeItems(in: [plan], categoryID: category.id).count, 1)
     }
 
+    func testUndatedOverviewFilterMatchesOnlyActiveTicketsWithoutSchedule() {
+        let undatedPlan = Plan(planKindKey: Plan.undatedTicketPlanKindKey)
+        let datedPlan = Plan(startsAt: date(2026, 8, 12), endsAt: date(2026, 8, 12))
+
+        XCTAssertTrue(
+            TicketOverviewFilter.undated.includes(
+                TicketAttempt(statusKey: "beforeApply", plan: undatedPlan)
+            )
+        )
+        XCTAssertFalse(
+            TicketOverviewFilter.undated.includes(
+                TicketAttempt(statusKey: "beforeApply", plan: datedPlan)
+            )
+        )
+        XCTAssertFalse(
+            TicketOverviewFilter.undated.includes(
+                TicketAttempt(statusKey: "lost", plan: undatedPlan)
+            )
+        )
+        XCTAssertFalse(
+            TicketOverviewFilter.undated.includes(
+                TicketAttempt(statusKey: "attended", plan: undatedPlan)
+            )
+        )
+    }
+
+    func testNeedsActionFilterIncludesHomeStatusFallbacks() {
+        XCTAssertTrue(
+            TicketOverviewFilter.needsAction.includes(
+                TicketAttempt(statusKey: "won")
+            )
+        )
+        XCTAssertTrue(
+            TicketOverviewFilter.needsAction.includes(
+                TicketAttempt(statusKey: "waitingIssue")
+            )
+        )
+    }
+
+    func testWonWithoutPaymentDeadlineReportsInputIssue() {
+        let attempt = TicketAttempt(
+            statusKey: "won",
+            paymentDeadlineAt: .distantPast
+        )
+
+        XCTAssertEqual(
+            TicketInputIssueDefinition.issue(for: attempt)?.title,
+            "支払締切を設定"
+        )
+    }
+
+    func testHomeTicketScheduleCollapsedAndExpandedCounts() {
+        XCTAssertEqual(HomeAttentionDisplay.visibleCount(total: 0, isExpanded: false), 0)
+        XCTAssertEqual(HomeAttentionDisplay.visibleCount(total: 1, isExpanded: false), 1)
+        XCTAssertEqual(HomeAttentionDisplay.visibleCount(total: 4, isExpanded: false), 3)
+        XCTAssertEqual(HomeAttentionDisplay.visibleCount(total: 4, isExpanded: true), 4)
+        XCTAssertEqual(HomeAttentionDisplay.hiddenCount(total: 4), 1)
+        XCTAssertEqual(HomeAttentionDisplay.hiddenCount(total: 12), 9)
+    }
+
+    func testTicketManagementVisualStagesUseTheAiryPalette() {
+        XCTAssertEqual(
+            TicketProgressColorPalette.visualStage(forDeadlineLabel: "抽選申込"),
+            .application
+        )
+        XCTAssertEqual(
+            TicketProgressColorPalette.visualStage(forDeadlineLabel: "チケ発売"),
+            .sale
+        )
+        XCTAssertEqual(
+            TicketProgressColorPalette.visualStage(forDeadlineLabel: "抽選当落"),
+            .result
+        )
+        XCTAssertEqual(
+            TicketProgressColorPalette.visualStage(forDeadlineLabel: "チケ支払"),
+            .payment
+        )
+        XCTAssertEqual(
+            TicketProgressColorPalette.visualStage(forDeadlineLabel: "チケ受取"),
+            .acquired
+        )
+        XCTAssertEqual(
+            TicketProgressColorPalette.visualStage(forDeadlineLabel: "参加日"),
+            .acquired
+        )
+        XCTAssertNil(TicketProgressColorPalette.visualStage(forDeadlineLabel: "チケット"))
+
+        XCTAssertEqual(TicketProgressVisualStage.application.surfaceHex, "#D5F3F8")
+        XCTAssertEqual(TicketProgressVisualStage.sale.surfaceHex, "#DDEFFC")
+        XCTAssertEqual(TicketProgressVisualStage.result.surfaceHex, "#F8D8E2")
+        XCTAssertEqual(TicketProgressVisualStage.payment.surfaceHex, "#F8E9BB")
+        XCTAssertEqual(TicketProgressVisualStage.acquired.surfaceHex, "#D7F1E7")
+        XCTAssertEqual(TicketProgressVisualStage.result.accentHex, "#B34769")
+    }
+
+    func testCombinedEntryActionUsesSavedLotteryOrSaleFlow() {
+        let lotteryAttempt = TicketAttempt(
+            statusKey: "beforeApply",
+            entryRouteKey: "card"
+        )
+        let saleAttempt = TicketAttempt(
+            statusKey: "onSaleSoon",
+            entryRouteKey: "general"
+        )
+
+        XCTAssertEqual(
+            TicketProgressPresentation.deadlineLabel(
+                forActionTitle: "申込・発売開始",
+                attempt: lotteryAttempt
+            ),
+            "抽選申込"
+        )
+        XCTAssertEqual(
+            TicketProgressPresentation.deadlineLabel(
+                forActionTitle: "申込・発売開始",
+                attempt: saleAttempt
+            ),
+            "チケ発売"
+        )
+    }
+
     func testHomePickupLimitsEachLifecycleToNewestTenItems() {
         let now = date(2026, 7, 24, hour: 12)
         let category = RecordCategory(name: "観劇", templateKey: "theater")
@@ -192,7 +313,7 @@ final class TicketWorkflowTests: XCTestCase {
 
         let stages = TicketProgressTimeline.stages(for: attempt, plan: plan)
 
-        XCTAssertEqual(stages.map(\.title), ["申込", "当落", "支払", "取得"])
+        XCTAssertEqual(stages.map(\.title), ["申込", "当落", "支払", "受取"])
         XCTAssertEqual(TicketProgressTimeline.currentIndex(for: attempt, stages: stages), 2)
     }
 
@@ -232,7 +353,7 @@ final class TicketWorkflowTests: XCTestCase {
 
         let stages = TicketProgressTimeline.stages(for: attempt, plan: plan)
 
-        XCTAssertEqual(stages.map(\.title), ["申込", "当落", "支払", "取得"])
+        XCTAssertEqual(stages.map(\.title), ["申込", "当落", "支払", "受取"])
         XCTAssertEqual(TicketProgressTimeline.currentIndex(for: attempt, stages: stages), stages.count)
     }
 
@@ -339,8 +460,75 @@ final class TicketWorkflowTests: XCTestCase {
 
         let stages = TicketProgressTimeline.stages(for: attempt, plan: plan)
 
-        XCTAssertEqual(stages.map(\.title), ["発売", "取得"])
+        XCTAssertEqual(stages.map(\.title), ["発売", "受取"])
         XCTAssertEqual(stages.first?.date, date(2026, 7, 1))
+    }
+
+    func testPaymentAndReceiptAreSeparateExplicitTransitions() {
+        let paymentAttempt = TicketAttempt(statusKey: "waitingPayment")
+        let receiptAttempt = TicketAttempt(statusKey: "waitingIssue")
+
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.transitions(for: paymentAttempt).first?.targetStatusKey,
+            "waitingIssue"
+        )
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.transitions(for: paymentAttempt).first?.title,
+            "支払い済みにする"
+        )
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.transitions(for: receiptAttempt).first?.targetStatusKey,
+            "issued"
+        )
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.transitions(for: receiptAttempt).first?.title,
+            "チケットを受け取った"
+        )
+    }
+
+    func testCurrentStageLabelsExplainWhatTheUserIsWaitingFor() {
+        XCTAssertEqual(
+            TicketProgressPresentation.currentStageLabel(
+                for: TicketAttempt(statusKey: "beforeApply", entryRouteKey: "card")
+            ),
+            "抽選申込"
+        )
+        XCTAssertEqual(
+            TicketProgressPresentation.currentStageLabel(
+                for: TicketAttempt(statusKey: "waitingResult", entryRouteKey: "card")
+            ),
+            "当落待ち"
+        )
+        XCTAssertEqual(
+            TicketProgressPresentation.currentStageLabel(
+                for: TicketAttempt(statusKey: "waitingIssue", entryRouteKey: "card")
+            ),
+            "受取待ち"
+        )
+    }
+
+    func testPreviousProgressStageRecoversFromMistakenResultAndReceipt() {
+        let lotteryPlan = Plan()
+        let lostAttempt = TicketAttempt(
+            statusKey: "lost",
+            entryRouteKey: "fanClub",
+            plan: lotteryPlan
+        )
+        let issuedAttempt = TicketAttempt(
+            statusKey: "issued",
+            entryRouteKey: "fanClub",
+            paymentDeadlineAt: date(2026, 8, 15),
+            plan: lotteryPlan
+        )
+
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.previousStatusKey(for: lostAttempt),
+            "waitingResult"
+        )
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.previousStatusKey(for: issuedAttempt),
+            "waitingIssue"
+        )
     }
 
     func testApplicationStartNotificationUsesSaleCopyForDirectPurchase() {

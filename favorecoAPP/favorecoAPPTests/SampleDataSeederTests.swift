@@ -101,6 +101,13 @@ final class SampleDataSeederTests: XCTestCase {
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<PhotoBlob>()), 2)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleItem>()), 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleTransaction>()), 0)
+
+        let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        XCTAssertEqual(Set(events.map(\.screenWorkType)), Set(ScreenWorkType.allCases))
+        XCTAssertEqual(
+            Set(events.map(\.screenWorkSeasonNumber)),
+            Set([0, 1, 2])
+        )
     }
 
     func testAutomaticInsertionRunsOnlyOnce() throws {

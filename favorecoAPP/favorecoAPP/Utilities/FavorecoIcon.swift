@@ -170,6 +170,8 @@ enum PhosphorIconGlyph {
             || name == "rectangle.landscape" || name == "rectangle.landscape.fill" {
             return scalar(0xE2CA)
         }
+        if name.hasPrefix("photo.on.rectangle") { return scalar(0xE836) }
+        if name.hasPrefix("bookmark") { return scalar(0xE0E8) }
         if name.hasPrefix("doc.viewfinder") { return scalar(0xEBB6) }
         if name.hasPrefix("sparkles") || name.hasPrefix("wand.") {
             return scalar(0xE6A2)

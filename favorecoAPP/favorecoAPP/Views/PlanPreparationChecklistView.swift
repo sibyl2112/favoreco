@@ -311,12 +311,12 @@ struct PlanPreparationChecklistView: View {
                     editingTask = task
                     isShowingEditor = true
                 } label: {
-                    FavorecoIconLabel("編集", systemImage: "pencil")
+                    Label("編集", systemImage: "pencil")
                 }
                 Button(role: .destructive) {
                     delete(task)
                 } label: {
-                    FavorecoIconLabel("削除", systemImage: "trash")
+                    Label("削除", systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis")
