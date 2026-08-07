@@ -21,28 +21,30 @@ struct CategoryVisitRecordPosterTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             GeometryReader { geometry in
-                ThumbnailImage(
-                    reference: .event(item.event.id),
-                    displaySize: geometry.size,
-                    contentMode: .fill
-                ) {
-                    CategoryDefaultArtworkImage(
-                        templateKey: category.templateKey,
-                        displaySize: geometry.size
-                    )
+                ZStack(alignment: .topTrailing) {
+                    ThumbnailImage(
+                        reference: .event(item.event.id),
+                        displaySize: geometry.size,
+                        contentMode: .fill
+                    ) {
+                        CategoryDefaultArtworkImage(
+                            templateKey: category.templateKey,
+                            displaySize: geometry.size
+                        )
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
+
+                    if category.templateKey == "museum" {
+                        Text(ordinalBadgeText)
+                            .font(FavorecoTypography.jpSans(20, weight: .bold, relativeTo: .body))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.72), radius: 3, y: 1)
+                            .padding(6)
+                    }
                 }
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                .clipped()
             }
             .aspectRatio(posterAspectRatio, contentMode: .fit)
-
-            if category.templateKey == "museum" {
-                Text(ExperienceDetailPresentation.museumVisitOrdinal(for: item.visit))
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .padding(.horizontal, 6)
-            }
 
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Text(FavorecoDateText.compactDate(item.visit.visitedAt))
@@ -84,6 +86,12 @@ struct CategoryVisitRecordPosterTile: View {
             return "\(title)、\(date)\(ordinal)、評価なし"
         }
         return "\(title)、\(date)\(ordinal)、評価\(String(format: "%.1f", item.visit.overallRating))"
+    }
+
+    private var ordinalBadgeText: String {
+        let ordinal = ExperienceDetailPresentation.visitOrdinal(for: item.visit)
+        let circled = ["⓪", "①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"]
+        return circled.indices.contains(ordinal) ? circled[ordinal] : "\(ordinal)"
     }
 }
 

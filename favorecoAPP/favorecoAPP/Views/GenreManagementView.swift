@@ -929,15 +929,22 @@ private struct GenreFormSettingItem: Identifiable {
         }
 
         switch (templateKey, definition.id) {
-        case ("movie", "basic"): ("作品・鑑賞情報", "作品区分、タイトル、鑑賞日、映画館、評価")
-        case ("movie", "memo"): ("感想・メモ", "作品の感想や残しておきたいこと")
-        case ("museum", "basic"): ("展示・鑑賞情報", "展示名、鑑賞日、会場、評価")
-        case ("live", "basic"): ("ライブ・参加情報", "ライブ名、参加日、会場、評価")
+        case ("movie", "basic"):
+            return ("作品・鑑賞情報", "作品区分、タイトル、鑑賞日、映画館、評価")
+        case ("movie", "memo"):
+            return ("感想・メモ", "作品の感想や残しておきたいこと")
+        case ("museum", "basic"):
+            return ("展示・鑑賞情報", "展示名、鑑賞日、会場、評価")
+        case ("live", "basic"):
+            return ("ライブ・参加情報", "ライブ名、参加日、会場、評価")
         case ("theme_park", "basic"), ("nature_living", "basic"), ("outing_facility", "basic"):
-            ("施設・訪問情報", "施設名、訪問日、場所、評価")
-        case ("sake", "basic"): ("お酒・記録情報", "銘柄、飲んだ日、場所、評価")
-        case ("goshuin", "basic"): ("参拝情報", "参拝先、参拝日、場所")
-        default: (definition.name, definition.description)
+            return ("施設・訪問情報", "施設名、訪問日、場所、評価")
+        case ("sake", "basic"):
+            return ("お酒・記録情報", "銘柄、飲んだ日、場所、評価")
+        case ("goshuin", "basic"):
+            return ("参拝情報", "参拝先、参拝日、場所")
+        default:
+            return (definition.name, definition.description)
         }
     }
 

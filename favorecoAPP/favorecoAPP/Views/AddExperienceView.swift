@@ -986,6 +986,14 @@ struct EditExperienceView: View {
                     Divider()
                     OutingFacilityTypePicker(selection: $draft.subTypeKey)
                 }
+                if let categoryTemplateKey = category?.templateKey,
+                   ["theme_park", "nature_living"].contains(categoryTemplateKey) {
+                    Divider()
+                    VisitSubtitleEditor(
+                        text: $draft.visitSubtitle,
+                        categoryTemplateKey: categoryTemplateKey
+                    )
+                }
             }
         case "officialInfo":
             if isTheaterVisit {
@@ -1645,6 +1653,14 @@ struct AddVisitView: View {
                     onSelectPublicPlace: { draft.apply(publicPlace: $0) },
                     onOpenPlaceSearch: { isShowingPlaceSearch = true }
                 )
+                if let categoryTemplateKey = event.category?.templateKey,
+                   ["theme_park", "nature_living"].contains(categoryTemplateKey) {
+                    Divider()
+                    VisitSubtitleEditor(
+                        text: $draft.visitSubtitle,
+                        categoryTemplateKey: categoryTemplateKey
+                    )
+                }
             }
         case "memo":
             VStack(alignment: .leading, spacing: 16) {
@@ -1894,6 +1910,7 @@ struct AddExperienceDraft {
     var officialURL: String = ""
     var socialLinksText: String = ""
     var eventSubtitle: String = ""
+    var visitSubtitle: String = ""
     var theaterCreditsText: String = ""
     var visitedAt: Date = Date()
     var endedAt: Date = Date()
@@ -1948,6 +1965,7 @@ struct AddExperienceDraft {
         outcomeKey = visit.outcomeKey
         seatText = visit.seatText
         let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+        visitSubtitle = unitFields.visitSubtitle
         ocrText = unitFields.ocrText
         eyecatchAspectRatioKey = unitFields.eyecatchAspectRatioKey
         goshuinBookSizeKey = unitFields.goshuinBookSizeKey
@@ -2106,6 +2124,7 @@ struct AddExperienceDraft {
         VisitUnitFields(
             ocrText: trimmedOCRText,
             styleNames: normalizedStyleNames(from: styleNamesText),
+            visitSubtitle: visitSubtitle.trimmingCharacters(in: .whitespacesAndNewlines),
             excludedEventCastLinkIDs: excludedEventCastLinkIDs.sorted { $0.uuidString < $1.uuidString },
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
@@ -2262,6 +2281,7 @@ struct VisitDraft {
     var endedAt: Date
     var bookReadingHasEndDate: Bool = true
     var styleNamesText: String = ""
+    var visitSubtitle: String = ""
     var venueName: String = ""
     var venueAddress: String = ""
     var latitude: Double = 0
@@ -2429,6 +2449,7 @@ struct VisitDraft {
         VisitUnitFields(
             ocrText: trimmedOCRText,
             styleNames: normalizedStyleNames(from: styleNamesText),
+            visitSubtitle: visitSubtitle.trimmingCharacters(in: .whitespacesAndNewlines),
             excludedEventCastLinkIDs: excludedEventCastLinkIDs.sorted { $0.uuidString < $1.uuidString },
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
@@ -2444,6 +2465,39 @@ struct VisitDraft {
             return "未評価"
         }
         return String(format: "%.1f", overallRating)
+    }
+}
+
+private struct VisitSubtitleEditor: View {
+    @Binding var text: String
+    let categoryTemplateKey: String
+
+    private var title: String {
+        categoryTemplateKey == "theme_park" ? "イベント名（任意）" : "今回の見どころ"
+    }
+
+    private var prompt: String {
+        categoryTemplateKey == "theme_park"
+            ? "例：ディズニー・ハロウィーン"
+            : "例：クラゲ展示、夜の水族館"
+    }
+
+    private var explanation: String {
+        categoryTemplateKey == "theme_park"
+            ? "施設名とは別に、この来園で開催されていたイベント名を残します。"
+            : "施設名とは別に、この来園で見た展示や目的を残します。"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(FavorecoTypography.bodyStrong)
+            TextField(prompt, text: $text)
+                .textInputAutocapitalization(.sentences)
+            Text(explanation)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

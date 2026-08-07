@@ -144,6 +144,9 @@ enum SampleDataSeeder {
                 let placeSeed = samplePlace(for: category, index: sampleIndex)
                 let unitFields = VisitUnitFields(
                     ocrText: sampleOCRText(for: category, title: definition.title),
+                    visitSubtitle: category.templateKey == "nature_living" && scenario == .completed
+                        ? natureVisitSubtitle(for: sampleIndex)
+                        : "",
                     eventPeriodStartsAt: scenario == .catalogOnly ? itemDate : nil,
                     eventPeriodEndsAt: scenario == .catalogOnly
                         ? itemDate.addingTimeInterval(14 * 24 * 60 * 60)
@@ -652,7 +655,7 @@ enum SampleDataSeeder {
             seriesName = ""
             organizer = ""
         case "nature_living":
-            titles = ["海遊館", "沖縄美ら海水族館", "旭山動物園", "名古屋港水族館", "鳥羽水族館", "水族館へ行く", "動物園へ行く", "植物園へ行く", "クラゲ展示が気になる", "夜の水族館が気になる", "温室を見てみたい", "深海生物の特別展示", "野鳥観察イベント", "熱帯植物展", "ペンギンの生態展示", "珊瑚礁の企画展示"]
+            titles = ["海遊館", "沖縄美ら海水族館", "旭山動物園", "名古屋港水族館", "鳥羽水族館", "葛西臨海水族園", "神戸どうぶつ王国", "京都府立植物園", "すみだ水族館", "新江ノ島水族館", "神代植物公園", "サンシャイン水族館", "上野動物園", "夢の島熱帯植物館", "アクアマリンふくしま", "掛川花鳥園"]
             seriesName = ""
             organizer = ""
         case "outing_facility":
@@ -683,6 +686,10 @@ enum SampleDataSeeder {
             subTypeKey: sampleSubTypeKey(for: category, index: index),
             organizer: organizer
         )
+    }
+
+    private static func natureVisitSubtitle(for index: Int) -> String {
+        ["クラゲ展示", "夜の水族館", "ペンギンの生態展示", "珊瑚礁の企画展示", "温室の特別公開"][index % 5]
     }
 
     private static func samplePlace(for category: RecordCategory, index: Int) -> SamplePlace {

@@ -39,6 +39,9 @@ enum MasterMergeService {
         destination.aliasesRaw = mergedTerms(destination.aliasesRaw, source.aliasesRaw, source.displayName)
         destination.roleTagsRaw = mergedTerms(destination.roleTagsRaw, source.roleTagsRaw)
         destination.memo = preferred(destination.memo, fallback: source.memo)
+        if destination.imageData == nil {
+            destination.imageData = source.imageData
+        }
         destination.officialURL = preferred(destination.officialURL, fallback: source.officialURL)
         destination.socialLinksRaw = preferred(destination.socialLinksRaw, fallback: source.socialLinksRaw)
         destination.imagePath = preferred(destination.imagePath, fallback: source.imagePath)

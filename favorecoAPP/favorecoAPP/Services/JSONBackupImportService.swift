@@ -186,6 +186,9 @@ enum JSONBackupImportService {
             model.isArchived = item.isArchived
             model.createdAt = item.createdAt
             model.updatedAt = item.updatedAt
+            if let base64 = item.imageDataBase64, let data = Data(base64Encoded: base64) {
+                model.imageData = data
+            }
         }
 
         for item in envelope.ticketAccounts {

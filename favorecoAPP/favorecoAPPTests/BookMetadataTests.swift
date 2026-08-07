@@ -6,13 +6,15 @@ final class BookMetadataTests: XCTestCase {
         let rawValue = VisitUnitFields(
             bookSeriesName: "灯台文庫",
             bookVolumeNumber: "2",
-            bookAuthorName: "架空 著者"
+            bookAuthorName: "架空 著者",
+            bookISBN: "9784101010014"
         ).encodedRawValue
         let restored = VisitUnitFields(rawValue: rawValue)
 
         XCTAssertEqual(restored.bookSeriesName, "灯台文庫")
         XCTAssertEqual(restored.bookVolumeNumber, "2")
         XCTAssertEqual(restored.bookAuthorName, "架空 著者")
+        XCTAssertEqual(restored.bookISBN, "9784101010014")
     }
 
     @MainActor
@@ -22,12 +24,14 @@ final class BookMetadataTests: XCTestCase {
         event.applyBookMetadata(
             seriesName: "灯台文庫",
             volumeNumber: "2",
-            authorName: "架空 著者"
+            authorName: "架空 著者",
+            isbn: "9784101010014"
         )
 
         XCTAssertEqual(event.bookSeriesName, "灯台文庫")
         XCTAssertEqual(event.bookVolumeLabel, "第2巻")
         XCTAssertEqual(event.bookAuthorName, "架空 著者")
+        XCTAssertEqual(event.bookISBN, "9784101010014")
         XCTAssertEqual(event.seriesName, "灯台文庫・第2巻・架空 著者")
     }
 
@@ -38,6 +42,27 @@ final class BookMetadataTests: XCTestCase {
         XCTAssertTrue(restored.bookSeriesName.isEmpty)
         XCTAssertTrue(restored.bookVolumeNumber.isEmpty)
         XCTAssertTrue(restored.bookAuthorName.isEmpty)
+        XCTAssertTrue(restored.bookISBN.isEmpty)
+    }
+
+    func testISBNNormalizationAcceptsHyphensAndSpaces() {
+        XCTAssertEqual(
+            BookMetadataLookupService.normalizedISBN("ISBN 978-4-10-101001-4"),
+            "9784101010014"
+        )
+        XCTAssertEqual(
+            BookMetadataLookupService.normalizedISBN("4-10-101001-X"),
+            "410101001X"
+        )
+    }
+
+    func testISBNExtractionFromOCRText() {
+        XCTAssertEqual(
+            BookMetadataLookupService.isbnCandidates(
+                from: "定価 700円\nISBN 978-4-10-101001-4\n新潮文庫"
+            ),
+            ["9784101010014"]
+        )
     }
 
     func testNextVolumeNumberUsesLargestStructuredVolume() {

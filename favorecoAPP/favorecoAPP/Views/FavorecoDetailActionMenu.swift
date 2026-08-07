@@ -22,7 +22,8 @@ struct FavorecoDetailActionMenuButton: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: size >= 44 ? 20 : 16, weight: .bold))
-                .foregroundStyle(accentColor)
+                // ジャンル色の円とアクセント色が近い場合も、操作記号を埋もれさせない。
+                .foregroundStyle(Color(red: 0.98, green: 0.96, blue: 0.91))
                 .frame(width: size, height: size)
                 .background(genreColor.opacity(0.88), in: Circle())
                 .overlay {

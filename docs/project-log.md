@@ -5,6 +5,138 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-08-08: 書籍詳細を1冊1読書記録の導線へ整理
+
+### 変更概要・意図
+- 書籍詳細にも他ジャンル共通の`予定を立てる / 記録を追加`が常時表示され、読了済みの本へ2件目のVisitを作れていた
+- 書籍トップの読書中／読了タイルも1回の読書記録ではなく、その汎用本詳細を開いていた
+- 読書中／読了タイルは最新の読書記録詳細へ直接進み、未記録の気になる／積読だけ本詳細を開く
+- 書籍は1冊につき読書記録1件を基本とし、既存記録がある時は`読書記録を見る`、未記録時だけ`読書を記録`を表示する
+- 書籍詳細から汎用の予定ボタン、記録件数・最新日・平均評価・複数履歴を外し、本の情報と1件の読書記録へ絞った
+- 既存の重複記録は利用者データを勝手に削除せず、最新記録を開く
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 書籍専用の単一CTAと表示分岐を追加
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 読書中／読了タイルを読書記録詳細へ直接接続
+- `favoreco/CLAUDE.md`: 書籍を1冊1読書記録とする現行仕様へ更新
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新
+
+### 影響する画面・機能
+- 書籍トップから開く単行本詳細と、その読書記録詳細への遷移
+- 他ジャンルの対象詳細、書籍一覧の読了冊数、既存保存データは変更しない
+
+### 確認結果（実機 / ビルド）
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- Simulator向けビルドはCoreSimulatorService停止によるAsset Catalogエラーで環境中断（Swift変更由来のエラーではない）
+
+### 既知のリスク・残課題
+- 実機で読了本のタップ、`読書記録を見る`、未記録本の`読書を記録`、開閉だけでは件数が変化しないことを確認する
+- 過去に作成済みの重複Visitは自動削除しない
+
+## 2026-08-08: 写真取込後の操作と表示崩れを整理
+
+### 変更概要・原因
+- OS標準の長押しメニュとPicker内で独自Phosphorフォントのグリフを表示し、未対応アイコンが`?`になっていた
+- 4列グリッドのセル幅に対して画像の描画サイズを拘束しておらず、縦長と横長の画像が隣接セルへ重なっていた
+- OCRと金額入力が常に目立ち、写真分類ごとの役割が不明確だった
+
+### 変更意図
+- タップは大判の写真情報、長押しは快速操作として役割を分ける
+- 元画像の縦横比に左右されず正方形セルから描画がはみ出さないようにする
+- OCRは必要な場合だけ使う任意機能、金額はチケット／グッズだけにする
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperiencePhotoThumbnail.swift`: 正方形セル拘束、aspect fill、clip、SF Symbols表示を統一
+- `favorecoAPP/favorecoAPP/Views/ExperiencePhotoUnitEditor.swift`: 大判情報シート、タップ／長押し、分類ラベル、任意OCR、金額表示条件を整理
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`: 仕様と実機確認項目を反映
+
+### 影響範囲・確認
+- 記録の新規追加、編集、既存対象への記録追加で使う共通写真ユニットが対象。保存モデル、圧縮、既存OCR本文、費用集計ルールは変更しない
+- 対象Swiftの構文解析、差分検査、署名なしgeneric iPhoneOS全体ビルドに成功。既存の`AddTicketPlanView.swift`にMainActor警告2件が残るが、今回の写真変更によるエラーはない。実機で縦長／横長混在、タップ／長押し、4分類、OCR OFF／結果あり、ライト／ダークを確認する
+
+## 2026-08-08: テーマパークの来園記録へイベント名を追加
+
+### 変更概要・原因
+- 施設をPlaceMasterへ一本化した一方、同じ施設で季節ごとに開催されるハロウィーン等を1回来園単位で残す明示欄がテーマパークにはなかった
+- 自然・生き物で使用中の`VisitUnitFields.visitSubtitle`をテーマパークにも展開し、フォームでは`イベント名（任意）`と表示した
+- 来園／体験記録行と記録詳細Heroへ副題を追加し、施設詳細の履歴表示と揃えた
+
+### 変更意図
+- `東京ディズニーランド`等の恒久的な施設名と、`ディズニー・ハロウィーン`等のその回だけの催事名を混ぜない
+- Eventマスターを再び施設一覧へ増やさず、観劇のサブタイトルに近い補足をVisit単位で保持する
+- 自然・生き物では既存の`今回の見どころ`という語彙と保存値を維持する
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: テーマパークのイベント名入力とジャンル別ラベルを追加
+- `favorecoAPP/favorecoAPP/Views/PlaceExperienceVisitRow.swift`: 来園／体験記録行へ副題を追加
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: テーマパークの記録Heroへ副題を追加
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`: 現行仕様と確認項目を更新
+
+### 影響する画面・機能
+- テーマパーク／自然・生き物の新規記録、編集、来園／体験記録一覧、施設履歴、記録詳細Hero
+- PlaceMaster、ExperienceEvent、Plan、既存Visitの保存内容とバックアップschemaは変更しない
+
+### 確認結果（実機 / ビルド）
+- 変更3 Swiftの構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+
+### 既知のリスク・残課題
+- イベント名あり／なし、新規／編集、長文、テーマパーク／自然・生き物のラベルと各表示先を実機確認する
+
+## 2026-08-08: 施設情報をPlaceMaster一覧へ一本化
+
+### 変更概要・原因
+- テーマパーク等の`施設情報`で、上段にPlaceMasterの固定施設行、下段に未紐付けの旧ExperienceEventカードが同じ件数へ混在していた
+- 表示方式の切替は下段Eventだけへ作用し、同じSection内で見た目と操作が二重化していた
+- 施設情報から旧Eventカードを外し、PlaceMaster行だけを表示・件数集計するようにした
+
+### 変更意図
+- 利用者向けの施設単位をPlaceMasterへ一本化し、Eventという内部互換構造を施設一覧へ露出させない
+- 旧Event・予定・来園／体験記録は削除せず、Interests、Coming Up、Park Log／Nature Logの該当表示を維持する
+- 施設アイキャッチは既存の`PlaceMaster.imageData`を正本とし、施設詳細の編集、一覧、詳細、バックアップ接続を再利用する
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 施設系の旧ExperienceEventカードと表示切替を施設情報から除外
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`: 表示単位と互換利用先を更新
+
+### 影響する画面・機能
+- テーマパーク、自然・生き物、その他・未分類の施設情報一覧
+- Event・Plan・Visitの保存、気になる、予定、来園／体験記録、施設アイキャッチの保存・バックアップは変更しない
+
+### 確認結果（実機 / ビルド）
+- `CategoryTopView.swift`のSwift構文解析成功
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+
+### 既知のリスク・残課題
+- 施設0／1／多数件、旧Eventのみ、Interest／Plan／Visitあり、画像あり／なしを実機確認する
+- 旧EventだけでPlaceMasterへ未接続かつInterest・Plan・Visitもない対象は一覧から見えなくなるが、データは削除せず互換保持する
+
+## 2026-08-07: ジャンル設定の静的メソッド戻り値不足を修正
+
+### 変更概要・原因
+- `GenreFormSettingItem.presentation`は`(title, detail)`を返す関数だが、`switch`のcaseへタプル式だけを置き、関数から返していなかった
+- Xcodeが`Missing return in static method expected to return '(title: String, detail: String)'`としてビルドを停止していた
+- 全caseとdefaultを明示的な`return`へ変更した
+
+### 変更意図
+- 映画・ミュージアム・ライブ・施設・酒・御朱印のジャンル設定表示を維持したまま、すべてのコード経路で戻り値を保証する
+- Swiftの暗黙的な式評価に依存せず、対応する言語モードに左右されない書き方へ揃える
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/GenreManagementView.swift`: タプルを返すswitch全分岐へreturnを追加
+- `docs/00-開発状況と残課題.md`: 修正状態と検証項目を追記
+
+### 影響範囲
+- 設定 > ジャンル設定の入力項目名・説明生成
+- 保存モデル、ジャンル構成、表示文言は変更しない
+
+### 確認結果・残課題
+- 同じ`case: (値, 値)`形式をSwift全体で横断検索し、該当箇所はこのメソッドだけだった
+- 対象Swiftの構文解析と差分検査に成功
+- 署名なしgeneric iPhoneOS全体ビルドに成功し、`GenreManagementView.swift`を含む全Swiftのコンパイルとリンクを確認した
+
 ## 2026-08-07: ドラマ・アニメの鑑賞年から桁区切りを除去
 
 ### 変更概要・原因
@@ -27740,3 +27872,182 @@ Homeの見出しに4件とあるのにカードは3件しか表示されず、�
 - 主な変更ファイル: `PublicPlaceCatalogService.swift`, `PublicPlaceCatalogView.swift`, `ExperienceBasicUnitEditor.swift`, `AddExperienceView.swift`, `AddTicketPlanView.swift`, `PlanDetailView.swift`, `ExperienceDetailView.swift`, `PlaceExperienceDetailView.swift`, `PublicPlaceCatalogTests.swift`, `generate-cloudkit-records.py`
 - 確認結果: 対象Swift構文解析、差分検査成功。generic iPhoneOS向けDebug全体ビルドはCoreSimulatorService／simdiskimaged停止によるAsset Catalogエラーで環境中断し、変更固有エラーは検出されていない
 - 残課題: CloudKit公開DBへ`sourceURL`付きレコードを再投入後、実機で公式サイト／情報元遷移、確認日、登録済み状態、予定・記録・施設詳細の会場リンク、公演URLとの分離を確認する
+
+## 2026-08-07: ジャンル一覧・施設画像・御朱印MAP・記録写真導線を整理
+
+### 変更概要・意図
+- Museum Logの回数を画像右上の丸数字へ移し、日付・評価以外の下部文字行をなくした
+- 書籍の気になるを3列書影固定、積読・読書中・読了を各Section単位の3列／横長切替へ変更し、検索語の全消去を追加した。3列は題名を画像下へ置かず、巻数だけを書影右下へ重ねる
+- 場所マスターへ施設アイキャッチを追加し、選択画像を中央トリミングした1280×720 JPEGへ縮小してexternal storageへ保存する。施設一覧・詳細、JSONバックアップ／復元、場所統合へ接続した
+- 自然・生き物の展示名や見どころを施設名から分離し、Visit単位の任意`今回の見どころ`として保存・表示する
+- 御朱印MAPで座標未保存の住所をジオコードして再利用し、フィルター変更時は選択マーカーとカメラを更新する
+- 記録詳細の写真追加をライブラリ直行から、写真ライブラリ／カメラの選択式へ変更した
+
+### 主な変更ファイル
+- `CategoryTopMovieSections.swift`, `CategoryTopView.swift`: ミュージアム回数表示と書籍一覧・検索・表示切替
+- `CoreModels.swift`, `MasterManagementView.swift`, `PlaceExperienceDetailView.swift`: 場所画像の保存・編集・表示
+- `VisitUnitFields.swift`, `AddExperienceView.swift`, `ExperienceDetailView.swift`, `DebugDataSeeder.swift`: 自然Visitの見どころとサンプル構造
+- `CategoryTopGoshuinSections.swift`: MAP座標補完、カメラ、フィルター選択状態
+- `JSONBackupExportService.swift`, `JSONBackupImportService.swift`, `MasterMergeService.swift`: 場所画像のバックアップ・復元・統合
+- `GenreManagementView.swift`: 作業ツリー内で判明したタプル戻り値不足を修正
+
+### 影響する画面・機能
+- ミュージアムの3列鑑賞記録、書籍トップの全状態一覧
+- 場所マスター編集、テーマパーク／自然・生き物の施設一覧・施設詳細
+- 自然・生き物の記録追加・編集・詳細
+- 御朱印MAPと種別フィルター
+- 記録詳細の思い出・グッズ・特典写真追加
+- JSONバックアップ／復元、場所統合、開発用サンプルデータ
+
+### 確認結果
+- 対象差分の読み直しと`git diff --check`に成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功
+
+### 既知のリスク・残課題
+- 実機でミュージアム同一展示11回以上、書籍0／1／大量件と各表示切替、場所画像の横長／縦長／正方形素材を確認する
+- 自然・生き物の見どころ保存・再編集、御朱印の全て／神社／寺切替と住所だけの場所、写真3分類のカメラ／ライブラリを確認する
+
+## 2026-08-08: 設定の追加操作を強調し、非観劇の記録詳細クラッシュを修正
+
+### 変更概要・意図
+- `チケット・会員情報を追加`を通常の設定行から、全幅44pt・テーマ色塗りの主操作へ変更した
+- 共通の設定情報枠を8pt角丸から12pt連続角丸へ変更し、外側Sectionカードの角の印象へ近づけた
+- 映像作品の鑑賞記録を開くと落ちる実機Crash Logを取得。`ExperienceDetailView.body`の非観劇分岐で、巨大なSwiftUIジェネリック型のメタデータ解決が再帰し、スタックガード領域へ到達して`EXC_BAD_ACCESS / SIGSEGV`になっていた
+- 非観劇本文の各Sectionを`AnyView`境界で分割し、表示・操作・保存内容を維持したまま型メタデータの再帰深度を抑えた。同じ詳細を使うミュージアム、書籍、施設系等も同時に再発防止対象とした
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/SettingsInputIntegration.swift`: チケット・会員情報追加をテーマ色の主ボタンへ変更
+- `favorecoAPP/favorecoAPP/Views/SettingsFormComponents.swift`: 共通情報枠を12pt連続角丸へ統一
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 非観劇記録詳細のSectionごとに型消去境界を追加
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 現行仕様、原因、実機確認項目を更新
+
+### 影響する画面・機能
+- 設定 > プロフィール・連携 > チケット・会員・カレンダー
+- `FavorecoSettingsInfoCallout`を使う全設定画面
+- 映像作品、ミュージアム、LIVE、書籍、テーマパーク、自然・生き物、御朱印等の観劇以外の記録詳細
+- SwiftDataモデル、保存値、画像データ、記録詳細の表示順と操作内容は変更なし
+
+### 確認結果（実機 / ビルド）
+- 実機から`favoreco-2026-08-07-234726.ips`を取得し、メインスレッドの`ExperienceDetailView.body`内でSwift型メタデータ解決が再帰していたことを確認
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- 接続実機向け署名付きDebug全体ビルドと上書きインストール、アプリ起動に成功
+
+### 既知のリスク・残課題
+- 実機で映像作品の3列／横長双方から鑑賞記録詳細が開くことを確認する
+- 同じ共通詳細を使うミュージアム、書籍、施設系の各1件と、設定のライト／ダーク・Dynamic Typeを確認する
+
+## 2026-08-08: 非観劇詳細の追加報告を照合し、右上メニューを高コントラスト化
+
+### 変更概要・意図
+- ミュージアム、映像作品、テーマパーク、自然・生き物、御朱印の記録タップで落ちた報告を実機Crash Logの時刻と照合した。すべて前回の型再帰修正版を上書きする前の23:45〜23:47に発生しており、上書き後の新しいCrash Logは検出されていない
+- 予定・記録詳細の右上メニューは、三点記号へジャンルアクセント色を使っていたため、円のジャンル色と近い映像作品・テーマパークで同化していた。三点だけ明るいアイボリーへ固定し、円と外周には従来どおりジャンル色を残した
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/FavorecoDetailActionMenu.swift`: 共通メニューボタンの三点記号を高コントラスト化
+- `favoreco/CLAUDE.md`, `docs/00-開発状況と残課題.md`: 現行仕様と実機確認状態を更新
+
+### 影響する画面・機能
+- 全ジャンルの対象情報、予定、個別記録詳細にある右上メニューボタン
+- メニュー内の操作、ジャンル色、保存モデル、画像、詳細本文は変更なし
+
+### 確認結果（実機 / ビルド）
+- 修正版導入後に新しいCrash Logが生成されていないことを確認
+- `git diff --check`、署名なしgeneric iPhoneOS向けDebug全体ビルド、接続実機向け署名付きDebug全体ビルドに成功
+- 接続実機へ上書きインストール成功。端末がロック中だったため自動起動だけOSに拒否された
+- 利用者実機で、報告されたミュージアム・映像作品・テーマパーク・自然・生き物・御朱印の記録詳細遷移と右上メニュー表示に問題がないことを確認
+
+### 既知のリスク・残課題
+- 今回報告された再現経路に残課題なし
+
+## 2026-08-08: 書籍登録の先頭へISBN・画像入力補助を追加
+
+### 変更概要
+- `本を登録する`の`本の情報`より前に`入力を省く`を追加し、`ISBN・バーコードから入力`と`画像から本の情報を入力`を配置した
+- ISBNは10桁／13桁の手入力と、裏表紙を撮影したEAN-13バーコード検出に対応した
+- 表紙・奥付画像はVision OCRでISBNと書名候補を検出し、ISBNが得られた時だけ書誌候補を取得する
+- 書誌はGoogle Booksを先に検索し、取得できない場合はOpen Libraryへフォールバックする。確認画面の`この情報を入力`後に限り、書名、著者、ISBN、表紙、参照URLをフォームへ反映する
+- ISBNを`VisitUnitFields.bookISBN`へ後方互換で保存し、旧データは空値として従来どおり読み込む
+- 保存したISBNは、書籍の記録詳細にある`本の情報`から確認できる
+
+### 変更意図
+- Favorecoの主軸を外部データベース検索ではなく`記録と保存`に置いたまま、利用可能な書誌データで登録の手入力を最小化するため
+- 取得値を勝手に保存せず、候補確認と手修正を必ず残すため
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddInboxItemView.swift`: 上部導線、ISBN入力／バーコード撮影、画像OCR、候補確認、反映処理を追加
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 保存したISBNを`本の情報`へ表示
+- `favorecoAPP/favorecoAPP/Services/BookMetadataLookupService.swift`: ISBN正規化、画像バーコード検出、Google Books / Open Library取得を追加
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`: `bookISBN`の保存・復元・旧データ互換を追加
+- `favorecoAPP/favorecoAPPTests/BookMetadataTests.swift`: ISBN往復、正規化、OCR文字列からの抽出テストを追加
+- `favoreco/CLAUDE.md`, `docs/00-開発状況と残課題.md`: プロダクト境界と現行仕様を更新
+
+### 影響する画面・機能
+- 書籍ジャンルの`本を登録する`、表紙、書名・著者・ISBN・参照URLの保存
+- 他ジャンルの登録、読書回Visit、書籍一覧、既存データの表示は変更しない
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- iOS Simulator向けテストビルド成功
+- iOS Simulatorで`BookMetadataTests` 7件を実行し、ISBN保存往復、旧データ互換、ハイフン付きISBN正規化、OCR文字列からのISBN抽出を含め全件成功
+
+### 既知のリスク・残課題
+- 書誌データに収録されていないISBNは手入力が必要。外部サービス障害・通信断でも手入力と保存は維持する
+- 実機で番号検索、EAN-13撮影、表紙／奥付OCR、取得成功／0件／通信失敗、表紙あり／なし、キャンセル、Dynamic Typeを確認する
+## 2026-08-08: 映像作品へドラマ・アニメのHero背景を追加
+
+### 変更概要
+- 映像作品のトップ背景へ、既存の映画館`映像作品`を残したまま`ドラマ`と`アニメ`を追加した
+- ドラマは雨上がりの都市住宅街、アニメは人物なしの手描き風夕景として生成した
+- 2枚を既存背景と同じ1280×583 JPEGへ中央クロップし、安定したプリセットキーで選択可能にした
+
+### 変更意図
+映像作品の背景候補が映画館1枚だけで、ドラマやアニメの記録に映画の世界観が固定されていたため。作品固有の人物・文字・ロゴを避け、幅広い作品へ使える環境背景として選択肢を増やす。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/movie-hero-drama.jpg`: ドラマ用Hero背景
+- `favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/movie-hero-anime.jpg`: アニメ用Hero背景
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`: 映像作品の背景プリセット2件を追加
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様と確認項目を更新
+
+### 影響する画面・機能
+- 映像作品の記録追加・編集にあるトップ背景選択
+- 選択した背景を表示する映像作品の記録詳細Hero
+- 既存`movieDefault`保存値、自分の写真による背景指定、カバー／アイキャッチ、他ジャンルは変更なし
+
+### 確認結果（実機 / ビルド）
+- 生成画像に人物、文字、ロゴ、既存作品の固有要素がないことを目視確認
+- 2枚とも1280×583 JPEGであることを確認
+- 対象Swift構文解析、`git diff --check`成功
+- iOS 26.5 SDK、iOS 18.0 deployment target、署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- ビルド済みappバンドルに`movie-hero-drama.jpg`と`movie-hero-anime.jpg`が収録されることを確認
+- 既存の`AddTicketPlanView` MainActor警告2件のみで、新規警告・エラーなし
+
+### 既知のリスク・残課題
+- 実機Heroの中央トリミングと下端フェード後にタイトル・日時が読めることを確認する
+- 選択、保存、再編集、既定背景への復帰を確認する
+
+## 2026-08-08: 全ジャンル共通のカードタップと横スワイプを調整
+
+### 変更概要・意図
+- 書籍の読了グリッドを含むジャンルトップで、指の微小な横ずれを共通ジャンルPanが先に認識し、内側Buttonのタップをキャンセルしていた原因を特定した
+- 共通Panは移動量24pt以上で初めて判定を開始する専用認識器へ変更し、小さな指ぶれはカードタップとして扱う。意図的な横スワイプ成立後だけ従来どおりカード操作をキャンセルする
+- 書籍グリッド／横長、映像・ミュージアムのVisit一覧、共通ライブラリーグリッドはカード全面を明示的なタップ領域にした
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 共通Panの開始距離と一覧カードのタップ領域を調整
+- `favorecoAPP/favorecoAPPTests/GenreSwipeGestureCoordinationTests.swift`: 微小移動／意図的移動の境界テストを追加
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 現行仕様、原因、実機確認項目を更新
+
+### 影響する画面・機能
+- Homeと全ジャンルトップの本文カードタップ、ジャンル横スワイプ、縦スクロール
+- PICK UP、Map、内側横ScrollView、画面端の除外範囲と保存データは変更なし
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`成功
+- 署名なしgeneric iPhoneOS向けDebug全体ビルド成功
+- iOS Simulatorで`GenreSwipeGestureCoordinationTests` 5件を実行し全件成功
+
+### 既知のリスク・残課題
+- 実機で静止タップ、14pt程度指がずれたタップ、24pt以上の横スワイプ、縦スクロールを各ジャンルで確認する

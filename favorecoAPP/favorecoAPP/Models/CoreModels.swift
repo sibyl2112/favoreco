@@ -597,6 +597,10 @@ final class PlaceMaster {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
+    /// 施設共通の横長アイキャッチ。SwiftData側では外部保存してDB本体を肥大化させない。
+    @Attribute(.externalStorage)
+    var imageData: Data?
+
     @Relationship(deleteRule: .nullify, inverse: \Plan.placeMaster)
     var plans: [Plan]? = []
 
@@ -629,7 +633,8 @@ final class PlaceMaster {
         normalizedAddress: String = "",
         isArchived: Bool = false,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        imageData: Data? = nil
     ) {
         self.id = id
         self.name = name
@@ -651,6 +656,7 @@ final class PlaceMaster {
         self.isArchived = isArchived
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.imageData = imageData
     }
 
     var operationalStatus: PlaceOperationalStatus {

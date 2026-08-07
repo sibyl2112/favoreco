@@ -17,6 +17,11 @@ struct PlaceExperienceVisitRow: View {
         return visit.placeMaster?.name ?? ""
     }
 
+    private var visitSubtitle: String {
+        VisitUnitFields(rawValue: visit.unitFieldsRaw)
+            .visitSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             GeometryReader { geometry in
@@ -45,6 +50,13 @@ struct PlaceExperienceVisitRow: View {
                     .font(FavorecoTypography.jpSans(16, weight: .bold, relativeTo: .headline))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+
+                if !visitSubtitle.isEmpty {
+                    Text(visitSubtitle)
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(tint)
+                        .lineLimit(1)
+                }
 
                 FavorecoIconLabel(
                     "\(FavorecoDateText.compactDateWithHalfWidthWeekday(visit.visitedAt))  \(FavorecoDateText.time(visit.visitedAt))",

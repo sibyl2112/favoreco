@@ -83,6 +83,7 @@ struct RecordInputAssistSettingsView: View {
 
 struct RegistrationIntegrationSettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
     @AppStorage(AppStorageKeys.showsExternalCalendarEvents) private var showsExternalCalendarEvents = true
     @AppStorage(AppStorageKeys.selectedExternalCalendarIdentifiers) private var selectedExternalCalendarIdentifiers = ""
@@ -120,8 +121,24 @@ struct RegistrationIntegrationSettingsView: View {
                 Button {
                     isShowingAccountEditor = true
                 } label: {
-                    FavorecoIconLabel("チケット・会員情報を追加", systemImage: "plus.circle")
+                    FavorecoIconLabel(
+                        "チケット・会員情報を追加",
+                        systemImage: "plus.circle.fill",
+                        iconSize: 17
+                    )
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
+                    .background(
+                        themePalette.globalTint,
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
+                .buttonStyle(.plain)
+                .padding(.vertical, 4)
+                .accessibilityHint("チケットサイトや会員情報の登録画面を開きます")
             }
 
             FavorecoSettingsSection("外部カレンダー") {

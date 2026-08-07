@@ -156,6 +156,7 @@ struct EventDetailView: View {
         let scheduleSnapshot = TheaterEventScheduleSnapshot.make(event: event)
         let expenseSnapshot = TheaterEventExpenseSnapshot.make(event: event)
         let isTheater = category?.templateKey == "theater"
+        let isBook = category?.templateKey == "book"
         let eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
         let performanceSchedules = EventDetailPresentation.theaterSchedules(
             event: event,
@@ -215,8 +216,10 @@ struct EventDetailView: View {
                 } else {
                     hero(snapshot: snapshot)
                     eventMemoSection
-                    stats(snapshot: snapshot)
-                    visitHistory(snapshot: snapshot)
+                    if !isBook {
+                        stats(snapshot: snapshot)
+                        visitHistory(snapshot: snapshot)
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -794,6 +797,36 @@ struct EventDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
+            detailPrimaryActions(snapshot: snapshot)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func detailPrimaryActions(snapshot: EventDetailSnapshot) -> some View {
+        if category?.templateKey == "book" {
+            if let readingRecord = snapshot.visits.first {
+                NavigationLink {
+                    ExperienceDetailView(visit: readingRecord)
+                } label: {
+                    FavorecoIconLabel("読書記録を見る", systemImage: "book.closed", iconSize: 17)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accentColor)
+            } else {
+                Button {
+                    isShowingAddVisit = true
+                } label: {
+                    FavorecoIconLabel("読書を記録", systemImage: "book.closed", iconSize: 17)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accentColor)
+            }
+        } else {
             HStack(spacing: 10) {
                 Button {
                     openPlanEntry()
@@ -813,9 +846,6 @@ struct EventDetailView: View {
             }
             .tint(accentColor)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var representativeAspectRatio: CGFloat {

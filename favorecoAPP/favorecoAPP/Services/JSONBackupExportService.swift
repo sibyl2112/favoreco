@@ -614,6 +614,7 @@ nonisolated struct BackupPlace: Codable {
     var isArchived: Bool
     var createdAt: Date
     var updatedAt: Date
+    var imageDataBase64: String?
 
     nonisolated init(_ place: PlaceMaster) {
         id = place.id
@@ -636,6 +637,7 @@ nonisolated struct BackupPlace: Codable {
         isArchived = place.isArchived
         createdAt = place.createdAt
         updatedAt = place.updatedAt
+        imageDataBase64 = place.imageData?.base64EncodedString()
     }
 }
 

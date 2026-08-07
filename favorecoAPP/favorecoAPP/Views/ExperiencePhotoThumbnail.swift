@@ -71,54 +71,59 @@ private struct CompactPhotoThumbnail: View {
     let isHeroBackground: Bool
 
     var body: some View {
-        ZStack {
-            Group {
-                if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    FavorecoIcon(systemName: "photo", size: 22)
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(.secondarySystemGroupedBackground))
+        GeometryReader { geometry in
+            ZStack {
+                Group {
+                    if let image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.system(size: 22, weight: .regular))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color(.secondarySystemGroupedBackground))
+                    }
                 }
-            }
-            .aspectRatio(1, contentMode: .fill)
-            .clipped()
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
 
-            VStack {
-                HStack {
-                    FavorecoIcon(systemName: purpose.systemImage, size: 13)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 18, height: 18)
-                        .background(.black.opacity(0.58), in: Circle())
-                    Spacer(minLength: 0)
-                    if isCover {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.yellow)
-                            .frame(width: 18, height: 18)
-                            .background(.black.opacity(0.58), in: Circle())
-                    }
-                }
-                Spacer(minLength: 0)
-                if isHeroBackground {
+                VStack {
                     HStack {
-                        Spacer(minLength: 0)
-                        Image(systemName: "rectangle.landscape.fill")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.yellow)
+                        Image(systemName: purpose.systemImage)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white)
                             .frame(width: 18, height: 18)
                             .background(.black.opacity(0.58), in: Circle())
+                        Spacer(minLength: 0)
+                        if isCover {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.yellow)
+                                .frame(width: 18, height: 18)
+                                .background(.black.opacity(0.58), in: Circle())
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if isHeroBackground {
+                        HStack {
+                            Spacer(minLength: 0)
+                            Image(systemName: "rectangle.landscape.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.yellow)
+                                .frame(width: 18, height: 18)
+                                .background(.black.opacity(0.58), in: Circle())
+                        }
                     }
                 }
+                .padding(4)
             }
-            .padding(4)
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .aspectRatio(1, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .clipped()
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         .overlay {
@@ -267,7 +272,7 @@ private struct PhotoThumbnail: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             HStack {
-                FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage, iconSize: 13)
+                Label(purpose.title, systemImage: purpose.systemImage)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 7)

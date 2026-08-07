@@ -738,6 +738,10 @@ private struct PlaceMasterMergeView: View {
     @State private var showsOptionalFields = false
     @State private var selectedDestination: PlaceMaster?
     @State private var errorMessage = ""
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var selectedPhotoData: Data?
+    @State private var removesStoredPhoto = false
+    @State private var photoErrorMessage = ""
 
     init(place: PlaceMaster) {
         self.place = place
@@ -750,6 +754,41 @@ private struct PlaceMasterMergeView: View {
 
     var body: some View {
         Form {
+            Section("施設アイキャッチ") {
+                PlaceMasterEyecatch(
+                    imageData: selectedPhotoData ?? (removesStoredPhoto ? nil : place.imageData),
+                    tint: .accentColor
+                )
+
+                HStack {
+                    Spacer()
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        FavorecoIconLabel(
+                            selectedPhotoData == nil && place.imageData == nil ? "写真を選ぶ" : "写真を変更",
+                            systemImage: "photo"
+                        )
+                        .font(FavorecoTypography.captionStrong)
+                    }
+                    if selectedPhotoData != nil || (!removesStoredPhoto && place.imageData != nil) {
+                        Button("画像を外す", role: .destructive) {
+                            selectedPhotoData = nil
+                            removesStoredPhoto = true
+                        }
+                        .font(FavorecoTypography.captionStrong)
+                    }
+                    Spacer()
+                }
+
+                Text("横長（16:9）で軽量保存します。縦長・正方形の表示では中央を基準に切り抜きます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                if !photoErrorMessage.isEmpty {
+                    Text(photoErrorMessage)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
             Section("基本情報") {
                 TextField("名称", text: $draft.name)
                 TextField("よみ（任意）", text: $draft.reading)
@@ -868,6 +907,9 @@ private struct PlaceMasterMergeView: View {
                 draft.prefecture = extractedPrefecture
             }
         }
+        .task(id: selectedPhoto) {
+            await loadSelectedPlacePhoto()
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存") { save() }
@@ -915,6 +957,12 @@ private struct PlaceMasterMergeView: View {
         place.normalizedAddress = normalizedMasterText(draft.trimmedAddress)
         place.updatedAt = Date()
         do {
+            if removesStoredPhoto {
+                place.imageData = nil
+            }
+            if let selectedPhotoData {
+                place.imageData = selectedPhotoData
+            }
             try modelContext.save()
             errorMessage = ""
         } catch {
@@ -922,6 +970,56 @@ private struct PlaceMasterMergeView: View {
             draft = PlaceMasterDraft(place: place)
             errorMessage = "保存できませんでした: \(error.localizedDescription)"
         }
+    }
+
+    @MainActor
+    private func loadSelectedPlacePhoto() async {
+        guard let selectedPhoto else { return }
+        guard let data = try? await selectedPhoto.loadTransferable(type: Data.self),
+              let processed = PlaceMasterEyecatch.processedLandscapeData(from: data) else {
+            photoErrorMessage = "写真を読み込めませんでした。別の写真を選んでください。"
+            return
+        }
+        selectedPhotoData = processed
+        removesStoredPhoto = false
+        photoErrorMessage = ""
+    }
+}
+
+struct PlaceMasterEyecatch: View {
+    let imageData: Data?
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            tint.opacity(0.10)
+            if let imageData, let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                FavorecoIcon(systemName: "photo", size: 28)
+                    .foregroundStyle(tint)
+            }
+        }
+        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .clipped()
+        .accessibilityHidden(true)
+    }
+
+    static func processedLandscapeData(from sourceData: Data) -> Data? {
+        guard let sourceImage = UIImage(data: sourceData),
+              sourceImage.size.width > 0, sourceImage.size.height > 0 else { return nil }
+        let outputSize = CGSize(width: 1280, height: 720)
+        let scale = max(outputSize.width / sourceImage.size.width, outputSize.height / sourceImage.size.height)
+        let drawSize = CGSize(width: sourceImage.size.width * scale, height: sourceImage.size.height * scale)
+        let origin = CGPoint(
+            x: (outputSize.width - drawSize.width) / 2,
+            y: (outputSize.height - drawSize.height) / 2
+        )
+        return UIGraphicsImageRenderer(size: outputSize).image { _ in
+            sourceImage.draw(in: CGRect(origin: origin, size: drawSize))
+        }.jpegData(compressionQuality: 0.76)
     }
 }
 

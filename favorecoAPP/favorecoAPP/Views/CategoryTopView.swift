@@ -1560,9 +1560,9 @@ struct CategoryTopView: View {
         let facilityPlaces = showsPlaceExperienceSections
             ? facilityPlaceMasters(for: category)
             : []
-        let displayedProductionItems = showsPlaceExperienceSections
-            ? productionItems.filter { $0.placeMasterID == nil }
-            : productionItems
+        // 施設系は PlaceMaster を唯一の施設一覧にする。旧構造の ExperienceEvent は
+        // Interests / Coming Up / Log で扱い、施設情報へ重複表示しない。
+        let displayedProductionItems = showsPlaceExperienceSections ? [] : productionItems
         let productionCount = facilityPlaces.count + displayedProductionItems.count
         let tint: Color = switch category.templateKey {
         case "theater": TheaterCategoryStyle.gold
@@ -1604,6 +1604,7 @@ struct CategoryTopView: View {
                     category: category,
                     tint: tint,
                     onOpenEvent: openCategoryEvent,
+                    onOpenVisit: { selectedCategoryDetail = .visit($0) },
                     onOpenSeries: { route in selectedBookSeries = route }
                 )
 
@@ -2275,6 +2276,7 @@ struct CategoryTopView: View {
                                 selectedCategoryDetail = .visit(item.visit.id)
                             } label: {
                                 CategoryVisitRecordPosterTile(item: item, category: category)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }
@@ -2290,6 +2292,7 @@ struct CategoryTopView: View {
                                     category: category,
                                     tint: tint
                                 )
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         }
@@ -2860,6 +2863,12 @@ struct GenreSwipeExclusionZone: View {
 }
 
 enum GenreSwipeGestureCoordination {
+    static let activationDistance: CGFloat = 24
+
+    static func hasReachedActivationDistance(_ translation: CGPoint) -> Bool {
+        hypot(translation.x, translation.y) >= activationDistance
+    }
+
     static func allowsSimultaneousRecognition(
         with otherGestureRecognizer: UIGestureRecognizer
     ) -> Bool {
@@ -2941,7 +2950,10 @@ private struct DirectionalHorizontalPanInstaller: UIViewRepresentable {
         weak var markerView: UIView?
         private weak var installedView: UIView?
         private lazy var panGestureRecognizer: UIPanGestureRecognizer = {
-            let recognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+            let recognizer = IntentionalGenrePanGestureRecognizer(
+                target: self,
+                action: #selector(handlePan(_:))
+            )
             recognizer.delegate = self
             recognizer.cancelsTouchesInView = true
             recognizer.delaysTouchesBegan = false
@@ -3088,6 +3100,36 @@ private struct DirectionalHorizontalPanInstaller: UIViewRepresentable {
                 break
             }
         }
+    }
+}
+
+@MainActor
+private final class IntentionalGenrePanGestureRecognizer: UIPanGestureRecognizer {
+    private var initialLocation: CGPoint?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        initialLocation = touches.first?.location(in: view)
+        super.touchesBegan(touches, with: event)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        if state == .possible,
+           let initialLocation,
+           let currentLocation = touches.first?.location(in: view) {
+            let translation = CGPoint(
+                x: currentLocation.x - initialLocation.x,
+                y: currentLocation.y - initialLocation.y
+            )
+            guard GenreSwipeGestureCoordination.hasReachedActivationDistance(translation) else {
+                return
+            }
+        }
+        super.touchesMoved(touches, with: event)
+    }
+
+    override func reset() {
+        initialLocation = nil
+        super.reset()
     }
 }
 
@@ -3741,11 +3783,14 @@ private struct BookLibrarySection: View {
     let category: RecordCategory
     let tint: Color
     let onOpenEvent: (UUID) -> Void
+    let onOpenVisit: (UUID) -> Void
     let onOpenSeries: (BookSeriesRoute) -> Void
 
     @State private var searchText = ""
     @State private var filter: BookLibraryFilter = .all
-    @State private var layout: CategoryLibraryLayoutMode = .gallery
+    @State private var toReadLayout: CategoryLibraryLayoutMode = .gallery
+    @State private var readingLayout: CategoryLibraryLayoutMode = .gallery
+    @State private var readLayout: CategoryLibraryLayoutMode = .gallery
 
     private var searchedItems: [CategoryLibraryItem] {
         let query = normalizedBookText(searchText)
@@ -3770,6 +3815,16 @@ private struct BookLibrarySection: View {
                         .foregroundStyle(.secondary)
                     TextField("本・シリーズ・著者を検索", text: $searchText)
                         .textInputAutocapitalization(.never)
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            FavorecoIcon(systemName: "xmark.circle.fill", size: 17)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("検索語をすべて削除")
+                    }
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 42)
@@ -3794,14 +3849,6 @@ private struct BookLibrarySection: View {
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(tint)
                 Spacer()
-                if filter == .all || filter == .read {
-                    CategoryLibraryLayoutPicker(
-                        selection: $layout,
-                        tint: tint,
-                        modes: [.gallery, .banner],
-                        onSelect: { _ in }
-                    )
-                }
             }
 
             ForEach(visibleFilters) { status in
@@ -3823,7 +3870,8 @@ private struct BookLibrarySection: View {
     @ViewBuilder
     private func bookStatusSection(status: BookLibraryFilter, items: [CategoryLibraryItem]) -> some View {
         let entries = bookEntries(from: items, allItems: searchedItems)
-        let usesCoverGrid = status == .read && layout == .gallery
+        let sectionLayout = layout(for: status)
+        let usesCoverGrid = status == .interested || sectionLayout == .gallery
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(status.title)
@@ -3831,6 +3879,15 @@ private struct BookLibrarySection: View {
                 Text("\(items.count)")
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                if status != .interested, let binding = layoutBinding(for: status) {
+                    CategoryLibraryLayoutPicker(
+                        selection: binding,
+                        tint: tint,
+                        modes: [.gallery, .banner],
+                        onSelect: { _ in }
+                    )
+                }
             }
 
             if usesCoverGrid {
@@ -3838,6 +3895,7 @@ private struct BookLibrarySection: View {
                     ForEach(entries) { entry in
                         Button { open(entry) } label: {
                             BookLibraryGridTile(entry: entry, tint: tint)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -3847,11 +3905,31 @@ private struct BookLibrarySection: View {
                     ForEach(entries) { entry in
                         Button { open(entry) } label: {
                             BookLibraryListRow(entry: entry, tint: tint)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
+        }
+    }
+
+    private func layout(for status: BookLibraryFilter) -> CategoryLibraryLayoutMode {
+        switch status {
+        case .interested: .gallery
+        case .toRead: toReadLayout
+        case .reading: readingLayout
+        case .read: readLayout
+        case .all: .gallery
+        }
+    }
+
+    private func layoutBinding(for status: BookLibraryFilter) -> Binding<CategoryLibraryLayoutMode>? {
+        switch status {
+        case .toRead: $toReadLayout
+        case .reading: $readingLayout
+        case .read: $readLayout
+        case .all, .interested: nil
         }
     }
 
@@ -3862,6 +3940,8 @@ private struct BookLibrarySection: View {
                 seriesName: seriesName,
                 normalizedSeriesName: normalizedBookText(seriesName)
             ))
+        } else if let readingRecord = entry.representative.latestVisit {
+            onOpenVisit(readingRecord.id)
         } else {
             onOpenEvent(entry.representative.event.id)
         }
@@ -3873,8 +3953,7 @@ private struct BookLibraryGridTile: View {
     let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .bottomTrailing) {
                 if entry.seriesName != nil {
                     RoundedRectangle(cornerRadius: 5)
                         .fill(tint.opacity(0.16))
@@ -3884,8 +3963,8 @@ private struct BookLibraryGridTile: View {
                         .offset(x: 3, y: -2)
                 }
                 BookCoverArtwork(event: entry.representative.event)
-                if entry.seriesName != nil {
-                    Text("\(entry.items.count)")
+                if !volumeBadgeText.isEmpty {
+                    Text(volumeBadgeText)
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 7)
@@ -3893,24 +3972,15 @@ private struct BookLibraryGridTile: View {
                         .background(.black.opacity(0.74), in: Capsule())
                         .padding(5)
                 }
-            }
-            .aspectRatio(CGFloat(EyecatchAspectRatio.bookCover.value), contentMode: .fit)
-
-            Text(entry.title)
-                .font(FavorecoTypography.bodyStrong)
-                .lineLimit(2)
-            if entry.seriesName != nil {
-                Text("読了 \(entry.readCount)/\(entry.items.count)冊")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-            } else if !entry.representative.event.bookAuthorName.isEmpty {
-                Text(entry.representative.event.bookAuthorName)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
         }
+        .aspectRatio(CGFloat(EyecatchAspectRatio.bookCover.value), contentMode: .fit)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(entry.title)
+    }
+
+    private var volumeBadgeText: String {
+        if entry.seriesName != nil { return "全\(entry.items.count)巻" }
+        return entry.representative.event.bookVolumeLabel
     }
 }
 
@@ -4903,6 +4973,7 @@ private struct CategoryLibraryGallery: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .contentShape(Rectangle())
                     .background(galleryCardBackground)
                     .overlay {
                         Rectangle()

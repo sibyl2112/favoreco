@@ -81,6 +81,8 @@ struct VisitUnitFields: Codable {
     var styleNames: [String] = []
     var socialLinks: [String] = []
     var eventSubtitle: String = ""
+    /// 施設そのものではなく、この1回で見た展示・目的を表す短い副題。
+    var visitSubtitle: String = ""
     var eventCreditsText: String = ""
     var eventPerformanceTypeCustomName: String = ""
     var eventPeriodStartsAt: Date?
@@ -103,6 +105,7 @@ struct VisitUnitFields: Codable {
     var bookSeriesName: String = ""
     var bookVolumeNumber: String = ""
     var bookAuthorName: String = ""
+    var bookISBN: String = ""
     /// 書籍記録で終了日を明示したか。nil は旧データ（従来の読了日1日）として扱う。
     var bookReadingHasEndDate: Bool?
 
@@ -111,6 +114,7 @@ struct VisitUnitFields: Codable {
         styleNames: [String] = [],
         socialLinks: [String] = [],
         eventSubtitle: String = "",
+        visitSubtitle: String = "",
         eventCreditsText: String = "",
         eventPerformanceTypeCustomName: String = "",
         eventPeriodStartsAt: Date? = nil,
@@ -132,12 +136,14 @@ struct VisitUnitFields: Codable {
         bookSeriesName: String = "",
         bookVolumeNumber: String = "",
         bookAuthorName: String = "",
+        bookISBN: String = "",
         bookReadingHasEndDate: Bool? = nil
     ) {
         self.ocrText = ocrText
         self.styleNames = styleNames
         self.socialLinks = socialLinks
         self.eventSubtitle = eventSubtitle
+        self.visitSubtitle = visitSubtitle
         self.eventCreditsText = eventCreditsText
         self.eventPerformanceTypeCustomName = eventPerformanceTypeCustomName
         self.eventPeriodStartsAt = eventPeriodStartsAt
@@ -159,6 +165,7 @@ struct VisitUnitFields: Codable {
         self.bookSeriesName = bookSeriesName
         self.bookVolumeNumber = bookVolumeNumber
         self.bookAuthorName = bookAuthorName
+        self.bookISBN = bookISBN
         self.bookReadingHasEndDate = bookReadingHasEndDate
     }
 
@@ -167,6 +174,7 @@ struct VisitUnitFields: Codable {
         case styleNames
         case socialLinks
         case eventSubtitle
+        case visitSubtitle
         case eventCreditsText
         case eventPerformanceTypeCustomName
         case eventPeriodStartsAt
@@ -188,6 +196,7 @@ struct VisitUnitFields: Codable {
         case bookSeriesName
         case bookVolumeNumber
         case bookAuthorName
+        case bookISBN
         case bookReadingHasEndDate
     }
 
@@ -197,6 +206,7 @@ struct VisitUnitFields: Codable {
         styleNames = try container.decodeIfPresent([String].self, forKey: .styleNames) ?? []
         socialLinks = try container.decodeIfPresent([String].self, forKey: .socialLinks) ?? []
         eventSubtitle = try container.decodeIfPresent(String.self, forKey: .eventSubtitle) ?? ""
+        visitSubtitle = try container.decodeIfPresent(String.self, forKey: .visitSubtitle) ?? ""
         eventCreditsText = try container.decodeIfPresent(String.self, forKey: .eventCreditsText) ?? ""
         eventPerformanceTypeCustomName = try container.decodeIfPresent(String.self, forKey: .eventPerformanceTypeCustomName) ?? ""
         eventPeriodStartsAt = try container.decodeIfPresent(Date.self, forKey: .eventPeriodStartsAt)
@@ -220,6 +230,7 @@ struct VisitUnitFields: Codable {
         bookSeriesName = try container.decodeIfPresent(String.self, forKey: .bookSeriesName) ?? ""
         bookVolumeNumber = try container.decodeIfPresent(String.self, forKey: .bookVolumeNumber) ?? ""
         bookAuthorName = try container.decodeIfPresent(String.self, forKey: .bookAuthorName) ?? ""
+        bookISBN = try container.decodeIfPresent(String.self, forKey: .bookISBN) ?? ""
         bookReadingHasEndDate = try container.decodeIfPresent(Bool.self, forKey: .bookReadingHasEndDate)
     }
 
@@ -237,6 +248,7 @@ struct VisitUnitFields: Codable {
                 || !styleNames.isEmpty
                 || !socialLinks.isEmpty
                 || !eventSubtitle.isEmpty
+                || !visitSubtitle.isEmpty
                 || !eventCreditsText.isEmpty
                 || !eventPerformanceTypeCustomName.isEmpty
                 || eventPeriodStartsAt != nil
@@ -258,6 +270,7 @@ struct VisitUnitFields: Codable {
                 || !bookSeriesName.isEmpty
                 || !bookVolumeNumber.isEmpty
                 || !bookAuthorName.isEmpty
+                || !bookISBN.isEmpty
                 || bookReadingHasEndDate != nil,
               let data = try? JSONEncoder().encode(self),
               let string = String(data: data, encoding: .utf8) else {
@@ -295,6 +308,11 @@ extension ExperienceEvent {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var bookISBN: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookISBN
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var bookVolumeLabel: String {
         let value = bookVolumeNumber
         guard !value.isEmpty else { return "" }
@@ -310,11 +328,19 @@ extension ExperienceEvent {
             .joined(separator: "・")
     }
 
-    func applyBookMetadata(seriesName: String, volumeNumber: String, authorName: String) {
+    func applyBookMetadata(
+        seriesName: String,
+        volumeNumber: String,
+        authorName: String,
+        isbn: String? = nil
+    ) {
         var fields = VisitUnitFields(rawValue: unitFieldsRaw)
         fields.bookSeriesName = seriesName.trimmingCharacters(in: .whitespacesAndNewlines)
         fields.bookVolumeNumber = volumeNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         fields.bookAuthorName = authorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let isbn {
+            fields.bookISBN = isbn.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         unitFieldsRaw = fields.encodedRawValue
         self.seriesName = [
             fields.bookSeriesName,
@@ -395,6 +421,8 @@ struct HeroBackgroundPreset: Identifiable, Equatable {
         case "movie":
             [
                 .init(key: "movieDefault", title: "映像作品", resourceName: "movie-hero-default"),
+                .init(key: "movieDrama", title: "ドラマ", resourceName: "movie-hero-drama"),
+                .init(key: "movieAnime", title: "アニメ", resourceName: "movie-hero-anime"),
             ]
         case "book":
             [

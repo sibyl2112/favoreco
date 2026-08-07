@@ -47,16 +47,8 @@ struct PlaceMasterFacilityRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(tint.opacity(0.12))
-                FavorecoIcon(
-                    systemName: category.templateKey == "theme_park" ? "building.2.fill" : "leaf.fill",
-                    size: 23
-                )
-                .foregroundStyle(tint)
-            }
-            .frame(width: 54, height: 54)
+            PlaceMasterEyecatch(imageData: place.imageData, tint: tint)
+                .frame(width: 82, height: 54)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(place.name.isEmpty ? "名称未設定" : place.name)
@@ -154,8 +146,8 @@ private struct PlaceExperienceDetailView: View {
     }
 
     private func visitSubtitle(_ visit: Visit) -> String {
-        VisitUnitFields(rawValue: visit.event?.unitFieldsRaw ?? "")
-            .eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        VisitUnitFields(rawValue: visit.unitFieldsRaw)
+            .visitSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
@@ -163,16 +155,8 @@ private struct PlaceExperienceDetailView: View {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .top, spacing: 12) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(tint.opacity(0.14))
-                            FavorecoIcon(
-                                systemName: category.templateKey == "theme_park" ? "building.2.fill" : "leaf.fill",
-                                size: 30
-                            )
-                            .foregroundStyle(tint)
-                        }
-                        .frame(width: 66, height: 66)
+                        PlaceMasterEyecatch(imageData: place.imageData, tint: tint)
+                            .frame(width: 96, height: 64)
 
                         VStack(alignment: .leading, spacing: 5) {
                             Text(place.name.isEmpty ? "名称未設定" : place.name)

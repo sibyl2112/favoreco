@@ -142,7 +142,7 @@ struct PhotoUnitEditor: View {
                         }
                     }
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
         }
         .sheet(
             isPresented: $isShowingAllPhotos,
@@ -769,22 +769,22 @@ struct PhotoUnitEditor: View {
         Button {
             openEditor(for: editorTarget, fromGallery: opensFromGallery)
         } label: {
-            FavorecoIconLabel("写真の情報を編集", systemImage: "slider.horizontal.3")
+            Label("写真の情報を編集", systemImage: "slider.horizontal.3")
         }
         if purpose == .memory {
             Button {
                 coverPhotoPath = path
             } label: {
-                FavorecoIconLabel("カバー写真にする", systemImage: "star")
+                Label("カバー写真にする", systemImage: "star")
             }
             Button {
                 heroBackgroundPath = path
             } label: {
-                FavorecoIconLabel("トップ背景にする", systemImage: "rectangle.landscape")
+                Label("トップ背景にする", systemImage: "rectangle.landscape")
             }
         }
         Button(role: .destructive, action: onDelete) {
-            FavorecoIconLabel("削除", systemImage: "trash")
+            Label("削除", systemImage: "trash")
         }
     }
 
@@ -968,6 +968,7 @@ private struct PhotoMetadataEditor: View {
     let imageData: Data
     let allowsBenefits: Bool
     @State private var isRecognizing = false
+    @State private var isOCRSectionExpanded = false
     @State private var statusText = ""
     @State private var suggestions: [OCRImportSuggestion] = []
 
@@ -977,20 +978,22 @@ private struct PhotoMetadataEditor: View {
                 if allowsBenefits {
                     Picker("写真の種類", selection: $metadata.purpose) {
                         ForEach(ExperiencePhotoPurpose.allCases) { purpose in
-                            FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage)
-                                .tag(purpose)
+                            Text(purpose.title).tag(purpose)
                         }
                     }
                     .pickerStyle(.menu)
                 } else {
                     Picker("写真の種類", selection: $metadata.purpose) {
                         ForEach(ExperiencePhotoPurpose.allCases.filter { $0 != .benefit }) { purpose in
-                            FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage)
-                                .tag(purpose)
+                            Text(purpose.title).tag(purpose)
                         }
                     }
                     .pickerStyle(.segmented)
                 }
+
+                Text(purposeDescription)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("キャプション") {
@@ -1007,51 +1010,54 @@ private struct PhotoMetadataEditor: View {
             }
 
             if metadata.purpose != .memory {
-                Section("画像から読み取った情報") {
-                    Button {
-                        recognizeText()
-                    } label: {
-                        FavorecoIconLabel(
-                            isRecognizing ? "読み取り中" : "この写真から文字を読み取る",
-                            systemImage: "text.viewfinder"
-                        )
-                    }
-                    .disabled(isRecognizing || !usesOCRImportAssist)
-
-                    if !usesOCRImportAssist {
-                        Text("画像OCRは設定でOFFになっています。")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if !statusText.isEmpty {
-                        Text(statusText)
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    TextEditor(text: $metadata.ocrText)
-                        .frame(minHeight: 120)
-
-                    ForEach(amountSuggestions) { suggestion in
+                Section {
+                    DisclosureGroup(isExpanded: $isOCRSectionExpanded) {
                         Button {
-                            metadata.amountText = suggestion.value
-                            statusText = "金額候補を反映しました。"
+                            recognizeText()
                         } label: {
-                            FavorecoIconLabel(
-                                "金額候補 \(suggestion.displayValue)を使う",
-                                systemImage: "wand.and.stars"
+                            Label(
+                                isRecognizing ? "読み取り中" : "この写真から文字を読み取る",
+                                systemImage: "text.viewfinder"
                             )
                         }
+                        .disabled(isRecognizing || !usesOCRImportAssist)
+
+                        if !usesOCRImportAssist {
+                            Text("画像OCRは設定でOFFになっています。")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if !statusText.isEmpty {
+                            Text(statusText)
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        TextEditor(text: $metadata.ocrText)
+                            .frame(minHeight: 120)
+
+                        ForEach(amountSuggestions) { suggestion in
+                            Button {
+                                metadata.amountText = suggestion.value
+                                statusText = "金額候補を反映しました。"
+                            } label: {
+                                Text("金額候補 \(suggestion.displayValue)を使う")
+                            }
+                        }
+                    } label: {
+                        Label("文字読み取り（任意）", systemImage: "text.viewfinder")
                     }
                 }
 
-                Section(metadata.purpose == .ticket ? "チケット金額" : "グッズ金額") {
-                    TextField("0", text: $metadata.amountText)
-                        .keyboardType(.decimalPad)
-                    Text("合計金額は後続Stepで、記録全体の費用と分けて表示します。")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
+                if metadata.purpose.supportsAmount {
+                    Section(metadata.purpose == .ticket ? "チケット金額" : "グッズ金額") {
+                        TextField("0", text: $metadata.amountText)
+                            .keyboardType(.decimalPad)
+                        Text("合計金額は後続Stepで、記録全体の費用と分けて表示します。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             } else {
                 Section {
@@ -1061,8 +1067,24 @@ private struct PhotoMetadataEditor: View {
                 }
             }
         }
-        .onAppear { refreshSuggestions() }
+        .onAppear {
+            refreshSuggestions()
+            isOCRSectionExpanded = !metadata.ocrText.isEmpty
+        }
         .onChange(of: metadata.ocrText) { _, _ in refreshSuggestions() }
+    }
+
+    private var purposeDescription: String {
+        switch metadata.purpose {
+        case .memory:
+            return "通常の写真です。カバーやトップ背景にも指定できます。"
+        case .ticket:
+            return "チケット画像です。必要な場合だけ文字読み取りと金額を記録できます。"
+        case .goods:
+            return "グッズ画像です。必要な場合だけ文字読み取りと金額を記録できます。"
+        case .benefit:
+            return "ノベルティ・特典の画像です。費用には集計しません。"
+        }
     }
 
     private var amountSuggestions: [OCRImportSuggestion] {

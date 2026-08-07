@@ -241,6 +241,10 @@ struct ExperienceDetailView: View {
     @State private var goodsPhotoItems: [PhotosPickerItem] = []
     @State private var benefitPhotoItems: [PhotosPickerItem] = []
     @State private var photoAddErrorMessage: String?
+    @State private var pendingPhotoPurpose: ExperiencePhotoPurpose?
+    @State private var isShowingPhotoSourceChoice = false
+    @State private var isShowingDetailCamera = false
+    @State private var isShowingDetailCameraUnavailable = false
     @State private var backSwipeExclusionFrames: [CGRect] = []
     @State private var personMasterEditTarget: PersonMasterEditTarget?
     @State private var photoViewerRequest: ExperiencePhotoViewerRequest?
@@ -328,44 +332,44 @@ struct ExperienceDetailView: View {
                         .padding(.top, -24)
 
                         if isBook {
-                            bookInformationSection(snapshot: snapshot, accentColor: accentColor)
-                            bookReadingSection(snapshot: snapshot, accentColor: accentColor)
+                            AnyView(bookInformationSection(snapshot: snapshot, accentColor: accentColor))
+                            AnyView(bookReadingSection(snapshot: snapshot, accentColor: accentColor))
                             if hasVenueMapSource {
-                                venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                                AnyView(venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
                             }
-                            bookPhotosSection(
+                            AnyView(bookPhotosSection(
                                 snapshot: snapshot,
                                 excluding: Set([eyecatchPhoto?.id].compactMap { $0 }),
                                 accentColor: accentColor
-                            )
-                            bookMemoSection(accentColor: accentColor)
+                            ))
+                            AnyView(bookMemoSection(accentColor: accentColor))
                         } else {
-                            officialLinksSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
-                            venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                            AnyView(officialLinksSection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
+                            AnyView(venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
                             if snapshot.category?.templateKey == "museum" {
-                                museumVisitHistorySection(accentColor: accentColor)
+                                AnyView(museumVisitHistorySection(accentColor: accentColor))
                             }
-                            memoSection(template: template, accentColor: accentColor, isTheater: false)
-                            photoSection(
+                            AnyView(memoSection(template: template, accentColor: accentColor, isTheater: false))
+                            AnyView(photoSection(
                                 snapshot: snapshot,
                                 excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
                                 accentColor: accentColor,
                                 isTheater: false
-                            )
-                            classifiedPhotoSection(snapshot: snapshot, purpose: .ticket, accentColor: accentColor, isTheater: false)
-                            classifiedPhotoSection(snapshot: snapshot, purpose: .goods, accentColor: accentColor, isTheater: false)
-                            classifiedPhotoSection(snapshot: snapshot, purpose: .benefit, accentColor: accentColor, isTheater: false)
-                            expenseAndTicketSection(
+                            ))
+                            AnyView(classifiedPhotoSection(snapshot: snapshot, purpose: .ticket, accentColor: accentColor, isTheater: false))
+                            AnyView(classifiedPhotoSection(snapshot: snapshot, purpose: .goods, accentColor: accentColor, isTheater: false))
+                            AnyView(classifiedPhotoSection(snapshot: snapshot, purpose: .benefit, accentColor: accentColor, isTheater: false))
+                            AnyView(expenseAndTicketSection(
                                 snapshot: snapshot,
                                 plan: activePlan,
                                 accentColor: accentColor,
                                 showsActions: true
-                            )
-                            goshuinBookSection(snapshot: snapshot)
-                            peopleSection(snapshot: snapshot, accentColor: accentColor)
-                            ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
-                            basicInfo(snapshot: snapshot, template: template)
-                            advancedSection(snapshot: snapshot)
+                            ))
+                            AnyView(goshuinBookSection(snapshot: snapshot))
+                            AnyView(peopleSection(snapshot: snapshot, accentColor: accentColor))
+                            AnyView(ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
+                            AnyView(basicInfo(snapshot: snapshot, template: template))
+                            AnyView(advancedSection(snapshot: snapshot))
                         }
                     }
                     .padding(.horizontal, 20)
@@ -452,6 +456,22 @@ struct ExperienceDetailView: View {
                 initialPhotoID: request.initialPhotoID
             )
         }
+        .fullScreenCover(isPresented: $isShowingDetailCamera) {
+            CameraImagePicker(
+                onCapture: { image in
+                    if let purpose = pendingPhotoPurpose {
+                        addCapturedDetailPhoto(image, purpose: purpose)
+                    }
+                    isShowingDetailCamera = false
+                    pendingPhotoPurpose = nil
+                },
+                onCancel: {
+                    isShowingDetailCamera = false
+                    pendingPhotoPurpose = nil
+                }
+            )
+            .ignoresSafeArea()
+        }
         .navigationDestination(item: $navigatingPlan) { plan in
             PlanDetailView(plan: plan)
         }
@@ -493,6 +513,24 @@ struct ExperienceDetailView: View {
         } message: {
             Text(photoAddErrorMessage ?? "")
         }
+        .alert("カメラを使用できません", isPresented: $isShowingDetailCameraUnavailable) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("この端末ではカメラを起動できません。写真ライブラリから追加してください。")
+        }
+        .confirmationDialog("写真を追加", isPresented: $isShowingPhotoSourceChoice, titleVisibility: .visible) {
+            detailLibraryPickerForPendingPurpose
+            Button("カメラで撮影") {
+                guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+                    isShowingDetailCameraUnavailable = true
+                    return
+                }
+                isShowingDetailCamera = true
+            }
+            Button("キャンセル", role: .cancel) {
+                pendingPhotoPurpose = nil
+            }
+        }
         .confirmationDialog("地図で開く", isPresented: $isShowingMapChooser, titleVisibility: .visible) {
             if let url = snapshot.mapURL {
                 Button("Apple Maps") { openURL(url) }
@@ -501,6 +539,30 @@ struct ExperienceDetailView: View {
                 Button("Google Maps") { openURL(url) }
             }
             Button("キャンセル", role: .cancel) {}
+        }
+        .onChange(of: memoryPhotoItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task {
+                await addDetailPhotos(items, purpose: .memory)
+                memoryPhotoItems = []
+                pendingPhotoPurpose = nil
+            }
+        }
+        .onChange(of: goodsPhotoItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task {
+                await addDetailPhotos(items, purpose: .goods)
+                goodsPhotoItems = []
+                pendingPhotoPurpose = nil
+            }
+        }
+        .onChange(of: benefitPhotoItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task {
+                await addDetailPhotos(items, purpose: .benefit)
+                benefitPhotoItems = []
+                pendingPhotoPurpose = nil
+            }
         }
         .task(id: snapshot.weatherTaskID) {
             await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext)
@@ -608,6 +670,17 @@ struct ExperienceDetailView: View {
                     Text(eventSubtitle)
                         .font(FavorecoTypography.bodyStrong)
                         .foregroundStyle(.white.opacity(0.82))
+                        .lineLimit(2)
+                        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                }
+
+                let visitSubtitle = snapshot.unitFields.visitSubtitle
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if ["theme_park", "nature_living"].contains(snapshot.category?.templateKey ?? ""),
+                   !visitSubtitle.isEmpty {
+                    Text(visitSubtitle)
+                        .font(FavorecoTypography.bodyStrong)
+                        .foregroundStyle(.white.opacity(0.86))
                         .lineLimit(2)
                         .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
                 }
@@ -1028,6 +1101,9 @@ struct ExperienceDetailView: View {
                 DetailInfoRow(icon: "text.book.closed", title: "書名", value: snapshot.eventTitle)
                 if let seriesName = event?.seriesName, !seriesName.isEmpty {
                     DetailInfoRow(icon: "books.vertical", title: "補足", value: seriesName)
+                }
+                if let isbn = event?.bookISBN, !isbn.isEmpty {
+                    DetailInfoRow(icon: "barcode", title: "ISBN", value: isbn)
                 }
                 DetailInfoRow(icon: "rectangle.portrait", title: "種類", value: format.name)
                 if let officialURL = event?.officialURL,
@@ -1701,38 +1777,73 @@ struct ExperienceDetailView: View {
         let labelFont = FavorecoTypography.captionStrong
         switch purpose {
         case .memory:
-            PhotosPicker(selection: $memoryPhotoItems, maxSelectionCount: 20, matching: .images) {
+            Button {
+                pendingPhotoPurpose = .memory
+                isShowingPhotoSourceChoice = true
+            } label: {
                 detailPhotoPickerLabel(title, font: labelFont, accentColor: accentColor)
             }
-                .contentShape(Rectangle())
-                .zIndex(2)
-                .onChange(of: memoryPhotoItems) { _, items in
-                    Task { await addDetailPhotos(items, purpose: .memory); memoryPhotoItems = [] }
-                }
         case .goods:
-            PhotosPicker(selection: $goodsPhotoItems, maxSelectionCount: 20, matching: .images) {
+            Button {
+                pendingPhotoPurpose = .goods
+                isShowingPhotoSourceChoice = true
+            } label: {
                 detailPhotoPickerLabel(title, font: labelFont, accentColor: accentColor)
             }
-                .contentShape(Rectangle())
-                .zIndex(2)
-                .onChange(of: goodsPhotoItems) { _, items in
-                    Task { await addDetailPhotos(items, purpose: .goods); goodsPhotoItems = [] }
-                }
         case .benefit:
-            PhotosPicker(selection: $benefitPhotoItems, maxSelectionCount: 20, matching: .images) {
+            Button {
+                pendingPhotoPurpose = .benefit
+                isShowingPhotoSourceChoice = true
+            } label: {
                 detailPhotoPickerLabel(title, font: labelFont, accentColor: accentColor)
             }
-                .contentShape(Rectangle())
-                .zIndex(2)
-                .onChange(of: benefitPhotoItems) { _, items in
-                    Task { await addDetailPhotos(items, purpose: .benefit); benefitPhotoItems = [] }
-                }
         case .ticket:
             Button { isShowingEdit = true } label: {
                 FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
                     .font(labelFont)
                     .foregroundStyle(accentColor)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var detailLibraryPickerForPendingPurpose: some View {
+        switch pendingPhotoPurpose {
+        case .memory:
+            PhotosPicker(selection: $memoryPhotoItems, maxSelectionCount: 20, matching: .images) {
+                Text("写真ライブラリから選ぶ")
+            }
+        case .goods:
+            PhotosPicker(selection: $goodsPhotoItems, maxSelectionCount: 20, matching: .images) {
+                Text("写真ライブラリから選ぶ")
+            }
+        case .benefit:
+            PhotosPicker(selection: $benefitPhotoItems, maxSelectionCount: 20, matching: .images) {
+                Text("写真ライブラリから選ぶ")
+            }
+        case .ticket, .none:
+            EmptyView()
+        }
+    }
+
+    private func addCapturedDetailPhoto(_ image: UIImage, purpose: ExperiencePhotoPurpose) {
+        guard let sourceData = image.jpegData(compressionQuality: 0.9),
+              var pending = PendingPhoto.make(
+                from: sourceData,
+                filename: "detail-camera.jpg",
+                compressionQuality: 0.82
+              ) else {
+            photoAddErrorMessage = "撮影した画像を読み込めませんでした。もう一度お試しください。"
+            return
+        }
+        pending.metadata.purpose = purpose
+        modelContext.insert(pending.makePhotoBlob(visit: visit))
+        visit.updatedAt = Date()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            photoAddErrorMessage = "写真を保存できませんでした。もう一度お試しください。"
         }
     }
 

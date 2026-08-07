@@ -86,7 +86,10 @@ struct FavorecoSettingsInfoCallout: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(themePalette.globalTint.opacity(0.09), in: RoundedRectangle(cornerRadius: 8))
+        .background(
+            themePalette.globalTint.opacity(0.09),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
         .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
         .listRowSeparator(.hidden)
     }
