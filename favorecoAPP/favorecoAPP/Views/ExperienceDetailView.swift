@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import Photos
 import PhotosUI
 
 struct TheaterExperiencePage<Hero: View, Content: View>: View {
@@ -181,10 +182,18 @@ private struct PersonMasterEditTarget: Identifiable {
     let id: UUID
 }
 
+private struct ExperiencePhotoViewerRequest: Identifiable {
+    let id = UUID()
+    let photoIDs: [UUID]
+    let initialPhotoID: UUID
+}
+
 struct ExperienceDetailView: View {
     let visit: Visit
+    private let showsScrollingFrame: Bool
     let onBack: (() -> Void)?
     let onOpenEvent: ((UUID) -> Void)?
+    let onOpenVisit: ((UUID) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
@@ -194,16 +203,39 @@ struct ExperienceDetailView: View {
     @State private var calendarDraft: CalendarEventDraft?
     @State private var ticketPlanForEditor: Plan?
     @State private var navigatingPlan: Plan?
+    @State private var recordPreparationPlan: Plan?
     @State private var navigatingEventID: UUID?
+    @State private var navigatingSiblingVisit: Visit?
     @State private var isShowingDeleteConfirmation = false
     @State private var deletionErrorMessage: String?
     @State private var planCreationErrorMessage: String?
-    @State private var isNextActionsExpanded = true
+    @State private var isNextActionsExpanded = false
     @State private var isOCRExpanded = false
     @State private var isReviewExpanded = false
-    @State private var isOfficialInfoExpanded = true
+    @State private var isOfficialInfoExpanded = false
+    @State private var isVenueExpanded = false
     @State private var isPhotoCollectionExpanded = true
     @State private var isReviewSectionExpanded = true
+    @State private var isTicketExpanded = false
+    @State private var isTravelRecordExpanded = true
+    @State private var isExpenseExpanded = false
+    @State private var isCastExpanded = false
+    @State private var isBookInformationExpanded = false
+    @State private var isBookReadingExpanded = false
+    @State private var isBookPhotosExpanded = true
+    @State private var isBookMemoExpanded = true
+    @State private var isPlaceOfficialInfoExpanded = true
+    @State private var isPlaceVenueExpanded = true
+    @State private var isPlaceMemoExpanded = true
+    @State private var isPlacePhotosExpanded = true
+    @State private var isPlaceTicketPhotosExpanded = true
+    @State private var isPlaceGoodsPhotosExpanded = true
+    @State private var isPlaceBenefitPhotosExpanded = true
+    @State private var isPlacePeopleExpanded = true
+    @State private var isPlaceBasicInfoExpanded = true
+    @State private var isPlaceAdvancedExpanded = true
+    @State private var isGenericTicketExpanded = true
+    @State private var isGoshuinBookExpanded = true
     @State private var isShowingMapChooser = false
     @State private var memoryPhotoItems: [PhotosPickerItem] = []
     @State private var goodsPhotoItems: [PhotosPickerItem] = []
@@ -211,15 +243,23 @@ struct ExperienceDetailView: View {
     @State private var photoAddErrorMessage: String?
     @State private var backSwipeExclusionFrames: [CGRect] = []
     @State private var personMasterEditTarget: PersonMasterEditTarget?
+    @State private var photoViewerRequest: ExperiencePhotoViewerRequest?
+    @State private var isShowingActionMenu = false
+    @State private var isShowingRepeatEntry = false
+    @State private var isMuseumHistoryExpanded = true
 
     init(
         visit: Visit,
         onBack: (() -> Void)? = nil,
-        onOpenEvent: ((UUID) -> Void)? = nil
+        onOpenEvent: ((UUID) -> Void)? = nil,
+        onOpenVisit: ((UUID) -> Void)? = nil,
+        showsScrollingFrame: Bool? = nil
     ) {
         self.visit = visit
         self.onBack = onBack
         self.onOpenEvent = onOpenEvent
+        self.onOpenVisit = onOpenVisit
+        self.showsScrollingFrame = showsScrollingFrame ?? (onBack != nil)
     }
 
     var body: some View {
@@ -227,9 +267,11 @@ struct ExperienceDetailView: View {
         let genreColor = Color(hex: snapshot.category?.colorHex ?? "#6F8F7A")
         let template = CategoryRecordTemplate.template(for: snapshot.category)
         let isTheater = snapshot.category?.templateKey == "theater"
+        let isBook = snapshot.category?.templateKey == "book"
+        let categoryHex = themePalette.resolvedHex(categoryHex: snapshot.category?.colorHex ?? "#6F8F7A")
         let accentColor = isTheater
             ? Color(red: 0.82, green: 0.62, blue: 0.30)
-            : themePalette.categoryColor(hex: snapshot.category?.colorHex ?? "#6F8F7A")
+            : Color.legibleDetailAccent(hex: categoryHex)
         let eyecatchPhoto = detailEyecatchPhoto(in: snapshot)
         let backgroundPhoto = detailBackgroundPhoto(in: snapshot)
 
@@ -237,7 +279,7 @@ struct ExperienceDetailView: View {
             if isTheater {
                 TheaterExperiencePage(
                     genreColor: genreColor,
-                    showsScrollingFrame: onBack != nil
+                    showsScrollingFrame: showsScrollingFrame
                 ) {
                     recordHero(
                         snapshot: snapshot,
@@ -248,23 +290,28 @@ struct ExperienceDetailView: View {
                     )
                 } content: {
                     officialLinksSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
-                    nextActionsSection(snapshot: snapshot, plan: activePlan, accentColor: accentColor)
                     venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
+                    nextActionsSection(snapshot: snapshot, plan: activePlan, accentColor: accentColor)
                     theaterPhotoCollectionSection(
                         snapshot: snapshot,
                         excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
                         accentColor: accentColor
                     )
                     memoSection(template: template, accentColor: accentColor, isTheater: true)
-                    theaterCreditsSection(snapshot: snapshot, accentColor: accentColor)
-                    theaterFocusSection(snapshot: snapshot, accentColor: accentColor)
-                    expenseAndTicketSection(
+                    ticketAndSeatCard(snapshot: snapshot, plan: activePlan, accentColor: accentColor)
+                    theaterTravelRecordSection(
                         snapshot: snapshot,
                         plan: activePlan,
-                        accentColor: accentColor,
-                        showsActions: false
+                        accentColor: accentColor
                     )
-                    peopleSection(snapshot: snapshot, accentColor: accentColor)
+                    ExperienceExpenseSummaryCard(
+                        summary: ExperienceExpenseSummary.make(visit: visit, plan: activePlan),
+                        tint: accentColor,
+                        title: "費用",
+                        isExpanded: $isExpenseExpanded,
+                        titleFont: TheaterDetailSectionStyle.titleFont
+                    )
+                    theaterCastAndFocusSection(snapshot: snapshot, accentColor: accentColor)
                     ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                 }
             } else {
@@ -280,45 +327,66 @@ struct ExperienceDetailView: View {
                         .padding(.horizontal, -20)
                         .padding(.top, -24)
 
-                        officialLinksSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
-                        venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
-                        memoSection(template: template, accentColor: accentColor, isTheater: false)
-                        photoSection(
-                            snapshot: snapshot,
-                            excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
-                            accentColor: accentColor,
-                            isTheater: false
-                        )
-                        classifiedPhotoSection(snapshot: snapshot, purpose: .ticket, accentColor: accentColor, isTheater: false)
-                        classifiedPhotoSection(snapshot: snapshot, purpose: .goods, accentColor: accentColor, isTheater: false)
-                        expenseAndTicketSection(
-                            snapshot: snapshot,
-                            plan: activePlan,
-                            accentColor: accentColor,
-                            showsActions: true
-                        )
-                        goshuinBookSection(snapshot: snapshot)
-                        peopleSection(snapshot: snapshot, accentColor: accentColor)
-                        ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
-                        basicInfo(snapshot: snapshot, template: template)
-                        advancedSection(snapshot: snapshot)
+                        if isBook {
+                            bookInformationSection(snapshot: snapshot, accentColor: accentColor)
+                            bookReadingSection(snapshot: snapshot, accentColor: accentColor)
+                            if hasVenueMapSource {
+                                venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                            }
+                            bookPhotosSection(
+                                snapshot: snapshot,
+                                excluding: Set([eyecatchPhoto?.id].compactMap { $0 }),
+                                accentColor: accentColor
+                            )
+                            bookMemoSection(accentColor: accentColor)
+                        } else {
+                            officialLinksSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                            venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                            if snapshot.category?.templateKey == "museum" {
+                                museumVisitHistorySection(accentColor: accentColor)
+                            }
+                            memoSection(template: template, accentColor: accentColor, isTheater: false)
+                            photoSection(
+                                snapshot: snapshot,
+                                excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
+                                accentColor: accentColor,
+                                isTheater: false
+                            )
+                            classifiedPhotoSection(snapshot: snapshot, purpose: .ticket, accentColor: accentColor, isTheater: false)
+                            classifiedPhotoSection(snapshot: snapshot, purpose: .goods, accentColor: accentColor, isTheater: false)
+                            classifiedPhotoSection(snapshot: snapshot, purpose: .benefit, accentColor: accentColor, isTheater: false)
+                            expenseAndTicketSection(
+                                snapshot: snapshot,
+                                plan: activePlan,
+                                accentColor: accentColor,
+                                showsActions: true
+                            )
+                            goshuinBookSection(snapshot: snapshot)
+                            peopleSection(snapshot: snapshot, accentColor: accentColor)
+                            ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                            basicInfo(snapshot: snapshot, template: template)
+                            advancedSection(snapshot: snapshot)
+                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 24)
                     .modifier(
                         CategoryEmbeddedDetailCardModifier(
-                            isEnabled: onBack != nil,
+                            isEnabled: showsScrollingFrame,
                             genreColor: genreColor,
                             borderColor: accentColor
                         )
                     )
-                    .padding(.horizontal, onBack != nil ? 10 : 0)
-                    .padding(.top, onBack != nil ? 74 : 0)
+                    .padding(.horizontal, showsScrollingFrame ? 10 : 0)
+                    .padding(.top, showsScrollingFrame ? 74 : 0)
                 }
-                .ignoresSafeArea(edges: onBack == nil ? .top : [])
+                .ignoresSafeArea(edges: showsScrollingFrame ? [] : .top)
                 .background {
-                    if onBack == nil {
-                        detailPageBackground(genreColor: genreColor)
+                    if !showsScrollingFrame {
+                        detailPageBackground(
+                            genreColor: genreColor,
+                            usesHighContrast: true
+                        )
                     }
                 }
             }
@@ -332,6 +400,13 @@ struct ExperienceDetailView: View {
         .overlay(alignment: .top) {
             detailNavigationControls(accentColor: accentColor, genreColor: genreColor)
         }
+        .favorecoDetailActionMenu(
+            isPresented: $isShowingActionMenu,
+            genreColor: genreColor,
+            accentColor: accentColor,
+            topPadding: onBack != nil ? 116 : 70,
+            actions: recordMenuActions
+        )
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if onBack != nil {
                 CategoryDetailBottomActionBar(
@@ -345,6 +420,21 @@ struct ExperienceDetailView: View {
         .sheet(isPresented: $isShowingEdit) {
             EditExperienceView(visit: visit)
         }
+        .sheet(isPresented: $isShowingRepeatEntry) {
+            if let event = visit.event {
+                let fields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+                AddVisitView(
+                    event: event,
+                    initialDraft: VisitDraft(repeating: visit),
+                    initialCoverPhotoPath: visit.eyecatchPath.isEmpty
+                        ? event.representativeEyecatchPath
+                        : visit.eyecatchPath,
+                    initialHeroBackgroundPath: fields.heroBackgroundPath,
+                    initialHeroBackgroundPresetKey: fields.heroBackgroundPresetKey,
+                    inheritedVisualSource: visit
+                )
+            }
+        }
         .sheet(item: $calendarDraft) { draft in
             CalendarEventEditSheet(draft: draft)
         }
@@ -356,11 +446,20 @@ struct ExperienceDetailView: View {
                 PersonMasterEditDestination(personID: target.id, showsCancelButton: true)
             }
         }
+        .fullScreenCover(item: $photoViewerRequest) { request in
+            ExperiencePhotoViewer(
+                photos: resolvedViewerPhotos(for: request),
+                initialPhotoID: request.initialPhotoID
+            )
+        }
         .navigationDestination(item: $navigatingPlan) { plan in
             PlanDetailView(plan: plan)
         }
         .navigationDestination(item: $navigatingEventID) { eventID in
             EventDetailDestination(eventID: eventID)
+        }
+        .navigationDestination(item: $navigatingSiblingVisit) { siblingVisit in
+            ExperienceDetailView(visit: siblingVisit)
         }
         .confirmationDialog("この記録を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
             Button("この記録だけ削除", role: .destructive) {
@@ -398,7 +497,7 @@ struct ExperienceDetailView: View {
             if let url = snapshot.mapURL {
                 Button("Apple Maps") { openURL(url) }
             }
-            if let url = googleMapsURL(snapshot: snapshot) {
+            if let url = googleMapsURL {
                 Button("Google Maps") { openURL(url) }
             }
             Button("キャンセル", role: .cancel) {}
@@ -418,6 +517,18 @@ struct ExperienceDetailView: View {
         }
     }
 
+    private func presentPhotoViewer(_ photos: [PhotoBlob], initialPhoto: PhotoBlob) {
+        photoViewerRequest = ExperiencePhotoViewerRequest(
+            photoIDs: photos.map(\.id),
+            initialPhotoID: initialPhoto.id
+        )
+    }
+
+    private func resolvedViewerPhotos(for request: ExperiencePhotoViewerRequest) -> [PhotoBlob] {
+        let photosByID = Dictionary(uniqueKeysWithValues: (visit.photos ?? []).map { ($0.id, $0) })
+        return request.photoIDs.compactMap { photosByID[$0] }
+    }
+
     private func recordHero(
         snapshot: ExperienceDetailSnapshot,
         accentColor: Color,
@@ -426,6 +537,7 @@ struct ExperienceDetailView: View {
         backgroundPhoto: PhotoBlob?
     ) -> some View {
         let heroSeatText = resolvedHeroSeatText
+        let metadataFontSize: CGFloat = snapshot.category?.templateKey == "theater" ? 14 : 15
         return ZStack(alignment: .bottomLeading) {
             recordHeroBackground(
                 photo: backgroundPhoto,
@@ -452,6 +564,11 @@ struct ExperienceDetailView: View {
                         Spacer(minLength: 8)
                         heroWeather(snapshot: snapshot)
                     }
+                } else if snapshot.category?.templateKey == "museum" {
+                    Text(ExperienceDetailPresentation.museumVisitOrdinal(for: visit))
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.white.opacity(0.76))
+                        .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
                 } else if let seriesName = snapshot.event?.seriesName, !seriesName.isEmpty {
                     Text(seriesName)
                         .lineLimit(1)
@@ -460,7 +577,8 @@ struct ExperienceDetailView: View {
                         .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
                 }
 
-                if let event = snapshot.event {
+                let exposesEventMaster = !["museum", "movie"].contains(snapshot.category?.templateKey ?? "")
+                if let event = snapshot.event, exposesEventMaster {
                     if let onOpenEvent {
                         Button {
                             onOpenEvent(event.id)
@@ -506,31 +624,46 @@ struct ExperienceDetailView: View {
                     .frame(width: snapshot.category?.templateKey == "theater" ? 140 : 112)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        heroDateRow(snapshot: snapshot)
+                        if snapshot.category?.templateKey == "book" {
+                            recordMetadataRow(
+                                icon: "calendar",
+                                text: bookReadingPeriodText(snapshot: snapshot),
+                                accentColor: .white.opacity(0.86),
+                                fontSize: metadataFontSize
+                            )
+                        } else {
+                            heroDateRow(snapshot: snapshot)
 
-                        recordMetadataRow(
-                            icon: "clock",
-                            text: ExperienceDetailPresentation.performanceTime(for: visit),
-                            accentColor: .white.opacity(0.86)
-                        )
+                            recordMetadataRow(
+                                icon: "clock",
+                                text: ExperienceDetailPresentation.performanceTime(for: visit),
+                                accentColor: .white.opacity(0.86),
+                                fontSize: metadataFontSize
+                            )
 
-                        recordMetadataRow(
-                            icon: "tag.fill",
-                            text: heroDisplayText(snapshot.unitFields.styleNames.joined(separator: "・")),
-                            accentColor: .white.opacity(0.86)
-                        )
+                            recordMetadataRow(
+                                icon: "tag.fill",
+                                text: heroDisplayText(snapshot.unitFields.styleNames.joined(separator: "・")),
+                                accentColor: .white.opacity(0.86),
+                                fontSize: metadataFontSize
+                            )
 
-                        recordMetadataRow(
-                            icon: "mappin.and.ellipse",
-                            text: heroDisplayText(visit.venueNameSnapshot),
-                            accentColor: .white.opacity(0.86)
-                        )
+                            recordMetadataRow(
+                                icon: "mappin.and.ellipse",
+                                text: heroDisplayText(visit.venueNameSnapshot),
+                                accentColor: .white.opacity(0.86),
+                                fontSize: metadataFontSize
+                            )
 
-                        recordMetadataRow(
-                            icon: "chair",
-                            text: heroDisplayText(heroSeatText),
-                            accentColor: .white.opacity(0.86)
-                        )
+                            if ["theater", "live"].contains(snapshot.category?.templateKey ?? "") {
+                                recordMetadataRow(
+                                    icon: "chair",
+                                    text: heroDisplayText(heroSeatText),
+                                    accentColor: .white.opacity(0.86),
+                                    fontSize: metadataFontSize
+                                )
+                            }
+                        }
 
                         recordRating(accentColor: .white.opacity(0.90))
                     }
@@ -538,9 +671,12 @@ struct ExperienceDetailView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.bottom, 35)
         }
-        .frame(minHeight: 560, alignment: .bottom)
+        .frame(
+            minHeight: snapshot.category?.templateKey == "theater" ? 485 : 560,
+            alignment: .bottom
+        )
         .accessibilityElement(children: .contain)
     }
 
@@ -623,14 +759,19 @@ struct ExperienceDetailView: View {
         .clipped()
     }
 
-    private func detailPageBackground(genreColor: Color) -> some View {
+    private func detailPageBackground(genreColor: Color, usesHighContrast: Bool) -> some View {
         ZStack {
             Color.black
             LinearGradient(
-                colors: [genreColor, genreColor.opacity(0.72), Color.black.opacity(0.94)],
+                colors: usesHighContrast
+                    ? [genreColor.opacity(0.64), genreColor.opacity(0.46), Color.black.opacity(0.96)]
+                    : [genreColor, genreColor.opacity(0.72), Color.black.opacity(0.94)],
                 startPoint: .top,
                 endPoint: .bottom
             )
+            if usesHighContrast {
+                Color.black.opacity(0.24)
+            }
         }
         .ignoresSafeArea()
     }
@@ -670,33 +811,43 @@ struct ExperienceDetailView: View {
 
             Spacer()
 
-            Menu {
-                Button {
-                    isShowingEdit = true
-                } label: {
-                    Label("編集", systemImage: "pencil")
-                }
-
-                Button(role: .destructive) {
-                    isShowingDeleteConfirmation = true
-                } label: {
-                    Label("この記録だけ削除", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(accentColor)
-                    .frame(width: 50, height: 50)
-                    .background(genreColor.opacity(0.86), in: Circle())
-                    .overlay {
-                        Circle().stroke(accentColor.opacity(0.72), lineWidth: 1)
-                    }
-            }
-            .accessibilityLabel("メニュー")
+            FavorecoDetailActionMenuButton(
+                isPresented: $isShowingActionMenu,
+                genreColor: genreColor,
+                accentColor: accentColor
+            )
         }
         .padding(.horizontal, 20)
         .padding(.top, onBack != nil ? 54 : 0)
         .safeAreaPadding(.top, onBack != nil ? 0 : 8)
+    }
+
+    private var recordMenuActions: [FavorecoDetailAction] {
+        var actions = [
+            FavorecoDetailAction(
+                title: "記録を編集",
+                systemImage: "pencil",
+                action: { isShowingEdit = true }
+            )
+        ]
+        if visit.event?.category?.templateKey == "museum" {
+            actions.append(
+                FavorecoDetailAction(
+                    title: "この展示をもう一度記録",
+                    systemImage: "arrow.clockwise.circle",
+                    action: { isShowingRepeatEntry = true }
+                )
+            )
+        }
+        actions.append(
+            FavorecoDetailAction(
+                title: "この記録だけ削除",
+                systemImage: "trash",
+                isDestructive: true,
+                action: { isShowingDeleteConfirmation = true }
+            )
+        )
+        return actions
     }
 
     private var edgeBackGesture: some Gesture {
@@ -754,7 +905,11 @@ struct ExperienceDetailView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
-        .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+        .font(FavorecoTypography.jpSans(
+            snapshot.category?.templateKey == "theater" ? 14 : 15,
+            weight: .regular,
+            relativeTo: .body
+        ))
         .foregroundStyle(.white.opacity(0.96))
     }
 
@@ -777,7 +932,12 @@ struct ExperienceDetailView: View {
         .fixedSize()
     }
 
-    private func recordMetadataRow(icon: String, text: String, accentColor: Color) -> some View {
+    private func recordMetadataRow(
+        icon: String,
+        text: String,
+        accentColor: Color,
+        fontSize: CGFloat = 15
+    ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             FavorecoIcon(systemName: icon, size: 17)
                 .foregroundStyle(accentColor)
@@ -787,7 +947,7 @@ struct ExperienceDetailView: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
         }
-        .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+        .font(FavorecoTypography.jpSans(fontSize, weight: .regular, relativeTo: .body))
     }
 
     private func recordRating(accentColor: Color) -> some View {
@@ -812,6 +972,11 @@ struct ExperienceDetailView: View {
 
     private func detailEyecatchPhoto(in snapshot: ExperienceDetailSnapshot) -> PhotoBlob? {
         if snapshot.event?.eyecatchData != nil { return nil }
+        let visitEyecatchPath = visit.eyecatchPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !visitEyecatchPath.isEmpty,
+           let visitEyecatch = snapshot.photos.first(where: { $0.relativePath == visitEyecatchPath }) {
+            return visitEyecatch
+        }
         if let event = snapshot.event,
            let representative = EventRepresentativePhotoResolver.photo(for: event),
            ExperiencePhotoPurpose.resolved(from: representative.purpose) == .memory {
@@ -843,6 +1008,180 @@ struct ExperienceDetailView: View {
         }
     }
 
+    private func bookInformationSection(
+        snapshot: ExperienceDetailSnapshot,
+        accentColor: Color
+    ) -> some View {
+        let event = snapshot.event
+        let format = EyecatchAspectRatio.option(
+            for: snapshot.unitFields.eyecatchAspectRatioKey,
+            category: snapshot.category
+        )
+        return VStack(alignment: .leading, spacing: 14) {
+            bookSectionHeader(
+                title: "本の情報",
+                icon: "book.closed",
+                isExpanded: $isBookInformationExpanded,
+                accentColor: accentColor
+            )
+            if isBookInformationExpanded {
+                DetailInfoRow(icon: "text.book.closed", title: "書名", value: snapshot.eventTitle)
+                if let seriesName = event?.seriesName, !seriesName.isEmpty {
+                    DetailInfoRow(icon: "books.vertical", title: "補足", value: seriesName)
+                }
+                DetailInfoRow(icon: "rectangle.portrait", title: "種類", value: format.name)
+                if let officialURL = event?.officialURL,
+                   !officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button {
+                        guard let url = URL(string: officialURL) else { return }
+                        openURL(url)
+                    } label: {
+                        DetailInfoRow(icon: "link", title: "URL", value: officialURL)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .sectionCard(tint: accentColor, emphasized: false)
+    }
+
+    private func bookReadingSection(
+        snapshot: ExperienceDetailSnapshot,
+        accentColor: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            bookSectionHeader(
+                title: "読書の記録",
+                icon: "calendar",
+                isExpanded: $isBookReadingExpanded,
+                accentColor: accentColor
+            )
+            if isBookReadingExpanded {
+                DetailInfoRow(
+                    icon: "calendar.badge.clock",
+                    title: "期間",
+                    value: bookReadingPeriodText(snapshot: snapshot)
+                )
+                DetailInfoRow(
+                    icon: "star",
+                    title: "評価",
+                    value: snapshot.ratingText
+                )
+            }
+        }
+        .sectionCard(tint: accentColor, emphasized: false)
+    }
+
+    private func bookPhotosSection(
+        snapshot: ExperienceDetailSnapshot,
+        excluding excludedPhotoIDs: Set<UUID>,
+        accentColor: Color
+    ) -> some View {
+        let photos = memoryPhotos(in: snapshot).filter { !excludedPhotoIDs.contains($0.id) }
+        return VStack(alignment: .leading, spacing: 14) {
+            bookSectionHeader(
+                title: "写真",
+                icon: "photo.on.rectangle",
+                count: photos.count,
+                isExpanded: $isBookPhotosExpanded,
+                accentColor: accentColor
+            )
+            if isBookPhotosExpanded {
+                if photos.isEmpty {
+                    Text("写真はまだありません")
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+                } else {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                        spacing: 8
+                    ) {
+                        ForEach(photos) { photo in
+                            Button {
+                                presentPhotoViewer(photos, initialPhoto: photo)
+                            } label: {
+                                RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
+                                    .frame(maxWidth: .infinity)
+                                    .aspectRatio(1, contentMode: .fit)
+                                    .clipped()
+                                    .background(Color(.secondarySystemFill))
+                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+        .sectionCard(tint: accentColor, emphasized: false)
+    }
+
+    private func bookMemoSection(accentColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            bookSectionHeader(
+                title: "読書メモ",
+                icon: "note.text",
+                isExpanded: $isBookMemoExpanded,
+                accentColor: accentColor
+            )
+            if isBookMemoExpanded {
+                Text(visit.note.isEmpty ? "メモはまだありません" : visit.note)
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(visit.note.isEmpty ? .secondary : .primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .sectionCard(tint: accentColor, emphasized: false)
+    }
+
+    private func bookSectionHeader(
+        title: String,
+        icon: String,
+        count: Int? = nil,
+        isExpanded: Binding<Bool>,
+        accentColor: Color
+    ) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isExpanded.wrappedValue.toggle()
+            }
+        } label: {
+            HStack(spacing: 10) {
+                FavorecoIcon(systemName: icon, size: 17)
+                    .foregroundStyle(accentColor)
+                Text(title)
+                    .font(FavorecoTypography.sectionTitle)
+                    .foregroundStyle(.primary)
+                if let count {
+                    Text("\(count)枚")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(accentColor)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func bookReadingPeriodText(snapshot: ExperienceDetailSnapshot) -> String {
+        let start = Self.bookDateFormatter.string(from: visit.visitedAt)
+        let hasEndDate = snapshot.unitFields.bookReadingHasEndDate ?? true
+        guard hasEndDate else { return "\(start)〜" }
+        let end = Self.bookDateFormatter.string(from: max(visit.endedAt, visit.visitedAt))
+        return start == end ? start : "\(start)〜\(end)"
+    }
+
+    private static let bookDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "yyyy/M/d"
+        return formatter
+    }()
+
     private func officialLinksSection(
         snapshot: ExperienceDetailSnapshot,
         accentColor: Color,
@@ -857,23 +1196,25 @@ struct ExperienceDetailView: View {
         let organizations = theaterOrganizationRows(snapshot: snapshot)
 
         return VStack(alignment: .leading, spacing: 14) {
-            Button {
-                guard isTheater else { return }
-                withAnimation(.easeInOut(duration: 0.2)) { isOfficialInfoExpanded.toggle() }
-            } label: {
-                HStack {
-                    sectionTitle(isTheater ? "作品・公演情報" : "公式情報")
-                    Spacer()
-                    if isTheater {
-                        Image(systemName: isOfficialInfoExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption.weight(.bold))
-                    }
-                }
-                .contentShape(Rectangle())
+            if isTheater {
+                TheaterDetailDisclosureHeader(
+                    .eventInformation,
+                    tint: accentColor,
+                    isExpanded: $isOfficialInfoExpanded
+                )
+            } else if isGenericExperienceDetail {
+                genericDisclosureHeader(
+                    "公式情報",
+                    accentColor: accentColor,
+                    isExpanded: $isPlaceOfficialInfoExpanded
+                )
+            } else {
+                sectionTitle("公式情報")
             }
-            .buttonStyle(.plain)
 
-            if !isTheater || isOfficialInfoExpanded {
+            if (isTheater && isOfficialInfoExpanded)
+                || (isGenericExperienceDetail && isPlaceOfficialInfoExpanded)
+                || (!isTheater && !isGenericExperienceDetail) {
                 if isTheater, !organizations.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(organizations, id: \.label) { item in
@@ -943,7 +1284,11 @@ struct ExperienceDetailView: View {
                 }
             }
         }
-        .sectionCard(tint: accentColor, emphasized: isTheater)
+        .modifier(ExperienceOrTheaterSectionCard(
+            isTheater: isTheater,
+            tint: accentColor,
+            emphasizesGenericCard: isGenericExperienceDetail
+        ))
     }
 
     private func theaterOrganizationRows(
@@ -1055,70 +1400,200 @@ struct ExperienceDetailView: View {
         let geocodeText = address.isEmpty ? venueName : address
 
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                sectionTitle("会場")
-                Spacer()
-                if snapshot.mapURL != nil, hasMapSource {
-                    Button {
-                        isShowingMapChooser = true
-                    } label: {
-                        Label("マップで開く", systemImage: "arrow.up.right")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(accentColor)
-                    }
-                    .buttonStyle(.plain)
+            if isTheater {
+                TheaterDetailDisclosureHeader(
+                    .venue,
+                    tint: accentColor,
+                    isExpanded: $isVenueExpanded
+                )
+            } else if isGenericExperienceDetail {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    genericDisclosureHeader(
+                        "会場・地図",
+                        accentColor: accentColor,
+                        isExpanded: $isPlaceVenueExpanded
+                    )
+                    mapOpenButton(snapshot: snapshot, hasMapSource: hasMapSource, accentColor: accentColor)
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline) {
+                    sectionTitle("会場")
+                    Spacer()
+                    mapOpenButton(snapshot: snapshot, hasMapSource: hasMapSource, accentColor: accentColor)
                 }
             }
 
-            if hasMapSource {
-                if !venueName.isEmpty {
-                    Text(venueName)
-                        .font(FavorecoTypography.bodyStrong)
-                        .textSelection(.enabled)
-                }
-                if !address.isEmpty {
-                    Text(address)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+            if hasMapSource && (!isGenericExperienceDetail || isPlaceVenueExpanded) {
+                if !venueName.isEmpty || !address.isEmpty {
+                    TheaterVenueSummary(venueName: venueName, address: address)
                 }
 
-                ZStack {
-                    Color.white.opacity(0.06)
-                    FavorecoIcon(systemName: "map", size: 30)
-                        .foregroundStyle(accentColor.opacity(0.52))
-                    PlaceMapPreview(
-                        venueName: venueName,
-                        address: geocodeText,
-                        latitude: latitude,
-                        longitude: longitude
-                    )
+                PlaceOfficialWebsiteLink(urlString: visit.placeMaster?.officialURL ?? "")
+
+                if (!isTheater && !isGenericExperienceDetail)
+                    || (isTheater && isVenueExpanded)
+                    || (isGenericExperienceDetail && isPlaceVenueExpanded) {
+                    if isTheater {
+                        HStack {
+                            Spacer()
+                            mapOpenButton(snapshot: snapshot, hasMapSource: hasMapSource, accentColor: accentColor)
+                        }
+                    }
+
+                    ZStack {
+                        Color.white.opacity(0.06)
+                        FavorecoIcon(systemName: "map", size: 30)
+                            .foregroundStyle(accentColor.opacity(0.52))
+                        PlaceMapPreview(
+                            venueName: venueName,
+                            address: geocodeText,
+                            latitude: latitude,
+                            longitude: longitude
+                        )
+                    }
+                    .frame(height: 180)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
-                .frame(height: 180)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .allowsHitTesting(false)
-            } else {
-                FavorecoContentUnavailableView(
-                    "会場未登録",
-                    systemImage: "map",
-                    description: "会場や住所を登録すると地図が表示されます"
-                )
-                .frame(maxWidth: .infinity, minHeight: 150)
+            } else if !isGenericExperienceDetail || isPlaceVenueExpanded {
+                if !isTheater || isVenueExpanded || isGenericExperienceDetail {
+                    FavorecoContentUnavailableView(
+                        "会場未登録",
+                        systemImage: "map",
+                        description: "会場や住所を登録すると地図が表示されます"
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 150)
+                }
             }
         }
-        .sectionCard(tint: accentColor, emphasized: isTheater)
+        .modifier(ExperienceOrTheaterSectionCard(
+            isTheater: isTheater,
+            tint: accentColor,
+            emphasizesGenericCard: isGenericExperienceDetail
+        ))
     }
 
-    private func googleMapsURL(snapshot: ExperienceDetailSnapshot) -> URL? {
-        let venue = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
-        let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let query = address.isEmpty ? venue : address
-        guard !query.isEmpty,
-              let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
-        if UIApplication.shared.canOpenURL(URL(string: "comgooglemaps://")!) {
-            return URL(string: "comgooglemaps://?q=\(encoded)")
+    private func museumVisitHistorySection(accentColor: Color) -> some View {
+        let visits = (visit.event?.visits ?? []).sorted {
+            if $0.visitedAt != $1.visitedAt { return $0.visitedAt > $1.visitedAt }
+            if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
+            return $0.id.uuidString > $1.id.uuidString
         }
-        return URL(string: "https://www.google.com/maps/search/?api=1&q=\(encoded)")
+
+        return VStack(alignment: .leading, spacing: 12) {
+            genericDisclosureHeader(
+                "この展示の鑑賞履歴",
+                countText: "\(visits.count)回",
+                accentColor: accentColor,
+                isExpanded: $isMuseumHistoryExpanded
+            )
+
+            if isMuseumHistoryExpanded {
+                ForEach(Array(visits.enumerated()), id: \.element.id) { index, historyVisit in
+                    if index > 0 {
+                        Divider()
+                            .overlay(Color.white.opacity(0.12))
+                    }
+
+                    Button {
+                        openMuseumHistoryVisit(historyVisit)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: historyVisit.id == visit.id ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(historyVisit.id == visit.id ? accentColor : .white.opacity(0.48))
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(ExperienceDetailPresentation.museumVisitOrdinal(for: historyVisit))
+                                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
+                                    .foregroundStyle(.white)
+                                HStack(spacing: 8) {
+                                    Text(FavorecoDateText.compactDate(historyVisit.visitedAt))
+                                    if !historyVisit.venueNameSnapshot.isEmpty {
+                                        Text(historyVisit.venueNameSnapshot)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.white.opacity(0.68))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            if historyVisit.id != visit.id {
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(accentColor)
+                            } else {
+                                Text("表示中")
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.white.opacity(0.62))
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(historyVisit.id == visit.id)
+                }
+
+                Divider()
+                    .overlay(Color.white.opacity(0.12))
+
+                Button {
+                    isShowingRepeatEntry = true
+                } label: {
+                    FavorecoIconLabel(
+                        "この展示をもう一度記録",
+                        systemImage: "arrow.clockwise.circle",
+                        iconSize: 16
+                    )
+                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
+                    .foregroundStyle(accentColor)
+                    .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .modifier(ExperienceOrTheaterSectionCard(
+            isTheater: false,
+            tint: accentColor,
+            emphasizesGenericCard: true
+        ))
+    }
+
+    private func openMuseumHistoryVisit(_ historyVisit: Visit) {
+        guard historyVisit.id != visit.id else { return }
+        if let onOpenVisit {
+            onOpenVisit(historyVisit.id)
+        } else {
+            navigatingSiblingVisit = historyVisit
+        }
+    }
+
+    @ViewBuilder
+    private func mapOpenButton(
+        snapshot: ExperienceDetailSnapshot,
+        hasMapSource: Bool,
+        accentColor: Color
+    ) -> some View {
+        if snapshot.mapURL != nil, hasMapSource {
+            Button {
+                isShowingMapChooser = true
+            } label: {
+                Label("マップで開く", systemImage: "arrow.up.right")
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(accentColor)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var googleMapsURL: URL? {
+        let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
+        return PlaceSearchService.googleMapsURL(
+            name: visit.venueNameSnapshot,
+            address: visit.placeMaster?.address ?? "",
+            latitude: hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0),
+            longitude: hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
+        )
     }
 
     @ViewBuilder
@@ -1131,57 +1606,77 @@ struct ExperienceDetailView: View {
         let photos = snapshot.photos.filter {
             ExperiencePhotoPurpose.resolved(from: $0.purpose) == purpose
         }
+        let genericExpansion = genericPhotoExpansionBinding(for: purpose)
         if !photos.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    sectionTitle("\(purpose.title)（\(photos.count)件）")
-                    Spacer()
-                    if isTheater {
-                        detailPhotoPicker(purpose: purpose, accentColor: accentColor)
+                if isGenericExperienceDetail {
+                    genericDisclosureHeader(
+                        purpose.title,
+                        countText: "\(photos.count)件",
+                        accentColor: accentColor,
+                        isExpanded: genericExpansion
+                    )
+                } else {
+                    HStack {
+                        sectionTitle("\(purpose.title)（\(photos.count)件）")
+                        Spacer()
+                        if isTheater {
+                            detailPhotoPicker(purpose: purpose, accentColor: accentColor)
+                        }
                     }
                 }
 
-                ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
-                    if index > 0 { Divider() }
-                    HStack(alignment: .top, spacing: 12) {
-                        RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
-                            .frame(width: 92, height: 92)
-                            .clipped()
-                            .background(Color(.secondarySystemFill))
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                if !isGenericExperienceDetail || genericExpansion.wrappedValue {
+                    ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
+                        if index > 0 { Divider() }
+                        HStack(alignment: .top, spacing: 12) {
+                            RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
+                                .frame(width: 92, height: 92)
+                                .clipped()
+                                .background(Color(.secondarySystemFill))
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
-                        VStack(alignment: .leading, spacing: 7) {
-                            FavorecoIconLabel(
-                                "\(purpose.title) \(index + 1)",
-                                systemImage: purpose.systemImage,
-                                iconSize: 13
-                            )
+                            VStack(alignment: .leading, spacing: 7) {
+                                FavorecoIconLabel(
+                                    "\(purpose.title) \(index + 1)",
+                                    systemImage: purpose.systemImage,
+                                    iconSize: 13
+                                )
                                 .font(FavorecoTypography.captionStrong)
                                 .foregroundStyle(accentColor)
 
-                            if photo.amount != Decimal(0) {
-                                Text(formattedPhotoAmount(photo.amount))
-                                    .font(FavorecoTypography.bodyStrong)
-                                    .foregroundStyle(.primary)
-                            }
+                                if photo.amount != Decimal(0) {
+                                    Text(formattedPhotoAmount(photo.amount))
+                                        .font(FavorecoTypography.bodyStrong)
+                                        .foregroundStyle(.primary)
+                                }
 
-                            let text = photo.ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !text.isEmpty {
-                                Text(text)
-                                    .font(FavorecoTypography.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(4)
-                            } else if photo.amount == Decimal(0) {
-                                Text("画像として保存")
-                                    .font(FavorecoTypography.caption)
-                                    .foregroundStyle(.secondary)
+                                let caption = photo.caption.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if !caption.isEmpty {
+                                    Text(caption)
+                                        .font(FavorecoTypography.body)
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(4)
+                                }
+
+                                let text = photo.ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if !text.isEmpty {
+                                    Text(text)
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(4)
+                                } else if photo.amount == Decimal(0) && caption.isEmpty {
+                                    Text("画像として保存")
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
-            .sectionCard(tint: accentColor, emphasized: isTheater)
+            .sectionCard(tint: accentColor, emphasized: isTheater || isGenericExperienceDetail)
         } else if isTheater, purpose == .goods || purpose == .benefit {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -1207,28 +1702,28 @@ struct ExperienceDetailView: View {
         switch purpose {
         case .memory:
             PhotosPicker(selection: $memoryPhotoItems, maxSelectionCount: 20, matching: .images) {
-                FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
-                    .font(labelFont)
-                    .foregroundStyle(accentColor)
+                detailPhotoPickerLabel(title, font: labelFont, accentColor: accentColor)
             }
+                .contentShape(Rectangle())
+                .zIndex(2)
                 .onChange(of: memoryPhotoItems) { _, items in
                     Task { await addDetailPhotos(items, purpose: .memory); memoryPhotoItems = [] }
                 }
         case .goods:
             PhotosPicker(selection: $goodsPhotoItems, maxSelectionCount: 20, matching: .images) {
-                FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
-                    .font(labelFont)
-                    .foregroundStyle(accentColor)
+                detailPhotoPickerLabel(title, font: labelFont, accentColor: accentColor)
             }
+                .contentShape(Rectangle())
+                .zIndex(2)
                 .onChange(of: goodsPhotoItems) { _, items in
                     Task { await addDetailPhotos(items, purpose: .goods); goodsPhotoItems = [] }
                 }
         case .benefit:
             PhotosPicker(selection: $benefitPhotoItems, maxSelectionCount: 20, matching: .images) {
-                FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
-                    .font(labelFont)
-                    .foregroundStyle(accentColor)
+                detailPhotoPickerLabel(title, font: labelFont, accentColor: accentColor)
             }
+                .contentShape(Rectangle())
+                .zIndex(2)
                 .onChange(of: benefitPhotoItems) { _, items in
                     Task { await addDetailPhotos(items, purpose: .benefit); benefitPhotoItems = [] }
                 }
@@ -1239,6 +1734,19 @@ struct ExperienceDetailView: View {
                     .foregroundStyle(accentColor)
             }
         }
+    }
+
+    private func detailPhotoPickerLabel(
+        _ title: String,
+        font: Font,
+        accentColor: Color
+    ) -> some View {
+        FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
+            .font(font)
+            .foregroundStyle(accentColor)
+            .padding(.horizontal, 6)
+            .frame(minWidth: 66, minHeight: 44)
+            .contentShape(Rectangle())
     }
 
     @MainActor
@@ -1281,6 +1789,52 @@ struct ExperienceDetailView: View {
             .filter { !$0.isArchived }
             .sorted { $0.updatedAt > $1.updatedAt }
             .first
+            ?? recordPreparationPlan
+    }
+
+    @ViewBuilder
+    private func theaterTravelRecordSection(
+        snapshot: ExperienceDetailSnapshot,
+        plan: Plan?,
+        accentColor: Color
+    ) -> some View {
+        let tasks = plan?.preparationFields.orderedTasks ?? []
+
+        VStack(alignment: .leading, spacing: 12) {
+            TheaterDetailDisclosureHeader(
+                .travelRecord,
+                countText: tasks.isEmpty ? "0件" : "\(tasks.count)件",
+                tint: accentColor,
+                isExpanded: $isTravelRecordExpanded
+            )
+
+            if isTravelRecordExpanded {
+                if let plan {
+                    PlanPreparationChecklistView(
+                        plan: plan,
+                        tint: accentColor,
+                        title: "遠征・準備の記録",
+                        presentation: .record,
+                        showsHeader: false,
+                        appliesCardBackground: false
+                    )
+                } else {
+                    Text("宿泊・新幹線・飛行機など、実際に使った内容と金額をこの観劇回へ残せます。")
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        recordPreparationPlan = ensureTicketPlan(snapshot: snapshot)
+                    } label: {
+                        FavorecoIconLabel("遠征・準備の記録を追加", systemImage: "plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(accentColor)
+                }
+            }
+        }
+        .theaterDetailSectionCard(tint: accentColor)
     }
 
     @ViewBuilder
@@ -1334,71 +1888,37 @@ struct ExperienceDetailView: View {
         plan: Plan?,
         accentColor: Color
     ) -> some View {
-        let isPerformanceDayOrLater = Calendar.current.startOfDay(for: Date()) >= Calendar.current.startOfDay(for: visit.visitedAt)
         let outstanding = outstandingActionCount(in: plan)
 
         return VStack(alignment: .leading, spacing: 12) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isNextActionsExpanded.toggle()
-                }
-            } label: {
-                HStack {
-                    FavorecoIconLabel("次にやること", systemImage: "checklist", iconSize: 20)
-                        .font(FavorecoTypography.sectionTitle)
-                    Spacer()
-                    if outstanding > 0 {
-                        Text("未完了 \(outstanding)")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(accentColor)
-                    }
-                    Image(systemName: isNextActionsExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption.weight(.bold))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            TheaterDetailDisclosureHeader(
+                .nextActions,
+                countText: outstanding > 0 ? "未完了 \(outstanding)" : nil,
+                tint: accentColor,
+                isExpanded: $isNextActionsExpanded
+            )
 
             if isNextActionsExpanded {
-                HStack(spacing: 10) {
-                    Button {
-                        guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
-                        ticketPlanForEditor = plan
-                    } label: {
-                        FavorecoIconLabel("チケット申込", systemImage: "ticket", iconSize: 14)
-                            .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 24)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(accentColor)
-
-                    Button {
-                        guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
-                        navigatingPlan = plan
-                    } label: {
-                        FavorecoIconLabel("遠征ToDo", systemImage: "suitcase.rolling", iconSize: 16)
-                            .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 24)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(accentColor)
+                Button {
+                    guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
+                    navigatingPlan = plan
+                } label: {
+                    FavorecoIconLabel("遠征ToDo", systemImage: "suitcase.rolling", iconSize: 16)
+                        .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 24)
                 }
+                .buttonStyle(.bordered)
+                .tint(accentColor)
 
                 Text("チケット取得のスケジュール設定と、旅程のコスト管理ができます。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .sectionCard(tint: accentColor, emphasized: true)
-        .onAppear {
-            isNextActionsExpanded = !isPerformanceDayOrLater || outstanding > 0
-        }
+        .theaterDetailSectionCard(tint: accentColor)
     }
 
     private func outstandingActionCount(in plan: Plan?) -> Int {
@@ -1417,99 +1937,147 @@ struct ExperienceDetailView: View {
     ) -> some View {
         let attempts = ExperienceDetailPresentation.securedTicketAttempts(in: plan)
         let hasVisitDetails = !visit.seatText.isEmpty || !visit.outcomeKey.isEmpty
+        let isTheater = snapshot.category?.templateKey == "theater"
+        let seatSummary = visit.seatText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? attempts.first?.seatText.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            : visit.seatText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if hasVisitDetails || !attempts.isEmpty || snapshot.category?.templateKey == "theater" {
+        if hasVisitDetails || !attempts.isEmpty || isTheater {
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle("チケット・座席")
-
-                let ticketPhotos = snapshot.photos.filter {
-                    ExperiencePhotoPurpose.resolved(from: $0.purpose) == .ticket
+                if isTheater {
+                    TheaterDetailDisclosureHeader(
+                        .ticket,
+                        countText: attempts.isEmpty ? "0件" : "\(attempts.count)件",
+                        tint: accentColor,
+                        isExpanded: $isTicketExpanded
+                    )
+                } else {
+                    genericDisclosureHeader(
+                        "チケット・座席",
+                        countText: attempts.isEmpty ? nil : "\(attempts.count)件",
+                        accentColor: accentColor,
+                        isExpanded: $isGenericTicketExpanded
+                    )
                 }
-                if !ticketPhotos.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(ticketPhotos) { photo in
-                                RepresentativePhotoImage(photo: photo, maxPixelSize: 420, contentMode: .fill)
-                                    .frame(width: 88, height: 88)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+                if isTheater, !isTicketExpanded {
+                    if !seatSummary.isEmpty {
+                        DetailInfoRow(icon: "chair", title: "座席", value: seatSummary)
+                    }
+                } else if isTheater || isGenericTicketExpanded {
+                    if isTheater {
+                        Button {
+                            guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
+                            ticketPlanForEditor = plan
+                        } label: {
+                            FavorecoIconLabel(
+                                attempts.isEmpty ? "チケット申込" : "別の申込を追加",
+                                systemImage: "ticket",
+                                iconSize: 15
+                            )
+                                .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 24)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(accentColor)
+                    }
+
+                    let ticketPhotos = snapshot.photos.filter {
+                        ExperiencePhotoPurpose.resolved(from: $0.purpose) == .ticket
+                    }
+                    if !ticketPhotos.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(ticketPhotos) { photo in
+                                    RepresentativePhotoImage(photo: photo, maxPixelSize: 420, contentMode: .fill)
+                                        .frame(width: 88, height: 88)
+                                        .clipped()
+                                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                }
                             }
                         }
                     }
-                }
 
-                if !visit.seatText.isEmpty {
-                    DetailInfoRow(icon: "chair", title: "座席", value: visit.seatText)
-                }
-
-                if attempts.isEmpty, !visit.outcomeKey.isEmpty {
-                    DetailInfoRow(
-                        icon: "ticket",
-                        title: "状態",
-                        value: snapshot.ticketStatusText
-                    )
-                }
-
-                ForEach(Array(attempts.enumerated()), id: \.element.id) { index, attempt in
-                    if index > 0 {
-                        Divider()
-                            .overlay(Color.white.opacity(0.12))
+                    if !visit.seatText.isEmpty {
+                        DetailInfoRow(icon: "chair", title: "座席", value: visit.seatText)
                     }
 
-                    if attempts.count > 1 {
-                        Text("チケット \(index + 1)")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(accentColor)
-                    }
-
-                    DetailInfoRow(
-                        icon: "ticket",
-                        title: "状態",
-                        value: TicketStatusDefinition.name(for: attempt.statusKey)
-                    )
-
-                    if !attempt.entryRouteKey.isEmpty {
+                    if attempts.isEmpty, !visit.outcomeKey.isEmpty {
                         DetailInfoRow(
-                            icon: "person.text.rectangle",
-                            title: "申込",
-                            value: TicketEntryRouteDefinition.name(for: attempt.entryRouteKey)
+                            icon: "ticket",
+                            title: "状態",
+                            value: snapshot.ticketStatusText
                         )
                     }
 
-                    if !attempt.ticketSite.isEmpty {
-                        DetailInfoRow(icon: "safari", title: "購入元", value: attempt.ticketSite)
-                    }
+                    ForEach(Array(attempts.enumerated()), id: \.element.id) { index, attempt in
+                        if index > 0 {
+                            Divider()
+                                .overlay(Color.white.opacity(0.12))
+                        }
 
-                    if !attempt.seatText.isEmpty, attempt.seatText != visit.seatText {
-                        DetailInfoRow(icon: "chair", title: "座席", value: attempt.seatText)
-                    }
+                        if attempts.count > 1 {
+                            Text("チケット \(index + 1)")
+                                .font(FavorecoTypography.captionStrong)
+                                .foregroundStyle(accentColor)
+                        }
 
-                    if attempt.price > 0 {
                         DetailInfoRow(
-                            icon: "ticket.fill",
-                            title: "券面",
-                            value: ticketAmountText(attempt.price, quantity: attempt.quantity)
+                            icon: "ticket",
+                            title: "状態",
+                            value: TicketStatusDefinition.name(for: attempt.statusKey)
                         )
+
+                        if !attempt.entryRouteKey.isEmpty {
+                            DetailInfoRow(
+                                icon: "person.text.rectangle",
+                                title: "申込",
+                                value: TicketEntryRouteDefinition.name(for: attempt.entryRouteKey)
+                            )
+                        }
+
+                        if !attempt.ticketSite.isEmpty {
+                            DetailInfoRow(icon: "safari", title: "購入元", value: attempt.ticketSite)
+                        }
+
+                        if !attempt.seatText.isEmpty, attempt.seatText != visit.seatText {
+                            DetailInfoRow(icon: "chair", title: "座席", value: attempt.seatText)
+                        }
+
+                        if attempt.price > 0 {
+                            DetailInfoRow(
+                                icon: "ticket.fill",
+                                title: "券面",
+                                value: ticketAmountText(attempt.price, quantity: attempt.quantity)
+                            )
+                        }
+
+                        if attempt.fee > 0 {
+                            DetailInfoRow(
+                                icon: "plus.circle",
+                                title: "手数料",
+                                value: ticketAmountText(attempt.fee, quantity: attempt.quantity)
+                            )
+                        }
                     }
 
-                    if attempt.fee > 0 {
-                        DetailInfoRow(
-                            icon: "plus.circle",
-                            title: "手数料",
-                            value: ticketAmountText(attempt.fee, quantity: attempt.quantity)
-                        )
-                    }
-                }
-
-                if snapshot.category?.templateKey == "theater" {
-                    HStack(spacing: 8) {
-                        compactImportButton("画像・OCR", icon: "doc.viewfinder")
-                        compactImportButton("URL", icon: "link.badge.plus")
-                        compactImportButton("手入力", icon: "plus")
+                    if isTheater {
+                        HStack(spacing: 8) {
+                            compactImportButton("画像・OCR", icon: "doc.viewfinder")
+                            compactImportButton("URL", icon: "link.badge.plus")
+                            compactImportButton("手入力", icon: "plus")
+                        }
                     }
                 }
             }
-            .sectionCard(tint: accentColor, emphasized: snapshot.category?.templateKey == "theater")
+            .modifier(ExperienceOrTheaterSectionCard(
+                isTheater: isTheater,
+                tint: accentColor,
+                emphasizesGenericCard: !isTheater
+            ))
         }
     }
 
@@ -1564,6 +2132,7 @@ struct ExperienceDetailView: View {
         modelContext.insert(plan)
         do {
             try modelContext.save()
+            recordPreparationPlan = plan
             return plan
         } catch {
             modelContext.rollback()
@@ -1572,94 +2141,156 @@ struct ExperienceDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private func theaterCreditsSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
-        let legacyCastLinks = snapshot.linkedPeople.filter { ExperienceDetailPresentation.isTheaterCastLink($0) }
-        if !snapshot.eventCreditsText.isEmpty || !legacyCastLinks.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionTitle("キャスト・スタッフ")
+    private func theaterCastAndFocusSection(
+        snapshot: ExperienceDetailSnapshot,
+        accentColor: Color
+    ) -> some View {
+        let focusLinks = snapshot.linkedPeople.filter { $0.roleKey == PersonRoleOption.theaterFocus.key }
+        let creditLines = theaterCreditLines(from: snapshot.eventCreditsText)
 
-                if !snapshot.eventCreditsText.isEmpty {
-                    Text(snapshot.eventCreditsText)
+        return VStack(alignment: .leading, spacing: 14) {
+            TheaterDetailDisclosureHeader(
+                .cast,
+                tint: accentColor,
+                isExpanded: $isCastExpanded
+            )
+
+            if !isCastExpanded {
+                theaterFocusSummary(focusLinks: focusLinks, accentColor: accentColor)
+            } else {
+                Text("公演全体のキャスト・スタッフ")
+                    .font(FavorecoTypography.bodyStrong)
+
+                if creditLines.isEmpty {
+                    Text("キャスト・スタッフはまだ登録されていません")
                         .font(FavorecoTypography.body)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-
-                if !legacyCastLinks.isEmpty {
-                    Text(snapshot.eventCreditsText.isEmpty ? "登録済みの出演者" : "以前の形式で登録した出演者")
-                        .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
-                    Text(legacyCastLinks.map { link in
-                        let role = link.displayRole.isEmpty
-                            ? ExperienceDetailPresentation.roleName(for: link.roleKey)
-                            : link.displayRole
-                        return "\(role)：\(ExperienceDetailPresentation.personName(for: link))"
-                    }.joined(separator: "\n"))
-                    .font(FavorecoTypography.body)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    VStack(alignment: .leading, spacing: 9) {
+                        ForEach(creditLines) { line in
+                            if let role = line.role, let name = line.name {
+                                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                    Text(role)
+                                        .font(FavorecoTypography.captionStrong)
+                                        .foregroundStyle(accentColor)
+                                        .frame(width: 84, alignment: .leading)
+                                    Text(name)
+                                        .font(FavorecoTypography.body)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            } else {
+                                Text(line.rawValue)
+                                    .font(FavorecoTypography.body)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
                     .textSelection(.enabled)
                 }
+
+                Divider().overlay(accentColor.opacity(0.24))
+
+                Text("お目当て・注目した人")
+                    .font(FavorecoTypography.bodyStrong)
+
+                if focusLinks.isEmpty {
+                    Text("この回で注目した人はまだ登録されていません")
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+                } else {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 74, maximum: 86), spacing: 12, alignment: .top)],
+                        alignment: .leading,
+                        spacing: 14
+                    ) {
+                        ForEach(focusLinks) { link in
+                            theaterFocusPersonButton(link: link, accentColor: accentColor, showsRole: true)
+                        }
+                    }
+                }
             }
-            .sectionCard(tint: accentColor, emphasized: true)
+        }
+        .theaterDetailSectionCard(tint: accentColor)
+    }
+
+    @ViewBuilder
+    private func theaterFocusSummary(
+        focusLinks: [EventPersonLink],
+        accentColor: Color
+    ) -> some View {
+        if !focusLinks.isEmpty {
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(Array(focusLinks.prefix(3))) { link in
+                    theaterFocusPersonButton(link: link, accentColor: accentColor, showsRole: false)
+                }
+                if focusLinks.count > 3 {
+                    VStack(spacing: 6) {
+                        ZStack {
+                            Circle().fill(accentColor.opacity(0.16))
+                            Text("+\(focusLinks.count - 3)")
+                                .font(FavorecoTypography.captionStrong)
+                                .foregroundStyle(accentColor)
+                        }
+                        .frame(width: 52, height: 52)
+                        Text("ほか\(focusLinks.count - 3)人")
+                            .font(FavorecoTypography.jpSans(10, weight: .medium, relativeTo: .caption2))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .frame(width: 64)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
         }
     }
 
     @ViewBuilder
-    private func theaterFocusSection(snapshot: ExperienceDetailSnapshot, accentColor: Color) -> some View {
-        let focusLinks = snapshot.linkedPeople.filter { $0.roleKey == PersonRoleOption.theaterFocus.key }
-        if !focusLinks.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("お目当て・注目した人")
-                    .font(FavorecoTypography.sectionTitle)
-                    .foregroundStyle(.primary)
+    private func theaterFocusPersonButton(
+        link: EventPersonLink,
+        accentColor: Color,
+        showsRole: Bool
+    ) -> some View {
+        let reactionTitles = TheaterFocusLinkMetadata(memo: link.memo)
+            .reactionKeys
+            .map { TheaterFocusReaction.title(for: $0) }
+        let item = TheaterCastItem(
+            name: ExperienceDetailPresentation.personName(for: link),
+            role: showsRole ? (reactionTitles.isEmpty ? "注目" : reactionTitles.joined(separator: "・")) : "",
+            imageData: link.person?.imageData,
+            imagePath: link.person?.imagePath ?? "",
+            roleTagsRaw: link.person?.roleTagsRaw ?? "",
+            tint: accentColor,
+            compact: !showsRole
+        )
+        if let personID = link.person?.id {
+            Button {
+                personMasterEditTarget = PersonMasterEditTarget(id: personID)
+            } label: {
+                item
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("人物マスターを編集")
+        } else {
+            item
+        }
+    }
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 14) {
-                        ForEach(focusLinks) { link in
-                            let reactionTitles = TheaterFocusLinkMetadata(memo: link.memo)
-                                .reactionKeys
-                                .map { TheaterFocusReaction.title(for: $0) }
-                            if let personID = link.person?.id {
-                                Button {
-                                    personMasterEditTarget = PersonMasterEditTarget(id: personID)
-                                } label: {
-                                    TheaterCastItem(
-                                        name: ExperienceDetailPresentation.personName(for: link),
-                                        role: reactionTitles.isEmpty ? "注目" : reactionTitles.joined(separator: "・"),
-                                        imageData: link.person?.imageData,
-                                        imagePath: link.person?.imagePath ?? "",
-                                        roleTagsRaw: link.person?.roleTagsRaw ?? "",
-                                        tint: accentColor
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityHint("人物マスターを編集")
-                            } else {
-                                TheaterCastItem(
-                                    name: ExperienceDetailPresentation.personName(for: link),
-                                    role: reactionTitles.isEmpty ? "注目" : reactionTitles.joined(separator: "・"),
-                                    imageData: nil,
-                                    imagePath: "",
-                                    roleTagsRaw: "",
-                                    tint: accentColor
-                                )
-                            }
-                        }
-                    }
-                }
-                .scrollClipDisabled()
-            }
-            .sectionCard(tint: accentColor, emphasized: true)
-            .background {
-                GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: DetailBackSwipeExclusionPreferenceKey.self,
-                        value: [proxy.frame(in: .global)]
-                    )
+    private func theaterCreditLines(from text: String) -> [TheaterCreditDisplayLine] {
+        text.split(whereSeparator: \Character.isNewline).enumerated().compactMap { index, line in
+            let rawValue = String(line).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !rawValue.isEmpty else { return nil }
+            let separators: [Character] = ["：", ":"]
+            if let separatorIndex = rawValue.firstIndex(where: { separators.contains($0) }) {
+                let role = String(rawValue[..<separatorIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let name = String(rawValue[rawValue.index(after: separatorIndex)...])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !role.isEmpty, !name.isEmpty {
+                    return TheaterCreditDisplayLine(id: index, rawValue: rawValue, role: role, name: name)
                 }
             }
+            return TheaterCreditDisplayLine(id: index, rawValue: rawValue, role: nil, name: nil)
         }
     }
 
@@ -1676,21 +2307,12 @@ struct ExperienceDetailView: View {
         }
 
         VStack(alignment: .leading, spacing: 14) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { isPhotoCollectionExpanded.toggle() }
-            } label: {
-                HStack {
-                    sectionTitle("写真・コレクション")
-                    Spacer()
-                    Text("\(memories.count + collection.count)枚")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                    Image(systemName: isPhotoCollectionExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption.weight(.bold))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            TheaterDetailDisclosureHeader(
+                .photos,
+                countText: "\(memories.count + collection.count)枚",
+                tint: accentColor,
+                isExpanded: $isPhotoCollectionExpanded
+            )
 
             if isPhotoCollectionExpanded {
                 HStack {
@@ -1718,6 +2340,7 @@ struct ExperienceDetailView: View {
                         detailPhotoPicker(purpose: .goods, accentColor: accentColor, title: "グッズ")
                         detailPhotoPicker(purpose: .benefit, accentColor: accentColor, title: "特典")
                     }
+                    .zIndex(2)
                 }
 
                 if collection.isEmpty {
@@ -1729,7 +2352,7 @@ struct ExperienceDetailView: View {
                 }
             }
         }
-        .sectionCard(tint: accentColor, emphasized: true)
+        .theaterDetailSectionCard(tint: accentColor)
     }
 
     private func theaterPhotoGrid(
@@ -1738,30 +2361,40 @@ struct ExperienceDetailView: View {
         showsPurpose: Bool
     ) -> some View {
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
-            spacing: 10
+            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
+            spacing: 8
         ) {
             ForEach(photos) { photo in
                 let purpose = ExperiencePhotoPurpose.resolved(from: photo.purpose)
                 VStack(alignment: .leading, spacing: 5) {
-                    ZStack(alignment: .bottomLeading) {
-                        RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
-                            .frame(maxWidth: .infinity)
+                    Button {
+                        presentPhotoViewer(photos, initialPhoto: photo)
+                    } label: {
+                        ZStack(alignment: .bottomLeading) {
+                            GeometryReader { proxy in
+                                RepresentativePhotoImage(photo: photo, maxPixelSize: 360, contentMode: .fill)
+                                    .frame(width: proxy.size.width, height: proxy.size.width)
+                                    .clipped()
+                                    .background(Color(.secondarySystemFill))
+                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                            }
                             .aspectRatio(1, contentMode: .fit)
-                            .clipped()
-                            .background(Color(.secondarySystemFill))
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        if showsPurpose {
-                            FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage, iconSize: 9, spacing: 3)
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
-                                .background(.black.opacity(0.66), in: Capsule())
-                                .padding(5)
+                            if showsPurpose {
+                                FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage, iconSize: 9, spacing: 3)
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.68)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 3)
+                                    .background(.black.opacity(0.66), in: Capsule())
+                                    .padding(4)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(purpose.title)の写真")
+                    .accessibilityHint("開いて左右に送れます")
                     if photo.amount != Decimal(0) {
                         Text(formattedPhotoAmount(photo.amount))
                             .font(FavorecoTypography.captionStrong)
@@ -1783,45 +2416,56 @@ struct ExperienceDetailView: View {
         let galleryPhotos = memoryPhotos(in: snapshot).filter { !excludedPhotoIDs.contains($0.id) }
         if !galleryPhotos.isEmpty || isTheater {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    sectionTitle(isTheater ? "思い出" : "写真")
-                    Spacer()
-                    if isTheater {
-                        detailPhotoPicker(purpose: .memory, accentColor: accentColor)
+                if isGenericExperienceDetail {
+                    genericDisclosureHeader(
+                        "写真・コレクション",
+                        countText: "\(galleryPhotos.count)枚",
+                        accentColor: accentColor,
+                        isExpanded: $isPlacePhotosExpanded
+                    )
+                } else {
+                    HStack {
+                        sectionTitle(isTheater ? "思い出" : "写真")
+                        Spacer()
+                        if isTheater {
+                            detailPhotoPicker(purpose: .memory, accentColor: accentColor)
+                        }
                     }
                 }
 
-                if galleryPhotos.isEmpty {
-                    Text("当日の写真や会場の思い出を追加できます")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
-                        spacing: 8
-                    ) {
-                        ForEach(galleryPhotos) { photo in
-                            ZStack(alignment: .bottomLeading) {
-                                RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
-                                    .frame(maxWidth: .infinity)
-                                    .aspectRatio(1, contentMode: .fit)
-                                    .clipped()
-                                    .background(Color(.secondarySystemFill))
-                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                if photo.relativePath == visit.eyecatchPath {
-                                    Image(systemName: "star.fill")
-                                        .font(.caption2.weight(.bold))
-                                        .foregroundStyle(.white)
-                                        .padding(6)
-                                        .background(.black.opacity(0.58), in: Circle())
-                                        .padding(5)
+                if !isGenericExperienceDetail || isPlacePhotosExpanded {
+                    if galleryPhotos.isEmpty {
+                        Text("当日の写真や会場の思い出を追加できます")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                            spacing: 8
+                        ) {
+                            ForEach(galleryPhotos) { photo in
+                                ZStack(alignment: .bottomLeading) {
+                                    RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
+                                        .frame(maxWidth: .infinity)
+                                        .aspectRatio(1, contentMode: .fit)
+                                        .clipped()
+                                        .background(Color(.secondarySystemFill))
+                                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    if photo.relativePath == visit.eyecatchPath {
+                                        Image(systemName: "star.fill")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(.white)
+                                            .padding(6)
+                                            .background(.black.opacity(0.58), in: Circle())
+                                            .padding(5)
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-            .sectionCard(tint: accentColor, emphasized: isTheater)
+            .sectionCard(tint: accentColor, emphasized: isTheater || isGenericExperienceDetail)
         }
     }
 
@@ -1830,14 +2474,20 @@ struct ExperienceDetailView: View {
         if snapshot.category?.templateKey == "goshuin", !snapshot.unitFields.goshuinBookSizeKey.isEmpty {
             let size = GoshuinBookSize.option(for: snapshot.unitFields.goshuinBookSizeKey)
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle("御朱印帳")
-                DetailInfoRow(
-                    icon: "book.closed",
-                    title: "サイズ",
-                    value: "\(size.name)（\(size.displaySize)）"
+                genericDisclosureHeader(
+                    "御朱印帳",
+                    accentColor: .white,
+                    isExpanded: $isGoshuinBookExpanded
                 )
+                if isGoshuinBookExpanded {
+                    DetailInfoRow(
+                        icon: "book.closed",
+                        title: "サイズ",
+                        value: "\(size.name)（\(size.displaySize)）"
+                    )
+                }
             }
-            .sectionCard()
+            .sectionCard(tint: .white, emphasized: true)
         }
     }
 
@@ -1851,26 +2501,38 @@ struct ExperienceDetailView: View {
             : snapshot.linkedPeople
         if !links.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle(snapshot.category?.templateKey == "theater" ? "スタッフ・関係者" : "人物・団体")
+                let title = snapshot.category?.templateKey == "theater" ? "スタッフ・関係者" : "人物・団体"
+                if isGenericExperienceDetail {
+                    genericDisclosureHeader(
+                        title,
+                        countText: "\(links.count)件",
+                        accentColor: accentColor,
+                        isExpanded: $isPlacePeopleExpanded
+                    )
+                } else {
+                    sectionTitle(title)
+                }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(links) { link in
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text(link.displayRole.isEmpty ? ExperienceDetailPresentation.roleName(for: link.roleKey) : link.displayRole)
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(accentColor)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(accentColor.opacity(0.12), in: Capsule())
+                if !isGenericExperienceDetail || isPlacePeopleExpanded {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(links) { link in
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Text(link.displayRole.isEmpty ? ExperienceDetailPresentation.roleName(for: link.roleKey) : link.displayRole)
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(accentColor)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(accentColor.opacity(0.12), in: Capsule())
 
-                            Text(link.nameSnapshot.isEmpty ? link.person?.displayName ?? "人物・団体" : link.nameSnapshot)
-                                .font(FavorecoTypography.bodyStrong)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                                Text(link.nameSnapshot.isEmpty ? link.person?.displayName ?? "人物・団体" : link.nameSnapshot)
+                                    .font(FavorecoTypography.bodyStrong)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
                     }
                 }
             }
-            .sectionCard()
+            .sectionCard(tint: accentColor, emphasized: isGenericExperienceDetail)
         }
     }
 
@@ -1878,18 +2540,12 @@ struct ExperienceDetailView: View {
     private func ocrSection(snapshot: ExperienceDetailSnapshot, accentColor: Color, isTheater: Bool) -> some View {
         if !snapshot.unitFields.ocrText.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { isOCRExpanded.toggle() }
-                } label: {
-                    HStack {
-                        sectionTitle("OCR・取込結果")
-                        Spacer()
-                        Image(systemName: isOCRExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption.weight(.bold))
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                TheaterDetailDisclosureHeader(
+                    .ocr,
+                    countText: "1件",
+                    tint: accentColor,
+                    isExpanded: $isOCRExpanded
+                )
                 if isOCRExpanded {
                     Text(snapshot.unitFields.ocrText)
                         .font(FavorecoTypography.body)
@@ -1897,57 +2553,78 @@ struct ExperienceDetailView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .sectionCard(tint: accentColor, emphasized: isTheater)
+            .modifier(ExperienceOrTheaterSectionCard(isTheater: isTheater, tint: accentColor))
         }
     }
 
     private func basicInfo(snapshot: ExperienceDetailSnapshot, template: CategoryRecordTemplate) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle(template.visitSectionTitle)
-
-            if !snapshot.unitFields.weatherSymbolName.isEmpty {
-                DetailInfoRow(
-                    icon: snapshot.unitFields.weatherSymbolName,
-                    title: "天気",
-                    value: snapshot.weatherTemperatureText
+            if isGenericExperienceDetail {
+                genericDisclosureHeader(
+                    template.visitSectionTitle,
+                    accentColor: .white,
+                    isExpanded: $isPlaceBasicInfoExpanded
                 )
-                if let weatherAttributionURL = snapshot.weatherAttributionURL {
-                    Link(destination: weatherAttributionURL) {
-                        Label("Apple Weather", systemImage: "apple.logo")
-                            .font(FavorecoTypography.caption)
+            } else {
+                sectionTitle(template.visitSectionTitle)
+            }
+
+            if !isGenericExperienceDetail || isPlaceBasicInfoExpanded {
+                if !snapshot.unitFields.weatherSymbolName.isEmpty {
+                    DetailInfoRow(
+                        icon: snapshot.unitFields.weatherSymbolName,
+                        title: "天気",
+                        value: snapshot.weatherTemperatureText
+                    )
+                    if let weatherAttributionURL = snapshot.weatherAttributionURL {
+                        Link(destination: weatherAttributionURL) {
+                            Label("Apple Weather", systemImage: "apple.logo")
+                                .font(FavorecoTypography.caption)
+                        }
                     }
                 }
-            }
 
-            Button {
-                calendarDraft = makeCalendarDraft(snapshot: snapshot)
-            } label: {
-                FavorecoIconLabel("カレンダーに追加", systemImage: "calendar.badge.plus", iconSize: 17)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    calendarDraft = makeCalendarDraft(snapshot: snapshot)
+                } label: {
+                    FavorecoIconLabel("カレンダーに追加", systemImage: "calendar.badge.plus", iconSize: 17)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
-        .sectionCard()
+        .sectionCard(tint: .white, emphasized: isGenericExperienceDetail)
     }
 
     @ViewBuilder
     private func advancedSection(snapshot: ExperienceDetailSnapshot) -> some View {
         if !snapshot.unitFields.advancedEntries.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle("詳細オプション")
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(snapshot.unitFields.advancedEntries) { entry in
-                        if !entry.isEmpty {
-                            DetailInfoRow(
-                                icon: "slider.horizontal.3",
-                                title: entry.trimmedLabel.isEmpty ? "追加項目" : entry.trimmedLabel,
-                                value: entry.trimmedValue
-                            )
+                if isGenericExperienceDetail {
+                    genericDisclosureHeader(
+                        "詳細オプション",
+                        countText: "\(snapshot.unitFields.advancedEntries.filter { !$0.isEmpty }.count)件",
+                        accentColor: .white,
+                        isExpanded: $isPlaceAdvancedExpanded
+                    )
+                } else {
+                    sectionTitle("詳細オプション")
+                }
+                if !isGenericExperienceDetail || isPlaceAdvancedExpanded {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(snapshot.unitFields.advancedEntries) { entry in
+                            if !entry.isEmpty {
+                                DetailInfoRow(
+                                    icon: "slider.horizontal.3",
+                                    title: entry.trimmedLabel.isEmpty ? "追加項目" : entry.trimmedLabel,
+                                    value: entry.trimmedValue
+                                )
+                            }
                         }
                     }
                 }
             }
-            .sectionCard()
+            .sectionCard(tint: .white, emphasized: isGenericExperienceDetail)
         }
     }
 
@@ -1960,23 +2637,25 @@ struct ExperienceDetailView: View {
         let tagNames = TheaterEmotionTags.names(from: visit.tagNamesRaw)
         if !visit.note.isEmpty || !tagNames.isEmpty || isTheater {
             VStack(alignment: .leading, spacing: 12) {
-                Button {
-                    guard isTheater else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) { isReviewSectionExpanded.toggle() }
-                } label: {
-                    HStack {
-                        sectionTitle(isTheater ? "感想" : template.memoSectionTitle)
-                        Spacer()
-                        if isTheater {
-                            Image(systemName: isReviewSectionExpanded ? "chevron.up" : "chevron.down")
-                                .font(.caption.weight(.bold))
-                        }
-                    }
-                    .contentShape(Rectangle())
+                if isTheater {
+                    TheaterDetailDisclosureHeader(
+                        .review,
+                        tint: accentColor,
+                        isExpanded: $isReviewSectionExpanded
+                    )
+                } else if isGenericExperienceDetail {
+                    genericDisclosureHeader(
+                        template.memoSectionTitle,
+                        accentColor: accentColor,
+                        isExpanded: $isPlaceMemoExpanded
+                    )
+                } else {
+                    sectionTitle(template.memoSectionTitle)
                 }
-                .buttonStyle(.plain)
 
-                if !isTheater || isReviewSectionExpanded {
+                if (isTheater && isReviewSectionExpanded)
+                    || (isGenericExperienceDetail && isPlaceMemoExpanded)
+                    || (!isTheater && !isGenericExperienceDetail) {
                     if !tagNames.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 7) {
@@ -2011,13 +2690,86 @@ struct ExperienceDetailView: View {
                     }
                 }
             }
-            .sectionCard(tint: accentColor, emphasized: isTheater)
+            .modifier(ExperienceOrTheaterSectionCard(
+                isTheater: isTheater,
+                tint: accentColor,
+                emphasizesGenericCard: isGenericExperienceDetail
+            ))
         }
     }
 
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
-            .font(FavorecoTypography.sectionTitle)
+            .font(detailSectionTitleFont)
+    }
+
+    private var isGenericExperienceDetail: Bool {
+        let templateKey = visit.event?.category?.templateKey ?? ""
+        return templateKey != "theater"
+    }
+
+    private var hasVenueMapSource: Bool {
+        let venueName = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+        let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !venueName.isEmpty
+            || !address.isEmpty
+            || visit.latitude != 0
+            || visit.longitude != 0
+            || (visit.placeMaster?.latitude ?? 0) != 0
+            || (visit.placeMaster?.longitude ?? 0) != 0
+    }
+
+    private func genericDisclosureHeader(
+        _ title: String,
+        countText: String? = nil,
+        accentColor: Color,
+        isExpanded: Binding<Bool>
+    ) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isExpanded.wrappedValue.toggle()
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Text(title)
+                    .font(FavorecoTypography.jpSans(16, weight: .semibold, relativeTo: .headline))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let countText {
+                    Text(countText)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.white.opacity(0.76))
+                }
+                Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(accentColor)
+            }
+            .frame(minHeight: 30)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(isExpanded.wrappedValue ? "開いています" : "閉じています")
+        .accessibilityHint(isExpanded.wrappedValue ? "ダブルタップで閉じます" : "ダブルタップで開きます")
+    }
+
+    private func genericPhotoExpansionBinding(for purpose: ExperiencePhotoPurpose) -> Binding<Bool> {
+        switch purpose {
+        case .ticket:
+            return $isPlaceTicketPhotosExpanded
+        case .goods:
+            return $isPlaceGoodsPhotosExpanded
+        case .benefit:
+            return $isPlaceBenefitPhotosExpanded
+        case .memory:
+            return $isPlacePhotosExpanded
+        }
+    }
+
+    private var detailSectionTitleFont: Font {
+        guard visit.event?.category?.templateKey == "theater" else {
+            return FavorecoTypography.sectionTitle
+        }
+        return FavorecoTypography.jpSans(16, weight: .semibold, relativeTo: .headline)
     }
 
     private func makeCalendarDraft(snapshot: ExperienceDetailSnapshot) -> CalendarEventDraft {
@@ -2054,6 +2806,150 @@ struct ExperienceDetailView: View {
 
 }
 
+struct ExperiencePhotoViewer: View {
+    let photos: [PhotoBlob]
+    let initialPhotoID: UUID
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedPhotoID: UUID
+    @State private var saveResult: PhotoSaveResult?
+
+    init(photos: [PhotoBlob], initialPhotoID: UUID) {
+        self.photos = photos
+        self.initialPhotoID = initialPhotoID
+        _selectedPhotoID = State(initialValue: initialPhotoID)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if photos.isEmpty {
+                FavorecoContentUnavailableView("写真を表示できません", systemImage: "photo")
+                    .foregroundStyle(.white)
+            } else {
+                TabView(selection: $selectedPhotoID) {
+                    ForEach(photos) { photo in
+                        RepresentativePhotoImage(photo: photo, maxPixelSize: 2_400, contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.horizontal, 12)
+                            .tag(photo.id)
+                            .contextMenu {
+                                Button {
+                                    Task { await saveToPhotoLibrary(photo) }
+                                } label: {
+                                    Label("写真に保存", systemImage: "square.and.arrow.down")
+                                }
+                            }
+                            .accessibilityLabel("写真 \(photoNumber(for: photo)) / \(photos.count)")
+                            .accessibilityHint("左右にスワイプできます。長押しすると写真に保存できます")
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+            }
+        }
+        .overlay(alignment: .top) {
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    FavorecoIcon(systemName: "xmark", size: 18, fallbackWeight: .bold)
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(.black.opacity(0.56), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("閉じる")
+
+                Spacer()
+
+                if !photos.isEmpty {
+                    Text("\(selectedPhotoNumber) / \(photos.count)")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .frame(height: 32)
+                        .background(.black.opacity(0.56), in: Capsule())
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+        .overlay(alignment: .bottom) {
+            if !photos.isEmpty {
+                Text("写真を長押しして保存")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.white.opacity(0.78))
+                    .padding(.horizontal, 12)
+                    .frame(height: 32)
+                    .background(.black.opacity(0.56), in: Capsule())
+                    .padding(.bottom, 18)
+                    .allowsHitTesting(false)
+            }
+        }
+        .alert(item: $saveResult) { result in
+            Alert(
+                title: Text(result.title),
+                message: Text(result.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var selectedPhotoNumber: Int {
+        guard let index = photos.firstIndex(where: { $0.id == selectedPhotoID }) else { return 1 }
+        return index + 1
+    }
+
+    private func photoNumber(for photo: PhotoBlob) -> Int {
+        guard let index = photos.firstIndex(where: { $0.id == photo.id }) else { return 1 }
+        return index + 1
+    }
+
+    @MainActor
+    private func saveToPhotoLibrary(_ photo: PhotoBlob) async {
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else {
+            saveResult = PhotoSaveResult(
+                title: "写真を保存できません",
+                message: "設定でFavorecoの写真追加を許可してください。"
+            )
+            return
+        }
+
+        let data = photo.data
+        guard !data.isEmpty else {
+            saveResult = PhotoSaveResult(
+                title: "写真を保存できません",
+                message: "画像データを読み込めませんでした。"
+            )
+            return
+        }
+
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetCreationRequest.forAsset()
+                    .addResource(with: .photo, data: data, options: nil)
+            }
+            saveResult = PhotoSaveResult(
+                title: "保存しました",
+                message: "写真ライブラリへ追加しました。"
+            )
+        } catch {
+            saveResult = PhotoSaveResult(
+                title: "写真を保存できません",
+                message: "もう一度お試しください。"
+            )
+        }
+    }
+}
+
+private struct PhotoSaveResult: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
 private struct RecordDetailEyecatch: View {
     let event: ExperienceEvent?
     let photo: PhotoBlob?
@@ -2062,51 +2958,61 @@ private struct RecordDetailEyecatch: View {
     let tint: Color
     let usesGoldFrame: Bool
 
+    @ViewBuilder
     var body: some View {
-        Group {
-            if let data = event?.eyecatchData, let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else if let photo {
-                RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fill)
-            } else {
-                ZStack {
-                    tint.opacity(0.18)
-                    FavorecoIcon(systemName: fallbackSymbol, size: 34)
-                        .foregroundStyle(tint)
+        if usesGoldFrame {
+            TheaterPosterArtwork(
+                reference: event.map { .event($0.id) },
+                backgroundColor: Color(.secondarySystemBackground)
+            ) { _ in
+                if let photo {
+                    RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fit)
+                } else {
+                    ZStack {
+                        tint.opacity(0.18)
+                        FavorecoIcon(systemName: fallbackSymbol, size: 34)
+                            .foregroundStyle(tint)
+                    }
                 }
             }
-        }
-        .aspectRatio(CGFloat(max(aspectRatio, 0.35)), contentMode: .fit)
-        .frame(maxWidth: .infinity)
-        .clipped()
-        .background(Color(.secondarySystemBackground))
-        .modifier(
-            RecordDetailEyecatchFrameModifier(
-                tint: tint,
-                usesTheaterFrame: usesGoldFrame
+            .theaterPosterFrame(tint: tint)
+        } else {
+            Group {
+                if let data = event?.eyecatchData, let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else if let photo {
+                    RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fill)
+                } else {
+                    ZStack {
+                        tint.opacity(0.18)
+                        FavorecoIcon(systemName: fallbackSymbol, size: 34)
+                            .foregroundStyle(tint)
+                    }
+                }
+            }
+            .aspectRatio(CGFloat(max(aspectRatio, 0.35)), contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .clipped()
+            .background(Color(.secondarySystemBackground))
+            .modifier(
+                RecordDetailEyecatchFrameModifier(tint: tint)
             )
-        )
+        }
     }
 }
 
 private struct RecordDetailEyecatchFrameModifier: ViewModifier {
     let tint: Color
-    let usesTheaterFrame: Bool
 
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if usesTheaterFrame {
-            content.theaterPosterFrame(tint: tint)
-        } else {
-            content
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .stroke(tint.opacity(0.42), lineWidth: 0.8)
-                }
-        }
+        content
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(tint.opacity(0.42), lineWidth: 0.8)
+            }
     }
 }
 
@@ -2117,11 +3023,12 @@ private struct TheaterCastItem: View {
     let imagePath: String
     let roleTagsRaw: String
     let tint: Color
+    var compact = false
 
     var body: some View {
         VStack(spacing: 6) {
             avatar
-                .frame(width: 64, height: 64)
+                .frame(width: compact ? 52 : 64, height: compact ? 52 : 64)
                 .clipShape(Circle())
                 .overlay {
                     Circle().stroke(tint.opacity(0.46), lineWidth: 1)
@@ -2130,14 +3037,18 @@ private struct TheaterCastItem: View {
             Text(name)
                 .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
                 .foregroundStyle(.primary)
-                .lineLimit(1)
+                .lineLimit(compact ? 2 : 1)
+                .multilineTextAlignment(.center)
                 .frame(width: 74)
 
-            Text(role)
-                .font(FavorecoTypography.jpSans(9, weight: .regular, relativeTo: .caption2))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(width: 74)
+            if !role.isEmpty {
+                Text(role)
+                    .font(FavorecoTypography.jpSans(9, weight: .regular, relativeTo: .caption2))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 74)
+            }
         }
         .accessibilityElement(children: .combine)
     }
@@ -2177,6 +3088,13 @@ private struct TheaterCastItem: View {
     }
 }
 
+private struct TheaterCreditDisplayLine: Identifiable {
+    let id: Int
+    let rawValue: String
+    let role: String?
+    let name: String?
+}
+
 private struct DetailInfoRow: View {
     let icon: String
     let title: String
@@ -2194,6 +3112,27 @@ private struct DetailInfoRow: View {
             Text(value)
                 .font(FavorecoTypography.bodyStrong)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct ExperienceOrTheaterSectionCard: ViewModifier {
+    let isTheater: Bool
+    let tint: Color
+    let emphasizesGenericCard: Bool
+
+    init(isTheater: Bool, tint: Color, emphasizesGenericCard: Bool = false) {
+        self.isTheater = isTheater
+        self.tint = tint
+        self.emphasizesGenericCard = emphasizesGenericCard
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isTheater {
+            content.theaterDetailSectionCard(tint: tint)
+        } else {
+            content.sectionCard(tint: tint, emphasized: emphasizesGenericCard)
         }
     }
 }

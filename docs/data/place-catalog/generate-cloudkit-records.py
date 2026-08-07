@@ -119,6 +119,7 @@ def main() -> None:
                 "latitude": optional_float(row["latitude"]),
                 "longitude": optional_float(row["longitude"]),
                 "officialURL": row["officialURL"],
+                "sourceURL": row["sourceURL"],
                 "capacity": optional_int(row["capacity"]),
                 "operationalStatus": "closed" if row["status"] == "closed" else "open",
                 "templeSect": detail.get("templeSect", ""),

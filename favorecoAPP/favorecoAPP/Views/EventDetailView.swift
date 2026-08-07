@@ -81,21 +81,39 @@ private struct EventHeroBackgroundPicker: View {
                 }
                     .frame(width: 82, height: 100)
                     .clipped()
+                    .overlay(alignment: .topTrailing) {
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.black.opacity(0.82))
+                                .frame(width: 24, height: 24)
+                                .background(TheaterCategoryStyle.lightGold, in: Circle())
+                                .overlay {
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.92), lineWidth: 1.5)
+                                }
+                                .shadow(color: .black.opacity(0.38), radius: 3, y: 1)
+                                .padding(5)
+                        }
+                    }
                     .overlay {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(
-                                isSelected ? Color(red: 0.82, green: 0.62, blue: 0.30) : Color.secondary.opacity(0.3),
+                                isSelected ? TheaterCategoryStyle.lightGold : Color.secondary.opacity(0.3),
                                 lineWidth: isSelected ? 3 : 1
                             )
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 Text(preset.title)
                     .font(FavorecoTypography.caption)
+                    .fontWeight(isSelected ? .bold : .regular)
+                    .foregroundStyle(isSelected ? TheaterCategoryStyle.gold : Color.primary)
                     .lineLimit(2)
                     .frame(width: 82, alignment: .leading)
             }
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -116,7 +134,7 @@ struct EventDetailView: View {
     @State private var isShowingRepresentativePhotoPicker = false
     @State private var isShowingArchiveConfirmation = false
     @State private var isShowingDeleteConfirmation = false
-    @State private var isShowingTheaterActionPanel = false
+    @State private var isShowingActionMenu = false
     @State private var selectedPlanID: UUID?
     @State private var actionErrorMessage: String?
     @State private var backSwipeExclusionFrames: [CGRect] = []
@@ -187,7 +205,8 @@ struct EventDetailView: View {
                         accentColor: theaterGold
                     )
                     TheaterEventTravelMapSection(
-                        snapshot: TheaterTravelMapSnapshot.make(visits: snapshot.visits),
+                        visitSnapshot: TheaterTravelMapSnapshot.make(visits: snapshot.visits),
+                        schedules: performanceSchedules,
                         accentColor: theaterGold
                     )
                 } else if category?.templateKey == "random_goods" {
@@ -221,16 +240,7 @@ struct EventDetailView: View {
         }
         .overlay(alignment: .top) {
             if isTheater {
-                ZStack(alignment: .topTrailing) {
-                    theaterNavigationControls
-                    if isShowingTheaterActionPanel {
-                        theaterActionPanel
-                            .padding(.top, 70)
-                            .padding(.trailing, 20)
-                            .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .topTrailing)))
-                            .zIndex(1)
-                    }
-                }
+                theaterNavigationControls
             }
         }
         .toolbar {
@@ -240,6 +250,13 @@ struct EventDetailView: View {
                 }
             }
         }
+        .favorecoDetailActionMenu(
+            isPresented: $isShowingActionMenu,
+            genreColor: eventMenuGenreColor,
+            accentColor: eventMenuAccentColor,
+            topPadding: isTheater ? 70 : 54,
+            actions: eventMenuActions
+        )
         .navigationDestination(item: $selectedPlanID) { planID in
             EventPlanDestination(planID: planID)
         }
@@ -309,48 +326,63 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private var eventMenu: some View {
-        Menu {
-            eventMenuItems
-        } label: {
-            Label("メニュー", systemImage: "ellipsis.circle")
-        }
+        FavorecoDetailActionMenuButton(
+            isPresented: $isShowingActionMenu,
+            genreColor: eventMenuGenreColor,
+            accentColor: eventMenuAccentColor,
+            size: 34
+        )
     }
 
-    @ViewBuilder
-    private var eventMenuItems: some View {
-        Button {
-            isShowingEditEvent = true
-        } label: {
-            Label(
-                category?.templateKey == "random_goods"
+    private var eventMenuActions: [FavorecoDetailAction] {
+        var actions = [
+            FavorecoDetailAction(
+                title: category?.templateKey == "random_goods"
                     ? "シリーズ情報・画像を編集"
                     : "対象情報・画像を編集",
-                systemImage: "pencil"
+                systemImage: "pencil",
+                action: { isShowingEditEvent = true }
+            )
+        ]
+
+        if !EventRepresentativePhotoResolver.resolve(
+            for: event,
+            sortedVisits: (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
+        ).photos.isEmpty {
+            actions.append(
+                FavorecoDetailAction(
+                    title: "代表写真を選ぶ",
+                    systemImage: "photo.badge.checkmark",
+                    action: { isShowingRepresentativePhotoPicker = true }
+                )
             )
         }
 
-        if EventRepresentativePhotoResolver.resolve(
-            for: event,
-            sortedVisits: (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
-        ).photos.isEmpty == false {
-            Button {
-                isShowingRepresentativePhotoPicker = true
-            } label: {
-                Label("代表写真を選ぶ", systemImage: "photo.badge.checkmark")
-            }
-        }
+        actions.append(contentsOf: [
+            FavorecoDetailAction(
+                title: "対象を非表示",
+                systemImage: "archivebox",
+                isDestructive: true,
+                action: { isShowingArchiveConfirmation = true }
+            ),
+            FavorecoDetailAction(
+                title: "すべての記録を削除",
+                systemImage: "trash",
+                isDestructive: true,
+                action: { isShowingDeleteConfirmation = true }
+            )
+        ])
+        return actions
+    }
 
-        Button(role: .destructive) {
-            isShowingArchiveConfirmation = true
-        } label: {
-            Label("対象を非表示", systemImage: "archivebox")
-        }
+    private var eventMenuGenreColor: Color {
+        Color(hex: category?.colorHex ?? "#6F8F7A")
+    }
 
-        Button(role: .destructive) {
-            isShowingDeleteConfirmation = true
-        } label: {
-            Label("この対象とすべての記録を削除", systemImage: "trash")
-        }
+    private var eventMenuAccentColor: Color {
+        guard category?.templateKey != "theater" else { return theaterGold }
+        let hex = themePalette.resolvedHex(categoryHex: category?.colorHex ?? "#6F8F7A")
+        return Color.legibleDetailAccent(hex: hex)
     }
 
     private var theaterNavigationControls: some View {
@@ -368,110 +400,14 @@ struct EventDetailView: View {
 
             Spacer()
 
-            Button {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    isShowingTheaterActionPanel.toggle()
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(theaterGold)
-                    .frame(width: 50, height: 50)
-                    .background(theaterWine.opacity(0.88), in: Circle())
-                    .overlay { Circle().stroke(theaterGold.opacity(0.72), lineWidth: 1) }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("メニュー")
-            .accessibilityValue(isShowingTheaterActionPanel ? "展開中" : "閉じています")
+            FavorecoDetailActionMenuButton(
+                isPresented: $isShowingActionMenu,
+                genreColor: eventMenuGenreColor,
+                accentColor: eventMenuAccentColor
+            )
         }
         .padding(.horizontal, 20)
         .safeAreaPadding(.top, 8)
-    }
-
-    private var theaterActionPanel: some View {
-        VStack(spacing: 0) {
-            theaterActionButton(
-                title: "対象情報・画像を編集",
-                systemImage: "pencil"
-            ) {
-                isShowingTheaterActionPanel = false
-                isShowingEditEvent = true
-            }
-
-            if EventRepresentativePhotoResolver.resolve(
-                for: event,
-                sortedVisits: (event.visits ?? []).sorted { $0.visitedAt > $1.visitedAt }
-            ).photos.isEmpty == false {
-                theaterActionDivider
-                theaterActionButton(
-                    title: "代表写真を選ぶ",
-                    systemImage: "photo.badge.checkmark"
-                ) {
-                    isShowingTheaterActionPanel = false
-                    isShowingRepresentativePhotoPicker = true
-                }
-            }
-
-            theaterActionDivider
-            theaterActionButton(
-                title: "対象を非表示",
-                systemImage: "archivebox",
-                isDestructive: true
-            ) {
-                isShowingTheaterActionPanel = false
-                isShowingArchiveConfirmation = true
-            }
-
-            theaterActionDivider
-            theaterActionButton(
-                title: "すべての記録を削除",
-                systemImage: "trash",
-                isDestructive: true
-            ) {
-                isShowingTheaterActionPanel = false
-                isShowingDeleteConfirmation = true
-            }
-        }
-        .frame(width: 250)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(red: 0.20, green: 0.025, blue: 0.055),
-                    Color.black.opacity(0.96)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(theaterGold.opacity(0.78), lineWidth: 0.8)
-        }
-        .shadow(color: .black.opacity(0.52), radius: 18, y: 8)
-    }
-
-    private var theaterActionDivider: some View {
-        Rectangle()
-            .fill(theaterGold.opacity(0.20))
-            .frame(height: 0.5)
-            .padding(.horizontal, 12)
-    }
-
-    private func theaterActionButton(
-        title: String,
-        systemImage: String,
-        isDestructive: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            FavorecoIconLabel(title, systemImage: systemImage, iconSize: 17)
-                .font(FavorecoTypography.bodyStrong)
-                .foregroundStyle(isDestructive ? Color(red: 0.96, green: 0.45, blue: 0.45) : Color(red: 0.96, green: 0.93, blue: 0.88))
-                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                .padding(.horizontal, 16)
-        }
-        .buttonStyle(.plain)
     }
 
     private var theaterPageBackground: some View {
@@ -498,6 +434,13 @@ struct EventDetailView: View {
         let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
         return VStack(spacing: 9) {
             Spacer().frame(height: 132)
+
+            Text("公演情報")
+                .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
+                .foregroundStyle(.white.opacity(0.88))
+                .tracking(0.8)
+                .accessibilityAddTraits(.isHeader)
+
             theaterPoster(snapshot: snapshot)
 
             let performanceTypeName = TheaterPerformanceType.displayName(
@@ -556,15 +499,9 @@ struct EventDetailView: View {
 
             theaterOfficialLinks(fields: fields)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    theaterPlanButton
-                    theaterVisitButton
-                }
-                VStack(spacing: 10) {
-                    theaterPlanButton
-                    theaterVisitButton
-                }
+            HStack(spacing: 10) {
+                theaterPlanButton
+                theaterVisitButton
             }
             .tint(theaterGold)
         }
@@ -622,29 +559,29 @@ struct EventDetailView: View {
 
     @ViewBuilder
     private func theaterPoster(snapshot: EventDetailSnapshot) -> some View {
-        Group {
-            if let data = event.eyecatchData, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else if let photo = snapshot.representativePhoto {
-                RepresentativePhotoImage(photo: photo, maxPixelSize: 900, contentMode: .fill)
+        TheaterPosterArtwork(
+            reference: .event(event.id),
+            backgroundColor: .black.opacity(0.42)
+        ) { size in
+            if let photo = snapshot.representativePhoto {
+                RepresentativePhotoImage(photo: photo, maxPixelSize: 900, contentMode: .fit)
+                    .frame(width: size.width, height: size.height)
             } else {
-                Rectangle()
-                    .fill(.black.opacity(0.42))
-                    .overlay {
-                        FavorecoIcon(systemName: "theatermasks.fill", size: 54)
-                            .foregroundStyle(theaterGold.opacity(0.8))
-                    }
+                FavorecoIcon(systemName: "theatermasks.fill", size: 54)
+                    .foregroundStyle(theaterGold.opacity(0.8))
+                    .frame(width: size.width, height: size.height)
             }
         }
         .frame(width: 148, height: 209)
-        .clipped()
         .theaterPosterFrame(tint: theaterGold)
+        .id(event.updatedAt)
     }
 
     private var theaterPlanButton: some View {
         Button(action: openPlanEntry) {
             FavorecoIconLabel("予定を立てる", systemImage: "calendar.badge.plus", iconSize: 17)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, minHeight: 36)
         }
         .buttonStyle(.bordered)
     }
@@ -660,7 +597,8 @@ struct EventDetailView: View {
     private var theaterVisitButton: some View {
         Button { isShowingAddVisit = true } label: {
             FavorecoIconLabel("記録を追加", systemImage: "plus.circle.fill", iconSize: 17)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, minHeight: 36)
         }
         .buttonStyle(.borderedProminent)
     }
@@ -1279,9 +1217,9 @@ struct EditEventView: View {
                     }
                 } header: {
                     if event.category?.templateKey == "theater" {
-                        Text("公演ビジュアル")
+                        FavorecoRegistrationSectionHeader("公演ビジュアル")
                     } else {
-                        Text("対象アイキャッチ")
+                        FavorecoRegistrationSectionHeader("対象アイキャッチ")
                     }
                 } footer: {
                     Text(
@@ -1341,6 +1279,16 @@ struct EditEventView: View {
                             )
                             TextField(template.titlePlaceholder, text: $draft.title)
                         }
+                    } else if event.category?.templateKey == "book" {
+                        BookInformationEditor(
+                            title: $draft.title,
+                            seriesName: $draft.bookSeriesName,
+                            volumeNumber: $draft.bookVolumeNumber,
+                            authorName: $draft.bookAuthorName,
+                            officialURL: $draft.officialURL,
+                            aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                            isEditable: true
+                        )
                     } else {
                         TextField(template.titlePlaceholder, text: $draft.title)
                         TextField(template.seriesPlaceholder, text: $draft.seriesName)
@@ -1355,7 +1303,7 @@ struct EditEventView: View {
                     }
                 } header: {
                     if event.category?.templateKey != "theater" {
-                        Text(template.targetSectionTitle)
+                        FavorecoRegistrationSectionHeader(template.targetSectionTitle)
                     }
                 }
 
@@ -1420,7 +1368,7 @@ struct EditEventView: View {
                         }
                     }
                 } else {
-                    Section("対象メモ") {
+                    FavorecoRegistrationSection("対象メモ") {
                         ZStack(alignment: .topLeading) {
                             if draft.memo.isEmpty {
                                 Text("対象そのものについて残しておきたいこと")
@@ -1493,15 +1441,9 @@ struct EditEventView: View {
             isProcessingEyecatch = false
             selectedEyecatchItem = nil
         }
-        let targetAspectRatio = event.category?.templateKey == "theater"
-            ? CGFloat(EyecatchAspectRatio.bSeriesPoster.value)
-            : nil
         guard let sourceData = try? await item.loadTransferable(type: Data.self),
               let compressed = await Task.detached(priority: .userInitiated, operation: {
-                  QuickCaptureImageService.compressedJPEG(
-                      from: sourceData,
-                      centeredToAspectRatio: targetAspectRatio
-                  )
+                  QuickCaptureImageService.compressedJPEG(from: sourceData)
               }).value else {
             saveErrorMessage = "画像を読み込めませんでした。別の写真をお試しください。"
             return
@@ -1511,21 +1453,19 @@ struct EditEventView: View {
 
     @ViewBuilder
     private func eyecatchPreview(_ image: UIImage) -> some View {
-        if EyecatchAspectRatio.usesEyecatchFill(for: event.category) {
+        if event.category?.templateKey == "theater" {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 150, height: 212)
+                .background(Color(.secondarySystemBackground))
+                .theaterPosterFrame(tint: TheaterCategoryStyle.gold)
+        } else if EyecatchAspectRatio.usesEyecatchFill(for: event.category) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(
-                    width: event.category?.templateKey == "theater" ? 150 : nil,
-                    height: event.category?.templateKey == "theater" ? 212 : nil
-                )
-                .frame(maxWidth: event.category?.templateKey == "theater" ? nil : .infinity)
-                .aspectRatio(
-                    event.category?.templateKey == "theater"
-                        ? nil
-                        : CGFloat(selectedEyecatchAspectRatio.value),
-                    contentMode: .fit
-                )
+                .frame(maxWidth: .infinity)
+                .aspectRatio(CGFloat(selectedEyecatchAspectRatio.value), contentMode: .fit)
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {
@@ -1561,7 +1501,15 @@ struct EditEventView: View {
         let now = Date()
         let updatedTitle = draft.trimmedTitle
         event.title = updatedTitle
-        event.seriesName = draft.trimmedSeriesName
+        if event.category?.templateKey == "book" {
+            event.applyBookMetadata(
+                seriesName: draft.trimmedBookSeriesName,
+                volumeNumber: draft.trimmedBookVolumeNumber,
+                authorName: draft.trimmedBookAuthorName
+            )
+        } else {
+            event.seriesName = draft.trimmedSeriesName
+        }
         if event.category?.templateKey == "theater" {
             event.subTypeKey = draft.subTypeKey
             for plan in event.plans ?? [] {
@@ -1601,6 +1549,9 @@ struct EditEventView: View {
         ThumbnailLoader.purge()
         if event.category?.templateKey == "book" {
             unitFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
+            unitFields.bookSeriesName = draft.trimmedBookSeriesName
+            unitFields.bookVolumeNumber = draft.trimmedBookVolumeNumber
+            unitFields.bookAuthorName = draft.trimmedBookAuthorName
         }
         event.unitFieldsRaw = unitFields.encodedRawValue
         event.updatedAt = now
@@ -1663,6 +1614,9 @@ struct EditEventView: View {
 private struct EventDraft {
     var title: String
     var seriesName: String
+    var bookSeriesName: String
+    var bookVolumeNumber: String
+    var bookAuthorName: String
     var subTypeKey: String
     var screenWorkSeasonNumber: Int
     var performanceTypeCustomName: String
@@ -1690,6 +1644,9 @@ private struct EventDraft {
         subTypeKey = event.subTypeKey
         officialURL = event.officialURL
         let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        bookSeriesName = fields.bookSeriesName
+        bookVolumeNumber = fields.bookVolumeNumber
+        bookAuthorName = fields.bookAuthorName
         if event.category?.templateKey == "movie" {
             subTypeKey = ScreenWorkType.resolved(from: subTypeKey).rawValue
         }
@@ -1737,6 +1694,18 @@ private struct EventDraft {
 
     var trimmedSeriesName: String {
         seriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookSeriesName: String {
+        bookSeriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookVolumeNumber: String {
+        bookVolumeNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookAuthorName: String {
+        bookAuthorName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var trimmedOfficialURL: String {

@@ -19,24 +19,40 @@ struct GenreManagementView: View {
     @State private var isShowingPlans = false
 
     private var sortedCategories: [RecordCategory] {
-        categories.sorted { $0.sortOrder < $1.sortOrder }
+        categories
+            .filter(shouldShowInManagement)
+            .sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private var activeCategoryCount: Int {
-        categories.filter { !$0.isArchived }.count
+        sortedCategories.filter { !$0.isArchived }.count
+    }
+
+    private func shouldShowInManagement(_ category: RecordCategory) -> Bool {
+        guard category.isBuiltIn else { return true }
+        if CategoryPresetSeeder.isInitialReleaseTemplate(category.templateKey) {
+            return true
+        }
+        if !category.isArchived {
+            return true
+        }
+        return !(category.events ?? []).isEmpty
+            || !(category.plans ?? []).isEmpty
+            || !(category.socialAccounts ?? []).isEmpty
     }
 
     var body: some View {
         List {
             if !warningMessage.isEmpty {
                 Section {
-                    FavorecoIconLabel(warningMessage, systemImage: "exclamationmark.circle")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
+                    FavorecoSettingsInfoCallout(
+                        title: "変更できませんでした",
+                        message: warningMessage
+                    )
                 }
             }
 
-            Section("表示ジャンル") {
+            FavorecoSettingsSection("表示するジャンル") {
                 ForEach(sortedCategories) { category in
                     HStack(spacing: 12) {
                         NavigationLink {
@@ -60,7 +76,7 @@ struct GenreManagementView: View {
                 .onMove(perform: moveCategories)
             }
 
-            Section {
+            FavorecoSettingsSectionWithFooter("ジャンル選択") {
                 Button {
                     hasCompletedGenreOnboarding = false
                     dismiss()
@@ -71,6 +87,7 @@ struct GenreManagementView: View {
                 Text("初回設定と同じ画面で、記録するジャンルを選び直します。既存の記録は削除されません。")
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("ジャンル管理")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -191,6 +208,7 @@ struct GenreDetailSettingsView: View {
     @State private var draft: GenreDetailDraft
     @State private var warningMessage = ""
     @State private var isShowingRemoveConfirmation = false
+    @State private var isShowingResetConfirmation = false
     @State private var isShowingPlans = false
 
     private var linkedSocialAccounts: [SocialAccount] {
@@ -199,8 +217,8 @@ struct GenreDetailSettingsView: View {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    private var enabledUnits: [RecordUnitDefinition] {
-        RecordUnitDefinition.definitions(for: category.enabledUnitsRaw)
+    private var formSettingItems: [GenreFormSettingItem] {
+        GenreFormSettingItem.items(for: category)
     }
 
     private var linkedRecordCount: Int {
@@ -218,35 +236,102 @@ struct GenreDetailSettingsView: View {
 
     var body: some View {
         Form {
-            Section("基本") {
-                TextField("表示名", text: $draft.name)
-                TextField("アイコン", text: $draft.iconSymbol)
-                    .textInputAutocapitalization(.never)
+            if category.isBuiltIn {
+                FavorecoSettingsSection("表示とデザイン") {
+                    FavorecoSettingsToggleRow(
+                        title: "このジャンルを表示",
+                        detail: "Homeとジャンル切り替えに表示します",
+                        isOn: Binding(
+                            get: { !draft.isArchived },
+                            set: { draft.isArchived = !$0 }
+                        )
+                    )
 
-                Picker("テーマカラー", selection: $draft.colorHex) {
-                    ForEach(GenreThemeColorPreset.all) { preset in
-                        Label(preset.name, systemImage: "circle.fill")
-                            .foregroundStyle(Color(hex: preset.hex))
-                            .tag(preset.hex)
-                    }
+                    GenreThemeColorPickerLink(selection: $draft.colorHex)
+                }
+            } else {
+                FavorecoSettingsSection("表示とデザイン") {
+                    FavorecoSettingsToggleRow(
+                        title: "このジャンルを表示",
+                        detail: "Homeとジャンル切り替えに表示します",
+                        isOn: Binding(
+                            get: { !draft.isArchived },
+                            set: { draft.isArchived = !$0 }
+                        )
+                    )
+
+                    GenreLabeledTextField(
+                        title: "表示名",
+                        prompt: "例：カフェ巡り",
+                        text: $draft.name
+                    )
+
+                    CustomGenreIconPickerLink(selection: $draft.iconSymbol)
+
+                    GenreThemeColorPickerLink(selection: $draft.colorHex)
                 }
 
-                Picker("テンプレタイプ", selection: $draft.templateTypeKey) {
-                    ForEach(CustomGenreTemplateType.all) { type in
-                        Text(type.name).tag(type.id)
+                FavorecoSettingsSection("記録の型と呼び名") {
+                    ExplicitFormControlRow(title: "記録の型") {
+                        Picker("記録の型", selection: $draft.templateTypeKey) {
+                            ForEach(CustomGenreTemplateType.all) { type in
+                                Text(type.name).tag(type.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
-                }
 
-                TextField("対象名ラベル", text: $draft.targetNameLabel)
-                TextField("記録単位の呼び名", text: $draft.recordUnitName)
-                TextField("日付ラベル", text: $draft.dateLabel)
+                    let selectedType = CustomGenreTemplateType.type(for: draft.templateTypeKey)
+                    FavorecoSettingsInfoCallout(
+                        title: "この型で使う構造",
+                        message: selectedType.description
+                    )
+
+                    GenreLabeledTextField(
+                        title: "記録対象の呼び名",
+                        prompt: "例：作品・場所",
+                        text: $draft.targetNameLabel
+                    )
+                    GenreLabeledTextField(
+                        title: "1回の記録の呼び名",
+                        prompt: "例：鑑賞・訪問",
+                        text: $draft.recordUnitName
+                    )
+                    GenreLabeledTextField(
+                        title: "日付項目の呼び名",
+                        prompt: "例：鑑賞日・訪問日",
+                        text: $draft.dateLabel
+                    )
+                }
             }
 
-            Section("SNS") {
+            FavorecoSettingsSection("記録フォーム") {
+                FavorecoSettingsInfoCallout(
+                    title: "このジャンルで入力する項目",
+                    message: "現在の(category.name)登録フォームに合わせています。常に使用する項目は非表示にできません。"
+                )
+
+                ForEach(formSettingItems) { item in
+                    let isSelected = draft.isSelected(item)
+                    FavorecoSettingsSelectionRow(
+                        title: item.title,
+                        detail: item.detail,
+                        status: item.isFixed ? "常に使用" : (isSelected ? "表示する" : "表示しない"),
+                        isSelected: isSelected,
+                        isLocked: item.isFixed
+                    ) {
+                        draft.set(item, isSelected: !isSelected)
+                    }
+                }
+            }
+
+            FavorecoSettingsSection("SNS連携") {
                 if linkedSocialAccounts.isEmpty {
                     Text("このジャンルに紐付いたSNSはありません。プロフィール > SNSでジャンルを指定できます。")
-                        .font(FavorecoTypography.caption)
+                        .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
                         .foregroundStyle(.secondary)
+                        .padding(.vertical, 8)
                 } else {
                     ForEach(linkedSocialAccounts) { account in
                         let platform = SocialPlatform.platform(for: account.platformKey)
@@ -258,32 +343,7 @@ struct GenreDetailSettingsView: View {
                 }
             }
 
-            Section("有効ユニット") {
-                ForEach(RecordUnitDefinition.all) { unit in
-                    UnitToggleRow(
-                        unit: unit,
-                        isSelected: draft.selectedUnitIDs.contains(unit.id)
-                    ) {
-                        draft.toggleUnit(unit.id)
-                    }
-                    .disabled(unit.isRequired)
-                }
-            }
-
-            Section("表示") {
-                Toggle("このジャンルを表示", isOn: Binding(
-                    get: { !draft.isArchived },
-                    set: { draft.isArchived = !$0 }
-                ))
-
-                if !warningMessage.isEmpty {
-                    Text(warningMessage)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("ジャンル管理") {
+            FavorecoSettingsSection("ジャンル管理") {
                 Button {
                     if purchaseManager.currentPlan.canCreateCustomGenres {
                         duplicateAsCustomGenre()
@@ -292,9 +352,23 @@ struct GenreDetailSettingsView: View {
                     }
                 } label: {
                     Label(
-                        purchaseManager.currentPlan.canCreateCustomGenres ? "この設定を複製" : "複製はPremium限定",
+                        purchaseManager.currentPlan.canCreateCustomGenres
+                            ? (category.isBuiltIn ? "自作ジャンルとして複製" : "この設定を複製")
+                            : "複製はPremium限定",
                         systemImage: purchaseManager.currentPlan.canCreateCustomGenres ? "plus.square.on.square" : "lock.fill"
                     )
+                }
+
+                if category.isBuiltIn {
+                    Button {
+                        isShowingResetConfirmation = true
+                    } label: {
+                        Label("標準設定に戻す", systemImage: "arrow.counterclockwise")
+                    }
+
+                    Text("テーマカラーと使用する記録項目を、このジャンルの初期設定へ戻します。")
+                        .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                        .foregroundStyle(.secondary)
                 }
 
                 if !category.isBuiltIn {
@@ -309,9 +383,16 @@ struct GenreDetailSettingsView: View {
 
                     if linkedRecordCount > 0 {
                         Text("記録・予定・SNS紐付けがあるため、データを守るため完全削除せず非表示にします。")
-                            .font(FavorecoTypography.caption)
+                            .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
                             .foregroundStyle(.secondary)
                     }
+                }
+
+                if !warningMessage.isEmpty {
+                    FavorecoSettingsInfoCallout(
+                        title: "確認",
+                        message: warningMessage
+                    )
                 }
             }
         }
@@ -341,6 +422,18 @@ struct GenreDetailSettingsView: View {
                 Text("紐づくデータは削除されません。ジャンル管理から再表示できます。")
             }
         }
+        .confirmationDialog(
+            "標準設定に戻しますか？",
+            isPresented: $isShowingResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("標準設定に戻す") {
+                resetToPreset()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("テーマカラーと使用する記録項目を初期設定へ戻します。記録、SNS、表示設定は変更しません。")
+        }
         .sheet(isPresented: $isShowingPlans) {
             NavigationStack {
                 BillingPlanSettingsView()
@@ -364,16 +457,19 @@ struct GenreDetailSettingsView: View {
             }
         }
 
-        category.name = draft.trimmedName
-        category.iconSymbol = draft.trimmedIconSymbol
         category.colorHex = draft.colorHex
-        category.templateTypeKey = draft.templateTypeKey
-        category.targetNameLabel = draft.trimmedTargetNameLabel
-        category.recordUnitName = draft.trimmedRecordUnitName
-        category.dateLabel = draft.trimmedDateLabel
         category.enabledUnitsRaw = draft.enabledUnitsRaw
         category.isArchived = draft.isArchived
         category.updatedAt = Date()
+
+        if !category.isBuiltIn {
+            category.name = draft.trimmedName
+            category.iconSymbol = draft.trimmedIconSymbol
+            category.templateTypeKey = draft.templateTypeKey
+            category.targetNameLabel = draft.trimmedTargetNameLabel
+            category.recordUnitName = draft.trimmedRecordUnitName
+            category.dateLabel = draft.trimmedDateLabel
+        }
 
         do {
             try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: modelContext)
@@ -386,6 +482,27 @@ struct GenreDetailSettingsView: View {
     private func activeCategoryCount() throws -> Int {
         let descriptor = FetchDescriptor<RecordCategory>()
         return try modelContext.fetch(descriptor).filter { !$0.isArchived }.count
+    }
+
+    private func resetToPreset() {
+        guard category.isBuiltIn,
+              let preset = CategoryPresetSeeder.presets.first(where: { $0.templateKey == category.templateKey }) else {
+            return
+        }
+
+        draft.resetEditableSettings(to: preset)
+        category.colorHex = preset.colorHex
+        category.enabledUnitsRaw = preset.enabledUnitsRaw
+        category.updatedAt = Date()
+
+        do {
+            try modelContext.save()
+            warningMessage = "標準設定に戻しました。"
+        } catch {
+            modelContext.rollback()
+            draft = GenreDetailDraft(category: category)
+            warningMessage = "標準設定に戻せませんでした。"
+        }
     }
 
     private func duplicateAsCustomGenre() {
@@ -529,6 +646,321 @@ private struct UnitToggleRow: View {
     }
 }
 
+private struct GenreLabeledTextField: View {
+    let title: String
+    let prompt: String
+    @Binding var text: String
+
+    var body: some View {
+        ExplicitFormTextField(
+            title: title,
+            prompt: prompt,
+            text: $text,
+            focusesFromWholeRow: true
+        )
+    }
+}
+
+private struct GenreThemeColorPickerLink: View {
+    @Binding var selection: String
+
+    private var selectedName: String {
+        GenreThemeColorPreset.preset(for: selection)?.name ?? "現在の色"
+    }
+
+    var body: some View {
+        NavigationLink {
+            GenreThemeColorSelectionView(selection: $selection)
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                ExplicitFormFieldTitle(title: "テーマカラー", isOptional: false, isRequired: false)
+                HStack(spacing: 10) {
+                    Spacer()
+                    Circle()
+                        .fill(Color(hex: selection))
+                        .overlay {
+                            Circle()
+                                .stroke(.primary.opacity(0.16), lineWidth: 0.5)
+                        }
+                        .frame(width: 22, height: 22)
+                    Text(selectedName)
+                        .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(height: 27)
+                .padding(.trailing, ExplicitFormMetrics.controlTrailingPadding)
+            }
+            .padding(.top, ExplicitFormMetrics.rowTopPadding)
+            .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
+            .frame(minHeight: ExplicitFormMetrics.rowMinimumHeight, alignment: .topLeading)
+        }
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+    }
+}
+
+private struct GenreThemeColorSelectionView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: String
+
+    var body: some View {
+        List(GenreThemeColorPreset.all) { preset in
+            Button {
+                selection = preset.hex
+                dismiss()
+            } label: {
+                HStack(spacing: 14) {
+                    Circle()
+                        .fill(Color(hex: preset.hex))
+                        .overlay {
+                            Circle()
+                                .stroke(.primary.opacity(0.16), lineWidth: 0.5)
+                        }
+                        .frame(width: 28, height: 28)
+
+                    Text(preset.name)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    if preset.hex.caseInsensitiveCompare(selection) == .orderedSame {
+                        Image(systemName: "checkmark")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(preset.name)を選択")
+            .accessibilityAddTraits(
+                preset.hex.caseInsensitiveCompare(selection) == .orderedSame ? .isSelected : []
+            )
+        }
+        .navigationTitle("テーマカラー")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct CustomGenreIconPickerLink: View {
+    @Binding var selection: String
+
+    private var selectedName: String {
+        CustomGenreIconPreset.preset(for: selection)?.name ?? "選択中"
+    }
+
+    var body: some View {
+        NavigationLink {
+            CustomGenreIconSelectionView(selection: $selection)
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                ExplicitFormFieldTitle(title: "アイコン", isOptional: false, isRequired: false)
+                HStack(spacing: 10) {
+                    Spacer()
+                    FavorecoIcon(systemName: selection, size: 20)
+                        .frame(width: 24, height: 24)
+                    Text(selectedName)
+                        .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(height: 27)
+                .padding(.trailing, ExplicitFormMetrics.controlTrailingPadding)
+            }
+            .padding(.top, ExplicitFormMetrics.rowTopPadding)
+            .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
+            .frame(minHeight: ExplicitFormMetrics.rowMinimumHeight, alignment: .topLeading)
+        }
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+    }
+}
+
+private struct CustomGenreIconSelectionView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: String
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+    ]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(CustomGenreIconPreset.all) { preset in
+                    let isSelected = preset.systemName == selection
+                    Button {
+                        selection = preset.systemName
+                        dismiss()
+                    } label: {
+                        VStack(spacing: 8) {
+                            FavorecoIcon(systemName: preset.systemName, size: 24)
+                                .frame(width: 32, height: 32)
+                            Text(preset.name)
+                                .font(FavorecoTypography.caption)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.center)
+                        }
+                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                        .frame(maxWidth: .infinity, minHeight: 82)
+                        .padding(.horizontal, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(
+                                    isSelected ? Color.accentColor : Color.secondary.opacity(0.16),
+                                    lineWidth: isSelected ? 1.5 : 0.5
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(preset.name)アイコン")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            }
+            .padding(16)
+        }
+        .navigationTitle("アイコン")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct CustomGenreIconPreset: Identifiable {
+    let id: String
+    let name: String
+    let systemName: String
+
+    static let all: [CustomGenreIconPreset] = [
+        .init(id: "sparkles", name: "きらめき", systemName: "sparkles"),
+        .init(id: "heart", name: "ハート", systemName: "heart.fill"),
+        .init(id: "star", name: "スター", systemName: "star"),
+        .init(id: "camera", name: "カメラ", systemName: "camera.fill"),
+        .init(id: "photo", name: "写真", systemName: "photo.fill"),
+        .init(id: "palette", name: "アート", systemName: "paintpalette.fill"),
+        .init(id: "theater", name: "舞台", systemName: "theatermasks.fill"),
+        .init(id: "music", name: "音楽", systemName: "music.mic"),
+        .init(id: "movie", name: "映像", systemName: "movieclapper.fill"),
+        .init(id: "book", name: "本", systemName: "books.vertical.fill"),
+        .init(id: "wine", name: "ドリンク", systemName: "wineglass.fill"),
+        .init(id: "ticket", name: "チケット", systemName: "ticket.fill"),
+        .init(id: "paw", name: "いきもの", systemName: "pawprint.fill"),
+        .init(id: "seal", name: "印", systemName: "seal.fill"),
+        .init(id: "box", name: "コレクション", systemName: "shippingbox.fill"),
+        .init(id: "map", name: "場所", systemName: "mappin"),
+        .init(id: "tag", name: "タグ", systemName: "tag.fill"),
+        .init(id: "castle", name: "施設", systemName: "castle.turret"),
+    ]
+
+    static func preset(for systemName: String) -> CustomGenreIconPreset? {
+        all.first { $0.systemName == systemName }
+    }
+}
+
+private struct GenreFormSettingItem: Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let storageIDs: Set<String>
+    let isFixed: Bool
+
+    static func items(for category: RecordCategory) -> [GenreFormSettingItem] {
+        switch category.templateKey {
+        case "book":
+            return [
+                fixed("bookInfo", "本の情報", "書名、シリーズ・巻数・著者、本の種類"),
+                fixed("bookReading", "読書の記録", "読み始めた日、読み終えた日、評価"),
+                fixed("photos", "写真", "この読書記録に残す写真"),
+                fixed("memo", "読書メモ", "感想や残しておきたいこと"),
+            ]
+        case "random_goods":
+            return [
+                fixed("series", "シリーズ情報", "シリーズ名、種類、メーカー、発売時期"),
+                fixed("lineup", "ラインナップ", "種類ごとの名前、画像、収集対象"),
+                fixed("transaction", "入手・手放し", "購入、交換、譲渡、売却などの履歴"),
+                fixed("goodsDetails", "写真・金額・公式情報", "画像、支出、参考リンク"),
+            ]
+        case "theater":
+            return [
+                fixed("basic", "参加日・会場", "鑑賞日、開演・終演、鑑賞方法、会場"),
+                fixed("theaterRating", "評価", "この回の満足度"),
+                configurable("ticketPlan", "鑑賞記録", "チケット状態、座席、お目当て・注目した人", ["ticketPlan", "people"]),
+                configurable("photos", "写真・アイキャッチ", "この回のアイキャッチと観劇写真"),
+                fixed("memo", "感想・感情タグ", "感想、感情タグ、その他のタグ"),
+                configurable("money", "集計記録", "チケット代などの金額"),
+                configurable("importOCR", "読み取り情報", "OCRで取得した原文"),
+                configurable("officialInfo", "公演公式情報", "公式URL、SNS、参考リンク"),
+            ]
+        default:
+            return genericItems(for: category)
+        }
+    }
+
+    private static func genericItems(for category: RecordCategory) -> [GenreFormSettingItem] {
+        let definitions: [RecordUnitDefinition]
+        if category.isBuiltIn,
+           let preset = CategoryPresetSeeder.presets.first(where: { $0.templateKey == category.templateKey }) {
+            definitions = RecordUnitDefinition.definitions(for: preset.enabledUnitsRaw)
+        } else {
+            definitions = RecordUnitDefinition.all
+        }
+
+        return definitions.map { definition in
+            let presentation = presentation(for: definition, templateKey: category.templateKey)
+            return GenreFormSettingItem(
+                id: definition.id,
+                title: presentation.title,
+                detail: presentation.detail,
+                storageIDs: [definition.id],
+                isFixed: definition.isRequired
+            )
+        }
+    }
+
+    private static func presentation(
+        for definition: RecordUnitDefinition,
+        templateKey: String
+    ) -> (title: String, detail: String) {
+        guard definition.id == "basic" || definition.id == "memo" else {
+            return (definition.name, definition.description)
+        }
+
+        switch (templateKey, definition.id) {
+        case ("movie", "basic"): ("作品・鑑賞情報", "作品区分、タイトル、鑑賞日、映画館、評価")
+        case ("movie", "memo"): ("感想・メモ", "作品の感想や残しておきたいこと")
+        case ("museum", "basic"): ("展示・鑑賞情報", "展示名、鑑賞日、会場、評価")
+        case ("live", "basic"): ("ライブ・参加情報", "ライブ名、参加日、会場、評価")
+        case ("theme_park", "basic"), ("nature_living", "basic"), ("outing_facility", "basic"):
+            ("施設・訪問情報", "施設名、訪問日、場所、評価")
+        case ("sake", "basic"): ("お酒・記録情報", "銘柄、飲んだ日、場所、評価")
+        case ("goshuin", "basic"): ("参拝情報", "参拝先、参拝日、場所")
+        default: (definition.name, definition.description)
+        }
+    }
+
+    private static func fixed(_ id: String, _ title: String, _ detail: String) -> GenreFormSettingItem {
+        GenreFormSettingItem(id: id, title: title, detail: detail, storageIDs: [], isFixed: true)
+    }
+
+    private static func configurable(
+        _ id: String,
+        _ title: String,
+        _ detail: String,
+        _ storageIDs: Set<String>? = nil
+    ) -> GenreFormSettingItem {
+        GenreFormSettingItem(
+            id: id,
+            title: title,
+            detail: detail,
+            storageIDs: storageIDs ?? [id],
+            isFixed: false
+        )
+    }
+}
+
 private struct GenreDetailDraft {
     var name: String
     var iconSymbol: String
@@ -590,6 +1022,26 @@ private struct GenreDetailDraft {
         selectedUnitIDs.formUnion(RecordUnitDefinition.requiredIDs)
     }
 
+    func isSelected(_ item: GenreFormSettingItem) -> Bool {
+        item.isFixed || !selectedUnitIDs.isDisjoint(with: item.storageIDs)
+    }
+
+    mutating func set(_ item: GenreFormSettingItem, isSelected: Bool) {
+        guard !item.isFixed else { return }
+        if isSelected {
+            selectedUnitIDs.formUnion(item.storageIDs)
+        } else {
+            selectedUnitIDs.subtract(item.storageIDs)
+        }
+        selectedUnitIDs.formUnion(RecordUnitDefinition.requiredIDs)
+    }
+
+    mutating func resetEditableSettings(to preset: CategoryPreset) {
+        colorHex = preset.colorHex
+        selectedUnitIDs = Set(RecordUnitDefinition.definitions(for: preset.enabledUnitsRaw).map(\.id))
+        selectedUnitIDs.formUnion(RecordUnitDefinition.requiredIDs)
+    }
+
     var canSave: Bool {
         !trimmedName.isEmpty && !trimmedIconSymbol.isEmpty
     }
@@ -609,7 +1061,13 @@ private struct GenreThemeColorPreset: Identifiable {
         GenreThemeColorPreset(id: "green", name: "グリーン", hex: "#2E7D60"),
         GenreThemeColorPreset(id: "rose", name: "ローズ", hex: "#A24C55"),
         GenreThemeColorPreset(id: "blue", name: "ブルー", hex: "#536C95"),
+        GenreThemeColorPreset(id: "sky", name: "スカイ", hex: "#2F7FB8"),
+        GenreThemeColorPreset(id: "mauve", name: "モーヴ", hex: "#A65A74"),
     ]
+
+    static func preset(for hex: String) -> GenreThemeColorPreset? {
+        all.first { $0.hex.caseInsensitiveCompare(hex) == .orderedSame }
+    }
 }
 
 struct AddCustomGenreView: View {
@@ -619,51 +1077,82 @@ struct AddCustomGenreView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var draft = CustomGenreDraft()
 
+    private var formSettingItems: [GenreFormSettingItem] {
+        RecordUnitDefinition.all.map { definition in
+            GenreFormSettingItem(
+                id: definition.id,
+                title: definition.name,
+                detail: definition.description,
+                storageIDs: [definition.id],
+                isFixed: definition.isRequired
+            )
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("基本") {
-                    TextField("表示名", text: $draft.name)
-                    TextField("アイコン", text: $draft.iconSymbol)
-                        .textInputAutocapitalization(.never)
-
-                    Picker("テーマカラー", selection: $draft.colorHex) {
-                        ForEach(GenreThemeColorPreset.all) { preset in
-                            Label(preset.name, systemImage: "circle.fill")
-                                .foregroundStyle(Color(hex: preset.hex))
-                                .tag(preset.hex)
-                        }
-                    }
+                FavorecoSettingsSection("表示とデザイン") {
+                    GenreLabeledTextField(
+                        title: "表示名",
+                        prompt: "例：カフェ巡り",
+                        text: $draft.name
+                    )
+                    CustomGenreIconPickerLink(selection: $draft.iconSymbol)
+                    GenreThemeColorPickerLink(selection: $draft.colorHex)
                 }
 
-                Section("テンプレタイプ") {
-                    Picker("タイプ", selection: $draft.templateTypeKey) {
-                        ForEach(CustomGenreTemplateType.all) { type in
-                            Text(type.name).tag(type.id)
+                FavorecoSettingsSection("記録の型と呼び名") {
+                    ExplicitFormControlRow(title: "記録の型") {
+                        Picker("記録の型", selection: $draft.templateTypeKey) {
+                            ForEach(CustomGenreTemplateType.all) { type in
+                                Text(type.name).tag(type.id)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
 
                     let selectedType = CustomGenreTemplateType.type(for: draft.templateTypeKey)
-                    Text(selectedType.description)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
+                    FavorecoSettingsInfoCallout(
+                        title: "この型で使う構造",
+                        message: selectedType.description
+                    )
+
+                    GenreLabeledTextField(
+                        title: "記録対象の呼び名",
+                        prompt: "例：作品・場所",
+                        text: $draft.targetNameLabel
+                    )
+                    GenreLabeledTextField(
+                        title: "1回の記録の呼び名",
+                        prompt: "例：鑑賞・訪問",
+                        text: $draft.recordUnitName
+                    )
+                    GenreLabeledTextField(
+                        title: "日付項目の呼び名",
+                        prompt: "例：鑑賞日・訪問日",
+                        text: $draft.dateLabel
+                    )
                 }
 
-                Section("呼び名") {
-                    TextField("対象名ラベル", text: $draft.targetNameLabel)
-                    TextField("記録単位の呼び名", text: $draft.recordUnitName)
-                    TextField("日付ラベル", text: $draft.dateLabel)
-                }
+                FavorecoSettingsSection("記録フォーム") {
+                    FavorecoSettingsInfoCallout(
+                        title: "このジャンルで入力する項目",
+                        message: "記録時に表示するブロックを選びます。基本情報とメモは常に使用します。"
+                    )
 
-                Section("使うユニット") {
-                    ForEach(RecordUnitDefinition.all) { unit in
-                        UnitToggleRow(
-                            unit: unit,
-                            isSelected: draft.selectedUnitIDs.contains(unit.id)
+                    ForEach(formSettingItems) { item in
+                        let isSelected = item.isFixed || draft.selectedUnitIDs.contains(item.id)
+                        FavorecoSettingsSelectionRow(
+                            title: item.title,
+                            detail: item.detail,
+                            status: item.isFixed ? "常に使用" : (isSelected ? "表示する" : "表示しない"),
+                            isSelected: isSelected,
+                            isLocked: item.isFixed
                         ) {
-                            draft.toggleUnit(unit.id)
+                            draft.toggleUnit(item.id)
                         }
-                        .disabled(unit.isRequired)
                     }
                 }
             }

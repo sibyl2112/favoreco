@@ -42,21 +42,25 @@ nonisolated enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sen
 
 nonisolated struct PhotoMetadataDraft: Sendable {
     var purpose: ExperiencePhotoPurpose = .memory
+    var caption: String = ""
     var ocrText: String = ""
     var amountText: String = ""
 
     init(
         purpose: ExperiencePhotoPurpose = .memory,
+        caption: String = "",
         ocrText: String = "",
         amountText: String = ""
     ) {
         self.purpose = purpose
+        self.caption = caption
         self.ocrText = ocrText
         self.amountText = amountText
     }
 
     @MainActor init(photo: PhotoBlob) {
         purpose = .resolved(from: photo.purpose)
+        caption = photo.caption
         ocrText = photo.ocrText
         amountText = Self.formattedAmount(photo.amount)
     }
@@ -102,6 +106,7 @@ nonisolated struct PendingPhoto: Identifiable, Sendable {
             originalFilename: originalFilename,
             mediaKind: "photo",
             purpose: metadata.purpose.rawValue,
+            caption: metadata.caption.trimmingCharacters(in: .whitespacesAndNewlines),
             ocrText: metadata.ocrText.trimmingCharacters(in: .whitespacesAndNewlines),
             amount: metadata.purpose.supportsAmount ? metadata.amount : Decimal(0),
             byteCount: data.count,

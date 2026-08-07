@@ -201,34 +201,43 @@ nonisolated struct PlanPreparationTask: Codable, Identifiable, Equatable {
 }
 
 nonisolated enum PlanPreparationKind: String, Codable, CaseIterable, Identifiable, Hashable {
-    case other
     case hotel
     case shinkansen
     case flight
+    case highwayBus
     case localTransport
+    case rentalCar
+    case baggage
     case otherTravel
+    case other
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .other: return "その他"
-        case .hotel: return "ホテル"
+        case .hotel: return "宿泊"
         case .shinkansen: return "新幹線"
         case .flight: return "飛行機"
+        case .highwayBus: return "高速・夜行バス"
         case .localTransport: return "現地交通"
+        case .rentalCar: return "レンタカー"
+        case .baggage: return "荷物・持ち物"
         case .otherTravel: return "その他の遠征"
+        case .other: return "その他の準備"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .other: return "checklist"
         case .hotel: return "bed.double"
         case .shinkansen: return "tram.fill"
         case .flight: return "airplane"
-        case .localTransport: return "bus"
-        case .otherTravel: return "suitcase.rolling"
+        case .highwayBus: return "bus.doubledecker"
+        case .localTransport: return "tram"
+        case .rentalCar: return "car"
+        case .baggage: return "suitcase"
+        case .otherTravel: return "map"
+        case .other: return "checklist"
         }
     }
 
@@ -248,7 +257,16 @@ nonisolated enum PlanPreparationKind: String, Codable, CaseIterable, Identifiabl
         if ["飛行機", "航空", "搭乗", "フライト", "jal", "ana"].contains(where: normalized.contains) {
             return .flight
         }
-        if ["バス", "地下鉄", "タクシー", "現地交通", "レンタカー"].contains(where: normalized.contains) {
+        if ["高速バス", "夜行バス", "深夜バス", "バスタ"].contains(where: normalized.contains) {
+            return .highwayBus
+        }
+        if ["レンタカー", "カーシェア", "レンタル車"].contains(where: normalized.contains) {
+            return .rentalCar
+        }
+        if ["荷物", "持ち物", "手荷物", "ロッカー", "荷造り"].contains(where: normalized.contains) {
+            return .baggage
+        }
+        if ["バス", "地下鉄", "タクシー", "現地交通", "路線", "乗換"].contains(where: normalized.contains) {
             return .localTransport
         }
         return nil
@@ -257,15 +275,26 @@ nonisolated enum PlanPreparationKind: String, Codable, CaseIterable, Identifiabl
 
 enum PlanPreparationSuggestion {
     static let titles = [
-        "ホテルを予約",
+        "宿泊を予約",
         "新幹線を予約",
         "飛行機を予約",
+        "高速・夜行バスを予約",
         "現地交通を確認",
+        "レンタカーを予約",
+        "荷物・持ち物を準備",
         "休暇を申請",
         "同行者へ連絡",
         "グッズを準備",
-        "チケット・座席を確認",
     ]
+
+    static let emphasizedTitles: Set<String> = [
+        "宿泊を予約",
+        "新幹線を予約",
+        "飛行機を予約",
+        "高速・夜行バスを予約",
+        "レンタカーを予約",
+    ]
+
 }
 
 struct ExperienceExpenseSummary {
@@ -324,6 +353,10 @@ extension Plan {
 
     var hasConfirmedSchedule: Bool {
         planKindKey != Self.undatedTicketPlanKindKey
+    }
+
+    func isUpcomingOrOngoing(at date: Date) -> Bool {
+        hasConfirmedSchedule && max(startsAt, endsAt) >= date
     }
 
     var hasConfirmedAdmissionPreparation: Bool {

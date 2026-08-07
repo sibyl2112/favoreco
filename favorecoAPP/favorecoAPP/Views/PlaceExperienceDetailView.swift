@@ -1,0 +1,338 @@
+import SwiftData
+import SwiftUI
+
+struct PlaceExperienceDetailSelection: Identifiable, Hashable {
+    let placeID: UUID
+    let categoryID: UUID
+
+    var id: String { "\(categoryID.uuidString)-\(placeID.uuidString)" }
+}
+
+struct PlaceExperienceDetailDestination: View {
+    @Query private var places: [PlaceMaster]
+    @Query private var categories: [RecordCategory]
+
+    init(placeID: UUID, categoryID: UUID) {
+        _places = Query(filter: #Predicate<PlaceMaster> { $0.id == placeID })
+        _categories = Query(filter: #Predicate<RecordCategory> { $0.id == categoryID })
+    }
+
+    var body: some View {
+        if let place = places.first, let category = categories.first {
+            PlaceExperienceDetailView(place: place, category: category)
+        } else {
+            FavorecoContentUnavailableView(
+                "施設が見つかりません",
+                systemImage: "mappin.slash",
+                description: "場所マスターが削除または統合された可能性があります。"
+            )
+        }
+    }
+}
+
+struct PlaceMasterFacilityRow: View {
+    let place: PlaceMaster
+    let category: RecordCategory
+    let plans: [Plan]
+    let visits: [Visit]
+    let tint: Color
+
+    private var upcomingCount: Int {
+        plans.filter { $0.hasConfirmedSchedule && $0.startsAt >= Date() }.count
+    }
+
+    private var visitLabel: String {
+        category.templateKey == "theme_park" ? "来園" : "訪問"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(tint.opacity(0.12))
+                FavorecoIcon(
+                    systemName: category.templateKey == "theme_park" ? "building.2.fill" : "leaf.fill",
+                    size: 23
+                )
+                .foregroundStyle(tint)
+            }
+            .frame(width: 54, height: 54)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(place.name.isEmpty ? "名称未設定" : place.name)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                if !place.address.isEmpty {
+                    Text(place.address)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                HStack(spacing: 10) {
+                    if upcomingCount > 0 {
+                        Label("予定\(upcomingCount)件", systemImage: "calendar")
+                    }
+                    if !visits.isEmpty {
+                        Label("\(visitLabel)\(visits.count)回", systemImage: "checkmark.circle")
+                    }
+                    if upcomingCount == 0 && visits.isEmpty {
+                        Text("登録済み")
+                    }
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(tint.opacity(0.22), lineWidth: 0.8)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("施設の詳細を開きます")
+    }
+}
+
+private struct PlaceExperienceDetailView: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+    let place: PlaceMaster
+    let category: RecordCategory
+    @State private var isShowingPlanCreation = false
+    @State private var isShowingRecordCreation = false
+    @State private var isShowingPlaceEdit = false
+
+    private var tint: Color {
+        themePalette.categoryColor(hex: category.colorHex)
+    }
+
+    private var categoryPlans: [Plan] {
+        (place.plans ?? [])
+            .filter {
+                !$0.isArchived
+                    && ($0.category ?? $0.event?.category)?.id == category.id
+            }
+            .sorted { $0.startsAt < $1.startsAt }
+    }
+
+    private var upcomingPlans: [Plan] {
+        categoryPlans.filter { $0.hasConfirmedSchedule && $0.startsAt >= Date() }
+    }
+
+    private var categoryVisits: [Visit] {
+        (place.visits ?? [])
+            .filter { $0.event?.category?.id == category.id }
+            .sorted { $0.visitedAt > $1.visitedAt }
+    }
+
+    private var recordActionTitle: String {
+        category.templateKey == "theme_park" ? "来園を記録" : "体験を記録"
+    }
+
+    private func planTitle(_ plan: Plan) -> String {
+        let title = plan.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title }
+        let eventTitle = plan.event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return eventTitle.isEmpty ? place.name : eventTitle
+    }
+
+    private func planSubtitle(_ plan: Plan) -> String {
+        let subtitle = plan.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !subtitle.isEmpty { return subtitle }
+        return VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "")
+            .eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func visitSubtitle(_ visit: Visit) -> String {
+        VisitUnitFields(rawValue: visit.event?.unitFieldsRaw ?? "")
+            .eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(tint.opacity(0.14))
+                            FavorecoIcon(
+                                systemName: category.templateKey == "theme_park" ? "building.2.fill" : "leaf.fill",
+                                size: 30
+                            )
+                            .foregroundStyle(tint)
+                        }
+                        .frame(width: 66, height: 66)
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(place.name.isEmpty ? "名称未設定" : place.name)
+                                .font(FavorecoTypography.jpSerif(24, weight: .semibold, relativeTo: .title2))
+                            if !place.address.isEmpty {
+                                Label(place.address, systemImage: "mappin.and.ellipse")
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if place.isClosed {
+                                Text("閉館・閉園")
+                                    .font(FavorecoTypography.captionStrong)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                    }
+
+                    if !place.officialURL.isEmpty, let url = URL(string: place.officialURL) {
+                        Link(destination: url) {
+                            FavorecoIconLabel("施設公式サイト", systemImage: "arrow.up.right.square", iconSize: 11)
+                                .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            if !place.name.isEmpty || !place.address.isEmpty || place.latitude != 0 || place.longitude != 0 {
+                Section("場所・地図") {
+                    PlaceMapPreview(
+                        venueName: place.name,
+                        address: place.address,
+                        latitude: place.latitude,
+                        longitude: place.longitude
+                    )
+                }
+            }
+
+            Section("これからの予定") {
+                if upcomingPlans.isEmpty {
+                    Text("予定はまだありません")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(upcomingPlans) { plan in
+                        NavigationLink {
+                            PlanDetailView(plan: plan)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(planTitle(plan))
+                                    .font(FavorecoTypography.bodyStrong)
+                                let subtitle = planSubtitle(plan)
+                                if !subtitle.isEmpty, subtitle != planTitle(plan) {
+                                    Text(subtitle)
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Text(FavorecoDateText.compactDateTime(plan.startsAt))
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section(category.templateKey == "theme_park" ? "来園記録" : "体験記録") {
+                if categoryVisits.isEmpty {
+                    Text("記録はまだありません")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(categoryVisits) { visit in
+                        NavigationLink {
+                            ExperienceDetailView(visit: visit)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(visit.event?.title ?? place.name)
+                                    .font(FavorecoTypography.bodyStrong)
+                                let subtitle = visitSubtitle(visit)
+                                if !subtitle.isEmpty, subtitle != visit.event?.title {
+                                    Text(subtitle)
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Text(FavorecoDateText.compactDateTime(visit.visitedAt))
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !place.memo.isEmpty {
+                Section("メモ") {
+                    Text(place.memo)
+                }
+            }
+        }
+        .navigationTitle("施設詳細")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingPlaceEdit = true
+                } label: {
+                    FavorecoIcon(systemName: "pencil", size: 16)
+                }
+                .accessibilityLabel("施設情報を編集")
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            HStack(spacing: 10) {
+                Button {
+                    isShowingPlanCreation = true
+                } label: {
+                    FavorecoIconLabel("行く予定", systemImage: "calendar.badge.plus", iconSize: 16)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button {
+                    isShowingRecordCreation = true
+                } label: {
+                    FavorecoIconLabel(recordActionTitle, systemImage: "square.and.pencil", iconSize: 16)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+            .font(FavorecoTypography.captionStrong)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+        }
+        .sheet(isPresented: $isShowingPlanCreation) {
+            AddTicketPlanView(
+                entryMode: .plan,
+                initialCategoryID: category.id,
+                initialPlaceMaster: place
+            )
+        }
+        .sheet(isPresented: $isShowingRecordCreation) {
+            AddExperienceView(
+                category: category,
+                initialPlaceMaster: place
+            )
+        }
+        .sheet(isPresented: $isShowingPlaceEdit) {
+            NavigationStack {
+                PlaceMasterEditDestination(placeID: place.id)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("閉じる") { isShowingPlaceEdit = false }
+                        }
+                    }
+            }
+        }
+        .tint(tint)
+    }
+}

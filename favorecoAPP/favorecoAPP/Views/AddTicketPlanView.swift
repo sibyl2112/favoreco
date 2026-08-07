@@ -72,6 +72,7 @@ struct AddTicketPlanView: View {
     @State private var isShowingRegisteredEventPicker = false
     @State private var pendingSelectedEventID: UUID?
     @State private var isShowingPlaceSearch = false
+    @State private var suppressesPlaceSuggestions = false
     @State private var savedTheaterPlan: Plan?
     @State private var ticketPlanForNextStep: Plan?
     @State private var isShowingAfterPlanSaveActions = false
@@ -94,13 +95,27 @@ struct AddTicketPlanView: View {
     private let targetEvent: ExperienceEvent?
     private let onSave: (() -> Void)?
     private let entryMode: EntryMode
+    private let initialCategoryID: UUID?
 
-    init(plan: Plan? = nil, entryMode: EntryMode = .ticketSchedule) {
+    init(
+        plan: Plan? = nil,
+        entryMode: EntryMode = .ticketSchedule,
+        initialCategoryID: UUID? = nil,
+        initialPlaceMaster: PlaceMaster? = nil
+    ) {
         self.editingPlan = plan
         self.targetEvent = plan?.event
         self.onSave = nil
         self.entryMode = entryMode
-        _draft = State(initialValue: TicketPlanDraft(plan: plan, entryMode: entryMode))
+        self.initialCategoryID = plan?.category?.id ?? initialCategoryID
+        var initialDraft = TicketPlanDraft(plan: plan, entryMode: entryMode)
+        if plan == nil {
+            initialDraft.categoryID = initialCategoryID
+            if let initialPlaceMaster {
+                initialDraft.applyDestination(placeMaster: initialPlaceMaster)
+            }
+        }
+        _draft = State(initialValue: initialDraft)
         _targetSelectionMode = State(initialValue: entryMode == .ticketSchedule ? .existingEvent : .new)
     }
 
@@ -109,6 +124,7 @@ struct AddTicketPlanView: View {
         self.targetEvent = nil
         self.onSave = onSave
         self.entryMode = .plan
+        self.initialCategoryID = category.id
         _draft = State(initialValue: TicketPlanDraft(inboxItem: inboxItem, categoryID: category.id))
     }
 
@@ -122,6 +138,7 @@ struct AddTicketPlanView: View {
         self.targetEvent = event
         self.onSave = onSave
         self.entryMode = entryMode
+        self.initialCategoryID = event.category?.id
         _draft = State(
             initialValue: TicketPlanDraft(
                 event: event,
@@ -164,7 +181,11 @@ struct AddTicketPlanView: View {
     }
 
     private var interestedEvents: [ExperienceEvent] {
-        events.filter { !$0.isArchived && $0.stateKey == "interested" }
+        events.filter {
+            !$0.isArchived
+                && $0.stateKey == "interested"
+                && (draft.categoryID == nil || $0.category?.id == draft.categoryID)
+        }
     }
 
     private var activeEvents: [ExperienceEvent] {
@@ -176,7 +197,7 @@ struct AddTicketPlanView: View {
     }
 
     private var activeEventPickerItems: [EventPickerItem] {
-        activeEvents.map(EventPickerItem.init)
+        registeredTargetEvents.map(EventPickerItem.init)
     }
 
     private var availablePlans: [Plan] {
@@ -188,7 +209,12 @@ struct AddTicketPlanView: View {
     }
 
     private var selectedRegisteredEvent: ExperienceEvent? {
-        activeEvents.first { $0.id == selectedEventID }
+        registeredTargetEvents.first { $0.id == selectedEventID }
+    }
+
+    private var registeredTargetEvents: [ExperienceEvent] {
+        guard entryMode == .plan, let categoryID = draft.categoryID else { return activeEvents }
+        return activeEvents.filter { $0.category?.id == categoryID }
     }
 
     private var plansForSelectedEvent: [Plan] {
@@ -208,7 +234,13 @@ struct AddTicketPlanView: View {
         if entryMode == .unified {
             return [.new, .existingEvent]
         }
-        return entryMode == .ticketSchedule ? [.new, .existingEvent] : [.new, .interested]
+        if entryMode == .ticketSchedule {
+            return [.new, .existingEvent]
+        }
+        if ["theme_park", "nature_living", "outing_facility"].contains(selectedCategory?.templateKey ?? "") {
+            return [.new, .existingEvent]
+        }
+        return [.new, .interested]
     }
 
     private var allowsTargetSelection: Bool {
@@ -229,6 +261,39 @@ struct AddTicketPlanView: View {
 
     private var usesPlanRegistration: Bool {
         entryMode == .plan || (isUnifiedRegistration && unifiedPurpose == .plan)
+    }
+
+    private var isSimpleDestinationPlan: Bool {
+        entryMode == .plan
+            && ["theme_park", "nature_living", "outing_facility"].contains(selectedCategory?.templateKey ?? "")
+    }
+
+    private var isSimpleViewingPlan: Bool {
+        entryMode == .plan
+            && ["movie", "museum"].contains(selectedCategory?.templateKey ?? "")
+    }
+
+    private var isSimplePlan: Bool {
+        isSimpleDestinationPlan || isSimpleViewingPlan
+    }
+
+    private var destinationTargetName: String {
+        switch selectedCategory?.templateKey {
+        case "theme_park": "施設"
+        case "nature_living": "スポット"
+        case "outing_facility": "施設"
+        case "movie": "作品"
+        case "museum": "展示・イベント"
+        default: "対象"
+        }
+    }
+
+    private var simpleScheduleSectionTitle: String {
+        switch selectedCategory?.templateKey {
+        case "movie": "観る日時"
+        case "museum": "鑑賞日時"
+        default: "行く日時"
+        }
     }
 
     private var usesTicketRegistration: Bool {
@@ -256,7 +321,7 @@ struct AddTicketPlanView: View {
         NavigationStack {
             Form {
                 if isUnifiedRegistration {
-                    Section("登録内容") {
+                    FavorecoRegistrationSection("登録内容") {
                         VStack(alignment: .leading, spacing: 12) {
                             unifiedPurposePicker
 
@@ -269,14 +334,14 @@ struct AddTicketPlanView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                } else if entryMode == .plan {
+                } else if entryMode == .plan, selectedCategory?.templateKey == "theater" {
                     Section {
                         TheaterUnifiedFormIntroduction(entry: unifiedFormEntry)
                     }
                 }
 
                 if allowsTargetSelection {
-                    Section(isUnifiedRegistration ? "対象" : "予定の対象") {
+                    Section {
                         if targetSelectionModes.count > 1 {
                             Picker("登録方法", selection: $targetSelectionMode) {
                                 ForEach(targetSelectionModes) { mode in
@@ -287,11 +352,11 @@ struct AddTicketPlanView: View {
                         }
 
                         if targetSelectionMode == .existingEvent {
-                            if activeEvents.isEmpty {
+                            if registeredTargetEvents.isEmpty {
                                 FavorecoContentUnavailableView(
-                                    "登録済みのイベントがありません",
+                                    "登録済みの対象がありません",
                                     systemImage: "rectangle.stack.badge.plus",
-                                    description: "新しいイベントとチケットを登録してください。"
+                                    description: "新しい施設・スポットと予定を同時に登録できます。"
                                 )
                             } else {
                                 Button {
@@ -306,7 +371,7 @@ struct AddTicketPlanView: View {
                                             .frame(width: 28)
 
                                         VStack(alignment: .leading, spacing: 3) {
-                                            Text(selectedRegisteredEvent?.title ?? "登録済みイベントを検索")
+                                            Text(selectedRegisteredEvent?.title ?? "登録済みから検索")
                                                 .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
                                                 .foregroundStyle(.primary)
                                                 .lineLimit(1)
@@ -330,7 +395,7 @@ struct AddTicketPlanView: View {
                                 }
                                 .buttonStyle(.plain)
 
-                                if selectedRegisteredEvent != nil {
+                                if selectedRegisteredEvent != nil && usesTicketRegistration {
                                     if plansForSelectedEvent.isEmpty {
                                         FavorecoIconLabel(
                                             "予定も同時に作成します",
@@ -442,11 +507,15 @@ struct AddTicketPlanView: View {
                                 .font(FavorecoTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
+                    } header: {
+                        FavorecoRegistrationSectionHeader(
+                            isUnifiedRegistration ? "対象" : isSimplePlan ? destinationTargetName : "予定の対象"
+                        )
                     }
                 }
 
                 if usesTicketRegistration, let selectedExistingPlan {
-                    Section("予定の基本情報") {
+                    Section {
                         VStack(spacing: 0) {
                             compactPlanSummaryRow(
                                 title: "ジャンル",
@@ -473,15 +542,17 @@ struct AddTicketPlanView: View {
                             }
                         }
                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                    } header: {
+                        FavorecoRegistrationSectionHeader("予定の基本情報")
                     }
                 } else {
                     Section {
-                        if let event = resolvedTargetEvent {
+                        if let event = resolvedTargetEvent, !isSimplePlan {
                             linkedTheaterReferenceRow(
                                 title: "ジャンル",
                                 value: event.category?.name ?? "未設定"
                             )
-                        } else {
+                        } else if !isSimplePlan {
                             ExplicitFormControlRow(title: "ジャンル") {
                                 Picker("ジャンル", selection: $draft.categoryID) {
                                     Text("未設定").tag(Optional<UUID>.none)
@@ -496,8 +567,10 @@ struct AddTicketPlanView: View {
                             }
                         }
 
-                        if let event = resolvedTargetEvent,
-                           event.category?.templateKey == "theater" {
+                        if let event = resolvedTargetEvent, isSimplePlan {
+                            linkedTheaterReferenceRow(title: "\(destinationTargetName)名", value: event.title)
+                        } else if let event = resolvedTargetEvent,
+                                  event.category?.templateKey == "theater" {
                             let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
                             linkedTheaterReferenceRow(title: "公演名", value: event.title)
                             if !event.seriesName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -512,8 +585,8 @@ struct AddTicketPlanView: View {
                             }
                         } else {
                             ExplicitFormTextField(
-                                title: "公演・イベント名",
-                                prompt: "公演・イベント名を入力",
+                                title: isSimplePlan ? "\(destinationTargetName)名" : "公演・イベント名",
+                                prompt: isSimplePlan ? "\(destinationTargetName)名を入力" : "公演・イベント名を入力",
                                 text: $draft.title,
                                 axis: .horizontal,
                                 minimumLines: 1,
@@ -524,18 +597,52 @@ struct AddTicketPlanView: View {
                                 focusesFromWholeRow: true
                             )
                         }
-                        ExplicitFormTextField(
-                            title: "サブタイトル",
-                            prompt: "任意",
-                            text: $draft.subtitle,
-                            axis: .vertical,
-                            minimumLines: 1,
-                            maximumLines: 2,
-                            labelStyle: .horizontal
-                        )
+                        if isSimpleDestinationPlan {
+                            placeSuggestionList
+                            ExplicitFormTextField(
+                                title: "住所",
+                                prompt: "任意（地図・カレンダーでは住所を優先）",
+                                text: venueAddressBinding,
+                                axis: .vertical,
+                                minimumLines: 1,
+                                maximumLines: 2,
+                                labelStyle: .horizontal
+                            )
+                                .textContentType(.fullStreetAddress)
+                            Button {
+                                isShowingPlaceSearch = true
+                            } label: {
+                                FavorecoIconLabel("地図から場所を入力", systemImage: "map")
+                                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
+                                    .allowsTightening(true)
+                            }
+                            PlaceMapPreview(
+                                venueName: draft.venueName,
+                                address: draft.venueAddress,
+                                latitude: draft.latitude,
+                                longitude: draft.longitude
+                            )
+                            PlaceOfficialWebsiteLink(
+                                urlString: venueOfficialURLString,
+                                title: "施設公式サイト"
+                            )
+                        }
+                        if !isSimplePlan {
+                            ExplicitFormTextField(
+                                title: "サブタイトル",
+                                prompt: "任意",
+                                text: $draft.subtitle,
+                                axis: .vertical,
+                                minimumLines: 1,
+                                maximumLines: 2,
+                                labelStyle: .horizontal
+                            )
+                        }
                         ExplicitFormTextField(
                             title: "公式URL",
-                            prompt: "公演・この予定の案内ページ（任意）",
+                            prompt: isSimplePlan ? "この予定の案内ページ（任意）" : "公演・この予定の案内ページ（任意）",
                             text: $draft.officialURL,
                             axis: .vertical,
                             minimumLines: 1,
@@ -551,10 +658,12 @@ struct AddTicketPlanView: View {
                                 .foregroundStyle(.secondary)
                         }
                     } header: {
-                        if usesPlanRegistration {
+                        if isSimplePlan {
+                            FavorecoRegistrationSectionHeader("\(destinationTargetName)情報")
+                        } else if usesPlanRegistration {
                             TheaterUnifiedSectionLabel(section: .performanceBasic)
                         } else {
-                            Text("公演の基本情報")
+                            FavorecoRegistrationSectionHeader("公演の基本情報")
                         }
                     }
                 }
@@ -605,25 +714,29 @@ struct AddTicketPlanView: View {
                             )
                         }
                     } header: {
-                        if usesPlanRegistration {
+                        if isSimplePlan {
+                            FavorecoRegistrationSectionHeader(simpleScheduleSectionTitle)
+                        } else if usesPlanRegistration {
                             TheaterUnifiedSectionLabel(section: .participation)
                         } else {
-                            Text(usesOpeningTime ? "観劇予定日" : "予定日時")
+                            FavorecoRegistrationSectionHeader(usesOpeningTime ? "観劇予定日" : "予定日時")
                         }
                     }
 
-                    if usesPlanRegistration || draft.hasConfirmedSchedule {
+                    if !isSimpleDestinationPlan && (usesPlanRegistration || draft.hasConfirmedSchedule) {
                         Section {
-                            inheritedTheaterVenueChoices
-                            ExplicitFormTextField(
-                                title: "会場（任意）",
-                                prompt: "公演情報から選択、または会場名を入力",
-                                text: venueNameBinding,
-                                axis: .vertical,
-                                minimumLines: 1,
-                                maximumLines: 2,
-                                labelStyle: .horizontal
-                            )
+                            if !isSimpleDestinationPlan {
+                                inheritedTheaterVenueChoices
+                                ExplicitFormTextField(
+                                    title: "会場（任意）",
+                                    prompt: "公演情報から選択、または会場名を入力",
+                                    text: venueNameBinding,
+                                    axis: .vertical,
+                                    minimumLines: 1,
+                                    maximumLines: 2,
+                                    labelStyle: .horizontal
+                                )
+                            }
                             placeSuggestionList
                             ExplicitFormTextField(
                                 title: "住所",
@@ -638,7 +751,10 @@ struct AddTicketPlanView: View {
                             Button {
                                 isShowingPlaceSearch = true
                             } label: {
-                                FavorecoIconLabel("Apple Mapsで会場・住所を入力", systemImage: "map")
+                                FavorecoIconLabel(
+                                    isSimplePlan ? "地図から場所を入力" : "Apple Mapsで会場・住所を入力",
+                                    systemImage: "map"
+                                )
                                     .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.78)
@@ -650,8 +766,13 @@ struct AddTicketPlanView: View {
                                 latitude: draft.latitude,
                                 longitude: draft.longitude
                             )
+                            PlaceOfficialWebsiteLink(urlString: venueOfficialURLString)
                         } header: {
-                            Text("会場")
+                            FavorecoRegistrationSectionHeader(
+                                isSimpleViewingPlan
+                                    ? (selectedCategory?.templateKey == "movie" ? "鑑賞場所" : "会場")
+                                    : isSimpleDestinationPlan ? "場所" : "会場"
+                            )
                         }
                     }
 
@@ -730,7 +851,7 @@ struct AddTicketPlanView: View {
                     }
 
                     if !batchImportedScheduleDrafts.isEmpty {
-                        Section("一括登録する別日程") {
+                        FavorecoRegistrationSection("一括登録する別日程") {
                             ForEach(Array(batchImportedScheduleDrafts.enumerated()), id: \.offset) { index, importedDraft in
                                 HStack(spacing: 10) {
                                     VStack(alignment: .leading, spacing: 3) {
@@ -760,7 +881,7 @@ struct AddTicketPlanView: View {
                         }
                     }
 
-                    Section("チケット情報") {
+                    FavorecoRegistrationSection("チケット情報") {
                         if draft.createsTicketAttempt {
                             if isUnifiedRegistration {
                                 if unifiedPurpose == .application {
@@ -806,7 +927,7 @@ struct AddTicketPlanView: View {
                     }
 
                     if draft.createsTicketAttempt && draft.showsAnyTicketMilestone {
-                        Section("チケットスケジュール") {
+                        FavorecoRegistrationSection("チケットスケジュール") {
                             if draft.showsSaleStart {
                                 DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
                             }
@@ -834,7 +955,7 @@ struct AddTicketPlanView: View {
                     }
 
                     if draft.createsTicketAttempt && draft.showsTicketDetails {
-                        Section("金額・座席") {
+                        FavorecoRegistrationSection("金額・座席") {
                             ExplicitFormTextField(
                                 title: "チケット代（任意）",
                                 prompt: "金額",
@@ -876,7 +997,7 @@ struct AddTicketPlanView: View {
                     }
                 }
 
-                Section(editsPlanOnly ? "予定メモ" : "タグ・メモ") {
+                FavorecoRegistrationSection(editsPlanOnly ? "予定メモ" : "タグ・メモ") {
                     if !editsPlanOnly && draft.createsTicketAttempt {
                         TicketTagInputField(text: $draft.tagNamesText)
                     }
@@ -886,8 +1007,8 @@ struct AddTicketPlanView: View {
                             prompt: "この予定について残すメモ（任意）",
                             text: $draft.memo,
                             axis: .vertical,
-                            minimumLines: 5,
-                            maximumLines: 5,
+                            minimumLines: isSimplePlan ? 3 : 5,
+                            maximumLines: isSimplePlan ? 3 : 5,
                             labelStyle: .horizontal,
                             reservesLineSpace: true
                         )
@@ -897,8 +1018,8 @@ struct AddTicketPlanView: View {
                             prompt: "任意",
                             text: $draft.memo,
                             axis: .vertical,
-                            minimumLines: 5,
-                            maximumLines: 5,
+                            minimumLines: isSimplePlan ? 3 : 5,
+                            maximumLines: isSimplePlan ? 3 : 5,
                             reservesLineSpace: true
                         )
                     }
@@ -926,7 +1047,7 @@ struct AddTicketPlanView: View {
             }
             .onAppear {
                 if editingPlan == nil {
-                    draft.setInitialCategoryIfNeeded(visibleCategories)
+                    restoreInitialCategoryIfNeeded()
                 }
                 if isUnifiedRegistration {
                     applyUnifiedPurpose(unifiedPurpose)
@@ -941,7 +1062,7 @@ struct AddTicketPlanView: View {
                 batchImportedScheduleDrafts.removeAll()
                 additionalApplications.removeAll { $0.isImported }
                 draft.clearTarget()
-                draft.setInitialCategoryIfNeeded(visibleCategories)
+                restoreInitialCategoryIfNeeded()
             }
             .onChange(of: selectedEventID) { _, _ in
                 batchImportedScheduleDrafts.removeAll()
@@ -950,10 +1071,25 @@ struct AddTicketPlanView: View {
                 guard let event else { return }
                 draft.applyTarget(event)
                 if targetSelectionMode == .existingEvent {
-                    selectedPlanID = plansForSelectedEvent.first?.id
-                    if let selectedExistingPlan {
-                        draft.applyTarget(selectedExistingPlan)
+                    if usesTicketRegistration {
+                        selectedPlanID = plansForSelectedEvent.first?.id
+                        if let selectedExistingPlan {
+                            draft.applyTarget(selectedExistingPlan)
+                        }
+                    } else {
+                        selectedPlanID = nil
+                        normalizeSimpleDestinationVenueName()
                     }
+                }
+            }
+            .onChange(of: draft.title) { oldValue, newValue in
+                guard isSimpleDestinationPlan else { return }
+                let oldTitle = oldValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                let currentVenue = draft.venueName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if currentVenue.isEmpty || currentVenue == oldTitle {
+                    draft.venueName = newValue
+                    draft.clearPlaceSelection()
+                    suppressesPlaceSuggestions = false
                 }
             }
             .onChange(of: selectedPlanID) { _, _ in
@@ -1004,10 +1140,15 @@ struct AddTicketPlanView: View {
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
                 ExperiencePlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
-                    draft.apply(
-                        place: candidate,
-                        preservingVenueName: draft.shouldPreserveVenueNameForAddressSearch
-                    )
+                    if isSimpleDestinationPlan {
+                        draft.applyDestination(place: candidate)
+                    } else {
+                        draft.apply(
+                            place: candidate,
+                            preservingVenueName: draft.shouldPreserveVenueNameForAddressSearch
+                        )
+                    }
+                    finishPlaceSuggestionSelection()
                     isShowingPlaceSearch = false
                 }
             }
@@ -1083,7 +1224,25 @@ struct AddTicketPlanView: View {
         } set: { value in
             draft.venueName = value
             draft.clearPlaceSelection()
+            suppressesPlaceSuggestions = false
         }
+    }
+
+    private func restoreInitialCategoryIfNeeded() {
+        if let initialCategoryID,
+           visibleCategories.contains(where: { $0.id == initialCategoryID }) {
+            draft.categoryID = initialCategoryID
+        } else {
+            draft.setInitialCategoryIfNeeded(visibleCategories)
+        }
+    }
+
+    private func normalizeSimpleDestinationVenueName() {
+        guard isSimpleDestinationPlan,
+              draft.venueName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        draft.venueName = resolvedTargetEvent?.title ?? draft.title
     }
 
     private var venueAddressBinding: Binding<String> {
@@ -1095,10 +1254,26 @@ struct AddTicketPlanView: View {
         }
     }
 
+    private var venueOfficialURLString: String {
+        if let publicPlaceSelection = draft.publicPlaceSelection {
+            return publicPlaceSelection.entry.officialURL
+        }
+
+        let normalizedName = normalizedPlaceText(draft.venueName)
+        guard !normalizedName.isEmpty else { return "" }
+        let normalizedAddress = normalizedPlaceText(draft.venueAddress)
+        return placeMasters.first { place in
+            guard !place.isArchived,
+                  normalizedPlaceText(place.name) == normalizedName else { return false }
+            if normalizedAddress.isEmpty { return true }
+            return normalizedPlaceText(place.address) == normalizedAddress
+        }?.officialURL ?? ""
+    }
+
     @ViewBuilder
     private var placeSuggestionList: some View {
-        let suggestions = draft.placeSuggestions(from: placeMasters)
-        let publicSuggestions = publicCatalogSuggestions
+        let suggestions = suppressesPlaceSuggestions ? [] : draft.placeSuggestions(from: placeMasters)
+        let publicSuggestions = suppressesPlaceSuggestions ? [] : publicCatalogSuggestions
         if !suggestions.isEmpty || !publicSuggestions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 if !suggestions.isEmpty {
@@ -1107,7 +1282,13 @@ struct AddTicketPlanView: View {
                         .foregroundStyle(.secondary)
                     ForEach(suggestions) { place in
                         Button {
-                            draft.apply(placeMaster: place)
+                            if isSimpleDestinationPlan {
+                                draft.applyDestination(placeMaster: place)
+                            } else {
+                                draft.apply(placeMaster: place)
+                            }
+                            finishPlaceSuggestionSelection()
+                            resolveSimpleDestinationCoordinateIfNeeded()
                         } label: {
                             HStack(spacing: 10) {
                                 FavorecoIcon(systemName: "mappin.and.ellipse", size: 16)
@@ -1136,7 +1317,14 @@ struct AddTicketPlanView: View {
                         .foregroundStyle(.secondary)
                     ForEach(publicSuggestions) { entry in
                         Button {
-                            draft.apply(publicPlace: PublicPlaceSelectionDraft(entry: entry))
+                            let selection = PublicPlaceSelectionDraft(entry: entry)
+                            if isSimpleDestinationPlan {
+                                draft.applyDestination(publicPlace: selection)
+                            } else {
+                                draft.apply(publicPlace: selection)
+                            }
+                            finishPlaceSuggestionSelection()
+                            resolveSimpleDestinationCoordinateIfNeeded()
                         } label: {
                             HStack(spacing: 10) {
                                 FavorecoIcon(systemName: "building.2.crop.circle", size: 16)
@@ -1149,7 +1337,7 @@ struct AddTicketPlanView: View {
                                         .lineLimit(1)
                                 }
                                 Spacer()
-                                FavorecoIcon(systemName: "plus.circle", size: 16)
+                                FavorecoIcon(systemName: "arrow.up.left", size: 16)
                                     .foregroundStyle(.tertiary)
                             }
                         }
@@ -1161,9 +1349,11 @@ struct AddTicketPlanView: View {
     }
 
     private var publicCatalogSuggestions: [PublicPlaceCatalogEntry] {
+        let query = draft.trimmedVenueName
+        guard !query.isEmpty else { return [] }
         let importedMarkers = Set(placeMasters.map(\.sourceSnapshotRaw))
         return PublicPlaceCatalogSearch.suggestions(
-            for: draft.trimmedVenueName,
+            for: query,
             in: publicPlaceStore.entries,
             excludingSourceMarkers: importedMarkers,
             includesClosed: false
@@ -1185,6 +1375,7 @@ struct AddTicketPlanView: View {
                     ForEach(venues) { venue in
                         Button {
                             draft.applyRegisteredVenue(venue)
+                            finishPlaceSuggestionSelection()
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: draft.trimmedVenueName == venue.trimmedName
@@ -1211,9 +1402,60 @@ struct AddTicketPlanView: View {
         }
     }
 
+    private func finishPlaceSuggestionSelection() {
+        suppressesPlaceSuggestions = true
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
+    }
+
+    private func resolveSimpleDestinationCoordinateIfNeeded() {
+        guard isSimpleDestinationPlan,
+              draft.latitude == 0,
+              draft.longitude == 0 else { return }
+
+        let selectedName = draft.trimmedVenueName
+        let selectedAddress = draft.venueAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        let selectionKey = "\(selectedName)|\(selectedAddress)"
+        let queries = [
+            [selectedName, selectedAddress].filter { !$0.isEmpty }.joined(separator: " "),
+            selectedAddress,
+            selectedName
+        ].reduce(into: [String]()) { values, query in
+            guard !query.isEmpty, !values.contains(query) else { return }
+            values.append(query)
+        }
+
+        Task { @MainActor in
+            for query in queries {
+                guard let candidate = try? await PlaceSearchService.search(query: query).first else {
+                    continue
+                }
+                let currentKey = "\(draft.trimmedVenueName)|\(draft.venueAddress.trimmingCharacters(in: .whitespacesAndNewlines))"
+                guard currentKey == selectionKey,
+                      draft.latitude == 0,
+                      draft.longitude == 0 else { return }
+                draft.latitude = candidate.latitude
+                draft.longitude = candidate.longitude
+                return
+            }
+        }
+    }
+
     private var navigationTitle: String {
         if isUnifiedRegistration { return "公演・チケットを登録" }
-        if entryMode == .plan { return unifiedFormEntry.navigationTitle }
+        if entryMode == .plan {
+            if ["theme_park", "nature_living", "outing_facility"].contains(selectedCategory?.templateKey ?? "") {
+                return "行く予定を立てる"
+            }
+            if selectedCategory?.templateKey == "theater" {
+                return unifiedFormEntry.navigationTitle
+            }
+            return editingPlan == nil ? "予定を立てる" : "予定を編集"
+        }
         if editingPlan != nil { return "予定を編集" }
         return draft.createsTicketAttempt ? "チケットスケジュール" : "予定を立てる"
     }
@@ -1269,7 +1511,7 @@ struct AddTicketPlanView: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("同じ日程の別申込")
+            FavorecoRegistrationSectionHeader("同じ日程の別申込")
         }
     }
 
@@ -1323,9 +1565,10 @@ struct AddTicketPlanView: View {
                 .pickerStyle(.menu)
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .onChange(of: applicationDraft.wrappedValue.accountID) { _, accountID in
+            .onChange(of: applicationDraft.wrappedValue.accountID) { previousAccountID, accountID in
                 applicationDraft.wrappedValue.applyAccount(
-                    activeAccounts.first { $0.id == accountID }
+                    activeAccounts.first { $0.id == accountID },
+                    replacing: accounts.first { $0.id == previousAccountID }
                 )
             }
 
@@ -2005,8 +2248,11 @@ struct AddTicketPlanView: View {
                     .pickerStyle(.menu)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .onChange(of: draft.accountID) { _, newValue in
-                    draft.applyAccount(activeAccounts.first { $0.id == newValue })
+                .onChange(of: draft.accountID) { previousValue, newValue in
+                    draft.applyAccount(
+                        activeAccounts.first { $0.id == newValue },
+                        replacing: accounts.first { $0.id == previousValue }
+                    )
                 }
 
                 ExplicitFormTextField(
@@ -2134,6 +2380,14 @@ struct AddTicketPlanView: View {
     }
 
     private func targetSelectionTitle(_ mode: TargetSelectionMode) -> String {
+        if entryMode == .plan,
+           ["theme_park", "nature_living", "outing_facility"].contains(selectedCategory?.templateKey ?? "") {
+            switch mode {
+            case .new: return "新しく登録"
+            case .existingEvent: return "登録済みから選ぶ"
+            case .interested: return mode.title
+            }
+        }
         guard usesTicketRegistration || isUnifiedRegistration else { return mode.title }
         switch mode {
         case .new: return "新規イベント"
@@ -2143,10 +2397,13 @@ struct AddTicketPlanView: View {
     }
 
     private func save() {
+        normalizeSimpleDestinationVenueName()
         if allowsTargetSelection,
            targetSelectionMode == .existingEvent,
            selectedRegisteredEvent == nil {
-            validationError = "チケット情報を追加するイベントを選んでください。"
+            validationError = usesTicketRegistration
+                ? "チケット情報を追加するイベントを選んでください。"
+                : "予定を追加する施設・スポットを選んでください。"
             return
         }
         if allowsTargetSelection,
@@ -2732,6 +2989,7 @@ struct AddTicketPlanView: View {
 }
 
 struct DateToggleRow: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
     let title: String
     @Binding var isOn: Bool
     @Binding var date: Date
@@ -2745,6 +3003,7 @@ struct DateToggleRow: View {
             ) {
                 Toggle(title, isOn: $isOn)
                     .labelsHidden()
+                    .tint(themePalette.prominentAction)
                     .accessibilityLabel(title)
             }
             if isOn {
@@ -2785,7 +3044,7 @@ private struct TheaterScheduleDateRow: View {
     let onClear: () -> Void
 
     var body: some View {
-        ExplicitFormControlRow(title: "日付") {
+        ExplicitFormControlRow(title: "日付", density: .compactSchedule) {
             HStack(spacing: 6) {
                 if isSet {
                     DatePicker(
@@ -2826,7 +3085,7 @@ private struct TenMinuteTimeRow: View {
     @Binding var selection: Date
 
     var body: some View {
-        ExplicitFormControlRow(title: title) {
+        ExplicitFormControlRow(title: title, density: .compactSchedule) {
             TenMinuteTimeField(
                 selection: $selection,
                 accessibilityLabel: "\(title)時刻"
@@ -2842,7 +3101,7 @@ private struct OptionalTenMinuteTimeRow: View {
     let defaultValue: Date
 
     var body: some View {
-        ExplicitFormControlRow(title: title, isOptional: true) {
+        ExplicitFormControlRow(title: title, isOptional: true, density: .compactSchedule) {
             HStack(spacing: 6) {
                 TenMinuteTimeField(
                     selection: $selection,
@@ -2925,6 +3184,7 @@ private struct TenMinuteTimeField: View {
                 }
                 .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
                 .buttonStyle(.borderedProminent)
+                .favorecoProminentActionStyle()
             }
             .padding(12)
             .presentationCompactAdaptation(.popover)
@@ -3041,6 +3301,7 @@ private struct FiveMinuteTimeField: View {
                 }
                 .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
                 .buttonStyle(.borderedProminent)
+                .favorecoProminentActionStyle()
             }
             .padding(12)
             .presentationCompactAdaptation(.popover)
@@ -3387,7 +3648,7 @@ private struct TicketImportReviewSheet: View {
                         .disabled(candidate.isExistingDuplicate)
                     }
                 } header: {
-                    Text("読み取った内容")
+                    FavorecoRegistrationSectionHeader("読み取った内容")
                 } footer: {
                     Text("内容を確認し、登録する候補だけを選んでください。登録済みと一致する候補は追加しません。")
                 }
@@ -3901,12 +4162,27 @@ private struct TicketPlanDraft {
         longitude = placeMaster.longitude
     }
 
+    mutating func applyDestination(placeMaster: PlaceMaster) {
+        apply(placeMaster: placeMaster)
+        title = placeMaster.name
+    }
+
     mutating func apply(publicPlace selection: PublicPlaceSelectionDraft) {
         publicPlaceSelection = selection
         venueName = selection.entry.officialName
         venueAddress = selection.entry.address
         latitude = selection.entry.latitude
         longitude = selection.entry.longitude
+    }
+
+    mutating func applyDestination(publicPlace selection: PublicPlaceSelectionDraft) {
+        apply(publicPlace: selection)
+        title = selection.entry.officialName
+    }
+
+    mutating func applyDestination(place: PlaceSearchCandidate) {
+        apply(place: place, preservingVenueName: false)
+        title = place.name
     }
 
     mutating func clearPlaceSelection() {
@@ -3974,7 +4250,7 @@ private struct TicketPlanDraft {
     }
 
     var showsAccountFields: Bool {
-        flowKey == "lotteryPlanned"
+        flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
     }
 
     var showsTicketGuide: Bool {
@@ -4200,8 +4476,43 @@ private struct TicketPlanDraft {
         purchaseURL = guide.urlString
     }
 
-    mutating func applyAccount(_ account: TicketAccount?) {
-        guard let account else { return }
+    mutating func applyAccount(
+        _ account: TicketAccount?,
+        replacing previousAccount: TicketAccount? = nil
+    ) {
+        if let previousAccount {
+            let previousServiceName = previousAccount.serviceName
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let previousHolderName = previousAccount.accountName
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let previousSiteURL = previousAccount.siteURL
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let previousGuideKey = TicketGuideDefinition.inferredKey(
+                siteName: previousServiceName,
+                urlString: previousSiteURL
+            )
+            let previousPurchaseURL = !previousSiteURL.isEmpty
+                ? previousSiteURL
+                : (TicketGuideDefinition.guide(for: previousGuideKey)?.urlString ?? "")
+
+            if trimmedTicketSite == previousServiceName {
+                ticketSite = ""
+            }
+            if trimmedHolderName == previousHolderName {
+                holderName = ""
+            }
+            if trimmedPurchaseURL == previousPurchaseURL {
+                purchaseURL = ""
+            }
+            if ticketGuideKey == previousGuideKey {
+                ticketGuideKey = TicketGuideDefinition.customKey
+            }
+        }
+
+        guard let account else {
+            accountID = nil
+            return
+        }
         let serviceName = account.serviceName.trimmingCharacters(in: .whitespacesAndNewlines)
         let siteURL = account.siteURL.trimmingCharacters(in: .whitespacesAndNewlines)
         accountID = account.id

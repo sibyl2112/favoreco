@@ -1287,18 +1287,22 @@ private struct FavoPinnedTargetCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                ThumbnailImage(
+                CategoryEyecatchArtwork(
                     reference: target.thumbnailReference,
-                    displaySize: CGSize(width: 38, height: 38),
-                    contentMode: .fill
-                ) {
+                    templateKey: target.categoryTemplateKey,
+                    backgroundColor: Color(hex: target.colorHex).opacity(0.12)
+                ) { size in
                     FavorecoIcon(systemName: target.iconSymbol, size: 19)
                         .foregroundStyle(Color(hex: target.colorHex))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(hex: target.colorHex).opacity(0.12))
+                        .frame(width: size.width, height: size.height)
                 }
                 .frame(width: 38, height: 38)
-                .clipShape(Circle())
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: target.categoryTemplateKey == "theater" ? 0 : 19,
+                        style: .continuous
+                    )
+                )
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))

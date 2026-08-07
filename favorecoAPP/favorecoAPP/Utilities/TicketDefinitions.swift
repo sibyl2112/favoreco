@@ -244,6 +244,18 @@ struct TicketGuideDefinition: Identifiable, Hashable {
         all.first(where: { $0.key == key && $0.key != customKey })
     }
 
+    static func suggestions(matching query: String) -> [TicketGuideDefinition] {
+        let normalizedQuery = normalizedSearchText(query)
+        guard normalizedQuery.count >= 2 else { return [] }
+
+        return all.filter { guide in
+            guard guide.key != customKey else { return false }
+            return searchKeywords(for: guide).contains { keyword in
+                normalizedSearchText(keyword).contains(normalizedQuery)
+            }
+        }
+    }
+
     static func inferredKey(siteName: String, urlString: String) -> String {
         let site = siteName.lowercased()
         let url = urlString.lowercased()
@@ -252,6 +264,33 @@ struct TicketGuideDefinition: Identifiable, Hashable {
             return site == guide.name.lowercased()
                 || (!guide.urlString.isEmpty && url.hasPrefix(guide.urlString.lowercased()))
         }?.key ?? customKey
+    }
+
+    private static func searchKeywords(for guide: TicketGuideDefinition) -> [String] {
+        let aliases: [String: [String]] = [
+            "pia": ["ぴあ", "pia"],
+            "eplus": ["イープラ", "eplus", "e+"],
+            "lawson": ["ローチケ", "ローソン"],
+            "rakuten": ["楽天", "rakuten"],
+            "cnplayguide": ["cn", "シーエヌ"],
+            "ticketboard": ["チケットボード", "tickebo"],
+            "tixplus": ["チケプラ"],
+            "confetti": ["カンフェティ", "confetti"],
+            "livepocket": ["ライブポケット"],
+            "passmarket": ["パスマーケット"],
+            "mubic": ["ムビチケ"],
+        ]
+        return [guide.name, guide.key, guide.urlString] + (aliases[guide.key] ?? [])
+    }
+
+    private static func normalizedSearchText(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(
+                options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                locale: Locale(identifier: "ja_JP")
+            )
+            .lowercased()
     }
 }
 
@@ -574,7 +613,7 @@ enum TicketProgressPresentation {
             return usesLotteryFlow(attempt) ? "抽選申込" : "発売待ち"
         case "onSaleSoon": return "発売待ち"
         case "waitingResult": return "当落待ち"
-        case "won": return "支払い"
+        case "won": return "支払い待ち"
         case "waitingPayment": return "支払い待ち"
         case "waitingIssue": return "受取待ち"
         case "issued": return "受取済み"
@@ -804,12 +843,12 @@ struct TicketStatusTransitionDefinition: Identifiable, Hashable {
             ]
         case "waitingResult":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "won", title: "当選にする", systemImage: "checkmark.seal"),
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingPayment", title: "当選にする", systemImage: "checkmark.seal"),
                 TicketStatusTransitionDefinition(targetStatusKey: "lost", title: "落選にする", systemImage: "xmark.seal"),
             ]
         case "won":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "waitingPayment", title: "支払いへ進む", systemImage: "yensign.circle"),
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingIssue", title: "支払い済みにする", systemImage: "checkmark.circle.fill"),
             ]
         case "waitingPayment":
             return [
@@ -853,6 +892,19 @@ struct TicketStatusTransitionDefinition: Identifiable, Hashable {
     }
 }
 
+enum TicketPostAcquisitionDetailsPrompt {
+    static func shouldOffer(
+        for attempt: TicketAttempt,
+        afterTransitionTo statusKey: String
+    ) -> Bool {
+        guard statusKey == "waitingIssue" || statusKey == "issued" else {
+            return false
+        }
+        return attempt.price == Decimal(0)
+            || attempt.seatText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
 struct TicketAccountTypeDefinition: Identifiable, Hashable {
     let key: String
     let name: String
@@ -864,7 +916,6 @@ struct TicketAccountTypeDefinition: Identifiable, Hashable {
         TicketAccountTypeDefinition(key: "playguide", name: "プレイガイド"),
         TicketAccountTypeDefinition(key: "theaterMembership", name: "劇場会員"),
         TicketAccountTypeDefinition(key: "card", name: "カード枠"),
-        TicketAccountTypeDefinition(key: "calendar", name: "外部カレンダー"),
         TicketAccountTypeDefinition(key: "other", name: "その他"),
     ]
 

@@ -49,7 +49,7 @@ struct AddCollectibleSeriesView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("シリーズ") {
+                FavorecoRegistrationSection("シリーズ") {
                     TextField("シリーズ名", text: $title)
                     Picker("グッズの種類", selection: $kind) {
                         ForEach(CollectibleKind.allCases) { value in
@@ -63,7 +63,7 @@ struct AddCollectibleSeriesView: View {
                     }
                 }
 
-                Section("画像") {
+                FavorecoRegistrationSection("画像") {
                     let photoActionTitle = imageData == nil ? "シリーズ画像を選ぶ" : "シリーズ画像を変更"
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         FavorecoIconLabel(photoActionTitle, systemImage: "photo")
@@ -77,7 +77,7 @@ struct AddCollectibleSeriesView: View {
                     }
                 }
 
-                Section("補足") {
+                FavorecoRegistrationSection("補足") {
                     TextField("公式URL（任意）", text: $officialURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
@@ -495,12 +495,12 @@ struct CollectibleItemEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("種類") {
+                FavorecoRegistrationSection("種類") {
                     TextField("名前（例：赤・キャラクター名）", text: $name)
                     TextField("バリエーション・レア度（任意）", text: $variantName)
                     Toggle("コンプリート対象に含める", isOn: $isCompletionTarget)
                 }
-                Section("画像") {
+                FavorecoRegistrationSection("画像") {
                     let photoActionTitle = imageData == nil ? "画像を選ぶ" : "画像を変更"
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         FavorecoIconLabel(photoActionTitle, systemImage: "photo")
@@ -577,7 +577,7 @@ struct CollectibleTransactionEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("対象") {
+                FavorecoRegistrationSection("対象") {
                     Picker("種類", selection: $selectedItemID) {
                         Text("選択してください").tag(UUID?.none)
                         ForEach(items) { Text($0.displayName).tag(Optional($0.id)) }
@@ -593,7 +593,7 @@ struct CollectibleTransactionEditorView: View {
                             .foregroundStyle(.red)
                     }
                 }
-                Section("詳細（任意）") {
+                FavorecoRegistrationSection("詳細（任意）") {
                     TextField("合計金額", text: $amountText).keyboardType(.numberPad)
                     TextField("場所・店舗", text: $place)
                     TextField("メモ", text: $memo, axis: .vertical).lineLimit(2...5)
@@ -658,7 +658,7 @@ private struct CollectibleItemDetailView: View {
                     FavorecoIconLabel("入手・手放しを記録", systemImage: "plusminus.circle.fill")
                 }.tint(accentColor)
             }
-            Section("履歴") {
+            FavorecoRegistrationSection("履歴") {
                 let transactions = (item.transactions ?? []).sorted { $0.occurredAt > $1.occurredAt }
                 if transactions.isEmpty { Text("履歴はまだありません").foregroundStyle(.secondary) }
                 ForEach(transactions) { transaction in

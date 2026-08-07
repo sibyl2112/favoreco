@@ -9,15 +9,23 @@ import PhotosUI
 import SwiftData
 import SwiftUI
 
+enum PlanPreparationPresentation {
+    case planning
+    case record
+}
+
 struct PlanPreparationChecklistView: View {
     @Environment(\.modelContext) private var modelContext
 
     @Bindable var plan: Plan
     let tint: Color
+    var title = "公演の準備・遠征"
     var highlightedTaskID: UUID? = nil
+    var presentation: PlanPreparationPresentation = .planning
+    var showsHeader = true
+    var appliesCardBackground = true
 
-    @State private var isShowingEditor = false
-    @State private var editingTask: PlanPreparationTask?
+    @State private var editorRequest: PlanPreparationEditorRequest?
     @State private var errorMessage = ""
 
     private var fields: PlanPreparationFields {
@@ -25,8 +33,16 @@ struct PlanPreparationChecklistView: View {
     }
 
     private var isActive: Bool {
-        plan.hasConfirmedSchedule
-            && fields.isActive(automaticActivation: plan.automaticallyActivatesPreparationChecklist)
+        switch presentation {
+        case .planning:
+            return fields.isActive(automaticActivation: plan.automaticallyActivatesPreparationChecklist)
+        case .record:
+            return true
+        }
+    }
+
+    private var canEditTasks: Bool {
+        plan.supportsPreparationChecklist
     }
 
     private var ticketPhase: PlanPreparationTicketPhase {
@@ -38,51 +54,82 @@ struct PlanPreparationChecklistView: View {
     }
 
     private var availableSuggestions: [String] {
-        let existing = Set(fields.tasks.map { normalizedTitle($0.title) })
-        return orderedSuggestionTitles.filter { !existing.contains(normalizedTitle($0)) }
+        orderedSuggestionTitles
     }
 
     private var orderedSuggestionTitles: [String] {
-        switch ticketPhase {
-        case .secured:
-            return ["ホテルを予約", "新幹線を予約", "飛行機を予約", "現地交通を確認", "休暇を申請", "同行者へ連絡", "チケット・座席を確認", "グッズを準備"]
-        case .noTicket, .applying, .closed:
-            return PlanPreparationSuggestion.titles
-        }
+        PlanPreparationSuggestion.titles
     }
 
     private var showsSuggestions: Bool {
         guard isActive else { return false }
+        if presentation == .record { return true }
         if case .closed = ticketPhase { return explicitlyEnabled }
         return true
     }
 
     var body: some View {
+        Group {
+            if appliesCardBackground {
+                content
+                    .planPreparationCard()
+            } else {
+                content
+            }
+        }
+        .sheet(item: $editorRequest) { request in
+            PlanPreparationTaskEditor(
+                task: request.task,
+                defaultDueDate: defaultDueDate,
+                defaultScheduleDate: plan.startsAt,
+                tint: tint
+            ) { task in
+                save(task)
+            }
+        }
+        .alert("保存できませんでした", isPresented: Binding(
+            get: { !errorMessage.isEmpty },
+            set: { if !$0 { errorMessage = "" } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("公演の準備・遠征")
-                        .font(FavorecoTypography.sectionTitle)
-                    if !plan.hasConfirmedSchedule {
-                        Text("参加日未定")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    } else if fields.checklistMode == .automatic {
-                        Text(automaticStatusText)
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
+            if showsHeader {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(FavorecoTypography.sectionTitle)
+                        if !plan.hasConfirmedSchedule {
+                            Text("参加日未定でも入力できます")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        } else if presentation == .record {
+                            Text("宿泊・交通の実績と金額をこの回へ残します")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        } else if fields.checklistMode == .automatic {
+                            Text(automaticStatusText)
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer(minLength: 12)
+
+                    if presentation == .planning {
+                        Toggle("準備リストを使う", isOn: activeBinding)
+                            .labelsHidden()
+                            .accessibilityLabel("公演の準備リストを使う")
                     }
                 }
-
-                Spacer(minLength: 12)
-
-                Toggle("準備リストを使う", isOn: activeBinding)
-                    .labelsHidden()
-                    .accessibilityLabel("公演の準備リストを使う")
-                    .disabled(!plan.hasConfirmedSchedule)
             }
 
-            if !plan.hasConfirmedSchedule {
+            if !canEditTasks {
                 FavorecoIconLabel(
                     "参加日を確定すると、遠征ToDoを入力できます。",
                     systemImage: "calendar.badge.exclamationmark"
@@ -129,14 +176,24 @@ struct PlanPreparationChecklistView: View {
                                 }
                             }
                         }
+                        .background {
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: CategoryDetailSwipeExclusionPreferenceKey.self,
+                                    value: [proxy.frame(in: .global).insetBy(dx: -6, dy: -6)]
+                                )
+                            }
+                        }
                     }
                 }
 
                 Button {
-                    editingTask = nil
-                    isShowingEditor = true
+                    editorRequest = PlanPreparationEditorRequest(task: nil)
                 } label: {
-                    FavorecoIconLabel("準備・遠征項目を追加", systemImage: "plus")
+                    FavorecoIconLabel(
+                        presentation == .record ? "遠征・準備の記録を追加" : "準備・遠征項目を追加",
+                        systemImage: "plus"
+                    )
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -147,28 +204,9 @@ struct PlanPreparationChecklistView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .saturation(plan.hasConfirmedSchedule ? 1 : 0)
-        .opacity(plan.hasConfirmedSchedule ? 1 : 0.55)
-        .disabled(!plan.hasConfirmedSchedule)
-        .planPreparationCard()
-        .sheet(isPresented: $isShowingEditor) {
-            PlanPreparationTaskEditor(
-                task: editingTask,
-                defaultDueDate: defaultDueDate,
-                defaultScheduleDate: plan.startsAt,
-                tint: tint
-            ) { task in
-                save(task)
-            }
-        }
-        .alert("保存できませんでした", isPresented: Binding(
-            get: { !errorMessage.isEmpty },
-            set: { if !$0 { errorMessage = "" } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
-        }
+        .saturation(canEditTasks ? 1 : 0)
+        .opacity(canEditTasks ? 1 : 0.55)
+        .disabled(!canEditTasks)
     }
 
     private var automaticStatusText: String {
@@ -181,17 +219,21 @@ struct PlanPreparationChecklistView: View {
     }
 
     private var emptyStateText: String {
+        if presentation == .record {
+            return "宿泊・新幹線・飛行機など、実際に使った内容と金額を追加できます。"
+        }
         switch ticketPhase {
         case .secured:
             return "当選・取得後に必要な準備だけを追加できます。"
         case .applying:
             return "結果を待ちながら、必要な準備だけ先に追加できます。"
         case .noTicket, .closed:
-            return "ホテル・新幹線・飛行機・同行者への連絡など、必要な項目だけを追加できます。"
+            return "宿泊・交通・荷物・同行者への連絡など、必要な項目だけを追加できます。"
         }
     }
 
     private var suggestionSectionTitle: String {
+        if presentation == .record { return "履歴を追加" }
         switch ticketPhase {
         case .secured: return "当選・取得後に確認"
         case .applying: return "必要なら先に追加"
@@ -214,15 +256,12 @@ struct PlanPreparationChecklistView: View {
         let button = Button {
             addSuggestion(title)
         } label: {
-            FavorecoIconLabel(title, systemImage: "plus", iconSize: 13)
-                .font(FavorecoTypography.captionStrong)
-                .padding(.horizontal, 10)
-                .frame(minHeight: 34)
+            FavorecoIconLabel(title, systemImage: "plus", iconSize: 17)
         }
         .tint(tint)
 
         if case .secured = ticketPhase,
-           ["ホテルを予約", "新幹線を予約", "飛行機を予約"].contains(title) {
+           PlanPreparationSuggestion.emphasizedTitles.contains(title) {
             button.buttonStyle(.borderedProminent)
         } else {
             button.buttonStyle(.bordered)
@@ -262,8 +301,7 @@ struct PlanPreparationChecklistView: View {
             .accessibilityLabel(task.isCompleted ? "未完了に戻す" : "完了にする")
 
             Button {
-                editingTask = task
-                isShowingEditor = true
+                editorRequest = PlanPreparationEditorRequest(task: task)
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(task.trimmedTitle.isEmpty ? "準備項目" : task.trimmedTitle)
@@ -308,8 +346,7 @@ struct PlanPreparationChecklistView: View {
 
             Menu {
                 Button {
-                    editingTask = task
-                    isShowingEditor = true
+                    editorRequest = PlanPreparationEditorRequest(task: task)
                 } label: {
                     Label("編集", systemImage: "pencil")
                 }
@@ -380,7 +417,7 @@ struct PlanPreparationChecklistView: View {
     }
 
     private func updateFields(_ update: (inout PlanPreparationFields) -> Void) {
-        guard plan.hasConfirmedSchedule else { return }
+        guard canEditTasks else { return }
         let previousValue = plan.unitFieldsRaw
         var fields = plan.preparationFields
         update(&fields)
@@ -398,13 +435,6 @@ struct PlanPreparationChecklistView: View {
         }
     }
 
-    private func normalizedTitle(_ title: String) -> String {
-        title.trimmingCharacters(in: .whitespacesAndNewlines).folding(
-            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
-            locale: .current
-        )
-    }
-
     private func scheduleText(for task: PlanPreparationTask, startsAt: Date) -> String {
         guard let endsAt = task.endsAt, endsAt > startsAt else {
             return "\(task.kind.title)・\(FavorecoDateText.compactDateTime(startsAt))"
@@ -416,6 +446,11 @@ struct PlanPreparationChecklistView: View {
         NumberFormatter.planCurrency.string(from: NSDecimalNumber(decimal: amount))
             ?? "¥\(NSDecimalNumber(decimal: amount).intValue)"
     }
+}
+
+private struct PlanPreparationEditorRequest: Identifiable {
+    let id = UUID()
+    let task: PlanPreparationTask?
 }
 
 private struct PlanPreparationTaskEditor: View {
@@ -465,7 +500,7 @@ private struct PlanPreparationTaskEditor: View {
         NavigationStack {
             Form {
                 Section("準備すること") {
-                    TextField("例：ホテルを予約", text: $title)
+                    TextField("例：宿泊を予約", text: $title)
                         .textInputAutocapitalization(.never)
 
                     Picker("種類", selection: $kind) {
@@ -479,13 +514,8 @@ private struct PlanPreparationTaskEditor: View {
                 Section("遠征スケジュール") {
                     Toggle("日時を設定", isOn: $hasSchedule)
                     if hasSchedule {
-                        DatePicker("開始", selection: $startsAt)
-                            .onChange(of: startsAt) { _, newValue in
-                                if endsAt < newValue {
-                                    endsAt = newValue.addingTimeInterval(60 * 60)
-                                }
-                            }
-                        DatePicker("終了", selection: $endsAt, in: startsAt...)
+                        FiveMinuteDateTimeRow(title: "開始", selection: scheduleStartBinding)
+                        FiveMinuteDateTimeRow(title: "終了", selection: scheduleEndBinding)
                     }
 
                     if kind.isTravel {
@@ -503,7 +533,7 @@ private struct PlanPreparationTaskEditor: View {
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("費用を合算する項目は、ホテル・交通・その他の遠征から種類を選んでください。")
+                        Text("費用を合算する項目は、宿泊・交通・その他の遠征から種類を選んでください。")
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -512,11 +542,7 @@ private struct PlanPreparationTaskEditor: View {
                 Section("期限") {
                     Toggle("期限を設定", isOn: $hasDueDate)
                     if hasDueDate {
-                        DatePicker(
-                            "日時",
-                            selection: $dueAt,
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
+                        FiveMinuteDateTimeRow(title: "日時", selection: dueAtBinding)
                     }
                 }
 
@@ -576,6 +602,34 @@ private struct PlanPreparationTaskEditor: View {
 
     private var trimmedTitle: String {
         String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))
+    }
+
+    private var scheduleStartBinding: Binding<Date> {
+        Binding {
+            startsAt
+        } set: { newValue in
+            let rounded = newValue.roundedToNearestFiveMinutes()
+            startsAt = rounded
+            if endsAt < rounded {
+                endsAt = rounded.addingTimeInterval(60 * 60)
+            }
+        }
+    }
+
+    private var scheduleEndBinding: Binding<Date> {
+        Binding {
+            endsAt
+        } set: { newValue in
+            endsAt = max(newValue.roundedToNearestFiveMinutes(), startsAt)
+        }
+    }
+
+    private var dueAtBinding: Binding<Date> {
+        Binding {
+            dueAt
+        } set: { newValue in
+            dueAt = newValue.roundedToNearestFiveMinutes()
+        }
     }
 
     private var parsedAmount: Decimal {

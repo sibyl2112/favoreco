@@ -59,7 +59,7 @@ struct DataManagementView: View {
                 .padding(.vertical, 12)
             }
 
-            Section("保存データ") {
+            FavorecoSettingsSection("保存データ") {
                 LabeledContent("対象", value: "\(events.count)")
                 LabeledContent("気になる対象", value: "\(events.filter { $0.stateKey == "interested" && !$0.isArchived }.count)")
                 LabeledContent("訪問/鑑賞記録", value: "\(visits.count)")
@@ -75,7 +75,7 @@ struct DataManagementView: View {
                 }
             }
 
-            Section("インポート・エクスポート") {
+            FavorecoSettingsSection("読み込み・書き出し") {
                 NavigationLink {
                     FullBackupView()
                 } label: {
@@ -107,13 +107,14 @@ struct DataManagementView: View {
                 }
             }
 
-            Section("バックアップについて") {
-                Text("記録はこの端末に保存されています。アプリを削除する前やデータ整理の前に、無料のJSONエクスポートで手動バックアップしてください。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+            FavorecoSettingsSection("バックアップについて") {
+                FavorecoSettingsInfoCallout(
+                    title: "操作前にバックアップ",
+                    message: "記録はこの端末に保存されています。アプリの削除やデータ整理の前に、JSONエクスポートで手動バックアップしてください。"
+                )
             }
 
-            Section("キャッシュ") {
+            FavorecoSettingsSection("キャッシュ") {
                 Button {
                     URLCache.shared.removeAllCachedResponses()
                     maintenanceMessage = "Webキャッシュを削除しました。記録データは変更していません。"
@@ -133,7 +134,7 @@ struct DataManagementView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("データ整理") {
+            FavorecoSettingsSection("データ整理") {
                 NavigationLink {
                     ArchivedEventManagementView()
                 } label: {
@@ -162,12 +163,13 @@ struct DataManagementView: View {
             }
 
             if !maintenanceMessage.isEmpty {
-                Section("処理結果") {
+                FavorecoSettingsSection("処理結果") {
                     Text(maintenanceMessage)
                         .font(FavorecoTypography.caption)
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("データ管理")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(
@@ -333,7 +335,7 @@ struct FullDataDeletionView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("削除されるもの") {
+            FavorecoSettingsSection("削除されるもの") {
                 LabeledContent("保存モデル", value: "\(totalModelCount)件")
                 LabeledContent("対象", value: "\(events.count)件")
                 LabeledContent("記録", value: "\(visits.count)件")
@@ -344,13 +346,13 @@ struct FullDataDeletionView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("保持されるもの") {
+            FavorecoSettingsSection("保持されるもの") {
                 Text("Home表示、入力補助、通知タイプなどの設定値は保持します。削除後は標準ジャンルを再生成し、初回ジャンル選択へ戻ります。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("確認") {
+            FavorecoSettingsSection("削除の確認") {
                 Text("続けるには「\(requiredText)」と入力してください。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
@@ -372,13 +374,14 @@ struct FullDataDeletionView: View {
             }
 
             if !errorMessage.isEmpty {
-                Section("エラー") {
+                FavorecoSettingsSection("エラー") {
                     Text(errorMessage)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.red)
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("全データ削除")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(
@@ -472,13 +475,13 @@ struct CSVExportView: View {
                 .padding(.vertical, 6)
             }
 
-            Section("対象データ") {
+            FavorecoSettingsSection("対象データ") {
                 LabeledContent("記録数", value: "\(visits.count)")
                 LabeledContent("形式", value: "CSV / UTF-8")
                 LabeledContent("写真", value: "含めない")
             }
 
-            Section("書き出し") {
+            FavorecoSettingsSection("書き出し") {
                 Button {
                     exportDocument = CSVExportDocument(text: csvText)
                     exportErrorMessage = ""
@@ -501,12 +504,13 @@ struct CSVExportView: View {
                 }
             }
 
-            Section("列") {
+            FavorecoSettingsSection("書き出される列") {
                 Text("date, category, title, series, venue, rating, status, seat, amount, official_url, tags, companions, note などを書き出します。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("CSVエクスポート")
         .navigationBarTitleDisplayMode(.inline)
         .fileExporter(
@@ -566,7 +570,7 @@ struct JSONExportView: View {
                 .padding(.vertical, 6)
             }
 
-            Section("対象データ") {
+            FavorecoSettingsSection("対象データ") {
                 LabeledContent("ジャンル", value: "\(categories.count)")
                 LabeledContent("対象", value: "\(events.count)")
                 LabeledContent("訪問/鑑賞記録", value: "\(visits.count)")
@@ -588,7 +592,7 @@ struct JSONExportView: View {
                 LabeledContent("写真メタデータ", value: "\(photos.count)")
             }
 
-            Section("書き出し") {
+            FavorecoSettingsSection("書き出し") {
                 Button {
                     do {
                         let text = try JSONBackupExportService.makeBackupJSON(
@@ -634,12 +638,13 @@ struct JSONExportView: View {
                 }
             }
 
-            Section("含まれないもの") {
+            FavorecoSettingsSection("含まれないもの") {
                 Text("JSON単体には写真/動画の実データ、iCloud同期状態、通知予約、外部カレンダー側のイベントを含めません。写真本体を残す場合は「完全バックアップ」を使用してください。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("JSONエクスポート")
         .navigationBarTitleDisplayMode(.inline)
         .fileExporter(
@@ -709,7 +714,7 @@ struct SyncBackupSettingsView: View {
                 Text("ONでは同じApple Accountの端末間で記録と写真を自動同期します。まず端末内へ保存されるため、通信やiCloud容量の問題で記録が失われることはありません。初回はWi-Fi環境を推奨します。")
             }
 
-            Section("バックアップ") {
+            FavorecoSettingsSection("バックアップ") {
 #if DEBUG
                 Toggle("自動バックアップ", isOn: $automaticBackupEnabled)
                 Toggle("iCloud Driveにも保存", isOn: $automaticBackupUsesICloudDrive)
@@ -744,7 +749,7 @@ struct SyncBackupSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("外部カレンダー") {
+            FavorecoSettingsSection("外部カレンダー") {
                 Toggle("favorecoの予定変更を自動反映", isOn: $automaticallyUpdatesExternalCalendar)
                     .disabled(!purchaseManager.currentPlan.includesSync)
                 Text("先に予定詳細の「カレンダーに追加」からApple/Googleなどの追加先を選びます。以後、favorecoで予定を編集・削除した時だけ同じ外部イベントへ片方向で反映します。外部側の編集はfavorecoへ戻しません。")
@@ -757,7 +762,7 @@ struct SyncBackupSettingsView: View {
                 }
             }
 
-            Section("同期トラブル診断") {
+            FavorecoSettingsSection("同期トラブル診断") {
                 LabeledContent("iCloud Drive", value: diagnostic?.hasUbiquityContainer == true ? "利用可能" : "未確認 / 利用不可")
                 LabeledContent("起動時の同期接続", value: iCloudSyncActiveAtLaunch ? "接続済み" : "未接続")
                 if let errorMessage = diagnostic?.errorMessage, !errorMessage.isEmpty {
@@ -767,6 +772,7 @@ struct SyncBackupSettingsView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("同期・バックアップ")
         .navigationBarTitleDisplayMode(.inline)
         .task {

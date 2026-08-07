@@ -27,6 +27,36 @@ struct QuickRegistrationView: View {
     @State private var titleCandidate = ""
     @State private var recognizedOCRLines: [String] = []
     @State private var isTitleCandidateFromOCR = false
+    private let initialTemplateKey: String?
+    private let screenTitle: String
+    private let locksCategory: Bool
+
+    init(
+        initialTemplateKey: String? = nil,
+        screenTitle: String = "クイック登録",
+        locksCategory: Bool = false,
+        initialBookTitle: String = "",
+        initialBookSeriesName: String = "",
+        initialBookVolumeNumber: String = "",
+        initialBookAuthorName: String = "",
+        initialBookStateKey: String = "interested",
+        initialBookAspectRatioKey: String = EyecatchAspectRatio.hardcoverBook.key
+    ) {
+        self.initialTemplateKey = initialTemplateKey
+        self.screenTitle = screenTitle
+        self.locksCategory = locksCategory
+        var initialDraft = QuickRegistrationDraft()
+        initialDraft.targetTemplateKey = initialTemplateKey ?? ""
+        initialDraft.title = initialBookTitle
+        initialDraft.bookSeriesName = initialBookSeriesName
+        initialDraft.bookVolumeNumber = initialBookVolumeNumber
+        initialDraft.bookAuthorName = initialBookAuthorName
+        initialDraft.bookStateKey = initialBookStateKey
+        initialDraft.eyecatchAspectRatioKey = initialBookAspectRatioKey.isEmpty
+            ? EyecatchAspectRatio.hardcoverBook.key
+            : initialBookAspectRatioKey
+        _draft = State(initialValue: initialDraft)
+    }
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -36,20 +66,117 @@ struct QuickRegistrationView: View {
         visibleCategories.first { $0.templateKey == draft.targetTemplateKey }
     }
 
+    private var isBookRegistration: Bool {
+        draft.targetTemplateKey == "book"
+    }
+
+    private var isMovieRegistration: Bool {
+        draft.targetTemplateKey == "movie"
+    }
+
+    private var isMuseumRegistration: Bool {
+        draft.targetTemplateKey == "museum"
+    }
+
+    private var targetName: String {
+        switch draft.targetTemplateKey {
+        case "book": "本"
+        case "movie": "作品"
+        case "museum": "展示・イベント"
+        case "theme_park": "施設"
+        case "nature_living": "スポット"
+        case "outing_facility": "施設"
+        default: "対象"
+        }
+    }
+
+    private var basicSectionTitle: String {
+        isBookRegistration ? "本の情報" : "\(targetName)情報"
+    }
+
+    private var targetFieldLabel: String {
+        isBookRegistration ? "書名" : "\(targetName)名"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("クイック登録") {
-                    Picker("ジャンル", selection: $draft.targetTemplateKey) {
-                        ForEach(visibleCategories) { category in
-                            Text(category.name).tag(category.templateKey)
+                FavorecoRegistrationSection(basicSectionTitle) {
+                    if !locksCategory {
+                        Picker("ジャンル", selection: $draft.targetTemplateKey) {
+                            ForEach(visibleCategories) { category in
+                                Text(category.name).tag(category.templateKey)
+                            }
                         }
                     }
 
-                    TextField("タイトル（必須）", text: $draft.title)
+                    ExplicitFormTextField(
+                        title: targetFieldLabel,
+                        prompt: isBookRegistration ? "書名を入力" : "\(targetName)名を入力",
+                        text: $draft.title,
+                        axis: .vertical,
+                        minimumLines: 1,
+                        maximumLines: 2,
+                        labelStyle: .horizontal,
+                        focusesFromWholeRow: true
+                    )
+
+                    if isBookRegistration {
+                        ExplicitFormTextField(
+                            title: "シリーズ",
+                            prompt: "シリーズ名（任意）",
+                            text: $draft.bookSeriesName,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
+                        )
+
+                        ExplicitFormTextField(
+                            title: "巻数",
+                            prompt: "巻数（任意）",
+                            text: $draft.bookVolumeNumber,
+                            labelStyle: .horizontal
+                        )
+                        .keyboardType(.numbersAndPunctuation)
+
+                        ExplicitFormTextField(
+                            title: "著者",
+                            prompt: "著者名（任意）",
+                            text: $draft.bookAuthorName,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
+                        )
+
+                        ExplicitFormControlRow(title: "読書状態") {
+                            Picker("読書状態", selection: $draft.bookStateKey) {
+                                Text("気になる").tag("interested")
+                                Text("積読").tag("active")
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                        }
+
+                        ExplicitFormControlRow(title: "本の種類") {
+                            Picker("本の種類", selection: $draft.eyecatchAspectRatioKey) {
+                                ForEach(EyecatchAspectRatio.selectableBookFormats) { format in
+                                    Text(format.name).tag(format.key)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                        }
+                    } else if isMovieRegistration {
+                        ScreenWorkTypeAndSeasonEditor(
+                            typeKey: $draft.subTypeKey,
+                            seasonNumber: $draft.screenWorkSeasonNumber
+                        )
+                    }
                 }
 
-                Section("アイキャッチ（任意）") {
+                FavorecoRegistrationSection(mediaSectionTitle) {
                     let photoActionTitle = eyecatchData == nil ? "写真を選ぶ" : "写真を変更"
                     if let eyecatchData, let image = UIImage(data: eyecatchData) {
                         Image(uiImage: image)
@@ -73,9 +200,9 @@ struct QuickRegistrationView: View {
                         guard let item else { return }
                         Task { await loadEyecatch(from: item) }
                     }
-                }
 
-                Section("入力補助") {
+                    Divider()
+
                     TextField("URL（任意）", text: $draft.sourceURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
@@ -169,20 +296,20 @@ struct QuickRegistrationView: View {
                     }
                 }
 
-                Section("メモ") {
+                FavorecoRegistrationSection(memoSectionTitle) {
                     ZStack(alignment: .topLeading) {
                         if draft.body.isEmpty {
-                            Text("気になった理由、あとで調べたいことなど")
+                            Text(memoPrompt)
                                 .foregroundStyle(.tertiary)
                                 .padding(.top, 8)
                                 .padding(.leading, 5)
                         }
                         TextEditor(text: $draft.body)
-                            .frame(minHeight: 120)
+                            .frame(minHeight: 88)
                     }
                 }
             }
-            .navigationTitle("クイック登録")
+            .navigationTitle(screenTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -198,7 +325,10 @@ struct QuickRegistrationView: View {
                 }
             }
             .onAppear {
-                if draft.targetTemplateKey.isEmpty {
+                if let initialTemplateKey,
+                   visibleCategories.contains(where: { $0.templateKey == initialTemplateKey }) {
+                    draft.targetTemplateKey = initialTemplateKey
+                } else if draft.targetTemplateKey.isEmpty {
                     draft.targetTemplateKey = visibleCategories.first?.templateKey ?? ""
                 }
             }
@@ -226,15 +356,26 @@ struct QuickRegistrationView: View {
         let now = Date()
         let event = ExperienceEvent(
             title: draft.trimmedTitle,
+            seriesName: isBookRegistration ? "" : draft.trimmedSeriesName,
+            subTypeKey: isMovieRegistration ? draft.subTypeKey : "",
             officialURL: draft.trimmedSourceURL,
-            stateKey: "interested",
+            stateKey: isBookRegistration ? draft.bookStateKey : "interested",
             memo: draft.trimmedBody,
             importMemo: draft.trimmedOCRText,
+            unitFieldsRaw: registrationUnitFieldsRaw,
             createdAt: now,
             updatedAt: now,
             eyecatchData: eyecatchData,
             category: selectedCategory
         )
+
+        if isBookRegistration {
+            event.applyBookMetadata(
+                seriesName: draft.trimmedBookSeriesName,
+                volumeNumber: draft.trimmedBookVolumeNumber,
+                authorName: draft.trimmedBookAuthorName
+            )
+        }
 
         modelContext.insert(event)
 
@@ -244,6 +385,51 @@ struct QuickRegistrationView: View {
         } catch {
             assertionFailure("Failed to save quick registration: \(error)")
         }
+    }
+
+    private var mediaSectionTitle: String {
+        switch draft.targetTemplateKey {
+        case "book": "表紙・公式情報（任意）"
+        case "movie": "ポスター・公式情報（任意）"
+        default: "画像・公式情報（任意）"
+        }
+    }
+
+    private var memoSectionTitle: String {
+        switch draft.targetTemplateKey {
+        case "book": "読書メモ（任意）"
+        case "movie": "作品メモ（任意）"
+        case "museum": "展示メモ（任意）"
+        default: "メモ（任意）"
+        }
+    }
+
+    private var memoPrompt: String {
+        switch draft.targetTemplateKey {
+        case "book": "読みたい理由、気になったことなど"
+        case "movie": "観たい理由、気になったことなど"
+        case "museum": "気になった理由、会期のメモなど"
+        default: "気になった理由、あとで調べたいことなど"
+        }
+    }
+
+    private var registrationUnitFieldsRaw: String {
+        if isBookRegistration {
+            return VisitUnitFields(
+                eyecatchAspectRatioKey: draft.eyecatchAspectRatioKey,
+                bookSeriesName: draft.trimmedBookSeriesName,
+                bookVolumeNumber: draft.trimmedBookVolumeNumber,
+                bookAuthorName: draft.trimmedBookAuthorName
+            ).encodedRawValue
+        }
+        if isMovieRegistration {
+            return VisitUnitFields(
+                screenWorkSeasonNumber: ScreenWorkType.resolved(from: draft.subTypeKey).supportsSeason
+                    ? draft.screenWorkSeasonNumber
+                    : 0
+            ).encodedRawValue
+        }
+        return ""
     }
 
     @MainActor
@@ -340,10 +526,18 @@ struct QuickRegistrationView: View {
 
 private struct QuickRegistrationDraft {
     var title: String = ""
+    var seriesName: String = ""
+    var bookSeriesName: String = ""
+    var bookVolumeNumber: String = ""
+    var bookAuthorName: String = ""
+    var bookStateKey: String = "interested"
     var body: String = ""
     var sourceURL: String = ""
     var targetTemplateKey: String = ""
     var ocrText: String = ""
+    var eyecatchAspectRatioKey = EyecatchAspectRatio.hardcoverBook.key
+    var subTypeKey = ScreenWorkType.movie.rawValue
+    var screenWorkSeasonNumber = 0
 
     var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -351,6 +545,22 @@ private struct QuickRegistrationDraft {
 
     var trimmedBody: String {
         body.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedSeriesName: String {
+        seriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookSeriesName: String {
+        bookSeriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookVolumeNumber: String {
+        bookVolumeNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookAuthorName: String {
+        bookAuthorName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var trimmedSourceURL: String {

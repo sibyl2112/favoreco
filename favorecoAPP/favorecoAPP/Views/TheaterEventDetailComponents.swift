@@ -273,9 +273,10 @@ struct TheaterEventMemoryGallerySection: View {
     let items: [EventDetailMemoryPhoto]
     let accentColor: Color
     @State private var showsAll = false
+    @State private var viewerSelection: TheaterEventGalleryViewerSelection?
 
     private var displayedItems: [EventDetailMemoryPhoto] {
-        showsAll ? items : Array(items.prefix(6))
+        Array(items.prefix(6))
     }
 
     var body: some View {
@@ -283,30 +284,24 @@ struct TheaterEventMemoryGallerySection: View {
             VStack(alignment: .leading, spacing: 12) {
                 TheaterEventSectionHeader(title: "思い出ギャラリー", count: items.count)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 10) {
-                        ForEach(displayedItems) { item in
-                            NavigationLink {
-                                ExperienceDetailView(visit: item.visit)
-                            } label: {
-                                ZStack(alignment: .bottomLeading) {
-                                    TheaterEventGalleryPhoto(photo: item.photo, height: 132)
-
-                                    Text(FavorecoDateText.compactDate(item.visit.visitedAt))
-                                        .font(FavorecoTypography.caption)
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 7)
-                                        .padding(.vertical, 5)
-                                        .background(.black.opacity(0.58), in: Capsule())
-                                        .padding(6)
-                                }
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("\(FavorecoDateText.compactDate(item.visit.visitedAt))の観劇記録を開く")
+                if showsAll {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2),
+                        spacing: 10
+                    ) {
+                        ForEach(items) { item in
+                            galleryPhotoButton(item, isExpanded: true)
                         }
                     }
-                    .padding(.horizontal, 1)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 10) {
+                            ForEach(displayedItems) { item in
+                                galleryPhotoButton(item, isExpanded: false)
+                            }
+                        }
+                        .padding(.horizontal, 1)
+                    }
                 }
 
                 if items.count > 6 {
@@ -328,8 +323,53 @@ struct TheaterEventMemoryGallerySection: View {
             }
             .padding(16)
             .theaterEventCard(accentColor: accentColor)
+            .fullScreenCover(item: $viewerSelection) { selection in
+                ExperiencePhotoViewer(
+                    photos: items.map(\.photo),
+                    initialPhotoID: selection.initialPhotoID
+                )
+            }
         }
     }
+
+    private func galleryPhotoButton(
+        _ item: EventDetailMemoryPhoto,
+        isExpanded: Bool
+    ) -> some View {
+        Button {
+            viewerSelection = TheaterEventGalleryViewerSelection(
+                initialPhotoID: item.photo.id
+            )
+        } label: {
+            ZStack(alignment: .bottomLeading) {
+                if isExpanded {
+                    RepresentativePhotoImage(photo: item.photo, maxPixelSize: 520, contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(1, contentMode: .fit)
+                        .background(.black.opacity(0.22))
+                } else {
+                    TheaterEventGalleryPhoto(photo: item.photo, height: 132)
+                }
+
+                Text(FavorecoDateText.compactDate(item.visit.visitedAt))
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.58), in: Capsule())
+                    .padding(6)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(FavorecoDateText.compactDate(item.visit.visitedAt))の写真を開く")
+        .accessibilityHint("全画面で開いて左右に送れます")
+    }
+}
+
+private struct TheaterEventGalleryViewerSelection: Identifiable {
+    let id = UUID()
+    let initialPhotoID: UUID
 }
 
 private struct TheaterEventParticipationRow: View {
@@ -600,7 +640,7 @@ private struct TheaterEventSectionHeader: View {
     private var systemImage: String {
         switch title {
         case "公演サマリー": "theatermasks"
-        case "参加した公演": "ticket"
+        case "参加した公演": "calendar.badge.checkmark"
         case "思い出ギャラリー": "photo.on.rectangle.angled"
         default: "sparkles"
         }

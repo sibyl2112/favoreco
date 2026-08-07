@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import SwiftData
 
 struct VisitedPlacesHeatMapSection: View {
     let visits: [Visit]
@@ -12,6 +13,9 @@ struct VisitedPlacesHeatMapSection: View {
     @State private var isShowingDetailedSearch = false
     @State private var cameraPosition: MapCameraPosition = .region(JapanVisitArea.nationwide.region)
     @State private var selectedPointID: String?
+    @State private var mapDestination: FavorecoMapDestination?
+    @State private var selectedHistoryPointID: String?
+    @Environment(\.modelContext) private var modelContext
 
     private var allPoints: [VisitedPlaceHeatPoint] {
         VisitedPlaceHeatPoint.make(from: visits)
@@ -86,6 +90,10 @@ struct VisitedPlacesHeatMapSection: View {
             }
             .font(FavorecoTypography.caption)
             .foregroundStyle(.secondary)
+
+            if category.templateKey == "museum", !allPoints.isEmpty {
+                museumRanking
+            }
         }
         .sheet(isPresented: $isShowingDetailedSearch) {
             VisitedPlacesDetailedSearchSheet(
@@ -105,12 +113,29 @@ struct VisitedPlacesHeatMapSection: View {
         .onChange(of: searchText) { _, _ in focusFilteredPoints() }
         .onChange(of: selectedPrefecture) { _, _ in focusFilteredPoints() }
         .onChange(of: filteredPoints.map(\.id)) { _, _ in focusFilteredPoints() }
+        .task(id: visits.map { "\($0.id.uuidString)-\($0.latitude)-\($0.longitude)" }.joined()) {
+            await repairMissingCoordinates()
+        }
+        .sheet(isPresented: Binding(
+            get: { selectedHistoryPointID != nil },
+            set: { if !$0 { selectedHistoryPointID = nil } }
+        )) {
+            if let point = allPoints.first(where: { $0.id == selectedHistoryPointID }) {
+                MuseumPlaceHistoryView(
+                    placeName: point.name,
+                    visits: visits
+                        .filter { point.visitIDs.contains($0.id) }
+                        .sorted { $0.visitedAt > $1.visitedAt },
+                    tint: tint
+                )
+            }
+        }
     }
 
     private var sectionTitle: String {
         switch category.templateKey {
-        case "museum": return "訪れたミュージアムMAP"
-        case "live": return "行ったライブ会場MAP"
+        case "museum": return "ミュージアムMAP"
+        case "live": return "ライブ会場"
         case "theme_park": return "行ったパークMAP"
         case "nature_living": return "訪れた自然・いきものMAP"
         case "outing_facility": return "その他・未分類施設MAP"
@@ -153,12 +178,90 @@ struct VisitedPlacesHeatMapSection: View {
         .accessibilityLabel("エリアで絞り込む")
     }
 
+    private var museumRanking: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LayeredCategorySectionTitle(
+                englishTitle: "Museum Ranking",
+                japaneseTitle: "よく行くミュージアム",
+                foregroundColor: .primary
+            )
+
+            VStack(spacing: 0) {
+                ForEach(Array(allPoints.prefix(10).enumerated()), id: \.element.id) { index, point in
+                    Button {
+                        selectedHistoryPointID = point.id
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text("\(index + 1)")
+                                .font(FavorecoTypography.jpSerif(19, weight: .semibold, relativeTo: .headline))
+                                .foregroundStyle(tint)
+                                .frame(width: 26)
+                            Text(point.name)
+                                .font(FavorecoTypography.bodyStrong)
+                                .foregroundStyle(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text("\(point.visitCount)回")
+                                .font(FavorecoTypography.captionStrong)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 11)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < min(allPoints.count, 10) - 1 {
+                        Divider().padding(.leading, 38)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    @MainActor
+    private func repairMissingCoordinates() async {
+        var didUpdate = false
+        for visit in visits where !visit.hasUsableMapCoordinate {
+            let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let venue = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
+            let query = address.isEmpty ? venue : address
+            guard !query.isEmpty,
+                  let candidates = try? await PlaceSearchService.search(query: query),
+                  let candidate = candidates.first else { continue }
+            visit.latitude = candidate.latitude
+            visit.longitude = candidate.longitude
+            if let place = visit.placeMaster {
+                place.latitude = candidate.latitude
+                place.longitude = candidate.longitude
+                if place.address.isEmpty, !candidate.address.isEmpty {
+                    place.address = candidate.address
+                }
+                place.updatedAt = Date()
+            }
+            visit.updatedAt = Date()
+            didUpdate = true
+        }
+        if didUpdate {
+            try? modelContext.save()
+        }
+    }
+
     private var map: some View {
         Map(position: $cameraPosition, interactionModes: [.pan, .zoom]) {
             ForEach(filteredPoints) { point in
                 Annotation(point.name, coordinate: point.coordinate, anchor: .center) {
                     Button {
                         focus(on: point)
+                        mapDestination = FavorecoMapDestination(
+                            name: point.name,
+                            address: "",
+                            latitude: point.coordinate.latitude,
+                            longitude: point.coordinate.longitude
+                        )
                     } label: {
                         VisitedPlaceHeatMarker(
                             visitCount: point.visitCount,
@@ -169,10 +272,11 @@ struct VisitedPlacesHeatMapSection: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(point.name)、\(point.visitCount)回")
-                    .accessibilityHint("この場所を地図の中央に表示")
+                    .accessibilityHint("地図の中央に表示して外部地図を選べます")
                 }
             }
         }
+        .favorecoEmbeddedMapInteraction()
         .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
         .frame(height: 250)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -199,6 +303,7 @@ struct VisitedPlacesHeatMapSection: View {
                     }
             }
         }
+        .favorecoMapDestinationDialog(destination: $mapDestination)
     }
 
     private func focusFilteredPoints() {
@@ -212,10 +317,7 @@ struct VisitedPlacesHeatMapSection: View {
 
     private func focus(on point: VisitedPlaceHeatPoint) {
         selectedPointID = point.id
-        let region = MKCoordinateRegion(
-            center: point.coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.035, longitudeDelta: 0.035)
-        )
+        let region = FavorecoMapViewport.singlePointRegion(center: point.coordinate)
         withAnimation(.easeInOut(duration: 0.25)) {
             cameraPosition = .region(region)
         }
@@ -349,6 +451,7 @@ private struct VisitedPlaceHeatPoint: Identifiable {
     let visitCount: Int
     let prefecture: String
     let searchableText: String
+    let visitIDs: Set<UUID>
 
     static func make(from visits: [Visit]) -> [VisitedPlaceHeatPoint] {
         let locatedVisits = visits.compactMap { visit -> LocatedVisit? in
@@ -378,7 +481,8 @@ private struct VisitedPlaceHeatPoint: Identifiable {
                     visit.placeMaster?.placeTagsRaw ?? "",
                     visit.tagNamesRaw,
                     visit.note,
-                ].joined(separator: " ")
+                ].joined(separator: " "),
+                visitID: visit.id
             )
         }
 
@@ -391,7 +495,8 @@ private struct VisitedPlaceHeatPoint: Identifiable {
                     coordinate: first.coordinate,
                     visitCount: grouped.count,
                     prefecture: grouped.compactMap { $0.prefecture.isEmpty ? nil : $0.prefecture }.first ?? "",
-                    searchableText: grouped.map(\.searchableText).joined(separator: " ")
+                    searchableText: grouped.map(\.searchableText).joined(separator: " "),
+                    visitIDs: Set(grouped.map(\.visitID))
                 )
             }
             .sorted {
@@ -402,6 +507,9 @@ private struct VisitedPlaceHeatPoint: Identifiable {
 
     static func region(for points: [VisitedPlaceHeatPoint]) -> MKCoordinateRegion {
         guard !points.isEmpty else { return JapanVisitArea.nationwide.region }
+        if let point = points.first, points.count == 1 {
+            return FavorecoMapViewport.singlePointRegion(center: point.coordinate)
+        }
         let latitudes = points.map { $0.coordinate.latitude }
         let longitudes = points.map { $0.coordinate.longitude }
         let minimumLatitude = latitudes.min() ?? 36.2
@@ -426,6 +534,54 @@ private struct VisitedPlaceHeatPoint: Identifiable {
         let coordinate: CLLocationCoordinate2D
         let prefecture: String
         let searchableText: String
+        let visitID: UUID
+    }
+}
+
+private struct MuseumPlaceHistoryView: View {
+    let placeName: String
+    let visits: [Visit]
+    let tint: Color
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(visits) { visit in
+                NavigationLink {
+                    ExperienceDetailView(visit: visit)
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? placeName : placeName)
+                            .font(FavorecoTypography.bodyStrong)
+                        HStack(spacing: 8) {
+                            FavorecoIconLabel(
+                                FavorecoDateText.compactDate(visit.visitedAt),
+                                systemImage: "calendar",
+                                iconSize: 13
+                            )
+                            if visit.overallRating > 0 {
+                                FavorecoIconLabel(
+                                    String(format: "%.1f", visit.overallRating),
+                                    systemImage: "star.fill",
+                                    iconSize: 13
+                                )
+                                .foregroundStyle(.yellow)
+                            }
+                        }
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle(placeName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                        .foregroundStyle(tint)
+                }
+            }
+        }
     }
 }
 

@@ -24,7 +24,6 @@ struct NotificationSettingsView: View {
     @AppStorage(AppStorageKeys.notificationPerformanceTiming) private var performanceTiming = PerformanceNotificationTiming.previousDayAndSameDay.rawValue
     @AppStorage(AppStorageKeys.notificationPreparationTiming) private var preparationTiming = PreparationNotificationTiming.previousDayEvening.rawValue
     @AppStorage(AppStorageKeys.notificationMembershipExpiryEnabled) private var membershipExpiryEnabled = false
-    @AppStorage(AppStorageKeys.notificationMemoryReminderEnabled) private var memoryReminderEnabled = false
     @AppStorage(AppStorageKeys.notificationMonthlyReportEnabled) private var monthlyReportEnabled = false
     @State private var authorizationStatusText = "確認中"
     @State private var permissionMessage = ""
@@ -32,8 +31,12 @@ struct NotificationSettingsView: View {
 
     var body: some View {
         Form {
-            Section("通知") {
-                Toggle("通知を有効化", isOn: $masterEnabled)
+            FavorecoSettingsSection("通知の利用") {
+                FavorecoSettingsToggleRow(
+                    title: "通知を有効にする",
+                    detail: "予定、チケット、会員期限、思い出レポートをまとめて切り替え",
+                    isOn: $masterEnabled
+                )
                     .onChange(of: masterEnabled) { _, newValue in
                         if newValue {
                             requestNotificationAuthorization()
@@ -51,7 +54,7 @@ struct NotificationSettingsView: View {
                 }
             }
 
-            Section("予定・チケット") {
+            FavorecoSettingsSection("予定・チケット") {
                 Picker("通知プリセット", selection: ticketPresetBinding) {
                     ForEach(TicketNotificationPreset.allCases) { preset in
                         Text(preset.title).tag(Optional(preset))
@@ -59,9 +62,10 @@ struct NotificationSettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
-                Text(currentTicketPreset?.summary ?? "現在：カスタム設定")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                FavorecoSettingsInfoCallout(
+                    title: "現在の通知内容",
+                    message: currentTicketPreset?.summary ?? "個別に選んだカスタム設定です。"
+                )
 
                 Toggle("申込・発売開始", isOn: $applicationStartEnabled)
                 Toggle("申込締切", isOn: $applicationDeadlineEnabled)
@@ -105,19 +109,17 @@ struct NotificationSettingsView: View {
                     }
                 }
 
-                Text("プリセットは通知する種類だけを変更し、ここで選んだ時刻は保持します。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                Text("新規利用時は「おすすめ」です。個別に変更するとカスタム設定として保持します。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                FavorecoSettingsInfoCallout(
+                    title: "プリセットについて",
+                    message: "通知する種類だけを変更し、選んだ時刻は保持します。個別に変更した内容はカスタム設定として保存されます。"
+                )
             }
             .disabled(!masterEnabled)
             .onChange(of: ticketNotificationSignature) { _, _ in
                 synchronizePlanAndTicketNotifications()
             }
 
-            Section("アカウント") {
+            FavorecoSettingsSection("FC・会員アカウント") {
                 Toggle("FC・会員期限", isOn: $membershipExpiryEnabled)
                     .onChange(of: membershipExpiryEnabled) { _, newValue in
                         if newValue {
@@ -126,33 +128,40 @@ struct NotificationSettingsView: View {
                             cancelMembershipNotifications()
                         }
                     }
+
+                FavorecoSettingsInfoCallout(
+                    title: "通知するタイミング",
+                    message: "各FC・プレイガイド・劇場会員などで有効期限と期限通知を設定すると、期限の30日前・7日前・当日の9時に、サービス名と期限が近いことをお知らせします。"
+                )
             }
             .disabled(!masterEnabled)
 
-            Section("思い出") {
-                Toggle("思い出リマインダー", isOn: $memoryReminderEnabled)
+            FavorecoSettingsSection("思い出レポート") {
                 Toggle("月刊・年間Favorecoを通知", isOn: $monthlyReportEnabled)
                     .disabled(!purchaseManager.currentPlan.includesSync)
                     .onChange(of: monthlyReportEnabled) { _, _ in
                         rescheduleMonthlyReportNotification()
                     }
-                Text("月刊は毎月1日9時、年間は毎年1月1日10時にお知らせします。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                FavorecoSettingsInfoCallout(
+                    title: "届く内容と開く場所",
+                    message: "毎月1日9時は先月、毎年1月1日10時は前年の記録・写真・ジャンル傾向をまとめたレポートを提案します。通知をタップすると、統計の月刊・年間Favorecoを直接開きます。"
+                )
                 if !purchaseManager.currentPlan.includesSync {
-                    Label("思い出レポート通知はPremium限定", systemImage: "lock.fill")
+                    Label("月刊・年間Favorecoの通知はPremium限定", systemImage: "lock.fill")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             .disabled(!masterEnabled)
 
-            Section("現在の実装範囲") {
-                Text("通知タイプ別の設定保存、iOS通知許可、予定・申込・公演準備・FC/会員期限、Premiumの月刊Favoreco通知まで接続しています。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+            FavorecoSettingsSection("通知について") {
+                FavorecoSettingsInfoCallout(
+                    title: "通知される内容",
+                    message: "予定・申込・公演準備・FC／会員期限と、Premiumの月刊・年間Favorecoを通知できます。"
+                )
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("通知設定")
         .navigationBarTitleDisplayMode(.inline)
         .task {

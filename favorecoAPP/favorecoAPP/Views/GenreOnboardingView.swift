@@ -16,7 +16,9 @@ struct GenreOnboardingView: View {
     @State private var step: OnboardingStep = .intro
 
     private var builtInCategories: [RecordCategory] {
-        categories.filter(\.isBuiltIn)
+        categories.filter {
+            $0.isBuiltIn && CategoryPresetSeeder.isInitialReleaseTemplate($0.templateKey)
+        }
     }
 
     private var hasSelection: Bool {
@@ -63,7 +65,7 @@ struct GenreOnboardingView: View {
             OnboardingMessagePanel(
                 symbol: "bookmark.fill",
                 title: "観た・行った・体験したを、美しく一生残す。",
-                message: "favorecoは、映画も観劇も酒も御朱印も、あなたの体験をジャンル横断で記録するアプリです。",
+                message: "favorecoは、観劇、映像作品、LIVE、書籍、ミュージアム、テーマパーク、自然・生き物の体験をジャンル横断で記録するアプリです。",
                 accentColor: Color(hex: "#9F2F4D")
             )
         case .records:
@@ -83,15 +85,18 @@ struct GenreOnboardingView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("ジャンルをまたげる")
                     .font(FavorecoTypography.sectionTitle)
-                Text("映画も、観劇も、酒も、同じ場所に。あとから表示ジャンルは変更できます。")
+                Text("観劇も、映像作品も、LIVEも、本も、ミュージアムも、おでかけも、同じ場所に。あとから表示ジャンルは変更できます。")
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     OnboardingGenreBubble(name: "観劇", color: Color(hex: "#9F2F4D"), icon: "theatermasks.fill")
                     OnboardingGenreBubble(name: "映像作品", color: Color(hex: "#D69B4F"), icon: "film.fill")
-                    OnboardingGenreBubble(name: "美術", color: Color(hex: "#A9D4EA"), icon: "paintpalette.fill")
-                    OnboardingGenreBubble(name: "酒", color: Color(hex: "#6F8F7A"), icon: "wineglass.fill")
+                    OnboardingGenreBubble(name: "LIVE", color: Color(hex: "#147C88"), icon: "music.mic")
+                    OnboardingGenreBubble(name: "書籍", color: Color(hex: "#536C95"), icon: "books.vertical.fill")
+                    OnboardingGenreBubble(name: "ミュージアム", color: Color(hex: "#7D8C78"), icon: "paintpalette.fill")
+                    OnboardingGenreBubble(name: "テーマパーク", color: Color(hex: "#2F7FB8"), icon: "ticket.fill")
+                    OnboardingGenreBubble(name: "自然・生き物", color: Color(hex: "#3E8060"), icon: "pawprint.fill")
                 }
             }
         case .privacy:

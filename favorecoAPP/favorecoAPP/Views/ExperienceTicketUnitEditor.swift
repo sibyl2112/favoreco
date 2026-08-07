@@ -45,7 +45,7 @@ struct ExperienceTicketUnitEditor: View {
                 labelStyle: .horizontal
             )
 
-            Text("この記録には状態と座席メモだけを残します。申込、当落、入金、チケット受取期限などは「予定・チケット」で管理します。")
+            Text("この回の状態と座席だけを記録します。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -67,7 +67,7 @@ struct ExperienceTicketUnitEditor: View {
             )
             .lineLimit(1...3)
 
-            Text("この記録には状態と座席メモだけを残します。申込、当落、入金、チケット受取期限などは「予定・チケット」で管理します。")
+            Text("この回の状態と座席だけを記録します。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

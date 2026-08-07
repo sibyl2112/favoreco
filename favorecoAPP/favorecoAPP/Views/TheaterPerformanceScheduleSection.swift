@@ -17,9 +17,9 @@ struct TheaterPerformanceScheduleSection: View {
         if !schedules.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 10) {
-                    FavorecoIcon(systemName: "calendar", size: 17, fallbackWeight: .medium)
+                    FavorecoIcon(systemName: "calendar", size: 20, fallbackWeight: .medium)
                         .foregroundStyle(accentColor)
-                        .frame(width: 22)
+                        .frame(width: 24)
                     Text("公演スケジュール")
                         .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                         .foregroundStyle(Color(red: 0.96, green: 0.93, blue: 0.88))
@@ -113,6 +113,7 @@ struct TheaterPerformanceScheduleSection: View {
 }
 
 struct TheaterScheduleEntryEditor: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Binding var entry: EventVenueEntry
     let fallbackStart: Date
     let fallbackEnd: Date
@@ -254,6 +255,7 @@ struct TheaterScheduleEntryEditor: View {
             ExplicitFormControlRow(title: "会期") {
                 Toggle("この公演地の会期を登録", isOn: hasPeriod)
                     .labelsHidden()
+                    .tint(themePalette.prominentAction)
                     .accessibilityLabel("この公演地の会期を登録")
             }
 

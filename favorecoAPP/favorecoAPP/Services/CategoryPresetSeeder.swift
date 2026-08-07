@@ -22,6 +22,20 @@ struct CategoryPreset: Sendable {
 }
 
 enum CategoryPresetSeeder {
+    static let initialReleaseTemplateKeys: Set<String> = [
+        "theater",
+        "movie",
+        "live",
+        "book",
+        "museum",
+        "theme_park",
+        "nature_living",
+    ]
+
+    static func isInitialReleaseTemplate(_ templateKey: String) -> Bool {
+        initialReleaseTemplateKeys.contains(templateKey)
+    }
+
     static let presets: [CategoryPreset] = [
         CategoryPreset(
             name: "観劇",
@@ -96,7 +110,7 @@ enum CategoryPresetSeeder {
             dateLabel: "訪問日"
         ),
         CategoryPreset(
-            name: "自然・いきもの",
+            name: "自然・生き物",
             templateKey: "nature_living",
             templateTypeKey: "visiting",
             iconSymbol: "pawprint.fill",
@@ -169,18 +183,27 @@ enum CategoryPresetSeeder {
             var resolvedCategories: [String: RecordCategory] = [:]
 
             for preset in presets {
+                let isReleaseTemplate = isInitialReleaseTemplate(preset.templateKey)
                 if let existing = existingCategories.first(where: { $0.isBuiltIn && $0.templateKey == preset.templateKey }) {
                     existing.name = preset.name
                     existing.iconSymbol = preset.iconSymbol
-                    existing.colorHex = preset.colorHex
-                    existing.sortOrder = preset.sortOrder
-                    existing.enabledUnitsRaw = preset.enabledUnitsRaw
                     existing.templateTypeKey = preset.templateTypeKey
                     existing.targetNameLabel = preset.targetNameLabel
                     existing.recordUnitName = preset.recordUnitName
                     existing.dateLabel = preset.dateLabel
+                    // 色・並び順・有効ユニットは利用者が設定画面で変更できるため、
+                    // 起動時のプリセット更新では上書きしない。旧データの空値だけ補完する。
+                    if existing.colorHex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        existing.colorHex = preset.colorHex
+                    }
+                    if existing.sortOrder <= 0 {
+                        existing.sortOrder = preset.sortOrder
+                    }
+                    if existing.enabledUnitsRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        existing.enabledUnitsRaw = preset.enabledUnitsRaw
+                    }
                     if !hasCompletedGenreOnboarding {
-                        existing.isArchived = false
+                        existing.isArchived = !isReleaseTemplate
                     }
                     existing.updatedAt = now
                     resolvedCategories[preset.templateKey] = existing
@@ -197,8 +220,10 @@ enum CategoryPresetSeeder {
                         targetNameLabel: preset.targetNameLabel,
                         recordUnitName: preset.recordUnitName,
                         dateLabel: preset.dateLabel,
-                        // 新設ジャンルは更新直後から利用できるよう、既存利用者にも初回だけ表示する。
-                        isArchived: hasCompletedGenreOnboarding && preset.templateKey != "random_goods",
+                        // 7ジャンルを初回表示で優先する。残りも継続開発対象として定義を保持するが、
+                        // 新規利用者の初期UIには出さない。
+                        // オンボーディング完了後に追加された標準ジャンルも、利用者の選択を尊重して非表示で作る。
+                        isArchived: hasCompletedGenreOnboarding || !isReleaseTemplate,
                         createdAt: now,
                         updatedAt: now
                     )
@@ -286,9 +311,9 @@ enum CategoryPresetSeeder {
 
         legacyCategory.name = "その他・未分類"
         legacyCategory.iconSymbol = "questionmark.folder.fill"
-        legacyCategory.colorHex = "#2F7FB8"
-        legacyCategory.sortOrder = 62
         if isFirstSplit {
+            legacyCategory.colorHex = "#2F7FB8"
+            legacyCategory.sortOrder = 62
             legacyCategory.isArchived = legacyWasVisible ? !(hasUnclassifiedEvents || hasUnclassifiedPlans) : true
         }
         legacyCategory.updatedAt = now

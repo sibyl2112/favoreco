@@ -1160,6 +1160,7 @@ final class PhotoBlob {
     var originalFilename: String = ""
     var mediaKind: String = "photo"
     var purpose: String = "memory"
+    var caption: String = ""
     var ocrText: String = ""
     var amount: Decimal = Decimal(0)
     var byteCount: Int = 0
@@ -1185,6 +1186,7 @@ final class PhotoBlob {
         originalFilename: String = "",
         mediaKind: String = "photo",
         purpose: String = "memory",
+        caption: String = "",
         ocrText: String = "",
         amount: Decimal = Decimal(0),
         byteCount: Int = 0,
@@ -1199,6 +1201,7 @@ final class PhotoBlob {
         self.originalFilename = originalFilename
         self.mediaKind = mediaKind
         self.purpose = purpose
+        self.caption = caption
         self.ocrText = ocrText
         self.amount = amount
         self.byteCount = byteCount

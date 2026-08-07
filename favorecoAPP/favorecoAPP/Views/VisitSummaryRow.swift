@@ -94,19 +94,18 @@ struct VisitSummaryRow: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        ThumbnailImage(
+        CategoryEyecatchArtwork(
             reference: visit.event.map { .event($0.id) },
-            displaySize: CGSize(width: 64, height: thumbnailHeight),
-            contentMode: EyecatchAspectRatio.usesEyecatchFill(for: category) ? .fill : .fit
-        ) {
+            templateKey: category?.templateKey ?? "",
+            backgroundColor: categoryColor.opacity(0.08),
+            defaultContentMode: EyecatchAspectRatio.usesEyecatchFill(for: category) ? .fill : .fit
+        ) { size in
             CategoryDefaultArtworkImage(
                 templateKey: category?.templateKey ?? "",
-                displaySize: CGSize(width: 64, height: thumbnailHeight)
+                displaySize: size
             )
         }
         .frame(width: 64, height: thumbnailHeight)
-        .clipped()
-        .background(categoryColor.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
@@ -446,19 +445,14 @@ private struct VisitRecordArtwork: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ThumbnailImage(
-                reference: visit.event.map { .event($0.id) },
-                displaySize: geometry.size,
-                contentMode: .fill
-            ) {
-                CategoryDefaultArtworkImage(
-                    templateKey: category?.templateKey ?? "",
-                    displaySize: geometry.size
-                )
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
+        CategoryEyecatchArtwork(
+            reference: visit.event.map { .event($0.id) },
+            templateKey: category?.templateKey ?? ""
+        ) { size in
+            CategoryDefaultArtworkImage(
+                templateKey: category?.templateKey ?? "",
+                displaySize: size
+            )
         }
         .aspectRatio(aspectRatio, contentMode: .fit)
         .clipped()

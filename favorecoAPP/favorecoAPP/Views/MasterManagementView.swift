@@ -452,6 +452,28 @@ struct PersonMasterEditDestination: View {
     }
 }
 
+struct PlaceMasterEditDestination: View {
+    @Query private var places: [PlaceMaster]
+
+    init(placeID: UUID) {
+        _places = Query(filter: #Predicate<PlaceMaster> { place in
+            place.id == placeID
+        })
+    }
+
+    var body: some View {
+        if let place = places.first {
+            PlaceMasterMergeView(place: place)
+        } else {
+            FavorecoContentUnavailableView(
+                "場所が見つかりません",
+                systemImage: "mappin.slash",
+                description: "場所マスターが削除または統合された可能性があります。"
+            )
+        }
+    }
+}
+
 private struct PersonMasterMergeView: View {
     let person: PersonMaster
     let showsCancelButton: Bool

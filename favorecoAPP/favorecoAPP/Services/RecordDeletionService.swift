@@ -40,6 +40,18 @@ enum RecordDeletionService {
         let externalCalendarTargets: [ExternalCalendarDeletionTarget]
     }
 
+    struct ExperienceDataDeletionResult {
+        let eventCount: Int
+        let visitCount: Int
+        let planCount: Int
+        let ticketAttemptCount: Int
+        let otherCount: Int
+
+        var deletedModelCount: Int {
+            eventCount + visitCount + planCount + ticketAttemptCount + otherCount
+        }
+    }
+
     /// この記録（Visit）だけを削除する。Event は残す（配下の Visit が 0 件になっても自動削除しない）。
     /// PhotoBlob は cascade で削除。Plan.visit 参照は nil 解除、EventPersonLink の visit 参照は削除。
     @MainActor
@@ -176,6 +188,73 @@ enum RecordDeletionService {
                 + archivedPlaces.count,
             linkCount: archivedLinks.count,
             externalCalendarTargets: externalCalendarTargets
+        )
+    }
+
+    /// ジャンルと各種マスターを残し、体験に紐づく利用者データだけを削除する。
+    /// 外部カレンダー側の予定は変更せず、Favoreco 内のリンク情報と通知だけを解除する。
+    @MainActor
+    static func deleteAllExperienceDataPreservingMasters(
+        in context: ModelContext
+    ) throws -> ExperienceDataDeletionResult {
+        let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        let visits = try context.fetch(FetchDescriptor<Visit>())
+        let plans = try context.fetch(FetchDescriptor<Plan>())
+        let attempts = try context.fetch(FetchDescriptor<TicketAttempt>())
+        let links = try context.fetch(FetchDescriptor<EventPersonLink>())
+        let inboxItems = try context.fetch(FetchDescriptor<InboxItem>())
+        let photos = try context.fetch(FetchDescriptor<PhotoBlob>())
+        let favoriteProfiles = try context.fetch(FetchDescriptor<FavoriteProfile>())
+        let galleryPhotos = try context.fetch(FetchDescriptor<FavoGalleryPhoto>())
+        let anniversaries = try context.fetch(FetchDescriptor<FavoAnniversary>())
+        let pins = try context.fetch(FetchDescriptor<FavoPin>())
+        let collectibleItems = try context.fetch(FetchDescriptor<CollectibleItem>())
+        let collectibleTransactions = try context.fetch(FetchDescriptor<CollectibleTransaction>())
+        let planIDs = plans.map(\.id)
+        let attemptIDs = attempts.map(\.id)
+
+        // inverse がないリンクを先に外し、ExperienceEvent 配下は cascade に任せる。
+        for link in links { context.delete(link) }
+        for event in events { context.delete(event) }
+        for plan in plans where plan.event == nil { context.delete(plan) }
+        for visit in visits where visit.event == nil { context.delete(visit) }
+        for attempt in attempts where attempt.plan == nil { context.delete(attempt) }
+        for item in collectibleItems where item.series == nil { context.delete(item) }
+        for transaction in collectibleTransactions where transaction.item == nil { context.delete(transaction) }
+        for photo in photos where photo.visit == nil { context.delete(photo) }
+        for item in inboxItems { context.delete(item) }
+        for pin in pins { context.delete(pin) }
+        for photo in galleryPhotos where photo.profile == nil { context.delete(photo) }
+        for anniversary in anniversaries where anniversary.profile == nil { context.delete(anniversary) }
+        for profile in favoriteProfiles { context.delete(profile) }
+
+        try context.save()
+
+        for attemptID in attemptIDs {
+            TicketNotificationScheduler.cancel(attemptID: attemptID)
+        }
+        for planID in planIDs {
+            TicketNotificationScheduler.cancel(planID: planID, attemptID: nil)
+            ExternalCalendarLinkStore.clear(planID: planID)
+        }
+        URLCache.shared.removeAllCachedResponses()
+        ThumbnailLoader.purge()
+
+        let otherCount = links.count
+            + inboxItems.count
+            + photos.count
+            + favoriteProfiles.count
+            + galleryPhotos.count
+            + anniversaries.count
+            + pins.count
+            + collectibleItems.count
+            + collectibleTransactions.count
+        return ExperienceDataDeletionResult(
+            eventCount: events.count,
+            visitCount: visits.count,
+            planCount: plans.count,
+            ticketAttemptCount: attempts.count,
+            otherCount: otherCount
         )
     }
 

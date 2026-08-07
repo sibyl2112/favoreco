@@ -185,30 +185,33 @@ struct PeopleUnitEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if existingLinks.isEmpty && pendingLinks.isEmpty {
-                Text(emptyDescription)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if !emptyDescription.isEmpty {
+                    Text(emptyDescription)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } else {
                 peopleList
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                if usesExplicitTheaterLayout {
-                    ExplicitFormTextField(
-                        title: "人物名（任意）",
-                        prompt: namePlaceholder,
-                        text: $name,
-                        labelStyle: .horizontal
-                    )
-                } else {
-                    TextField(namePlaceholder, text: $name)
-                }
+            VStack(alignment: .leading, spacing: 0) {
+                ExplicitFormTextField(
+                    title: allowsOrganizations ? "人物・団体名（任意）" : "人物名（任意）",
+                    prompt: namePlaceholder,
+                    text: $name,
+                    labelStyle: .horizontal
+                )
                 if showsRolePicker {
-                    Picker("役割", selection: $selectedRole) {
-                        ForEach(roleOptions) { role in
-                            Text(role.name).tag(role)
+                    formDivider
+                    ExplicitFormControlRow(title: "役割") {
+                        Picker("役割", selection: $selectedRole) {
+                            ForEach(roleOptions) { role in
+                                Text(role.name).tag(role)
+                            }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                     }
                     .onChange(of: selectedRole) { _, role in
                         if role.defaultsToOrganization {
@@ -218,15 +221,28 @@ struct PeopleUnitEditor: View {
                 }
 
                 if allowsOrganizations {
-                    Picker("区分", selection: $entityKind) {
-                        ForEach(PersonEntityKind.allCases) { kind in
-                            Text(kind.displayName).tag(kind)
+                    formDivider
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("区分")
+                            .font(
+                                FavorecoTypography.jpSans(
+                                    ExplicitFormMetrics.labelFontSize,
+                                    weight: .semibold,
+                                    relativeTo: .caption
+                                )
+                            )
+                        Picker("区分", selection: $entityKind) {
+                            ForEach(PersonEntityKind.allCases) { kind in
+                                Text(kind.displayName).tag(kind)
+                            }
                         }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
+                    .padding(.vertical, 8)
                 }
 
                 if allowsOrganizations && entityKind == .organization {
+                    formDivider
                     Picker("所属する上位団体", selection: $parentOrganizationID) {
                         Text("なし").tag(UUID?.none)
                         ForEach(organizationMasters) { organization in
@@ -239,10 +255,13 @@ struct PeopleUnitEditor: View {
                 }
 
                 if !relationshipTagOptions.isEmpty {
+                    formDivider
                     relationshipTagPicker(selection: $selectedRelationshipTagKeys)
+                        .padding(.vertical, 8)
                 }
 
                 if !suggestions.isEmpty {
+                    formDivider
                     VStack(alignment: .leading, spacing: 6) {
                         Text("似た人物・団体")
                             .font(FavorecoTypography.caption)
@@ -275,8 +294,10 @@ struct PeopleUnitEditor: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    .padding(.vertical, 8)
                 }
 
+                formDivider
                 Button {
                     appendPerson()
                 } label: {
@@ -285,6 +306,7 @@ struct PeopleUnitEditor: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(trimmedName.isEmpty)
+                .padding(.top, 8)
             }
         }
         .onAppear {
@@ -294,6 +316,11 @@ struct PeopleUnitEditor: View {
                 entityKind = .organization
             }
         }
+    }
+
+    private var formDivider: some View {
+        Divider()
+            .overlay(ExplicitFormMetrics.rowSeparatorColor)
     }
 
     private var peopleList: some View {
@@ -340,7 +367,14 @@ struct PeopleUnitEditor: View {
             Text("この回での印象（複数選択可）")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], alignment: .leading, spacing: 8) {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 8),
+                    GridItem(.flexible(), spacing: 8),
+                ],
+                alignment: .leading,
+                spacing: 8
+            ) {
                 ForEach(relationshipTagOptions) { option in
                     let isSelected = selection.wrappedValue.contains(option.key)
                     Button {
@@ -353,9 +387,11 @@ struct PeopleUnitEditor: View {
                         HStack(spacing: 5) {
                             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             Text(option.title)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
                         }
                         .font(FavorecoTypography.caption)
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, minHeight: 20)
                         .padding(.vertical, 8)
                     }
                     .buttonStyle(.bordered)

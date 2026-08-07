@@ -6,6 +6,7 @@ import UIKit
 struct TheaterPerformanceRegistrationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
 
     let category: RecordCategory
@@ -364,15 +365,20 @@ struct TheaterPerformanceRegistrationView: View {
                 }
 
                 Section {
-                    registrationButton(
-                        title: "公演を保存",
-                        detail: "保存後に、観劇予定またはチケット手配へ進めます",
-                        systemImage: "checkmark.circle.fill",
-                        tint: categoryTint
-                    ) {
-                        save(nextStep: .interest)
+                    if showingNextActions {
+                        postSaveActionsCard
+                            .clearRegistrationCardRow()
+                    } else {
+                        registrationButton(
+                            title: "公演を保存",
+                            detail: "保存後に、観劇予定またはチケット手配へ進めます",
+                            systemImage: "checkmark.circle.fill",
+                            tint: categoryTint
+                        ) {
+                            save(nextStep: .interest)
+                        }
+                        .clearRegistrationCardRow()
                     }
-                    .clearRegistrationCardRow()
                 }
             }
             .environment(\.defaultMinListRowHeight, 48)
@@ -391,29 +397,6 @@ struct TheaterPerformanceRegistrationView: View {
                 }
             }) { event in
                 AddTicketPlanView(event: event, entryMode: nextEntryMode)
-            }
-            .confirmationDialog(
-                "公演を保存しました",
-                isPresented: $showingNextActions,
-                titleVisibility: .visible
-            ) {
-                Button("観劇予定を追加") {
-                    guard let savedEventForNextAction else { return }
-                    nextEntryMode = .plan
-                    shouldDismissAfterNextStep = true
-                    nextEvent = savedEventForNextAction
-                }
-                Button("チケットを手配する") {
-                    guard let savedEventForNextAction else { return }
-                    nextEntryMode = .ticketSchedule
-                    shouldDismissAfterNextStep = true
-                    nextEvent = savedEventForNextAction
-                }
-                Button("完了") {
-                    dismiss()
-                }
-            } message: {
-                Text("次に行うことを選べます。チケット情報は公演フォームとは別に管理します。")
             }
             .confirmationDialog(
                 "公演ビジュアルを外しますか？",
@@ -438,6 +421,92 @@ struct TheaterPerformanceRegistrationView: View {
         }
     }
 
+    private var postSaveActionsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                FavorecoIcon(systemName: "checkmark.circle.fill", size: 18, fallbackWeight: .semibold)
+                    .foregroundStyle(categoryTint)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("公演を保存しました")
+                        .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                    Text("続けて登録する内容を選べます")
+                        .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+
+                Button("完了") {
+                    dismiss()
+                }
+                .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+                .foregroundStyle(categoryTint)
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 8) {
+                postSaveActionButton(
+                    title: "観劇予定を追加",
+                    systemImage: "calendar.badge.plus"
+                ) {
+                    openSavedEventNextStep(.plan)
+                }
+
+                postSaveActionButton(
+                    title: "チケットを手配",
+                    systemImage: "ticket"
+                ) {
+                    openSavedEventNextStep(.ticketSchedule)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(categoryTint.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(categoryTint.opacity(0.48), lineWidth: 1.1)
+        }
+    }
+
+    private func postSaveActionButton(
+        title: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                FavorecoIcon(systemName: systemImage, size: 13, fallbackWeight: .semibold)
+                Text(title)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .font(FavorecoTypography.jpSans(11.5, weight: .semibold, relativeTo: .body))
+            .foregroundStyle(categoryTint)
+            .frame(maxWidth: .infinity, minHeight: 38)
+            .background(categoryTint.opacity(0.11), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(categoryTint.opacity(0.34), lineWidth: 0.8)
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func openSavedEventNextStep(_ entryMode: AddTicketPlanView.EntryMode) {
+        guard let savedEventForNextAction else { return }
+        showingNextActions = false
+        nextEntryMode = entryMode
+        shouldDismissAfterNextStep = true
+        nextEvent = savedEventForNextAction
+    }
+
     private func registrationButton(
         title: String,
         detail: String,
@@ -460,7 +529,7 @@ struct TheaterPerformanceRegistrationView: View {
     }
 
     private var categoryTint: Color {
-        Color(hex: category.colorHex)
+        themePalette.globalTint
     }
 
     private func registrationCardLabel(
@@ -688,17 +757,13 @@ struct TheaterPerformanceRegistrationView: View {
                 sourceDataItems.append(sourceData)
             }
         }
-        let posterAspectRatio = CGFloat(EyecatchAspectRatio.bSeriesPoster.value)
         guard !sourceDataItems.isEmpty else {
             errorMessage = "画像を読み込めませんでした。別の写真をお試しください。"
             return
         }
         let results = await Task.detached(priority: .userInitiated, operation: {
             sourceDataItems.map { sourceData in
-            let compressed = QuickCaptureImageService.compressedJPEG(
-                from: sourceData,
-                centeredToAspectRatio: posterAspectRatio
-            )
+            let compressed = QuickCaptureImageService.compressedJPEG(from: sourceData)
             let analysis = QuickCaptureImageService.recognizedTextAnalysis(from: sourceData)
             return (compressed, analysis)
             }
@@ -769,12 +834,8 @@ struct TheaterPerformanceRegistrationView: View {
             errorMessage = "画像を読み込めませんでした。別の写真をお試しください。"
             return
         }
-        let posterAspectRatio = CGFloat(EyecatchAspectRatio.bSeriesPoster.value)
         let compressed = await Task.detached(priority: .userInitiated) {
-            QuickCaptureImageService.compressedJPEG(
-                from: sourceData,
-                centeredToAspectRatio: posterAspectRatio
-            )
+            QuickCaptureImageService.compressedJPEG(from: sourceData)
         }.value
         guard let compressed else {
             errorMessage = "画像を読み込めませんでした。別の写真をお試しください。"
@@ -844,12 +905,8 @@ struct TheaterPerformanceRegistrationView: View {
             importURL = candidate.resolvedURL.absoluteString
             var appliedFields = ["公演名", "公式URL"]
             if eyecatchData == nil, let sourceImageData = candidate.imageData {
-                let posterAspectRatio = CGFloat(EyecatchAspectRatio.bSeriesPoster.value)
                 let compressed = await Task.detached(priority: .userInitiated) {
-                    QuickCaptureImageService.compressedJPEG(
-                        from: sourceImageData,
-                        centeredToAspectRatio: posterAspectRatio
-                    )
+                    QuickCaptureImageService.compressedJPEG(from: sourceImageData)
                 }.value
                 if let compressed {
                     eyecatchData = compressed

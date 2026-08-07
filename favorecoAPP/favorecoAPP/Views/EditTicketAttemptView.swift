@@ -67,6 +67,15 @@ struct EditTicketAttemptView: View {
         accounts.first { $0.id == draft.accountID }
     }
 
+    private func updateSelectedAccount(
+        from previousAccountID: UUID?,
+        to accountID: UUID?
+    ) {
+        let account = activeAccounts.first { $0.id == accountID }
+        let previousAccount = accounts.first { $0.id == previousAccountID }
+        draft.applyAccount(account, replacing: previousAccount)
+    }
+
     private var editorTitle: String {
         editingAttempt == nil ? "チケットを追加" : "チケットを編集"
     }
@@ -79,7 +88,7 @@ struct EditTicketAttemptView: View {
 
                     if let editingAttempt,
                        TicketStatusTransitionDefinition.previousStatusKey(for: editingAttempt) != nil {
-                        Section("進捗の修正") {
+                        FavorecoRegistrationSection("進捗の修正") {
                             Button(role: .destructive) {
                                 isShowingProgressRewindConfirmation = true
                             } label: {
@@ -97,7 +106,7 @@ struct EditTicketAttemptView: View {
                     }
                 }
 
-                Section("チケット情報") {
+                FavorecoRegistrationSection("チケット情報") {
                     ExplicitFormControlRow(title: "登録内容") {
                         Picker("登録内容", selection: $draft.flowKey) {
                             ForEach(draft.flowOptions) { flow in
@@ -140,8 +149,8 @@ struct EditTicketAttemptView: View {
                             .labelsHidden()
                             .pickerStyle(.menu)
                         }
-                        .onChange(of: draft.accountID) { _, newValue in
-                            draft.applyAccount(activeAccounts.first { $0.id == newValue })
+                        .onChange(of: draft.accountID) { previousValue, newValue in
+                            updateSelectedAccount(from: previousValue, to: newValue)
                         }
 
                         ExplicitFormTextField(
@@ -198,7 +207,7 @@ struct EditTicketAttemptView: View {
                 }
 
                 if draft.showsTicketDetails {
-                    Section("金額・座席") {
+                    FavorecoRegistrationSection("金額・座席") {
                         ExplicitFormTextField(
                             title: "チケット代（任意）",
                             prompt: "金額を入力",
@@ -233,7 +242,7 @@ struct EditTicketAttemptView: View {
                     }
                 }
 
-                Section("タグ・メモ") {
+                FavorecoRegistrationSection("タグ・メモ") {
                     TicketTagInputField(text: $draft.tagNamesText)
                     ExplicitFormTextField(
                         title: "メモ（任意）",
@@ -343,7 +352,7 @@ struct EditTicketAttemptView: View {
     @ViewBuilder
     private var dateFieldsSection: some View {
         if draft.showsDateSection {
-            Section("工程日") {
+            FavorecoRegistrationSection("工程日") {
                 if draft.showsSaleStart {
                     DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
                 }
@@ -629,7 +638,7 @@ private struct TicketAttemptDraft {
     }
 
     var showsAccountFields: Bool {
-        flowKey == "lotteryPlanned"
+        flowKey == "lotteryPlanned" || flowKey == "saleWaiting"
     }
 
     var showsTicketGuide: Bool {
@@ -738,8 +747,43 @@ private struct TicketAttemptDraft {
         purchaseURL = guide.urlString
     }
 
-    mutating func applyAccount(_ account: TicketAccount?) {
-        guard let account else { return }
+    mutating func applyAccount(
+        _ account: TicketAccount?,
+        replacing previousAccount: TicketAccount? = nil
+    ) {
+        if let previousAccount {
+            let previousServiceName = previousAccount.serviceName
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let previousHolderName = previousAccount.accountName
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let previousSiteURL = previousAccount.siteURL
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let previousGuideKey = TicketGuideDefinition.inferredKey(
+                siteName: previousServiceName,
+                urlString: previousSiteURL
+            )
+            let previousPurchaseURL = !previousSiteURL.isEmpty
+                ? previousSiteURL
+                : (TicketGuideDefinition.guide(for: previousGuideKey)?.urlString ?? "")
+
+            if trimmedTicketSite == previousServiceName {
+                ticketSite = ""
+            }
+            if trimmedHolderName == previousHolderName {
+                holderName = ""
+            }
+            if trimmedPurchaseURL == previousPurchaseURL {
+                purchaseURL = ""
+            }
+            if ticketGuideKey == previousGuideKey {
+                ticketGuideKey = TicketGuideDefinition.customKey
+            }
+        }
+
+        guard let account else {
+            accountID = nil
+            return
+        }
         let serviceName = account.serviceName.trimmingCharacters(in: .whitespacesAndNewlines)
         let siteURL = account.siteURL.trimmingCharacters(in: .whitespacesAndNewlines)
         accountID = account.id

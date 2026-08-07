@@ -100,21 +100,24 @@ struct RecordFacetMasterManagementView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("\(kind.title)マスター")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "\(kind.title)を検索")
         .sheet(item: $editingValue) { value in
             NavigationStack {
                 Form {
-                    Section("表記") {
+                    FavorecoSettingsSection("表記") {
                         TextField(kind.title, text: $draftName)
                     }
-                    Section {
-                        Text("同じ表記がすでにある場合は1つへ統合します。関連する\(value.usageCount)件の記録へ反映されます。")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
+                    FavorecoSettingsSection("変更の反映") {
+                        FavorecoSettingsInfoCallout(
+                            title: "関連する記録も更新",
+                            message: "同じ表記がすでにある場合は1つへ統合し、関連する\(value.usageCount)件の記録へ反映します。"
+                        )
                     }
                 }
+                .favorecoSettingsListLayout()
                 .navigationTitle("\(kind.title)を編集")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -299,6 +302,7 @@ struct CompanionMasterManagementView: View {
                 Section { Text(errorMessage).foregroundStyle(.red) }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("同行者マスター")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "同行者を検索")
@@ -463,7 +467,7 @@ private struct CompanionMasterEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("同行者") {
+                FavorecoSettingsSection("同行者") {
                     HStack(spacing: 12) {
                         FavorecoIcon(
                             systemName: CompanionIconCatalog.validated(iconSymbol),
@@ -476,7 +480,7 @@ private struct CompanionMasterEditor: View {
                     }
                 }
 
-                Section("アイコン") {
+                FavorecoSettingsSection("アイコン") {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 12)], spacing: 12) {
                         ForEach(CompanionIconCatalog.symbols, id: \.self) { symbol in
                             Button {
@@ -496,13 +500,15 @@ private struct CompanionMasterEditor: View {
                 }
 
                 if usageCount > 0 {
-                    Section {
-                        Text("名前を変更すると、関連する\(usageCount)件の記録に反映されます。アイコンの変更では記録内容を変更しません。")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
+                    FavorecoSettingsSection("変更の反映") {
+                        FavorecoSettingsInfoCallout(
+                            title: "名前は記録にも反映",
+                            message: "名前の変更は関連する\(usageCount)件の記録へ反映します。アイコンの変更では記録内容を変更しません。"
+                        )
                     }
                 }
             }
+            .favorecoSettingsListLayout()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

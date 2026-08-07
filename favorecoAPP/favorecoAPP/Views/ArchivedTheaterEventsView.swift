@@ -96,18 +96,16 @@ struct ArchivedTheaterEventsView: View {
 
     @ViewBuilder
     private func eventThumbnail(_ event: ExperienceEvent) -> some View {
-        ThumbnailImage(
+        TheaterPosterArtwork(
             reference: .event(event.id),
-            displaySize: CGSize(width: 44, height: 62),
-            contentMode: .fill
-        ) {
+            backgroundColor: TheaterCategoryStyle.black
+        ) { size in
             CategoryDefaultArtworkImage(
                 templateKey: event.category?.templateKey ?? "theater",
-                displaySize: CGSize(width: 44, height: 62)
+                displaySize: size
             )
         }
         .frame(width: 44, height: 62)
-        .clipped()
     }
 
     private func restore(_ event: ExperienceEvent) {

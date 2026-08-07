@@ -13,6 +13,9 @@ struct TicketQuickActionSheet: View {
     @State private var updateError = ""
     @State private var isShowingSchedule = false
     @State private var editingAttempt: TicketAttempt?
+    @State private var ticketDetailsPromptAttempt: TicketAttempt?
+    @State private var pendingUpdatedStatusKey: String?
+    @State private var finishesUpdateAfterTicketEdit = false
 
     init(
         attempt: TicketAttempt,
@@ -122,7 +125,7 @@ struct TicketQuickActionSheet: View {
                                 .foregroundStyle(
                                     plan.hasConfirmedSchedule
                                         ? Color.primary.opacity(0.72)
-                                        : .orange
+                                        : TicketProgressColorPalette.scheduleUndated
                                 )
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.75)
@@ -210,12 +213,12 @@ struct TicketQuickActionSheet: View {
                     TicketAttendanceScheduleSheet(plan: plan)
                 }
             }
-            .sheet(item: $editingAttempt) { editingAttempt in
+            .sheet(item: $editingAttempt, onDismiss: finishUpdateAfterTicketEditIfNeeded) { editingAttempt in
                 if let plan = editingAttempt.plan {
                     EditTicketAttemptView(
                         plan: plan,
                         attempt: editingAttempt,
-                        prioritizesDates: true
+                        prioritizesDates: !finishesUpdateAfterTicketEdit
                     )
                 } else {
                     FavorecoContentUnavailableView(
@@ -224,6 +227,16 @@ struct TicketQuickActionSheet: View {
                     )
                 }
             }
+            .ticketPostAcquisitionDetailsPrompt(
+                attempt: $ticketDetailsPromptAttempt,
+                onEdit: { pendingAttempt in
+                    finishesUpdateAfterTicketEdit = true
+                    editingAttempt = pendingAttempt
+                },
+                onLater: { _ in
+                    finishPendingStatusUpdate()
+                }
+            )
             .alert("状態を更新できませんでした", isPresented: Binding(
                 get: { !updateError.isEmpty },
                 set: { if !$0 { updateError = "" } }
@@ -276,7 +289,7 @@ struct TicketQuickActionSheet: View {
                 .font(FavorecoTypography.jpSans(16, weight: .bold, relativeTo: .headline))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
-                .foregroundStyle(.orange)
+                .foregroundStyle(TicketProgressColorPalette.scheduleUndated)
         } else if let action = TicketNextActionDefinition.nextAction(for: attempt) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("次にやること")
@@ -364,21 +377,47 @@ struct TicketQuickActionSheet: View {
                 to: statusKey,
                 in: modelContext
             )
-            if let onStatusUpdated {
-                onStatusUpdated(attempt)
-                dismiss()
+            if TicketPostAcquisitionDetailsPrompt.shouldOffer(
+                for: attempt,
+                afterTransitionTo: statusKey
+            ) {
+                pendingUpdatedStatusKey = statusKey
+                DispatchQueue.main.async {
+                    ticketDetailsPromptAttempt = attempt
+                }
                 return
             }
-            if TicketAttendanceScheduleRequirement.shouldPrompt(
-                afterTransitionTo: statusKey,
-                plan: plan
-            ) {
-                DispatchQueue.main.async {
-                    isShowingSchedule = true
-                }
-            }
+            completeStatusUpdate(statusKey: statusKey)
         } catch {
             updateError = error.localizedDescription
+        }
+    }
+
+    private func finishUpdateAfterTicketEditIfNeeded() {
+        guard finishesUpdateAfterTicketEdit else { return }
+        finishesUpdateAfterTicketEdit = false
+        finishPendingStatusUpdate()
+    }
+
+    private func finishPendingStatusUpdate() {
+        guard let statusKey = pendingUpdatedStatusKey else { return }
+        pendingUpdatedStatusKey = nil
+        completeStatusUpdate(statusKey: statusKey)
+    }
+
+    private func completeStatusUpdate(statusKey: String) {
+        if let onStatusUpdated {
+            onStatusUpdated(attempt)
+            dismiss()
+            return
+        }
+        if TicketAttendanceScheduleRequirement.shouldPrompt(
+            afterTransitionTo: statusKey,
+            plan: plan
+        ) {
+            DispatchQueue.main.async {
+                isShowingSchedule = true
+            }
         }
     }
 }

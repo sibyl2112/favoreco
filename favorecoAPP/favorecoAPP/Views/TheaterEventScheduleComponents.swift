@@ -191,12 +191,14 @@ struct TheaterEventTicketProgressSection: View {
 
                 if let selectedReference {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text(TicketStatusDefinition.name(for: selectedReference.attempt.statusKey))
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(accentColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(accentColor.opacity(0.10), in: Capsule())
+                        if references.count == 1 {
+                            Text(TicketStatusDefinition.name(for: selectedReference.attempt.statusKey))
+                                .font(FavorecoTypography.captionStrong)
+                                .foregroundStyle(accentColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(accentColor.opacity(0.10), in: Capsule())
+                        }
 
                         Button {
                             onOpenPlan(selectedReference.plan.id)
@@ -246,19 +248,14 @@ private struct TheaterEventScheduleArtwork: View {
     let accentColor: Color
 
     var body: some View {
-        GeometryReader { geometry in
-            ThumbnailImage(
-                reference: .event(event.id),
-                displaySize: geometry.size,
-                contentMode: .fill
-            ) {
-                CategoryDefaultArtworkImage(
-                    templateKey: event.category?.templateKey ?? "theater",
-                    displaySize: geometry.size
-                )
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+        TheaterPosterArtwork(
+            reference: .event(event.id),
+            backgroundColor: TheaterCategoryStyle.black
+        ) { size in
+            CategoryDefaultArtworkImage(
+                templateKey: event.category?.templateKey ?? "theater",
+                displaySize: size
+            )
         }
-        .clipped()
     }
 }

@@ -58,6 +58,70 @@ final class DetailPresentationLogicTests: XCTestCase {
         )
     }
 
+    func testMuseumVisitOrdinalUsesDateOrderAndReordersAfterEditingDate() {
+        let event = ExperienceEvent(title: "雲を測る")
+        let first = Visit(
+            visitedAt: Date(timeIntervalSince1970: 2_000),
+            createdAt: Date(timeIntervalSince1970: 1),
+            event: event
+        )
+        let second = Visit(
+            visitedAt: Date(timeIntervalSince1970: 4_000),
+            createdAt: Date(timeIntervalSince1970: 2),
+            event: event
+        )
+        event.visits = [second, first]
+
+        XCTAssertEqual(ExperienceDetailPresentation.museumVisitOrdinal(for: first), "鑑賞1回目")
+        XCTAssertEqual(ExperienceDetailPresentation.museumVisitOrdinal(for: second), "鑑賞2回目")
+
+        second.visitedAt = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertEqual(ExperienceDetailPresentation.museumVisitOrdinal(for: second), "鑑賞1回目")
+        XCTAssertEqual(ExperienceDetailPresentation.museumVisitOrdinal(for: first), "鑑賞2回目")
+    }
+
+    func testRepeatVisitDraftCopiesPlaceAndDisplaySettingsButClearsPersonalRecord() {
+        let place = PlaceMaster(
+            name: "国立西洋美術館",
+            address: "東京都台東区上野公園7-7",
+            latitude: 35.7154,
+            longitude: 139.7758
+        )
+        let fields = VisitUnitFields(
+            ocrText: "前回OCR",
+            styleNames: ["企画展"],
+            eyecatchAspectRatioKey: EyecatchAspectRatio.cinemaPoster.key,
+            advancedEntries: [AdvancedFieldEntry(label: "補足", value: "前回詳細")]
+        )
+        let previous = Visit(
+            venueNameSnapshot: "国立西洋美術館",
+            overallRating: 5,
+            outcomeKey: "attended",
+            seatText: "前回の座席",
+            note: "前回の感想",
+            tagNamesRaw: "静か",
+            amount: 2_000,
+            unitFieldsRaw: fields.encodedRawValue,
+            placeMaster: place
+        )
+
+        let draft = VisitDraft(repeating: previous)
+
+        XCTAssertEqual(draft.venueName, "国立西洋美術館")
+        XCTAssertEqual(draft.venueAddress, "東京都台東区上野公園7-7")
+        XCTAssertEqual(draft.latitude, 35.7154)
+        XCTAssertEqual(draft.longitude, 139.7758)
+        XCTAssertEqual(draft.styleNamesText, "企画展")
+        XCTAssertEqual(draft.eyecatchAspectRatioKey, EyecatchAspectRatio.cinemaPoster.key)
+        XCTAssertEqual(draft.overallRating, 0)
+        XCTAssertTrue(draft.note.isEmpty)
+        XCTAssertTrue(draft.amountText.isEmpty)
+        XCTAssertTrue(draft.ocrText.isEmpty)
+        XCTAssertTrue(draft.advancedEntries.isEmpty)
+        XCTAssertTrue(draft.tagNamesText.isEmpty)
+    }
+
     func testWeatherTextRequiresBothTemperaturesAndRounds() {
         XCTAssertEqual(
             ExperienceDetailPresentation.compactWeatherText(

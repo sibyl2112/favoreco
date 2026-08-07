@@ -73,7 +73,7 @@ struct ExperienceEmotionTagEditor: View {
                 text: $tagNamesText,
                 labelStyle: .horizontal
             )
-            Text("この観劇回で感じたことです。共通のタグマスターへ集約され、他ジャンルでも再利用できます。")
+            Text("この回で感じたことを選びます。タグは他の記録でも使えます。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
         }

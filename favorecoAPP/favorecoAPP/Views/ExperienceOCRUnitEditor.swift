@@ -166,33 +166,28 @@ struct OCRUnitEditor: View {
                     .foregroundStyle(.secondary)
             }
 
-            if usesExplicitTheaterLayout {
-                ExplicitFormTextField(
-                    title: "読み取り原文（任意）",
-                    prompt: "読み取ったテキスト、または手入力",
-                    text: $ocrText,
-                    axis: .vertical,
-                    minimumLines: 5,
-                    maximumLines: 8,
-                    labelStyle: .horizontal,
-                    reservesLineSpace: true
-                )
-            } else {
-                ZStack(alignment: .topLeading) {
-                    if ocrText.isEmpty {
-                        Text("読み取ったテキスト、または手入力の取込メモ")
-                            .foregroundStyle(.tertiary)
-                            .padding(.top, 8)
-                            .padding(.leading, 5)
-                    }
-                    TextEditor(text: $ocrText)
-                        .frame(minHeight: 140)
-                }
-            }
+            Divider()
+                .overlay(ExplicitFormMetrics.rowSeparatorColor)
+
+            ExplicitFormTextField(
+                title: "読み取り原文（任意）",
+                prompt: "読み取ったテキスト、または手入力",
+                text: $ocrText,
+                axis: .vertical,
+                minimumLines: 5,
+                maximumLines: 8,
+                labelStyle: .horizontal,
+                reservesLineSpace: true
+            )
 
             if !ocrText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Divider()
+                    .overlay(ExplicitFormMetrics.rowSeparatorColor)
                 advancedSuggestionSection
             }
+
+            Divider()
+                .overlay(ExplicitFormMetrics.rowSeparatorColor)
 
             Text("基本OCRは読み取り結果をそのまま保存します。高度OCRの候補は確認して選んだ項目だけに反映され、自動で上書きしません。")
                 .font(FavorecoTypography.caption)

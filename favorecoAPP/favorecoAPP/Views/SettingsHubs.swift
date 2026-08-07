@@ -24,34 +24,38 @@ struct SettingsNavigationLabel: View {
                     .lineLimit(2)
             }
         }
-        .padding(.vertical, 4)
+        .frame(minHeight: 54)
+        .favorecoSettingsRowLayout()
     }
 }
 
 struct MySettingsHubView: View {
     var body: some View {
         List {
-            NavigationLink {
-                ProfileSettingsView()
-            } label: {
-                SettingsNavigationLabel(
-                    title: "プロフィール",
-                    detail: "表示名、写真、SNSアカウント",
-                    systemImage: "person.crop.circle"
-                )
-            }
+            FavorecoSettingsSection("プロフィールと連携") {
+                NavigationLink {
+                    ProfileSettingsView()
+                } label: {
+                    SettingsNavigationLabel(
+                        title: "プロフィール・SNS",
+                        detail: "表示名、プロフィール写真、SNSアカウント",
+                        systemImage: "person.crop.circle"
+                    )
+                }
 
-            NavigationLink {
-                RegistrationIntegrationSettingsView()
-            } label: {
-                SettingsNavigationLabel(
-                    title: "登録情報・連携",
-                    detail: "FC、プレイガイド、劇場会員、外部カレンダー",
-                    systemImage: "person.text.rectangle"
-                )
+                NavigationLink {
+                    RegistrationIntegrationSettingsView()
+                } label: {
+                    SettingsNavigationLabel(
+                        title: "チケット・会員・カレンダー",
+                        detail: "FC、プレイガイド、劇場会員、外部カレンダー",
+                        systemImage: "person.text.rectangle"
+                    )
+                }
             }
         }
-        .navigationTitle("マイ・登録情報")
+        .favorecoSettingsListLayout()
+        .navigationTitle("プロフィール・連携")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -81,7 +85,7 @@ struct MasterDataSettingsHubView: View {
 
     var body: some View {
         List {
-            Section("基本マスター") {
+            FavorecoSettingsSection("人物と場所") {
                 NavigationLink {
                     PersonMasterManagementView()
                 } label: {
@@ -95,7 +99,7 @@ struct MasterDataSettingsHubView: View {
                 }
             }
 
-            Section {
+            FavorecoSettingsSectionWithFooter("記録の分類") {
                 NavigationLink {
                     RecordFacetMasterManagementView(kind: .tag)
                 } label: {
@@ -107,12 +111,11 @@ struct MasterDataSettingsHubView: View {
                 } label: {
                     LabeledContent("同行者", value: "\(companionCount)件")
                 }
-            } header: {
-                Text("記録から集約")
             } footer: {
                 Text("タグは記録の表記を集約します。同行者は記録の表記を保ちながら、表示アイコンをマスターへ保存できます。改名・統合・削除は関連記録へ反映されます。")
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("マスターデータ")
         .navigationBarTitleDisplayMode(.inline)
     }

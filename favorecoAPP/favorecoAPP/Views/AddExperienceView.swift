@@ -23,6 +23,7 @@ struct AddExperienceView: View {
     @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.favorecoThemePalette) private var themePalette
     @State private var draft: AddExperienceDraft
     @State private var expandedUnitIDs: Set<String> = ["basic", "people", "ticketPlan", "photos", "officialInfo", "memo"]
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
@@ -43,11 +44,18 @@ struct AddExperienceView: View {
     init(
         category: RecordCategory,
         initialDraft: AddExperienceDraft = AddExperienceDraft(),
+        initialPlaceMaster: PlaceMaster? = nil,
         onSave: (() -> Void)? = nil
     ) {
         self.category = category
         self.onSave = onSave
         var preparedDraft = initialDraft
+        if let initialPlaceMaster {
+            if preparedDraft.trimmedTitle.isEmpty {
+                preparedDraft.title = initialPlaceMaster.name
+            }
+            preparedDraft.apply(placeMaster: initialPlaceMaster)
+        }
         if preparedDraft.subTypeKey.isEmpty {
             switch category.templateKey {
             case "theater": preparedDraft.subTypeKey = TheaterPerformanceType.play.rawValue
@@ -58,7 +66,11 @@ struct AddExperienceView: View {
             }
         }
         _draft = State(initialValue: preparedDraft)
-        if category.templateKey == "movie" {
+        if category.templateKey == "theater" {
+            _expandedUnitIDs = State(initialValue: ["basic"])
+        } else if category.templateKey == "book" {
+            _expandedUnitIDs = State(initialValue: ["photos", "memo"])
+        } else if ["movie", "museum"].contains(category.templateKey) {
             _expandedUnitIDs = State(initialValue: ["basic", "photos", "memo"])
         }
     }
@@ -66,22 +78,44 @@ struct AddExperienceView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if category.templateKey == "theater" {
+                if category.templateKey == "book" {
+                    addBookRecordForm
+                } else if category.templateKey == "theater",
+                   let photoUnit = activeUnitDefinitions(for: category).first(where: { $0.id == "photos" }) {
+                    TheaterRecordUnitBlock(
+                        unit: photoUnit,
+                        status: addStatus(for: photoUnit.id),
+                        isExpanded: binding(for: photoUnit.id)
+                    ) {
+                        addContent(for: photoUnit)
+                    }
+                }
+                if category.templateKey != "book", category.templateKey == "theater" {
                     Section {
                         TheaterUnifiedFormIntroduction(entry: .visitCreation)
                     }
                 }
-                if category.templateKey == "movie" {
-                    Section("作品区分") {
+                if category.templateKey != "book", category.templateKey == "movie" {
+                    FavorecoRegistrationSection("作品区分") {
                         ScreenWorkTypeAndSeasonEditor(
                             typeKey: $draft.subTypeKey,
                             seasonNumber: $draft.screenWorkSeasonNumber
                         )
                     }
                 }
-                Section("入力ユニット") {
+                if category.templateKey != "book", category.templateKey == "theater" {
+                    ForEach(activeUnitDefinitions(for: category).filter { $0.id != "photos" }) { unit in
+                        TheaterRecordUnitBlock(
+                            unit: unit,
+                            status: addStatus(for: unit.id),
+                            isExpanded: binding(for: unit.id)
+                        ) {
+                            addContent(for: unit)
+                        }
+                    }
+                } else if category.templateKey != "book" {
                     ForEach(activeUnitDefinitions(for: category)) { unit in
-                        RecordUnitAccordion(
+                        SeparatedRecordUnitBlock(
                             unit: unit,
                             status: addStatus(for: unit.id),
                             isExpanded: binding(for: unit.id)
@@ -91,17 +125,29 @@ struct AddExperienceView: View {
                     }
                 }
             }
+            .environment(\.defaultMinListRowHeight, 48)
+            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+            .tint(themePalette.globalTint)
             .navigationTitle(
                 category.templateKey == "theater"
                     ? TheaterUnifiedFormEntry.visitCreation.navigationTitle
-                    : "記録を追加"
+                    : ["movie", "museum"].contains(category.templateKey)
+                        ? "鑑賞済みを記録"
+                        : "記録を追加"
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button {
                         dismiss()
+                    } label: {
+                        if category.templateKey == "theater" {
+                            FavorecoIcon(systemName: "xmark", size: 18, fallbackWeight: .semibold)
+                        } else {
+                            Text("キャンセル")
+                        }
                     }
+                    .accessibilityLabel("キャンセル")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
@@ -126,6 +172,82 @@ struct AddExperienceView: View {
         }
     }
 
+    @ViewBuilder
+    private var addBookRecordForm: some View {
+        BookRecordEyecatchEditor(
+            existingPhotos: [],
+            pendingPhotos: $pendingPhotos,
+            coverPhotoPath: $coverPhotoPath,
+            fallbackImageData: nil
+        )
+
+        ForEach(bookRecordUnitDefinitions) { unit in
+            SeparatedRecordUnitBlock(
+                unit: unit,
+                status: addBookStatus(for: unit.id),
+                isExpanded: binding(for: unit.id)
+            ) {
+                addBookContent(for: unit.id)
+            }
+        }
+    }
+
+    private func addBookStatus(for unitID: String) -> RecordUnitStatus {
+        switch unitID {
+        case "bookInfo": draft.canSave ? .entered : .required
+        case "bookReading": .entered
+        case "photos": addStatus(for: "photos")
+        case "memo": addStatus(for: "memo")
+        default: .optional
+        }
+    }
+
+    @ViewBuilder
+    private func addBookContent(for unitID: String) -> some View {
+        switch unitID {
+        case "bookInfo":
+            BookInformationEditor(
+                title: $draft.title,
+                seriesName: $draft.bookSeriesName,
+                volumeNumber: $draft.bookVolumeNumber,
+                authorName: $draft.bookAuthorName,
+                officialURL: $draft.officialURL,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                isEditable: true
+            )
+        case "bookReading":
+            BookReadingPeriodEditor(
+                startsAt: $draft.visitedAt,
+                endsAt: $draft.endedAt,
+                hasEndDate: $draft.bookReadingHasEndDate,
+                rating: $draft.overallRating,
+                ratingText: draft.ratingLabel
+            )
+        case "photos":
+            PhotoUnitEditor(
+                existingPhotos: [],
+                deletedPhotoIDs: .constant([]),
+                existingPhotoMetadata: .constant([:]),
+                pendingPhotos: $pendingPhotos,
+                selectedItems: $selectedPhotoItems,
+                category: category,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                coverPhotoPath: $coverPhotoPath,
+                heroBackgroundPath: $heroBackgroundPath,
+                heroBackgroundPresetKey: $heroBackgroundPresetKey,
+                showsBookFormatPicker: false,
+                showsHeroBackgroundPicker: false
+            )
+        case "memo":
+            ExperienceMemoUnitEditor(
+                text: $draft.note,
+                placeholder: template.memoPlaceholder
+            )
+        default:
+            EmptyView()
+        }
+    }
+
     private func binding(for unitID: String) -> Binding<Bool> {
         Binding {
             expandedUnitIDs.contains(unitID)
@@ -142,12 +264,17 @@ struct AddExperienceView: View {
         switch unitID {
         case "basic":
             return draft.canSave && draft.hasValidPerformanceType(for: category) ? .entered : .required
+        case "theaterRating":
+            return draft.overallRating > 0 ? .entered : .optional
         case "officialInfo":
-            return draft.trimmedOfficialURL.isEmpty && draft.normalizedSocialLinks.isEmpty ? .optional : .entered
+            let hasOfficialInfo = !draft.trimmedOfficialURL.isEmpty
+                || !draft.normalizedSocialLinks.isEmpty
+                || !draft.trimmedTheaterCreditsText.isEmpty
+            return hasOfficialInfo ? .entered : .optional
         case "people":
             return draft.trimmedTheaterCreditsText.isEmpty && pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
-            return draft.hasTicketPlan ? .entered : .optional
+            return draft.hasTicketPlan || !pendingPeople.isEmpty ? .entered : .optional
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
         case "goshuinBook":
@@ -157,7 +284,7 @@ struct AddExperienceView: View {
         case "money":
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "memo":
-            return draft.trimmedNote.isEmpty ? .optional : .entered
+            return draft.trimmedNote.isEmpty && draft.normalizedTagNamesRaw.isEmpty ? .optional : .entered
         case "advanced":
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
@@ -182,12 +309,14 @@ struct AddExperienceView: View {
                     overallRating: $draft.overallRating,
                     latitude: draft.latitude,
                     longitude: draft.longitude,
+                    venueOfficialURL: draft.publicPlaceSelection?.entry.officialURL ?? "",
                     placeMasters: placeMasters,
                     usesPlaceSuggestions: usesInputSuggestionDictionary,
                     usesMapSearchAssist: usesMapSearchAssist,
                     supportsPerformanceTime: category.usesOpeningTime,
                     supportsStyles: category.templateKey == "theater",
                     usesExplicitTheaterLayout: category.templateKey == "theater",
+                    showsRating: category.templateKey != "theater",
                     datePrecision: screenWorkDatePrecision(
                         for: draft.subTypeKey,
                         category: category
@@ -204,8 +333,6 @@ struct AddExperienceView: View {
                         selection: $draft.subTypeKey,
                         customName: $draft.performanceTypeCustomName
                     )
-                    Divider()
-                    ExperienceEmotionTagEditor(tagNamesText: $draft.tagNamesText)
                 }
                 if category.isOutingFacilityGenre {
                     Divider()
@@ -213,20 +340,26 @@ struct AddExperienceView: View {
                 }
             }
         case "officialInfo":
-            ExperienceOfficialInfoUnitEditor(
-                officialURL: $draft.officialURL,
-                socialLinksText: $draft.socialLinksText,
-                eventSubtitle: $draft.eventSubtitle,
-                title: $draft.title,
-                seriesName: $draft.seriesName,
-                visitedAt: $draft.visitedAt,
-                venueName: venueNameBinding,
-                venueAddress: venueAddressBinding,
-                pendingPeople: $pendingPeople,
-                advancedEntries: $draft.advancedEntries,
-                allowsContributorCandidates: category.templateKey != "theater",
-                usesExplicitTheaterLayout: category.templateKey == "theater"
-            )
+            VStack(alignment: .leading, spacing: 16) {
+                ExperienceOfficialInfoUnitEditor(
+                    officialURL: $draft.officialURL,
+                    socialLinksText: $draft.socialLinksText,
+                    eventSubtitle: $draft.eventSubtitle,
+                    title: $draft.title,
+                    seriesName: $draft.seriesName,
+                    visitedAt: $draft.visitedAt,
+                    venueName: venueNameBinding,
+                    venueAddress: venueAddressBinding,
+                    pendingPeople: $pendingPeople,
+                    advancedEntries: $draft.advancedEntries,
+                    allowsContributorCandidates: category.templateKey != "theater",
+                    usesExplicitTheaterLayout: category.templateKey == "theater"
+                )
+                if category.templateKey == "theater" {
+                    Divider()
+                    TheaterCreditsTextEditor(text: $draft.theaterCreditsText)
+                }
+            }
         case "people":
             if category.templateKey == "theater" {
                 VStack(alignment: .leading, spacing: 18) {
@@ -244,14 +377,31 @@ struct AddExperienceView: View {
                     existingLinks: [],
                     deletedLinkIDs: .constant([]),
                     pendingLinks: $pendingPeople,
-                    personMasters: personMasters
+                    personMasters: personMasters,
+                    emptyDescription: ""
                 )
             }
         case "ticketPlan":
-            ExperienceTicketUnitEditor(
-                outcomeKey: $draft.outcomeKey,
-                seatText: $draft.seatText,
-                usesExplicitTheaterLayout: category.templateKey == "theater"
+            VStack(alignment: .leading, spacing: 16) {
+                ExperienceTicketUnitEditor(
+                    outcomeKey: $draft.outcomeKey,
+                    seatText: $draft.seatText,
+                    usesExplicitTheaterLayout: category.templateKey == "theater"
+                )
+                if category.templateKey == "theater" {
+                    Divider()
+                    TheaterFocusPeopleEditor(
+                        existingLinks: [],
+                        deletedLinkIDs: .constant([]),
+                        pendingLinks: $pendingPeople,
+                        personMasters: personMasters
+                    )
+                }
+            }
+        case "theaterRating":
+            ExperienceRatingUnitEditor(
+                overallRating: $draft.overallRating,
+                ratingText: draft.ratingLabel
             )
         case "photos":
             PhotoUnitEditor(
@@ -292,11 +442,17 @@ struct AddExperienceView: View {
                 usesExplicitTheaterLayout: category.templateKey == "theater"
             )
         case "memo":
-            ExperienceMemoUnitEditor(
-                text: $draft.note,
-                placeholder: template.memoPlaceholder,
-                usesExplicitTheaterLayout: category.templateKey == "theater"
-            )
+            VStack(alignment: .leading, spacing: 16) {
+                ExperienceMemoUnitEditor(
+                    text: $draft.note,
+                    placeholder: template.memoPlaceholder,
+                    usesExplicitTheaterLayout: category.templateKey == "theater"
+                )
+                if category.templateKey == "theater" {
+                    Divider()
+                    ExperienceEmotionTagEditor(tagNamesText: $draft.tagNamesText)
+                }
+            }
         case "advanced":
             ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
@@ -352,7 +508,7 @@ struct AddExperienceView: View {
             modelContext.insert(event)
         }
         event.title = draft.trimmedTitle
-        if !draft.trimmedSeriesName.isEmpty {
+        if resolvedCategory?.templateKey != "book", !draft.trimmedSeriesName.isEmpty {
             event.seriesName = draft.trimmedSeriesName
         }
         if !draft.subTypeKey.isEmpty {
@@ -365,11 +521,20 @@ struct AddExperienceView: View {
         if event.unitFieldsRaw.isEmpty || existingEvent == nil {
             event.unitFieldsRaw = eventUnitFieldsRaw
         }
+        if resolvedCategory?.templateKey == "book" {
+            event.applyBookMetadata(
+                seriesName: draft.trimmedBookSeriesName,
+                volumeNumber: draft.trimmedBookVolumeNumber,
+                authorName: draft.trimmedBookAuthorName
+            )
+        }
         event.stateKey = "active"
         event.updatedAt = now
         let visit = Visit(
             visitedAt: draft.visitedAt,
-            endedAt: max(draft.endedAt, draft.visitedAt),
+            endedAt: category.templateKey == "book" && !draft.bookReadingHasEndDate
+                ? draft.visitedAt
+                : max(draft.endedAt, draft.visitedAt),
             venueNameSnapshot: draft.trimmedVenueName,
             overallRating: draft.overallRating,
             outcomeKey: draft.outcomeKey,
@@ -455,6 +620,7 @@ struct EditExperienceView: View {
     @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.favorecoThemePalette) private var themePalette
     @State private var draft: AddExperienceDraft
     @State private var expandedUnitIDs: Set<String>
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
@@ -487,6 +653,10 @@ struct EditExperienceView: View {
         category?.templateKey == "theater"
     }
 
+    private var isBookVisit: Bool {
+        category?.templateKey == "book"
+    }
+
     private var visitFocusLinks: [EventPersonLink] {
         personLinks
             .filter {
@@ -503,18 +673,14 @@ struct EditExperienceView: View {
         _draft = State(initialValue: AddExperienceDraft(visit: visit))
         let isTheater = visit.event?.category?.templateKey == "theater"
         let isScreenWork = visit.event?.category?.templateKey == "movie"
-        var initialUnits: Set<String> = if isTheater {
-            ["basic", "ticketPlan", "people", "photos"]
+        let initialUnits: Set<String> = if isTheater {
+            ["basic"]
+        } else if visit.event?.category?.templateKey == "book" {
+            ["photos", "memo"]
         } else if isScreenWork {
             ["basic", "photos", "memo"]
         } else {
             ["basic", "people", "photos", "officialInfo", "memo"]
-        }
-        if isTheater, !visit.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            initialUnits.insert("memo")
-        }
-        if isTheater, visit.amount != 0 {
-            initialUnits.insert("money")
         }
         _expandedUnitIDs = State(initialValue: initialUnits)
         _coverPhotoPath = State(initialValue: visit.eyecatchPath)
@@ -534,22 +700,44 @@ struct EditExperienceView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if isTheaterVisit {
+                if isBookVisit {
+                    editBookRecordForm
+                } else if isTheaterVisit,
+                   let photoUnit = activeUnitDefinitions(for: category).first(where: { $0.id == "photos" }) {
+                    TheaterRecordUnitBlock(
+                        unit: photoUnit,
+                        status: editStatus(for: photoUnit.id),
+                        isExpanded: binding(for: photoUnit.id)
+                    ) {
+                        editContent(for: photoUnit)
+                    }
+                }
+                if !isBookVisit, isTheaterVisit {
                     Section {
                         TheaterUnifiedFormIntroduction(entry: .visitEditing)
                     }
                 }
-                if category?.templateKey == "movie" {
-                    Section("作品区分") {
+                if !isBookVisit, category?.templateKey == "movie" {
+                    FavorecoRegistrationSection("作品区分") {
                         ScreenWorkTypeAndSeasonEditor(
                             typeKey: $draft.subTypeKey,
                             seasonNumber: $draft.screenWorkSeasonNumber
                         )
                     }
                 }
-                Section("入力ユニット") {
+                if !isBookVisit, isTheaterVisit {
+                    ForEach(activeUnitDefinitions(for: category).filter { $0.id != "photos" }) { unit in
+                        TheaterRecordUnitBlock(
+                            unit: unit,
+                            status: editStatus(for: unit.id),
+                            isExpanded: binding(for: unit.id)
+                        ) {
+                            editContent(for: unit)
+                        }
+                    }
+                } else if !isBookVisit {
                     ForEach(activeUnitDefinitions(for: category)) { unit in
-                        RecordUnitAccordion(
+                        SeparatedRecordUnitBlock(
                             unit: unit,
                             status: editStatus(for: unit.id),
                             isExpanded: binding(for: unit.id)
@@ -559,17 +747,27 @@ struct EditExperienceView: View {
                     }
                 }
             }
+            .environment(\.defaultMinListRowHeight, 48)
+            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+            .tint(themePalette.globalTint)
             .navigationTitle(
                 isTheaterVisit
                     ? TheaterUnifiedFormEntry.visitEditing.navigationTitle
-                    : "記録を編集"
+                    : isBookVisit ? "読書記録を編集" : "記録を編集"
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button {
                         dismiss()
+                    } label: {
+                        if isTheaterVisit {
+                            FavorecoIcon(systemName: "xmark", size: 18, fallbackWeight: .semibold)
+                        } else {
+                            Text("キャンセル")
+                        }
                     }
+                    .accessibilityLabel("キャンセル")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
@@ -607,10 +805,88 @@ struct EditExperienceView: View {
         }
     }
 
+    @ViewBuilder
+    private var editBookRecordForm: some View {
+        BookRecordEyecatchEditor(
+            existingPhotos: visibleExistingPhotos,
+            pendingPhotos: $pendingPhotos,
+            coverPhotoPath: $coverPhotoPath,
+            fallbackImageData: event?.eyecatchData
+        )
+
+        ForEach(bookRecordUnitDefinitions) { unit in
+            SeparatedRecordUnitBlock(
+                unit: unit,
+                status: editBookStatus(for: unit.id),
+                isExpanded: binding(for: unit.id)
+            ) {
+                editBookContent(for: unit.id)
+            }
+        }
+    }
+
+    private func editBookStatus(for unitID: String) -> RecordUnitStatus {
+        switch unitID {
+        case "bookInfo": draft.canSave ? .entered : .required
+        case "bookReading": .entered
+        case "photos": visibleExistingPhotos.isEmpty && pendingPhotos.isEmpty ? .optional : .entered
+        case "memo": draft.trimmedNote.isEmpty ? .optional : .entered
+        default: .optional
+        }
+    }
+
+    @ViewBuilder
+    private func editBookContent(for unitID: String) -> some View {
+        switch unitID {
+        case "bookInfo":
+            BookInformationEditor(
+                title: $draft.title,
+                seriesName: $draft.bookSeriesName,
+                volumeNumber: $draft.bookVolumeNumber,
+                authorName: $draft.bookAuthorName,
+                officialURL: $draft.officialURL,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                isEditable: true
+            )
+        case "bookReading":
+            BookReadingPeriodEditor(
+                startsAt: $draft.visitedAt,
+                endsAt: $draft.endedAt,
+                hasEndDate: $draft.bookReadingHasEndDate,
+                rating: $draft.overallRating,
+                ratingText: draft.ratingLabel
+            )
+        case "photos":
+            PhotoUnitEditor(
+                existingPhotos: visibleExistingPhotos,
+                deletedPhotoIDs: $deletedPhotoIDs,
+                existingPhotoMetadata: $existingPhotoMetadata,
+                pendingPhotos: $pendingPhotos,
+                selectedItems: $selectedPhotoItems,
+                category: event?.category,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                coverPhotoPath: $coverPhotoPath,
+                heroBackgroundPath: $heroBackgroundPath,
+                heroBackgroundPresetKey: $heroBackgroundPresetKey,
+                showsBookFormatPicker: false,
+                showsHeroBackgroundPicker: false
+            )
+        case "memo":
+            ExperienceMemoUnitEditor(
+                text: $draft.note,
+                placeholder: template.memoPlaceholder
+            )
+        default:
+            EmptyView()
+        }
+    }
+
     private func editStatus(for unitID: String) -> RecordUnitStatus {
         switch unitID {
         case "basic":
             return isTheaterVisit || draft.canSave ? .entered : .required
+        case "theaterRating":
+            return draft.overallRating > 0 ? .entered : .optional
         case "officialInfo":
             if isTheaterVisit {
                 let hasOfficialURL = !(event?.officialURL ?? "")
@@ -626,7 +902,8 @@ struct EditExperienceView: View {
             }
             return visiblePersonLinks.isEmpty && pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
-            return draft.hasTicketPlan ? .entered : .optional
+            let hasFocusPeople = !visitFocusLinks.isEmpty || !pendingPeople.isEmpty
+            return draft.hasTicketPlan || hasFocusPeople ? .entered : .optional
         case "photos":
             return visibleExistingPhotos.isEmpty && pendingPhotos.isEmpty ? .optional : .entered
         case "goshuinBook":
@@ -636,7 +913,7 @@ struct EditExperienceView: View {
         case "money":
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
         case "memo":
-            return draft.trimmedNote.isEmpty ? .optional : .entered
+            return draft.trimmedNote.isEmpty && draft.normalizedTagNamesRaw.isEmpty ? .optional : .entered
         case "advanced":
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
@@ -662,12 +939,14 @@ struct EditExperienceView: View {
                         overallRating: $draft.overallRating,
                         latitude: draft.latitude,
                         longitude: draft.longitude,
+                        venueOfficialURL: draft.publicPlaceSelection?.entry.officialURL ?? "",
                         placeMasters: placeMasters,
                         usesPlaceSuggestions: usesInputSuggestionDictionary,
                         usesMapSearchAssist: usesMapSearchAssist,
                         supportsPerformanceTime: category?.usesOpeningTime == true,
                         supportsStyles: true,
                         usesExplicitTheaterLayout: true,
+                        showsRating: false,
                         ratingText: draft.ratingLabel,
                         onSelectPlace: { draft.apply(placeMaster: $0) },
                         onSelectPublicPlace: { draft.apply(publicPlace: $0) },
@@ -686,6 +965,7 @@ struct EditExperienceView: View {
                         overallRating: $draft.overallRating,
                         latitude: draft.latitude,
                         longitude: draft.longitude,
+                        venueOfficialURL: draft.publicPlaceSelection?.entry.officialURL ?? "",
                         placeMasters: placeMasters,
                         usesPlaceSuggestions: usesInputSuggestionDictionary,
                         usesMapSearchAssist: usesMapSearchAssist,
@@ -701,10 +981,6 @@ struct EditExperienceView: View {
                         onSelectPublicPlace: { draft.apply(publicPlace: $0) },
                         onOpenPlaceSearch: { isShowingPlaceSearch = true }
                     )
-                }
-                if isTheaterVisit {
-                    Divider()
-                    ExperienceEmotionTagEditor(tagNamesText: $draft.tagNamesText)
                 }
                 if category?.isOutingFacilityGenre == true {
                     Divider()
@@ -742,14 +1018,32 @@ struct EditExperienceView: View {
                     existingLinks: visiblePersonLinks,
                     deletedLinkIDs: $deletedPersonLinkIDs,
                     pendingLinks: $pendingPeople,
-                    personMasters: personMasters
+                    personMasters: personMasters,
+                    emptyDescription: ""
                 )
             }
         case "ticketPlan":
-            ExperienceTicketUnitEditor(
-                outcomeKey: $draft.outcomeKey,
-                seatText: $draft.seatText,
-                usesExplicitTheaterLayout: isTheaterVisit
+            VStack(alignment: .leading, spacing: 16) {
+                ExperienceTicketUnitEditor(
+                    outcomeKey: $draft.outcomeKey,
+                    seatText: $draft.seatText,
+                    usesExplicitTheaterLayout: isTheaterVisit
+                )
+                if isTheaterVisit {
+                    Divider()
+                    TheaterFocusPeopleEditor(
+                        existingLinks: visitFocusLinks,
+                        deletedLinkIDs: $deletedPersonLinkIDs,
+                        pendingLinks: $pendingPeople,
+                        personMasters: personMasters,
+                        existingReactionTagKeys: $existingFocusReactionTagKeys
+                    )
+                }
+            }
+        case "theaterRating":
+            ExperienceRatingUnitEditor(
+                overallRating: $draft.overallRating,
+                ratingText: draft.ratingLabel
             )
         case "photos":
             PhotoUnitEditor(
@@ -792,11 +1086,17 @@ struct EditExperienceView: View {
                 usesExplicitTheaterLayout: isTheaterVisit
             )
         case "memo":
-            ExperienceMemoUnitEditor(
-                text: $draft.note,
-                placeholder: template.memoPlaceholder,
-                usesExplicitTheaterLayout: isTheaterVisit
-            )
+            VStack(alignment: .leading, spacing: 16) {
+                ExperienceMemoUnitEditor(
+                    text: $draft.note,
+                    placeholder: template.memoPlaceholder,
+                    usesExplicitTheaterLayout: isTheaterVisit
+                )
+                if isTheaterVisit {
+                    Divider()
+                    ExperienceEmotionTagEditor(tagNamesText: $draft.tagNamesText)
+                }
+            }
         case "advanced":
             ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         default:
@@ -839,7 +1139,9 @@ struct EditExperienceView: View {
         }
 
         visit.visitedAt = draft.visitedAt
-        visit.endedAt = max(draft.endedAt, draft.visitedAt)
+        visit.endedAt = category?.templateKey == "book" && !draft.bookReadingHasEndDate
+            ? draft.visitedAt
+            : max(draft.endedAt, draft.visitedAt)
         visit.venueNameSnapshot = draft.trimmedVenueName
         visit.latitude = draft.latitude
         visit.longitude = draft.longitude
@@ -920,6 +1222,7 @@ struct EditExperienceView: View {
         for photo in visibleExistingPhotos {
             guard let metadata = existingPhotoMetadata[photo.id] else { continue }
             photo.purpose = metadata.purpose.rawValue
+            photo.caption = metadata.caption.trimmingCharacters(in: .whitespacesAndNewlines)
             photo.ocrText = metadata.purpose.supportsAmount
                 ? metadata.ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
                 : ""
@@ -982,6 +1285,7 @@ struct AddVisitView: View {
     @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.favorecoThemePalette) private var themePalette
     @State private var draft: VisitDraft
     @State private var expandedUnitIDs: Set<String> = ["basic", "people", "ticketPlan", "photos", "memo"]
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
@@ -1005,6 +1309,10 @@ struct AddVisitView: View {
     init(
         event: ExperienceEvent,
         initialDraft: VisitDraft = VisitDraft(),
+        initialCoverPhotoPath: String = "",
+        initialHeroBackgroundPath: String = "",
+        initialHeroBackgroundPresetKey: String = "",
+        inheritedVisualSource: Visit? = nil,
         sourcePlan: Plan? = nil,
         onSave: (() -> Void)? = nil
     ) {
@@ -1015,33 +1323,97 @@ struct AddVisitView: View {
         if event.category?.templateKey == "book", preparedDraft.eyecatchAspectRatioKey.isEmpty {
             preparedDraft.eyecatchAspectRatioKey = EyecatchAspectRatio.resolved(for: event).key
         }
+        let inheritedVisuals = Self.makeInheritedVisuals(from: inheritedVisualSource)
         _draft = State(initialValue: preparedDraft)
+        _pendingPhotos = State(initialValue: inheritedVisuals.photos)
+        _coverPhotoPath = State(initialValue: inheritedVisuals.coverPath ?? initialCoverPhotoPath)
+        _heroBackgroundPath = State(initialValue: inheritedVisuals.backgroundPath ?? initialHeroBackgroundPath)
+        _heroBackgroundPresetKey = State(initialValue: initialHeroBackgroundPresetKey)
         _screenWorkTypeKey = State(initialValue: event.screenWorkType.rawValue)
         _screenWorkSeasonNumber = State(initialValue: event.screenWorkSeasonNumber)
-        if event.category?.templateKey == "movie" {
+        if event.category?.templateKey == "theater" {
+            _expandedUnitIDs = State(initialValue: ["basic"])
+        } else if event.category?.templateKey == "book" {
+            _expandedUnitIDs = State(initialValue: ["photos", "memo"])
+        } else if ["movie", "museum"].contains(event.category?.templateKey ?? "") {
             _expandedUnitIDs = State(initialValue: ["basic", "photos", "memo"])
         }
+    }
+
+    private static func makeInheritedVisuals(
+        from source: Visit?
+    ) -> (photos: [PendingPhoto], coverPath: String?, backgroundPath: String?) {
+        guard let source else { return ([], nil, nil) }
+        let fields = VisitUnitFields(rawValue: source.unitFieldsRaw)
+        let requestedPaths = Set([source.eyecatchPath, fields.heroBackgroundPath].filter { !$0.isEmpty })
+        guard !requestedPaths.isEmpty else { return ([], nil, nil) }
+
+        var copied: [PendingPhoto] = []
+        var replacements: [String: String] = [:]
+        for photo in (source.photos ?? []) where requestedPaths.contains(photo.relativePath) && !photo.data.isEmpty {
+            let pending = PendingPhoto(
+                data: photo.data,
+                originalFilename: photo.originalFilename,
+                width: photo.width,
+                height: photo.height,
+                metadata: PhotoMetadataDraft(
+                    purpose: .memory,
+                    caption: photo.caption
+                )
+            )
+            copied.append(pending)
+            replacements[photo.relativePath] = pending.relativePath
+        }
+        return (
+            copied,
+            replacements[source.eyecatchPath],
+            replacements[fields.heroBackgroundPath]
+        )
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                if event.category?.templateKey == "theater" {
+                if event.category?.templateKey == "book" {
+                    addVisitBookRecordForm
+                }
+                if event.category?.templateKey != "book",
+                   event.category?.templateKey == "theater",
+                   let photoUnit = activeUnitDefinitions(for: event.category).first(where: { $0.id == "photos" }) {
+                    TheaterRecordUnitBlock(
+                        unit: photoUnit,
+                        status: visitStatus(for: photoUnit.id),
+                        isExpanded: binding(for: photoUnit.id)
+                    ) {
+                        visitContent(for: photoUnit)
+                    }
+                }
+                if event.category?.templateKey != "book", event.category?.templateKey == "theater" {
                     Section {
                         TheaterUnifiedFormIntroduction(entry: .visitCreation)
                     }
                 }
-                if event.category?.templateKey == "movie" {
-                    Section("作品区分") {
+                if event.category?.templateKey != "book", event.category?.templateKey == "movie" {
+                    FavorecoRegistrationSection("作品区分") {
                         ScreenWorkTypeAndSeasonEditor(
                             typeKey: $screenWorkTypeKey,
                             seasonNumber: $screenWorkSeasonNumber
                         )
                     }
                 }
-                Section("入力ユニット") {
+                if event.category?.templateKey != "book", event.category?.templateKey == "theater" {
+                    ForEach(activeUnitDefinitions(for: event.category).filter { $0.id != "photos" }) { unit in
+                        TheaterRecordUnitBlock(
+                            unit: unit,
+                            status: visitStatus(for: unit.id),
+                            isExpanded: binding(for: unit.id)
+                        ) {
+                            visitContent(for: unit)
+                        }
+                    }
+                } else if event.category?.templateKey != "book" {
                     ForEach(activeUnitDefinitions(for: event.category)) { unit in
-                        RecordUnitAccordion(
+                        SeparatedRecordUnitBlock(
                             unit: unit,
                             status: visitStatus(for: unit.id),
                             isExpanded: binding(for: unit.id)
@@ -1051,17 +1423,31 @@ struct AddVisitView: View {
                     }
                 }
             }
+            .environment(\.defaultMinListRowHeight, 48)
+            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+            .tint(themePalette.globalTint)
             .navigationTitle(
                 event.category?.templateKey == "theater"
                     ? TheaterUnifiedFormEntry.visitCreation.navigationTitle
-                    : "記録を追加"
+                    : event.category?.templateKey == "book"
+                        ? "読書記録を追加"
+                    : ["movie", "museum"].contains(event.category?.templateKey ?? "")
+                        ? "鑑賞の記録をつける"
+                        : "記録を追加"
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button {
                         dismiss()
+                    } label: {
+                        if event.category?.templateKey == "theater" {
+                            FavorecoIcon(systemName: "xmark", size: 18, fallbackWeight: .semibold)
+                        } else {
+                            Text("キャンセル")
+                        }
                     }
+                    .accessibilityLabel("キャンセル")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
@@ -1070,7 +1456,17 @@ struct AddVisitView: View {
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
-                ExperiencePlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
+                ExperiencePlaceSearchView(
+                    initialQuery: draft.mapSearchQuery,
+                    registeredVenues: VisitUnitFields(rawValue: event.unitFieldsRaw)
+                        .eventVenues
+                        .filter { !$0.isEmpty },
+                    onSelectRegisteredVenue: { venue in
+                        draft.clearPlaceSelection()
+                        draft.venueName = venue.trimmedName
+                        draft.venueAddress = venue.trimmedAddress
+                    }
+                ) { candidate in
                     let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
                     draft.apply(place: candidate, preservingVenueName: preservesVenueName)
                 }
@@ -1105,12 +1501,89 @@ struct AddVisitView: View {
         }
     }
 
+    @ViewBuilder
+    private var addVisitBookRecordForm: some View {
+        BookRecordEyecatchEditor(
+            existingPhotos: [],
+            pendingPhotos: $pendingPhotos,
+            coverPhotoPath: $coverPhotoPath,
+            fallbackImageData: event.eyecatchData
+        )
+
+        ForEach(bookRecordUnitDefinitions) { unit in
+            SeparatedRecordUnitBlock(
+                unit: unit,
+                status: addVisitBookStatus(for: unit.id),
+                isExpanded: binding(for: unit.id)
+            ) {
+                addVisitBookContent(for: unit.id)
+            }
+        }
+    }
+
+    private func addVisitBookStatus(for unitID: String) -> RecordUnitStatus {
+        switch unitID {
+        case "bookInfo", "bookReading": .entered
+        case "photos": pendingPhotos.isEmpty ? .optional : .entered
+        case "memo": draft.trimmedNote.isEmpty ? .optional : .entered
+        default: .optional
+        }
+    }
+
+    @ViewBuilder
+    private func addVisitBookContent(for unitID: String) -> some View {
+        switch unitID {
+        case "bookInfo":
+            BookInformationEditor(
+                title: .constant(event.title),
+                seriesName: .constant(event.bookSeriesName),
+                volumeNumber: .constant(event.bookVolumeNumber),
+                authorName: .constant(event.bookAuthorName),
+                officialURL: .constant(event.officialURL),
+                aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                isEditable: false
+            )
+        case "bookReading":
+            BookReadingPeriodEditor(
+                startsAt: $draft.visitedAt,
+                endsAt: $draft.endedAt,
+                hasEndDate: $draft.bookReadingHasEndDate,
+                rating: $draft.overallRating,
+                ratingText: draft.ratingLabel
+            )
+        case "photos":
+            PhotoUnitEditor(
+                existingPhotos: [],
+                deletedPhotoIDs: .constant([]),
+                existingPhotoMetadata: .constant([:]),
+                pendingPhotos: $pendingPhotos,
+                selectedItems: $selectedPhotoItems,
+                category: event.category,
+                aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                coverPhotoPath: $coverPhotoPath,
+                heroBackgroundPath: $heroBackgroundPath,
+                heroBackgroundPresetKey: $heroBackgroundPresetKey,
+                showsBookFormatPicker: false,
+                showsHeroBackgroundPicker: false
+            )
+        case "memo":
+            ExperienceMemoUnitEditor(
+                text: $draft.note,
+                placeholder: template.memoPlaceholder
+            )
+        default:
+            EmptyView()
+        }
+    }
+
     private func visitStatus(for unitID: String) -> RecordUnitStatus {
         switch unitID {
         case "basic":
             return .entered
+        case "theaterRating":
+            return draft.overallRating > 0 ? .entered : .optional
         case "memo":
-            return draft.trimmedNote.isEmpty ? .optional : .entered
+            return draft.trimmedNote.isEmpty && draft.normalizedTagNamesRaw.isEmpty ? .optional : .entered
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
         case "goshuinBook":
@@ -1125,7 +1598,7 @@ struct AddVisitView: View {
             }
             return pendingPeople.isEmpty ? .optional : .entered
         case "ticketPlan":
-            return draft.hasTicketPlan ? .entered : .optional
+            return draft.hasTicketPlan || !pendingPeople.isEmpty ? .entered : .optional
         case "officialInfo":
             let hasOfficialURL = !event.officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let hasSocialLinks = !VisitUnitFields(rawValue: event.unitFieldsRaw).socialLinks.isEmpty
@@ -1154,12 +1627,14 @@ struct AddVisitView: View {
                     overallRating: $draft.overallRating,
                     latitude: draft.latitude,
                     longitude: draft.longitude,
+                    venueOfficialURL: draft.publicPlaceSelection?.entry.officialURL ?? "",
                     placeMasters: placeMasters,
                     usesPlaceSuggestions: usesInputSuggestionDictionary,
                     usesMapSearchAssist: usesMapSearchAssist,
                     supportsPerformanceTime: event.category?.usesOpeningTime == true,
                     supportsStyles: event.category?.templateKey == "theater",
                     usesExplicitTheaterLayout: event.category?.templateKey == "theater",
+                    showsRating: event.category?.templateKey != "theater",
                     datePrecision: screenWorkDatePrecision(
                         for: screenWorkTypeKey,
                         category: event.category
@@ -1170,17 +1645,19 @@ struct AddVisitView: View {
                     onSelectPublicPlace: { draft.apply(publicPlace: $0) },
                     onOpenPlaceSearch: { isShowingPlaceSearch = true }
                 )
+            }
+        case "memo":
+            VStack(alignment: .leading, spacing: 16) {
+                ExperienceMemoUnitEditor(
+                    text: $draft.note,
+                    placeholder: template.memoPlaceholder,
+                    usesExplicitTheaterLayout: event.category?.templateKey == "theater"
+                )
                 if event.category?.templateKey == "theater" {
                     Divider()
                     ExperienceEmotionTagEditor(tagNamesText: $draft.tagNamesText)
                 }
             }
-        case "memo":
-            ExperienceMemoUnitEditor(
-                text: $draft.note,
-                placeholder: template.memoPlaceholder,
-                usesExplicitTheaterLayout: event.category?.templateKey == "theater"
-            )
         case "photos":
             PhotoUnitEditor(
                 existingPhotos: [],
@@ -1228,14 +1705,31 @@ struct AddVisitView: View {
                     existingLinks: [],
                     deletedLinkIDs: .constant([]),
                     pendingLinks: $pendingPeople,
-                    personMasters: personMasters
+                    personMasters: personMasters,
+                    emptyDescription: ""
                 )
             }
         case "ticketPlan":
-            ExperienceTicketUnitEditor(
-                outcomeKey: $draft.outcomeKey,
-                seatText: $draft.seatText,
-                usesExplicitTheaterLayout: event.category?.templateKey == "theater"
+            VStack(alignment: .leading, spacing: 16) {
+                ExperienceTicketUnitEditor(
+                    outcomeKey: $draft.outcomeKey,
+                    seatText: $draft.seatText,
+                    usesExplicitTheaterLayout: event.category?.templateKey == "theater"
+                )
+                if event.category?.templateKey == "theater" {
+                    Divider()
+                    TheaterFocusPeopleEditor(
+                        existingLinks: [],
+                        deletedLinkIDs: .constant([]),
+                        pendingLinks: $pendingPeople,
+                        personMasters: personMasters
+                    )
+                }
+            }
+        case "theaterRating":
+            ExperienceRatingUnitEditor(
+                overallRating: $draft.overallRating,
+                ratingText: draft.ratingLabel
             )
         case "money":
             ExperienceMoneyUnitEditor(
@@ -1274,7 +1768,9 @@ struct AddVisitView: View {
         var attendedAttempt: TicketAttempt?
         let visit = Visit(
             visitedAt: draft.visitedAt,
-            endedAt: max(draft.endedAt, draft.visitedAt),
+            endedAt: event.category?.templateKey == "book" && !draft.bookReadingHasEndDate
+                ? draft.visitedAt
+                : max(draft.endedAt, draft.visitedAt),
             venueNameSnapshot: draft.trimmedVenueName,
             overallRating: draft.overallRating,
             outcomeKey: draft.outcomeKey,
@@ -1377,7 +1873,11 @@ private struct SavedExperienceDetailView: View {
     let onDone: () -> Void
 
     var body: some View {
-        ExperienceDetailView(visit: visit, onBack: onDone)
+        ExperienceDetailView(
+            visit: visit,
+            onBack: onDone,
+            showsScrollingFrame: false
+        )
             .navigationBarBackButtonHidden()
     }
 }
@@ -1385,6 +1885,9 @@ private struct SavedExperienceDetailView: View {
 struct AddExperienceDraft {
     var title: String = ""
     var seriesName: String = ""
+    var bookSeriesName: String = ""
+    var bookVolumeNumber: String = ""
+    var bookAuthorName: String = ""
     var subTypeKey: String = ""
     var screenWorkSeasonNumber: Int = 0
     var performanceTypeCustomName: String = ""
@@ -1394,6 +1897,7 @@ struct AddExperienceDraft {
     var theaterCreditsText: String = ""
     var visitedAt: Date = Date()
     var endedAt: Date = Date()
+    var bookReadingHasEndDate: Bool = true
     var styleNamesText: String = ""
     var venueName: String = ""
     var venueAddress: String = ""
@@ -1420,6 +1924,9 @@ struct AddExperienceDraft {
         subTypeKey = visit.event?.subTypeKey ?? ""
         officialURL = visit.event?.officialURL ?? ""
         let eventFields = VisitUnitFields(rawValue: visit.event?.unitFieldsRaw ?? "")
+        bookSeriesName = eventFields.bookSeriesName
+        bookVolumeNumber = eventFields.bookVolumeNumber
+        bookAuthorName = eventFields.bookAuthorName
         if visit.event?.category?.templateKey == "movie" {
             subTypeKey = ScreenWorkType.resolved(from: subTypeKey).rawValue
             screenWorkSeasonNumber = eventFields.screenWorkSeasonNumber
@@ -1430,6 +1937,7 @@ struct AddExperienceDraft {
         theaterCreditsText = eventFields.eventCreditsText
         visitedAt = visit.visitedAt
         endedAt = visit.endedAt
+        bookReadingHasEndDate = VisitUnitFields(rawValue: visit.unitFieldsRaw).bookReadingHasEndDate ?? true
         styleNamesText = VisitUnitFields(rawValue: visit.unitFieldsRaw).styleNames.joined(separator: "、")
         venueName = visit.venueNameSnapshot
         venueAddress = visit.placeMaster?.address ?? ""
@@ -1473,6 +1981,18 @@ struct AddExperienceDraft {
 
     var trimmedSeriesName: String {
         seriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookSeriesName: String {
+        bookSeriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookVolumeNumber: String {
+        bookVolumeNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookAuthorName: String {
+        bookAuthorName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var trimmedOfficialURL: String {
@@ -1591,7 +2111,8 @@ struct AddExperienceDraft {
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
                 : eyecatchAspectRatioKey,
             goshuinBookSizeKey: category?.templateKey == "goshuin" && goshuinBookSizeKey.isEmpty ? GoshuinBookSize.standard.key : goshuinBookSizeKey,
-            advancedEntries: trimmedAdvancedEntries
+            advancedEntries: trimmedAdvancedEntries,
+            bookReadingHasEndDate: category?.templateKey == "book" ? bookReadingHasEndDate : nil
         )
     }
 
@@ -1610,7 +2131,10 @@ struct AddExperienceDraft {
                 : 0,
             eyecatchAspectRatioKey: category?.templateKey == "book"
                 ? (eyecatchAspectRatioKey.isEmpty ? EyecatchAspectRatio.hardcoverBook.key : eyecatchAspectRatioKey)
-                : ""
+                : "",
+            bookSeriesName: category?.templateKey == "book" ? trimmedBookSeriesName : "",
+            bookVolumeNumber: category?.templateKey == "book" ? trimmedBookVolumeNumber : "",
+            bookAuthorName: category?.templateKey == "book" ? trimmedBookAuthorName : ""
         ).encodedRawValue
     }
 
@@ -1665,7 +2189,15 @@ func applyTargetChangesFromExperienceEdit(
     guard event.category?.templateKey != "theater" else { return }
 
     event.title = draft.trimmedTitle
-    event.seriesName = draft.trimmedSeriesName
+    if event.category?.templateKey == "book" {
+        event.applyBookMetadata(
+            seriesName: draft.trimmedBookSeriesName,
+            volumeNumber: draft.trimmedBookVolumeNumber,
+            authorName: draft.trimmedBookAuthorName
+        )
+    } else {
+        event.seriesName = draft.trimmedSeriesName
+    }
     if event.category?.isOutingFacilityGenre == true {
         event.subTypeKey = draft.subTypeKey
         let destination = outingCategory(
@@ -1691,6 +2223,9 @@ func applyTargetChangesFromExperienceEdit(
     eventFields.eventSubtitle = draft.trimmedEventSubtitle
     if event.category?.templateKey == "book" {
         eventFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
+        eventFields.bookSeriesName = draft.trimmedBookSeriesName
+        eventFields.bookVolumeNumber = draft.trimmedBookVolumeNumber
+        eventFields.bookAuthorName = draft.trimmedBookAuthorName
     }
     if event.category?.templateKey == "movie" {
         eventFields.screenWorkSeasonNumber = ScreenWorkType.resolved(from: draft.subTypeKey).supportsSeason
@@ -1723,8 +2258,9 @@ private func outingCategory(
 }
 
 struct VisitDraft {
-    var visitedAt: Date = Date()
-    var endedAt: Date = Date()
+    var visitedAt: Date
+    var endedAt: Date
+    var bookReadingHasEndDate: Bool = true
     var styleNamesText: String = ""
     var venueName: String = ""
     var venueAddress: String = ""
@@ -1743,7 +2279,11 @@ struct VisitDraft {
     var tagNamesText: String = ""
     var excludedEventCastLinkIDs: Set<UUID> = []
 
-    init() {}
+    init() {
+        let initialTime = Date().roundedToNearestFiveMinutes()
+        visitedAt = initialTime
+        endedAt = initialTime
+    }
 
     init(plan: Plan) {
         let attempt = (plan.ticketAttempts ?? [])
@@ -1772,7 +2312,26 @@ struct VisitDraft {
         .joined(separator: "\n")
     }
 
+    /// 同じ対象をもう一度記録する時に、場所と表示設定だけを引き継ぐ。
+    /// 日時・評価・感想・写真・費用・人物・タグは新しい体験として空にする。
+    init(repeating visit: Visit) {
+        let initialTime = Date().roundedToNearestFiveMinutes()
+        let previousFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+        let place = visit.placeMaster
+        let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
+
+        visitedAt = initialTime
+        endedAt = initialTime
+        styleNamesText = previousFields.styleNames.joined(separator: "・")
+        venueName = visit.venueNameSnapshot
+        venueAddress = place?.address ?? ""
+        latitude = hasVisitCoordinate ? visit.latitude : (place?.latitude ?? 0)
+        longitude = hasVisitCoordinate ? visit.longitude : (place?.longitude ?? 0)
+        eyecatchAspectRatioKey = previousFields.eyecatchAspectRatioKey
+    }
+
     init(inboxItem: InboxItem) {
+        self.init()
         note = [inboxItem.body, inboxItem.sourceURL]
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .joined(separator: "\n")
@@ -1875,7 +2434,8 @@ struct VisitDraft {
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
                 : eyecatchAspectRatioKey,
             goshuinBookSizeKey: category?.templateKey == "goshuin" && goshuinBookSizeKey.isEmpty ? GoshuinBookSize.standard.key : goshuinBookSizeKey,
-            advancedEntries: trimmedAdvancedEntries
+            advancedEntries: trimmedAdvancedEntries,
+            bookReadingHasEndDate: category?.templateKey == "book" ? bookReadingHasEndDate : nil
         )
     }
 
@@ -1965,28 +2525,62 @@ func normalizedPlaceText(_ value: String) -> String {
 }
 
 func deduplicatedPlaceSuggestions(_ places: [PlaceMaster]) -> [PlaceMaster] {
-    var seenPlaces = Set<String>()
-    return places.filter { place in
-        let normalizedName = normalizedPlaceText(place.name)
-        let normalizedAddress = normalizedPlaceSuggestionAddress(place.address)
-        let locationKey: String
-        if !normalizedAddress.isEmpty {
-            locationKey = normalizedAddress
-        } else if place.latitude != 0 || place.longitude != 0 {
-            locationKey = String(format: "%.5f,%.5f", place.latitude, place.longitude)
+    var results: [PlaceMaster] = []
+    for place in places {
+        if let index = results.firstIndex(where: { placeSuggestionsReferToSameLocation($0, place) }) {
+            if placeSuggestionQuality(place) > placeSuggestionQuality(results[index]) {
+                results[index] = place
+            }
         } else {
-            locationKey = place.id.uuidString
+            results.append(place)
         }
-        return seenPlaces.insert("\(normalizedName)|\(locationKey)").inserted
     }
+    return results
 }
 
-private func normalizedPlaceSuggestionAddress(_ value: String) -> String {
+func normalizedPlaceSuggestionAddress(_ value: String) -> String {
     value
         .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
         .replacingOccurrences(of: #"〒?\s*\d{3}[-ー‐‑‒–—―]?\d{4}"#, with: "", options: .regularExpression)
         .replacingOccurrences(of: #"[-ー‐‑‒–—―]"#, with: "-", options: .regularExpression)
         .replacingOccurrences(of: #"[\s,，、。]"#, with: "", options: .regularExpression)
+}
+
+func placeAddressesReferToSameLocation(_ lhs: String, _ rhs: String) -> Bool {
+    guard !lhs.isEmpty, !rhs.isEmpty else { return lhs.isEmpty || rhs.isEmpty }
+    return lhs == rhs || lhs.contains(rhs) || rhs.contains(lhs)
+}
+
+private func placeSuggestionsReferToSameLocation(_ lhs: PlaceMaster, _ rhs: PlaceMaster) -> Bool {
+    guard normalizedPlaceText(lhs.name) == normalizedPlaceText(rhs.name) else { return false }
+
+    let lhsHasCoordinate = lhs.latitude != 0 || lhs.longitude != 0
+    let rhsHasCoordinate = rhs.latitude != 0 || rhs.longitude != 0
+    if lhsHasCoordinate, rhsHasCoordinate {
+        let coordinatesAreNear = abs(lhs.latitude - rhs.latitude) < 0.001
+            && abs(lhs.longitude - rhs.longitude) < 0.001
+        if coordinatesAreNear { return true }
+    }
+
+    return placeAddressesReferToSameLocation(
+        normalizedPlaceSuggestionAddress(lhs.address),
+        normalizedPlaceSuggestionAddress(rhs.address)
+    )
+}
+
+private func placeSuggestionQuality(_ place: PlaceMaster) -> Int {
+    let hasCoordinate = place.latitude != 0 || place.longitude != 0
+    let normalizedAddress = normalizedPlaceSuggestionAddress(place.address)
+    return (hasCoordinate ? 10_000 : 0) + normalizedAddress.count
+}
+
+private extension Date {
+    func roundedToNearestFiveMinutes(calendar: Calendar = .current) -> Date {
+        let minute = calendar.component(.minute, from: self)
+        let roundedMinute = Int((Double(minute) / 5).rounded()) * 5
+        let startOfHour = calendar.dateInterval(of: .hour, for: self)?.start ?? self
+        return calendar.date(byAdding: .minute, value: roundedMinute, to: startOfHour) ?? self
+    }
 }
 
 private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnitDefinition] {
@@ -2005,10 +2599,31 @@ private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnit
         return uniqueDefinitions
     }
 
+    var theaterDefinitions = uniqueDefinitions.filter { $0.id != "people" }
+    let hasViewingRecordUnit = uniqueDefinitions.contains { $0.id == "ticketPlan" || $0.id == "people" }
+    if hasViewingRecordUnit, !theaterDefinitions.contains(where: { $0.id == "ticketPlan" }) {
+        theaterDefinitions.append(
+            RecordUnitDefinition(
+                id: "ticketPlan",
+                name: "鑑賞記録",
+                description: "チケット状態・座席・注目した人",
+                isRequired: false
+            )
+        )
+    }
+    theaterDefinitions.append(
+        RecordUnitDefinition(
+            id: "theaterRating",
+            name: "評価",
+            description: "この回の満足度",
+            isRequired: false
+        )
+    )
+
     let theaterOrder = [
         "basic",
+        "theaterRating",
         "ticketPlan",
-        "people",
         "photos",
         "memo",
         "money",
@@ -2019,12 +2634,39 @@ private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnit
     let orderIndex = Dictionary(
         uniqueKeysWithValues: theaterOrder.enumerated().map { ($1, $0) }
     )
-    return uniqueDefinitions
+    return theaterDefinitions
         .sorted {
             (orderIndex[$0.id] ?? Int.max) < (orderIndex[$1.id] ?? Int.max)
         }
         .map(theaterRecordUnitDefinition)
 }
+
+private let bookRecordUnitDefinitions: [RecordUnitDefinition] = [
+    RecordUnitDefinition(
+        id: "bookInfo",
+        name: "本の情報",
+        description: "書名、シリーズ・巻数・著者、本の種類",
+        isRequired: true
+    ),
+    RecordUnitDefinition(
+        id: "bookReading",
+        name: "読書の記録",
+        description: "読み始めた日、読み終えた日、評価",
+        isRequired: false
+    ),
+    RecordUnitDefinition(
+        id: "photos",
+        name: "写真",
+        description: "この読書記録に残す写真",
+        isRequired: false
+    ),
+    RecordUnitDefinition(
+        id: "memo",
+        name: "読書メモ",
+        description: "感想や残しておきたいこと",
+        isRequired: false
+    ),
+]
 
 private func theaterRecordUnitDefinition(
     _ definition: RecordUnitDefinition
@@ -2033,36 +2675,36 @@ private func theaterRecordUnitDefinition(
     case "basic":
         return RecordUnitDefinition(
             id: definition.id,
-            name: "体験日程",
-            description: "鑑賞日・開演・終演・会場",
+            name: "参加日・会場",
+            description: "鑑賞日・開演・終演・鑑賞方法・会場",
             isRequired: definition.isRequired
+        )
+    case "theaterRating":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "評価",
+            description: "この回の満足度",
+            isRequired: false
         )
     case "ticketPlan":
         return RecordUnitDefinition(
             id: definition.id,
             name: "鑑賞記録",
-            description: "鑑賞方法・座席",
-            isRequired: definition.isRequired
-        )
-    case "people":
-        return RecordUnitDefinition(
-            id: definition.id,
-            name: "お目当て・注目した人",
-            description: "出演者・スタッフから記録",
+            description: "チケット状態・座席・注目した人",
             isRequired: definition.isRequired
         )
     case "photos":
         return RecordUnitDefinition(
             id: definition.id,
-            name: "写真",
-            description: "ポスター・資料・観劇の写真",
+            name: "写真・アイキャッチ",
+            description: "この回のアイキャッチ・観劇の写真",
             isRequired: definition.isRequired
         )
     case "memo":
         return RecordUnitDefinition(
             id: definition.id,
-            name: "感想記録",
-            description: "評価・感情タグ・自由メモ",
+            name: "感想・感情タグ",
+            description: "感想・感情タグ・その他のタグ",
             isRequired: definition.isRequired
         )
     case "money":
@@ -2143,7 +2785,8 @@ private enum RecordUnitStatus {
     }
 }
 
-private struct RecordUnitAccordion<Content: View>: View {
+private struct TheaterRecordUnitBlock<Content: View>: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
     let unit: RecordUnitDefinition
     let status: RecordUnitStatus
     @Binding var isExpanded: Bool
@@ -2162,28 +2805,91 @@ private struct RecordUnitAccordion<Content: View>: View {
     }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            content()
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-        } label: {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(unit.name)
-                        .font(FavorecoTypography.bodyStrong)
-                    Text(unit.description)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                Spacer(minLength: 8)
-                Text(status.title)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(status.color)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(status.color.opacity(0.12), in: Capsule())
+        if unit.id == "photos" {
+            Section {
+                content()
+                    .padding(.top, 10)
+                    .padding(.bottom, 4)
+            } header: {
+                unitHeader
             }
+        } else {
+            Section {
+                DisclosureGroup(isExpanded: $isExpanded) {
+                    content()
+                        .padding(.bottom, 4)
+                } label: {
+                    HStack(spacing: 10) {
+                        Text(unit.description)
+                            .font(FavorecoTypography.jpSans(12, weight: .regular, relativeTo: .caption))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        Spacer(minLength: 8)
+                        Text(status.title)
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(status.color)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(status.color.opacity(0.12), in: Capsule())
+                    }
+                    .frame(minHeight: 34)
+                }
+            } header: {
+                unitHeader
+            }
+        }
+    }
+
+    private var unitHeader: some View {
+        FavorecoRegistrationSectionHeader(unit.name)
+            .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .headline))
+            .textCase(nil)
+    }
+}
+
+private struct SeparatedRecordUnitBlock<Content: View>: View {
+    let unit: RecordUnitDefinition
+    let status: RecordUnitStatus
+    @Binding var isExpanded: Bool
+    let content: () -> Content
+
+    init(
+        unit: RecordUnitDefinition,
+        status: RecordUnitStatus,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.unit = unit
+        self.status = status
+        _isExpanded = isExpanded
+        self.content = content
+    }
+
+    var body: some View {
+        Section {
+            DisclosureGroup(isExpanded: $isExpanded) {
+                content()
+                    .padding(.bottom, 4)
+            } label: {
+                HStack(spacing: 10) {
+                    Text(unit.description)
+                        .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                        .foregroundStyle(.secondary.opacity(0.82))
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    Text(status.title)
+                        .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                        .foregroundStyle(status.color)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(status.color.opacity(0.10), in: Capsule())
+                }
+                .frame(minHeight: 32)
+            }
+        } header: {
+            FavorecoRegistrationSectionHeader(unit.name)
+                .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .headline))
+                .textCase(nil)
         }
     }
 }

@@ -39,6 +39,37 @@ enum PlaceSearchService {
         return prioritizedCandidates(candidates, for: trimmedQuery)
     }
 
+    /// Map previewで使う座標解決。Apple MapsのPOI検索で見つからない住所は
+    /// 住所ジオコーダーへフォールバックし、施設詳細と記録詳細で同じ結果を使う。
+    @MainActor
+    static func resolveCoordinate(queries: [String]) async -> CLLocationCoordinate2D? {
+        let normalizedQueries = queries.reduce(into: [String]()) { result, value in
+            let query = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty, !result.contains(query) else { return }
+            result.append(query)
+        }
+
+        for query in normalizedQueries {
+            guard !Task.isCancelled else { return nil }
+            if let candidate = try? await search(query: query).first {
+                return CLLocationCoordinate2D(
+                    latitude: candidate.latitude,
+                    longitude: candidate.longitude
+                )
+            }
+        }
+
+        for query in normalizedQueries {
+            guard !Task.isCancelled else { return nil }
+            let geocoder = CLGeocoder()
+            if let location = try? await geocoder.geocodeAddressString(query).first?.location {
+                return location.coordinate
+            }
+        }
+
+        return nil
+    }
+
     nonisolated static func prioritizedCandidates(
         _ candidates: [PlaceSearchCandidate],
         for query: String
@@ -128,6 +159,33 @@ enum PlaceSearchService {
         } else {
             return nil
         }
+        return components?.url
+    }
+
+    nonisolated static func googleMapsURL(
+        name: String,
+        address: String,
+        latitude: Double,
+        longitude: Double
+    ) -> URL? {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query: String
+
+        if latitude != 0 || longitude != 0 {
+            query = "\(latitude),\(longitude)"
+        } else {
+            query = [trimmedName, trimmedAddress]
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+        }
+        guard !query.isEmpty else { return nil }
+
+        var components = URLComponents(string: "https://www.google.com/maps/search/")
+        components?.queryItems = [
+            URLQueryItem(name: "api", value: "1"),
+            URLQueryItem(name: "query", value: query),
+        ]
         return components?.url
     }
 }

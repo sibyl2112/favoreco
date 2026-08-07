@@ -34,10 +34,10 @@ jp-nagano-togakushi-jinja-chusha,shrine,戸隠神社 中社,長野県,needs_revi
 jp-niigata-yahiko-jinja,shrine,彌彦神社,新潟県,needs_review,,yahiko-jinjya.or.jp,https://yahiko-jinjya.or.jp/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
 jp-nara-horyuji,temple,聖徳宗総本山 法隆寺,奈良県,confirmed,official_tourism,www.visitnara.jp,https://www.visitnara.jp/venues/A00506/,2026-07-21,自治体・観光協会・DMO等の公式観光案内への掲載を既存出典で確認
 jp-kyoto-jishoji-ginkakuji,temple,慈照寺（銀閣寺）,京都府,confirmed,official_tourism,ja.kyoto.travel,https://ja.kyoto.travel/tourism/single01.php?category_id=7&tourism_id=308,2026-07-21,自治体・観光協会・DMO等の公式観光案内への掲載を既存出典で確認
-jp-kyoto-sanjusangendo,temple,蓮華王院 三十三間堂,京都府,needs_review,,www.sanjusangendo.jp,https://www.sanjusangendo.jp/visit/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
+jp-kyoto-sanjusangendo,temple,蓮華王院 三十三間堂,京都府,confirmed,official_pilgrimage,平成洛陽三十三所観音霊場会,https://rakuyo33.jp/rengeoin/,2026-08-06,洛陽三十三所観音霊場第17番の公式札所案内を確認
 jp-shiga-hieizan-enryakuji,temple,天台宗総本山 比叡山延暦寺,滋賀県,confirmed,official_tourism,京都府観光連盟公式サイト,https://www.kyoto-kankou.or.jp/info_search/9048,2026-07-22,京都府観光連盟の広域観光案内への掲載を確認。所在地は滋賀県大津市
-jp-kanagawa-kamakura-kotokuin,temple,鎌倉大仏殿高徳院,神奈川県,needs_review,,www.kotoku-in.jp,https://www.kotoku-in.jp/?lang=ja,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
-jp-kanagawa-kamakura-hasedera,temple,鎌倉 長谷寺,神奈川県,needs_review,,www.hasedera.jp,https://www.hasedera.jp/about/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
+jp-kanagawa-kamakura-kotokuin,temple,鎌倉大仏殿高徳院,神奈川県,confirmed,official_pilgrimage,鎌倉三十三観音霊場巡拝,https://www.33kannon.jp/fudasho_23.html,2026-08-06,鎌倉三十三観音霊場第23番の公式札所案内を確認
+jp-kanagawa-kamakura-hasedera,temple,鎌倉 長谷寺,神奈川県,confirmed,official_pilgrimage,坂東三十三観音霊場会,https://bandou.gr.jp/temple/%e6%b5%b7%e5%85%89%e5%b1%b1-%e9%95%b7%e8%b0%b7%e5%af%ba%ef%bc%88%e9%95%b7%e8%b0%b7%e8%a6%b3%e9%9f%b3%ef%bc%89/,2026-08-06,坂東三十三観音第4番および鎌倉三十三観音第4番の公式札所案内を確認
 jp-yamagata-risshakuji-yamadera,temple,宝珠山 立石寺,山形県,needs_review,,www.kankou.yamagata.yamagata.jp,https://www.kankou.yamagata.yamagata.jp/db/cgi-bin/search/search.cgi?c=20&d01=10086382911950&panel=detail,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
 jp-iwate-motsuji,temple,天台宗 別格本山 毛越寺,岩手県,needs_review,,motsuji.or.jp,https://motsuji.or.jp/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
 jp-miyagi-matsushima-zuiganji,temple,国宝 瑞巌寺,宮城県,needs_review,,www.zuiganji.or.jp,https://www.zuiganji.or.jp/guide/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
@@ -103,13 +103,13 @@ jp-tokyo-gokokuji,temple,大本山 護国寺,東京都,needs_review,,www.gokokuj
 jp-tokyo-kaneiji,temple,東叡山 寛永寺,東京都,needs_review,,kaneiji.jp,https://kaneiji.jp/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
 jp-tokyo-gotokuji,temple,大谿山 豪徳寺,東京都,needs_review,,gotokuji.jp,https://gotokuji.jp/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
 jp-kanagawa-kamakura-engakuji,temple,臨済宗大本山 円覚寺,神奈川県,needs_review,,www.engakuji.or.jp,https://www.engakuji.or.jp/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
-jp-kanagawa-kamakura-kenchoji,temple,臨済宗建長寺派 大本山 建長寺,神奈川県,needs_review,,www.kenchoji.com,https://www.kenchoji.com/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
-jp-kanagawa-kamakura-hokokuji,temple,報国寺,神奈川県,needs_review,,houkokuji.or.jp,https://houkokuji.or.jp/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
+jp-kanagawa-kamakura-kenchoji,temple,臨済宗建長寺派 大本山 建長寺,神奈川県,confirmed,official_pilgrimage,鎌倉三十三観音霊場巡拝,https://www.33kannon.jp/fudasho_28.html,2026-08-06,鎌倉三十三観音霊場第28番の公式札所案内を確認
+jp-kanagawa-kamakura-hokokuji,temple,報国寺,神奈川県,confirmed,official_pilgrimage,鎌倉三十三観音霊場巡拝,https://www.33kannon.jp/fudasho_10.html,2026-08-06,鎌倉三十三観音霊場第10番の公式札所案内を確認
 jp-kanagawa-kamakura-meigetsuin,temple,明月院,神奈川県,confirmed,official_tourism,www.trip-kamakura.com,https://www.trip-kamakura.com/,2026-07-21,自治体・観光協会・DMO等の公式観光案内への掲載を既存出典で確認
 jp-kanagawa-kamakura-jochiji,temple,臨済宗円覚寺派 浄智寺,神奈川県,confirmed,official_tourism,www.trip-kamakura.com,https://www.trip-kamakura.com/,2026-07-21,自治体・観光協会・DMO等の公式観光案内への掲載を既存出典で確認
 jp-kanagawa-kamakura-jomyoji,temple,稲荷山 浄妙寺,神奈川県,confirmed,official_tourism,www.trip-kamakura.com,https://www.trip-kamakura.com/model_course/detail.php?id=35,2026-07-21,自治体・観光協会・DMO等の公式観光案内への掲載を既存出典で確認
-jp-kanagawa-kamakura-sugimotodera,temple,大蔵山 杉本寺,神奈川県,needs_review,,sugimotodera.com,https://sugimotodera.com/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
-jp-kanagawa-kamakura-komyoji,temple,浄土宗大本山 光明寺,神奈川県,needs_review,,komyoji-kamakura.or.jp,https://komyoji-kamakura.or.jp/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
+jp-kanagawa-kamakura-sugimotodera,temple,大蔵山 杉本寺,神奈川県,confirmed,official_pilgrimage,坂東三十三観音霊場会,https://bandou.gr.jp/temple/81/,2026-08-06,坂東三十三観音第1番および鎌倉三十三観音第1番の公式札所案内を確認
+jp-kanagawa-kamakura-komyoji,temple,浄土宗大本山 光明寺,神奈川県,confirmed,official_pilgrimage,鎌倉三十三観音霊場巡拝,https://www.33kannon.jp/fudasho_18.html,2026-08-06,鎌倉三十三観音霊場第18番の公式札所案内を確認
 jp-kanagawa-kamakura-gokurakuji,temple,霊鷲山 極楽寺,神奈川県,confirmed,official_tourism,www.trip-kamakura.com,https://www.trip-kamakura.com/,2026-07-21,自治体・観光協会・DMO等の公式観光案内への掲載を既存出典で確認
 jp-kanagawa-kamakura-myohonji,temple,長興山 妙本寺,神奈川県,needs_review,,www.myohonji.or.jp,https://www.myohonji.or.jp/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する
 jp-kanagawa-kawasaki-daishi,temple,川崎大師 平間寺,神奈川県,needs_review,,www.kawasakidaishi.com,https://www.kawasakidaishi.com/,2026-07-21,寺社公式・神社庁・宗派資料等が現出典。第三者の観光・参拝掲載を追加確認する

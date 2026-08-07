@@ -30,6 +30,38 @@ final class PublicPlaceCatalogTests: XCTestCase {
         XCTAssertEqual(cache.lastSyncedAt, date(3))
     }
 
+    func testCacheCodablePreservesSourceURL() throws {
+        let entry = PublicPlaceCatalogEntry(
+            id: "source-place",
+            catalogID: "venue",
+            parentPlaceID: "",
+            typeKeys: ["theater"],
+            officialName: "出典確認劇場",
+            reading: "",
+            aliases: [],
+            prefecture: "東京都",
+            municipality: "千代田区",
+            address: "東京都千代田区1-1",
+            latitude: 0,
+            longitude: 0,
+            officialURL: "https://example.org/venue",
+            sourceURL: "https://example.org/evidence",
+            capacity: 100,
+            operationalStatusRaw: PlaceOperationalStatus.open.rawValue,
+            templeSect: "",
+            enshrinedDeities: [],
+            pilgrimageMemberships: [],
+            updatedAt: date(1)
+        )
+        var cache = PublicPlaceCatalogCache()
+        cache.merge([change(entry)])
+
+        let data = try JSONEncoder().encode(cache)
+        let decoded = try JSONDecoder().decode(PublicPlaceCatalogCache.self, from: data)
+
+        XCTAssertEqual(decoded.entries.first?.sourceURL, "https://example.org/evidence")
+    }
+
     func testImporterPreservesCatalogFieldsWithoutAddingSwiftDataSchema() {
         let entry = PublicPlaceCatalogEntry(
             id: "shrine-1",
@@ -45,6 +77,7 @@ final class PublicPlaceCatalogTests: XCTestCase {
             latitude: 35.0,
             longitude: 139.0,
             officialURL: "https://example.org/",
+            sourceURL: "https://example.org/source",
             capacity: nil,
             operationalStatusRaw: PlaceOperationalStatus.open.rawValue,
             templeSect: "",
@@ -103,6 +136,51 @@ final class PublicPlaceCatalogTests: XCTestCase {
         XCTAssertEqual(selection.entry, entry)
     }
 
+    func testCatalogScopesIncludeOnlyRelevantPlaceTypes() {
+        let museum = makeEntry(
+            id: "museum",
+            name: "森美術館",
+            catalogID: "museum",
+            typeKeys: ["art_museum"],
+            updatedAt: date(1)
+        )
+        let themePark = makeEntry(
+            id: "theme-park",
+            name: "試験テーマパーク",
+            typeKeys: ["theme_park"],
+            updatedAt: date(1)
+        )
+        let aquarium = makeEntry(
+            id: "aquarium",
+            name: "試験水族館",
+            typeKeys: ["aquarium"],
+            updatedAt: date(1)
+        )
+
+        XCTAssertTrue(PublicPlaceCatalogScope.museum.includes(museum))
+        XCTAssertFalse(PublicPlaceCatalogScope.museum.includes(themePark))
+        XCTAssertTrue(PublicPlaceCatalogScope.themePark.includes(themePark))
+        XCTAssertFalse(PublicPlaceCatalogScope.themePark.includes(aquarium))
+        XCTAssertTrue(PublicPlaceCatalogScope.natureLiving.includes(aquarium))
+        XCTAssertFalse(PublicPlaceCatalogScope.natureLiving.includes(museum))
+    }
+
+    func testCatalogScopesClassifyImportedPlaceMasters() {
+        let museum = PlaceMaster(name: "森美術館")
+        museum.placeTagsRaw = "art_museum,museum"
+        let themePark = PlaceMaster(name: "試験テーマパーク")
+        themePark.placeTagsRaw = "theme_park,amusement_park"
+        let aquarium = PlaceMaster(name: "試験水族館")
+        aquarium.placeTagsRaw = "aquarium"
+
+        XCTAssertTrue(PublicPlaceCatalogScope.museum.includes(museum))
+        XCTAssertFalse(PublicPlaceCatalogScope.museum.includes(themePark))
+        XCTAssertTrue(PublicPlaceCatalogScope.themePark.includes(themePark))
+        XCTAssertFalse(PublicPlaceCatalogScope.themePark.includes(aquarium))
+        XCTAssertTrue(PublicPlaceCatalogScope.natureLiving.includes(aquarium))
+        XCTAssertFalse(PublicPlaceCatalogScope.natureLiving.includes(museum))
+    }
+
     func testResolveSelectionReusesExistingPlace() throws {
         let entry = makeEntry(id: "existing-place", name: "既存劇場", updatedAt: date(1))
         let existing = PublicPlaceCatalogImporter.makePlaceMaster(from: entry, now: date(1))
@@ -151,15 +229,17 @@ final class PublicPlaceCatalogTests: XCTestCase {
         name: String,
         reading: String = "",
         aliases: [String] = [],
+        catalogID: String = "test",
+        typeKeys: [String] = ["theater"],
         address: String = "東京都千代田区1-1",
         status: PlaceOperationalStatus = .open,
         updatedAt: Date
     ) -> PublicPlaceCatalogEntry {
         PublicPlaceCatalogEntry(
             id: id,
-            catalogID: "test",
+            catalogID: catalogID,
             parentPlaceID: "",
-            typeKeys: ["theater"],
+            typeKeys: typeKeys,
             officialName: name,
             reading: reading,
             aliases: aliases,
@@ -169,6 +249,7 @@ final class PublicPlaceCatalogTests: XCTestCase {
             latitude: 0,
             longitude: 0,
             officialURL: "",
+            sourceURL: "",
             capacity: 100,
             operationalStatusRaw: status.rawValue,
             templeSect: "",

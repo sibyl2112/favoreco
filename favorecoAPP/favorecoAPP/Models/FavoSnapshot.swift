@@ -186,6 +186,7 @@ struct FavoPinnedTargetSnapshot: Identifiable {
     let subtitle: String
     let iconSymbol: String
     let colorHex: String
+    let categoryTemplateKey: String
     let thumbnailReference: ThumbnailReference?
     let visitIDs: [UUID]
     let upcomingPlanIDs: [UUID]
@@ -352,6 +353,7 @@ struct FavoSnapshot {
                         subtitle: "人物・団体 · \(relatedVisits.count)件",
                         iconSymbol: "person.fill",
                         colorHex: targetProfile?.colorHex ?? favorite?.colorHex ?? "#8F5E73",
+                        categoryTemplateKey: "",
                         thumbnailReference: targetProfile.map {
                             .profileIcon($0.id, fallback: .person(person.id))
                         } ?? .person(person.id),
@@ -376,6 +378,7 @@ struct FavoSnapshot {
                         subtitle: "\(event.category?.name ?? "作品・体験") · \(relatedVisits.count)件",
                         iconSymbol: event.category?.iconSymbol ?? "sparkles.rectangle.stack",
                         colorHex: targetProfile?.colorHex ?? event.category?.colorHex ?? "#147C88",
+                        categoryTemplateKey: targetProfile == nil ? event.category?.templateKey ?? "" : "",
                         thumbnailReference: targetProfile.map {
                             .profileIcon($0.id, fallback: .event(event.id))
                         } ?? .event(event.id),
@@ -402,6 +405,7 @@ struct FavoSnapshot {
                         subtitle: "\(placeContext) · \(relatedVisits.count)件",
                         iconSymbol: "mappin.and.ellipse",
                         colorHex: targetProfile?.colorHex ?? "#2F7FB8",
+                        categoryTemplateKey: "",
                         thumbnailReference: targetProfile.map { .profileIcon($0.id) },
                         visitIDs: relatedVisits.map(\.id),
                         upcomingPlanIDs: relatedPlans.map(\.id),

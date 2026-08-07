@@ -10,7 +10,7 @@ import UIKit
 struct PhotoUnitEditor: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.photoCompressionQuality) private var compressionQuality = 0.85
-    @AppStorage(AppStorageKeys.photoAddStartMode) private var photoAddStartMode = "camera"
+    @AppStorage(AppStorageKeys.photoAddStartMode) private var photoAddStartMode = "library"
     let existingPhotos: [PhotoBlob]
     @Binding var deletedPhotoIDs: Set<UUID>
     @Binding var existingPhotoMetadata: [UUID: PhotoMetadataDraft]
@@ -21,6 +21,8 @@ struct PhotoUnitEditor: View {
     @Binding var coverPhotoPath: String
     @Binding var heroBackgroundPath: String
     @Binding var heroBackgroundPresetKey: String
+    var showsBookFormatPicker = true
+    var showsHeroBackgroundPicker = true
     @State private var isShowingCamera = false
     @State private var isShowingCameraUnavailableAlert = false
     @State private var importCompletedCount = 0
@@ -28,6 +30,8 @@ struct PhotoUnitEditor: View {
     @State private var editingTarget: PhotoEditorTarget?
     @State private var isShowingAllPhotos = false
     @State private var editingTargetAfterGallery: PhotoEditorTarget?
+    @State private var isShowingCoverPicker = false
+    @State private var isTheaterPhotoManagerExpanded = false
 
     private let largePhotoNoticeThreshold = 50
     private let compactPhotoLimit = 8
@@ -82,73 +86,17 @@ struct PhotoUnitEditor: View {
         remainingPhotoSlots != 0
     }
 
+    private var isTheater: Bool {
+        category?.templateKey == "theater"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("写真")
-                    .font(FavorecoTypography.bodyStrong)
-                Spacer()
-                Text(photoCountLabel)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if category?.templateKey == "book" {
-                bookFormatPicker
-            }
-
-            if !heroBackgroundPresets.isEmpty {
-                heroBackgroundPicker
-            } else if !heroBackgroundPath.isEmpty {
-                Button {
-                    heroBackgroundPath = ""
-                } label: {
-                    FavorecoIconLabel("トップ背景をジャンル既定に戻す", systemImage: "rectangle.landscape")
-                }
-                .buttonStyle(.bordered)
-            }
-
-            if currentPhotoCount == 0 {
-                Text("思い出写真、半券写真、表紙画像などを追加できます。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            if isTheater {
+                theaterEyecatchPicker
+                theaterPhotoManager
             } else {
-                photoGrid
-            }
-
-            if isImportingPhotos {
-                VStack(alignment: .leading, spacing: 6) {
-                    ProgressView(
-                        value: Double(importCompletedCount),
-                        total: Double(max(importTotalCount, 1))
-                    )
-                    Text("写真を取り込み中 \(importCompletedCount)/\(importTotalCount)")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityElement(children: .combine)
-            }
-
-            if maxPhotoCount == nil, showsLargePhotoNotice {
-                Label {
-                    Text("写真はこのまま追加できます。枚数が多い記録は、取り込み・完全バックアップ・初回同期に時間がかかる場合があります（現在約\(formattedPhotoBytes)）。")
-                } icon: {
-                    FavorecoIcon(systemName: "externaldrive.badge.exclamationmark", size: 17)
-                }
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if isImportingPhotos {
-                EmptyView()
-            } else if canAddPhotos {
-                photoAddControls
-            } else {
-                FavorecoIconLabel(photoLimitMessage, systemImage: "checkmark.circle")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                standardPhotoEditorContent
             }
         }
         .onAppear {
@@ -157,6 +105,13 @@ struct PhotoUnitEditor: View {
                 aspectRatioKey = category?.templateKey == "book"
                     ? EyecatchAspectRatio.hardcoverBook.key
                     : EyecatchAspectRatio.recommended(for: category).key
+            }
+        }
+        .onChange(of: selectedItems) { _, newItems in
+            guard !newItems.isEmpty else { return }
+            Task {
+                await appendPhotos(from: newItems)
+                selectedItems.removeAll()
             }
         }
         .fullScreenCover(isPresented: $isShowingCamera) {
@@ -214,6 +169,23 @@ struct PhotoUnitEditor: View {
                 }
             }
         }
+        .sheet(isPresented: $isShowingCoverPicker) {
+            NavigationStack {
+                ScrollView {
+                    coverSelectionGrid
+                        .padding(16)
+                }
+                .navigationTitle("アイキャッチを選択")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("閉じる") {
+                            isShowingCoverPicker = false
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private var photoLimitMessage: String {
@@ -227,6 +199,291 @@ struct PhotoUnitEditor: View {
     private var photoCountLabel: String {
         guard let maxPhotoCount else { return "\(currentPhotoCount)枚・上限なし" }
         return "\(currentPhotoCount)/\(maxPhotoCount)"
+    }
+
+    @ViewBuilder
+    private var standardPhotoEditorContent: some View {
+        HStack {
+            Text("写真")
+                .font(FavorecoTypography.bodyStrong)
+            Spacer()
+            Text(photoCountLabel)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        if category?.templateKey == "book", showsBookFormatPicker {
+            bookFormatPicker
+        }
+
+        if showsHeroBackgroundPicker, !heroBackgroundPresets.isEmpty {
+            heroBackgroundPicker
+        } else if showsHeroBackgroundPicker, !heroBackgroundPath.isEmpty {
+            Button {
+                heroBackgroundPath = ""
+            } label: {
+                FavorecoIconLabel("トップ背景をジャンル既定に戻す", systemImage: "rectangle.landscape")
+            }
+            .buttonStyle(.bordered)
+        }
+
+        photoLibraryContent
+    }
+
+    private var theaterPhotoManager: some View {
+        DisclosureGroup(isExpanded: $isTheaterPhotoManagerExpanded) {
+            photoLibraryContent
+                .padding(.top, 10)
+        } label: {
+            HStack(spacing: 8) {
+                FavorecoIconLabel(
+                    currentPhotoCount == 0 ? "写真を追加" : "写真一覧・追加",
+                    systemImage: "photo.on.rectangle.angled",
+                    iconSize: 14
+                )
+                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: 8)
+                Text(photoCountLabel)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var photoLibraryContent: some View {
+        if currentPhotoCount == 0 {
+            Text("思い出写真、半券写真、表紙画像などを追加できます。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            photoGrid
+        }
+
+        if isImportingPhotos {
+            VStack(alignment: .leading, spacing: 6) {
+                ProgressView(
+                    value: Double(importCompletedCount),
+                    total: Double(max(importTotalCount, 1))
+                )
+                Text("写真を取り込み中 \(importCompletedCount)/\(importTotalCount)")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+        }
+
+        if maxPhotoCount == nil, showsLargePhotoNotice {
+            Label {
+                Text("写真はこのまま追加できます。枚数が多い記録は、取り込み・完全バックアップ・初回同期に時間がかかる場合があります（現在約\(formattedPhotoBytes)）。")
+            } icon: {
+                FavorecoIcon(systemName: "externaldrive.badge.exclamationmark", size: 17)
+            }
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+
+        if isImportingPhotos {
+            EmptyView()
+        } else if canAddPhotos {
+            photoAddControls
+        } else {
+            FavorecoIconLabel(photoLimitMessage, systemImage: "checkmark.circle")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var coverEligiblePhotoItems: [PhotoGridItem] {
+        photoItems.filter { item in
+            switch item.kind {
+            case .existing:
+                guard let photo = activeExistingPhotos.first(where: { $0.id == item.id }) else {
+                    return false
+                }
+                return existingMetadata(for: photo).purpose == .memory
+            case .pending:
+                return pendingPhotos.first(where: { $0.id == item.id })?.metadata.purpose == .memory
+            }
+        }
+    }
+
+    private var activeCoverPaths: Set<String> {
+        Set(coverEligiblePhotoItems.compactMap { item in
+            switch item.kind {
+            case .existing:
+                return activeExistingPhotos.first(where: { $0.id == item.id })?.relativePath
+            case .pending:
+                return pendingPhotos.first(where: { $0.id == item.id })?.relativePath
+            }
+        })
+    }
+
+    private var hasActiveCoverPhoto: Bool {
+        activeCoverPaths.contains(coverPhotoPath)
+    }
+
+    private var selectedCoverPhotoItem: PhotoGridItem? {
+        coverEligiblePhotoItems.first { item in
+            switch item.kind {
+            case .existing:
+                return activeExistingPhotos.first(where: { $0.id == item.id })?.relativePath == coverPhotoPath
+            case .pending:
+                return pendingPhotos.first(where: { $0.id == item.id })?.relativePath == coverPhotoPath
+            }
+        }
+    }
+
+    private var theaterEyecatchPicker: some View {
+        HStack(spacing: 12) {
+            coverPhotoPreview
+                .frame(width: 54, height: 54)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("この回のアイキャッチ")
+                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(hasActiveCoverPhoto ? "設定済み" : "未設定")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(hasActiveCoverPhoto ? Color.green : Color.secondary)
+            }
+
+            Spacer(minLength: 4)
+
+            if coverEligiblePhotoItems.isEmpty {
+                eyecatchPhotoAddPicker
+            } else {
+                Button(hasActiveCoverPhoto ? "変更" : "選ぶ") {
+                    isShowingCoverPicker = true
+                }
+                .buttonStyle(.bordered)
+
+                if hasActiveCoverPhoto {
+                    Button("解除") {
+                        coverPhotoPath = ""
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .controlSize(.small)
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var coverPhotoPreview: some View {
+        if let item = selectedCoverPhotoItem {
+            switch item.kind {
+            case .existing:
+                if let photo = activeExistingPhotos.first(where: { $0.id == item.id }) {
+                    CompactSavedPhotoThumbnail(
+                        photo: photo,
+                        purpose: existingMetadata(for: photo).purpose,
+                        isCover: true,
+                        isHeroBackground: false
+                    )
+                }
+            case .pending:
+                if let photo = pendingPhotos.first(where: { $0.id == item.id }) {
+                    CompactPendingPhotoThumbnail(
+                        photo: photo,
+                        purpose: photo.metadata.purpose,
+                        isCover: true,
+                        isHeroBackground: false
+                    )
+                }
+            }
+        } else {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .overlay {
+                    FavorecoIcon(systemName: "photo", size: 20)
+                        .foregroundStyle(.secondary)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.25), lineWidth: 0.8)
+                }
+        }
+    }
+
+    private var eyecatchPhotoAddPicker: some View {
+        PhotosPicker(
+            selection: $selectedItems,
+            maxSelectionCount: remainingPhotoSlots,
+            matching: .images
+        ) {
+            FavorecoIconLabel("写真を追加", systemImage: "photo.badge.plus", iconSize: 13)
+                .font(FavorecoTypography.jpSans(12.5, weight: .semibold, relativeTo: .caption))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(!canAddPhotos)
+    }
+
+    @ViewBuilder
+    private var coverSelectionGrid: some View {
+        if coverEligiblePhotoItems.isEmpty {
+            FavorecoContentUnavailableView(
+                "選べる写真がありません",
+                systemImage: "photo",
+                description: "思い出写真を追加してから選択してください。"
+            )
+        } else {
+            LazyVGrid(columns: compactColumns, spacing: 6) {
+                ForEach(coverEligiblePhotoItems) { item in
+                    coverSelectionTile(for: item)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func coverSelectionTile(for item: PhotoGridItem) -> some View {
+        switch item.kind {
+        case .existing:
+            if let photo = activeExistingPhotos.first(where: { $0.id == item.id }) {
+                Button {
+                    coverPhotoPath = photo.relativePath
+                    isShowingCoverPicker = false
+                } label: {
+                    CompactSavedPhotoThumbnail(
+                        photo: photo,
+                        purpose: existingMetadata(for: photo).purpose,
+                        isCover: coverPhotoPath == photo.relativePath,
+                        isHeroBackground: heroBackgroundPath == photo.relativePath
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("この写真をアイキャッチにする")
+                .accessibilityAddTraits(coverPhotoPath == photo.relativePath ? .isSelected : [])
+            }
+        case .pending:
+            if let photo = pendingPhotos.first(where: { $0.id == item.id }) {
+                Button {
+                    coverPhotoPath = photo.relativePath
+                    isShowingCoverPicker = false
+                } label: {
+                    CompactPendingPhotoThumbnail(
+                        photo: photo,
+                        purpose: photo.metadata.purpose,
+                        isCover: coverPhotoPath == photo.relativePath,
+                        isHeroBackground: heroBackgroundPath == photo.relativePath
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("この写真をアイキャッチにする")
+                .accessibilityAddTraits(coverPhotoPath == photo.relativePath ? .isSelected : [])
+            }
+        }
     }
 
     private var formattedPhotoBytes: String {
@@ -276,19 +533,7 @@ struct PhotoUnitEditor: View {
                             heroBackgroundPath = ""
                         } label: {
                             VStack(alignment: .leading, spacing: 5) {
-                                Image(preset.resourceName)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 92, height: 112)
-                                    .clipped()
-                                    .overlay {
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(
-                                                isSelected(preset) ? Color.accentColor : Color.secondary.opacity(0.28),
-                                                lineWidth: isSelected(preset) ? 3 : 1
-                                            )
-                                    }
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                heroBackgroundPreview(for: preset)
 
                                 Text(preset.title)
                                     .font(FavorecoTypography.caption)
@@ -319,6 +564,40 @@ struct PhotoUnitEditor: View {
             ) == preset
     }
 
+    private func heroBackgroundPreview(for preset: HeroBackgroundPreset) -> some View {
+        Group {
+            if let image = bundledHeroBackgroundImage(named: preset.resourceName) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.secondary.opacity(0.08)
+                    .overlay {
+                        FavorecoIcon(systemName: "photo", size: 22)
+                            .foregroundStyle(.secondary)
+                    }
+            }
+        }
+        .frame(width: 92, height: 112)
+        .clipped()
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(
+                    isSelected(preset) ? Color.accentColor : Color.secondary.opacity(0.28),
+                    lineWidth: isSelected(preset) ? 3 : 1
+                )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func bundledHeroBackgroundImage(named resourceName: String) -> UIImage? {
+        if let image = UIImage(named: resourceName) { return image }
+        guard let url = Bundle.main.url(forResource: resourceName, withExtension: "jpg") else {
+            return nil
+        }
+        return UIImage(contentsOfFile: url.path)
+    }
+
     @ViewBuilder
     private var photoAddControls: some View {
         if photoAddStartMode == "library" {
@@ -340,14 +619,10 @@ struct PhotoUnitEditor: View {
             FavorecoIconLabel(label, systemImage: "photo.on.rectangle.angled")
                 .frame(maxWidth: .infinity)
         }
-        .onChange(of: selectedItems) { _, newItems in
-            Task {
-                await appendPhotos(from: newItems)
-                selectedItems.removeAll()
-            }
-        }
         if prominent {
-            picker.buttonStyle(.borderedProminent)
+            picker
+                .buttonStyle(.borderedProminent)
+                .favorecoProminentActionStyle()
         } else {
             picker.buttonStyle(.bordered)
         }
@@ -366,7 +641,9 @@ struct PhotoUnitEditor: View {
                 .frame(maxWidth: .infinity)
         }
         if prominent {
-            button.buttonStyle(.borderedProminent)
+            button
+                .buttonStyle(.borderedProminent)
+                .favorecoProminentActionStyle()
         } else {
             button.buttonStyle(.bordered)
         }
@@ -714,6 +991,19 @@ private struct PhotoMetadataEditor: View {
                     }
                     .pickerStyle(.segmented)
                 }
+            }
+
+            Section("キャプション") {
+                TextField(
+                    "写真に写っているものや、その時のひとこと",
+                    text: $metadata.caption,
+                    axis: .vertical
+                )
+                .lineLimit(2...4)
+
+                Text("生きものの名前なども、写真ごとにここへ残せます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if metadata.purpose != .memory {

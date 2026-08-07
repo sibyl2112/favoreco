@@ -28,14 +28,16 @@ final class SampleDataSeederTests: XCTestCase {
             categoryTemplateKeys: ["random_goods"]
         )
 
-        XCTAssertEqual(inserted.eventCount, 3)
+        XCTAssertEqual(inserted.eventCount, 16)
         XCTAssertEqual(inserted.visitCount, 0)
         XCTAssertEqual(inserted.planCount, 0)
+        XCTAssertEqual(inserted.interestCount, 3)
+        XCTAssertEqual(inserted.catalogOnlyCount, 5)
         XCTAssertEqual(inserted.ticketAttemptCount, 0)
 
         let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
         let samples = events.filter(SampleDataSeeder.isSampleEvent)
-        XCTAssertEqual(samples.count, 3)
+        XCTAssertEqual(samples.count, 16)
         XCTAssertTrue(samples.allSatisfy { ($0.visits ?? []).isEmpty })
         XCTAssertTrue(samples.allSatisfy { ($0.plans ?? []).isEmpty })
 
@@ -67,11 +69,11 @@ final class SampleDataSeederTests: XCTestCase {
             spent: 2_000
         )
 
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleItem>()), 15)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleTransaction>()), 11)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleItem>()), 26)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleTransaction>()), 18)
 
         let deleted = try SampleDataSeeder.deleteSamples(in: context)
-        XCTAssertEqual(deleted.eventCount, 3)
+        XCTAssertEqual(deleted.eventCount, 16)
         XCTAssertEqual(deleted.visitCount, 0)
         XCTAssertEqual(deleted.planCount, 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleItem>()), 0)
@@ -81,7 +83,7 @@ final class SampleDataSeederTests: XCTestCase {
         XCTAssertEqual(remainingEvents.map(\.id), [personalEvent.id])
     }
 
-    func testStandardCategoryKeepsTwoVisitsAndOneFuturePlan() throws {
+    func testStandardCategoryCreatesCurrentFourStageDataset() throws {
         let context = try makeContext()
         let category = makeCategory(name: "映画", templateKey: "movie")
         context.insert(category)
@@ -92,17 +94,23 @@ final class SampleDataSeederTests: XCTestCase {
             categoryTemplateKeys: ["movie"]
         )
 
-        XCTAssertEqual(inserted.eventCount, 3)
-        XCTAssertEqual(inserted.visitCount, 2)
-        XCTAssertEqual(inserted.planCount, 1)
+        XCTAssertEqual(inserted.eventCount, 16)
+        XCTAssertEqual(inserted.visitCount, 5)
+        XCTAssertEqual(inserted.planCount, 3)
+        XCTAssertEqual(inserted.interestCount, 3)
+        XCTAssertEqual(inserted.catalogOnlyCount, 5)
         XCTAssertEqual(inserted.ticketAttemptCount, 0)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Visit>()), 2)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Plan>()), 1)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<PhotoBlob>()), 2)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Visit>()), 5)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Plan>()), 3)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<PhotoBlob>()), 5)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleItem>()), 0)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleTransaction>()), 0)
 
         let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        XCTAssertEqual(events.filter { $0.stateKey == "interested" }.count, 3)
+        XCTAssertEqual(events.filter {
+            $0.stateKey == "active" && ($0.visits ?? []).isEmpty && ($0.plans ?? []).isEmpty
+        }.count, 5)
         XCTAssertEqual(Set(events.map(\.screenWorkType)), Set(ScreenWorkType.allCases))
         XCTAssertEqual(
             Set(events.map(\.screenWorkSeasonNumber)),
@@ -110,7 +118,38 @@ final class SampleDataSeederTests: XCTestCase {
         )
     }
 
-    func testAutomaticInsertionRunsOnlyOnce() throws {
+    func testExperienceResetPreservesCategoryPersonAndPlaceMasters() throws {
+        let context = try makeContext()
+        let category = makeCategory(name: "映画", templateKey: "movie")
+        let person = PersonMaster(displayName: "保存する人物")
+        let place = PlaceMaster(name: "保存する場所")
+        let event = ExperienceEvent(title: "削除する作品", category: category)
+        let visit = Visit(event: event, placeMaster: place)
+        let plan = Plan(title: "削除する予定", category: category, event: event, placeMaster: place)
+        context.insert(category)
+        context.insert(person)
+        context.insert(place)
+        context.insert(event)
+        context.insert(visit)
+        context.insert(plan)
+        try context.save()
+
+        let result = try RecordDeletionService.deleteAllExperienceDataPreservingMasters(
+            in: context
+        )
+
+        XCTAssertEqual(result.eventCount, 1)
+        XCTAssertEqual(result.visitCount, 1)
+        XCTAssertEqual(result.planCount, 1)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ExperienceEvent>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Visit>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Plan>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<RecordCategory>()), 1)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<PersonMaster>()), 1)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<PlaceMaster>()), 1)
+    }
+
+    func testAutomaticInsertionDoesNotCreateLargeDebugDataset() throws {
         SampleDataSeeder.resetAutomaticInsertionState()
         defer { SampleDataSeeder.resetAutomaticInsertionState() }
 
@@ -128,14 +167,14 @@ final class SampleDataSeederTests: XCTestCase {
             categoryTemplateKeys: ["random_goods"]
         )
 
-        XCTAssertEqual(first.eventCount, 3)
+        XCTAssertEqual(first.eventCount, 0)
         XCTAssertEqual(first.visitCount, 0)
         XCTAssertEqual(first.planCount, 0)
         XCTAssertEqual(second.eventCount, 0)
         XCTAssertEqual(second.visitCount, 0)
         XCTAssertEqual(second.planCount, 0)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ExperienceEvent>()), 3)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleItem>()), 15)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<ExperienceEvent>()), 0)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<CollectibleItem>()), 0)
     }
 
     func testAutomaticInsertionDoesNotAddSamplesWhenPersonalDataExists() throws {
@@ -205,9 +244,12 @@ final class SampleDataSeederTests: XCTestCase {
 
         XCTAssertEqual(refreshedCount, 1)
         let refreshedImage = try XCTUnwrap(sample.eyecatchData.flatMap(UIImage.init(data:)))
-        XCTAssertEqual(Int(refreshedImage.size.width), 1_000)
-        XCTAssertEqual(Int(refreshedImage.size.height), 1_414)
-        XCTAssertEqual(sample.representativeEyecatchPath, "sample/v2/theater-1.jpg")
+        XCTAssertEqual(
+            refreshedImage.size.width / refreshedImage.size.height,
+            CGFloat(EyecatchAspectRatio.bSeriesPoster.value),
+            accuracy: 0.01
+        )
+        XCTAssertEqual(sample.representativeEyecatchPath, "sample/v3/theater.jpg")
         XCTAssertEqual(
             VisitUnitFields(rawValue: sample.unitFieldsRaw).eyecatchAspectRatioKey,
             EyecatchAspectRatio.bSeriesPoster.key

@@ -9,7 +9,7 @@ struct SupportLinksView: View {
 
     var body: some View {
         Form {
-            Section("リンク") {
+            FavorecoSettingsSection("ガイドと規約") {
                 Link(destination: ranoviqoSiteURL) {
                     Label("RANOVIQO公式サイト", systemImage: "globe")
                 }
@@ -27,7 +27,7 @@ struct SupportLinksView: View {
                 }
             }
 
-            Section("アプリ情報") {
+            FavorecoSettingsSection("アプリ情報") {
                 NavigationLink {
                     ReleaseHistoryView()
                 } label: {
@@ -41,7 +41,7 @@ struct SupportLinksView: View {
                 LabeledContent("バージョン", value: AppReleaseNotes.currentVersion)
             }
 
-            Section("サポート") {
+            FavorecoSettingsSection("お問い合わせ") {
                 Link(destination: supportURL) {
                     Label("お問い合わせ", systemImage: "envelope")
                 }
@@ -55,12 +55,13 @@ struct SupportLinksView: View {
                 }
             }
 
-            Section("公式SNS") {
+            FavorecoSettingsSection("公式SNS") {
                 Link(destination: officialXURL) {
                     Label("公式X", systemImage: "arrow.up.right.square")
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("リンク・サポート")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -76,8 +77,9 @@ struct SettingsDocumentView: View {
                 Text(title)
                     .font(FavorecoTypography.heroLead)
                 Text(bodyText)
-                    .font(FavorecoTypography.body)
-                    .foregroundStyle(.secondary)
+                    .font(FavorecoTypography.jpSans(14, weight: .regular, relativeTo: .body))
+                    .foregroundStyle(.primary.opacity(0.80))
+                    .lineSpacing(7)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

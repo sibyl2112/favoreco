@@ -4,25 +4,23 @@ import SwiftData
 struct DisplaySettingsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.showsHomeAttention) private var showsHomeAttention = true
-    @AppStorage(AppStorageKeys.showsHomeCategories) private var showsHomeCategories = true
     @AppStorage(AppStorageKeys.followsSystemTextSize) private var followsSystemTextSize = true
     @AppStorage(AppStorageKeys.appTextSize) private var appTextSizeRaw = AppTextSize.standard.rawValue
     @AppStorage(AppStorageKeys.fontStyle) private var fontStyleRaw = AppFontStyle.standard.rawValue
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
     @AppStorage(AppStorageKeys.baseTheme) private var baseThemeRaw = FavorecoBaseTheme.favoNeon.rawValue
     @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
-    @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#256F9C"
+    @AppStorage(AppStorageKeys.unifiedThemeColorHex) private var unifiedThemeColorHex = "#3296BD"
 
     var body: some View {
         Form {
-            Section("Home表示") {
-                Toggle("チケットスケジュール", isOn: $showsHomeAttention)
-                Toggle("ジャンル一覧", isOn: $showsHomeCategories)
+            FavorecoSettingsSection("Homeに表示する内容") {
+                FavorecoSettingsToggleRow(title: "Ticket Schedule", detail: "期限や公演予定をHomeに表示", isOn: $showsHomeAttention)
                 LabeledContent("PICK UP", value: "常に表示")
                 LabeledContent("Favoreco Report", value: "常に表示")
             }
 
-            Section("外観") {
+            FavorecoSettingsSection("文字と外観") {
                 NavigationLink {
                     TextSizeSettingsView()
                 } label: {
@@ -40,7 +38,7 @@ struct DisplaySettingsView: View {
                 }
             }
 
-            Section("テーマ") {
+            FavorecoSettingsSection("テーマカラー") {
                 Picker("ベーステーマ", selection: $baseThemeRaw) {
                     ForEach(FavorecoBaseTheme.allCases) { theme in
                         Label {
@@ -94,11 +92,13 @@ struct DisplaySettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text(themeDescription)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                FavorecoSettingsInfoCallout(
+                    title: "テーマが変わる場所",
+                    message: themeDescription
+                )
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("表示・外観")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -155,7 +155,7 @@ private struct FontStyleSettingsView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsSectionWithFooter("フォントの種類") {
                 ForEach(AppFontStyle.allCases) { style in
                     Button {
                         guard style == .standard || canChangeFont else { return }
@@ -190,7 +190,7 @@ private struct FontStyleSettingsView: View {
                      : "フォント変更はPro以上で利用できます。標準表示は無料で使えます。")
             }
 
-            Section {
+            FavorecoSettingsSectionWithFooter("文字の太さ") {
                 Picker("文字の太さ", selection: fontWeightBinding) {
                     ForEach(AppFontWeight.allCases) { option in
                         Text(option.name).tag(option.rawValue)
@@ -198,8 +198,6 @@ private struct FontStyleSettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .disabled(!canChangeFont)
-            } header: {
-                Text("文字の太さ")
             } footer: {
                 if !canChangeFont {
                     Text("文字の太さ変更はPro以上で利用できます。")
@@ -208,7 +206,7 @@ private struct FontStyleSettingsView: View {
                 }
             }
 
-            Section("プレビュー") {
+            FavorecoSettingsSection("プレビュー") {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("記録が、美しい思い出になる")
                         .font(font(for: selectedStyle, size: 24, weight: .bold, prefersSerif: true))
@@ -220,6 +218,7 @@ private struct FontStyleSettingsView: View {
                 .padding(.vertical, 6)
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("フォント")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -282,8 +281,12 @@ private struct TextSizeSettingsView: View {
 
     var body: some View {
         Form {
-            Section {
-                Toggle("iOS設定に従う", isOn: $followsSystemTextSize)
+            FavorecoSettingsSectionWithFooter("文字サイズ") {
+                FavorecoSettingsToggleRow(
+                    title: "iOS設定に従う",
+                    detail: "端末の文字サイズとアクセシビリティ設定を反映",
+                    isOn: $followsSystemTextSize
+                )
 
                 if !followsSystemTextSize {
                     Picker("アプリ内文字サイズ", selection: $appTextSizeRaw) {
@@ -297,7 +300,7 @@ private struct TextSizeSettingsView: View {
                 Text("iOS設定に従う場合は、端末の文字サイズとアクセシビリティ設定を反映します。")
             }
 
-            Section("プレビュー") {
+            FavorecoSettingsSection("プレビュー") {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("記録が、美しい思い出になる")
                         .font(FavorecoTypography.jpSerif(24, weight: .bold, relativeTo: .title2))
@@ -309,6 +312,7 @@ private struct TextSizeSettingsView: View {
                 .padding(.vertical, 6)
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("文字サイズ")
         .navigationBarTitleDisplayMode(.inline)
     }

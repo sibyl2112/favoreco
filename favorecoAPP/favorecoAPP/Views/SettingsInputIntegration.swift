@@ -5,7 +5,7 @@ struct RecordInputAssistSettingsView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.defaultGenreMode) private var defaultGenreMode = "lastUsed"
     @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
-    @AppStorage(AppStorageKeys.photoAddStartMode) private var photoAddStartMode = "camera"
+    @AppStorage(AppStorageKeys.photoAddStartMode) private var photoAddStartMode = "library"
     @AppStorage(AppStorageKeys.photoCompressionQuality) private var photoCompressionQuality = 0.85
     @AppStorage(AppStorageKeys.usesURLImportAssist) private var usesURLImportAssist = true
     @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
@@ -15,7 +15,7 @@ struct RecordInputAssistSettingsView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsSectionWithFooter("記録の初期値") {
                 Picker("最初に選ぶジャンル", selection: $defaultGenreMode) {
                     Text("最後に使ったジャンル").tag("lastUsed")
                     Text("Homeで選択中のジャンル").tag("homeSelected")
@@ -25,16 +25,14 @@ struct RecordInputAssistSettingsView: View {
                     Text("詳細を開く").tag("openDetail")
                     Text("一覧に戻る").tag("returnToList")
                 }
-            } header: {
-                Text("記録の初期値")
             } footer: {
                 Text("新しい記録の日付は今日から始まり、入力画面で変更できます。")
             }
 
-            Section("写真") {
-                Picker("写真追加時に開く", selection: $photoAddStartMode) {
-                    Text("カメラを開く").tag("camera")
-                    Text("写真ライブラリを開く").tag("library")
+            FavorecoSettingsSection("写真の保存") {
+                Picker("写真追加の優先方法", selection: $photoAddStartMode) {
+                    Text("写真ライブラリ").tag("library")
+                    Text("カメラ").tag("camera")
                 }
 
                 Picker("保存画質", selection: $photoCompressionQuality) {
@@ -43,17 +41,18 @@ struct RecordInputAssistSettingsView: View {
                 }
 
                 LabeledContent("メタデータ削除", value: "ON")
-                Text("追加時に長辺1600pxへ縮小し、選択した品質で保存します。位置情報や撮影日時などの元画像メタデータは引き継ぎません。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                FavorecoSettingsInfoCallout(
+                    title: "写真の保存方法",
+                    message: "長辺1600pxへ縮小して保存します。位置情報や撮影日時など、元画像のメタデータは引き継ぎません。"
+                )
             }
 
-            Section("入力補助") {
-                Toggle("URLから候補を取得", isOn: $usesURLImportAssist)
-                Toggle("画像から文字を読み取る", isOn: $usesOCRImportAssist)
-                Toggle("会場をMapで検索", isOn: $usesMapSearchAssist)
-                Toggle("対象日の天気を付ける", isOn: $usesWeatherAutoFill)
-                Toggle("場所などの登録済み候補を表示", isOn: $usesInputSuggestionDictionary)
+            FavorecoSettingsSection("入力補助") {
+                FavorecoSettingsToggleRow(title: "URLから候補を取得", detail: "日時や会場などの候補を取得", isOn: $usesURLImportAssist)
+                FavorecoSettingsToggleRow(title: "画像から文字を読み取る", detail: "チラシやチケット画像をOCRで読み取り", isOn: $usesOCRImportAssist)
+                FavorecoSettingsToggleRow(title: "会場をMapで検索", detail: "場所の検索候補を表示", isOn: $usesMapSearchAssist)
+                FavorecoSettingsToggleRow(title: "対象日の天気を付ける", detail: "記録日に合わせて天気を補完", isOn: $usesWeatherAutoFill)
+                FavorecoSettingsToggleRow(title: "登録済み候補を表示", detail: "場所などの既存マスターから候補を表示", isOn: $usesInputSuggestionDictionary)
                 Label(
                     purchaseManager.currentPlan.includesLocalFullFeatures
                         ? "URLの日時・会場候補を利用できます"
@@ -62,12 +61,10 @@ struct RecordInputAssistSettingsView: View {
                 )
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(.secondary)
-                Text("OCR取込をOFFにしても、保存済みの読み取りテキストと手入力欄は残ります。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                Text("人物・団体は重複登録を防ぐため、この設定にかかわらず名前・よみ・別名から登録済み候補を表示します。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                FavorecoSettingsInfoCallout(
+                    title: "OFFにした場合",
+                    message: "保存済みのOCRテキストや手入力欄は残ります。人物・団体は重複防止のため、この設定にかかわらず登録済み候補を表示します。"
+                )
                 Label(
                     purchaseManager.currentPlan.includesLocalFullFeatures
                         ? "高度OCRの項目候補を利用できます"
@@ -78,6 +75,7 @@ struct RecordInputAssistSettingsView: View {
                 .foregroundStyle(.secondary)
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("記録・入力補助")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -98,10 +96,10 @@ struct RegistrationIntegrationSettingsView: View {
 
     var body: some View {
         List {
-            Section("FC・チケットアカウント") {
+            FavorecoSettingsSection("FC・チケットサイト・会員") {
                 if activeAccounts.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        Label("登録情報はまだありません", systemImage: "person.crop.circle.badge.plus")
+                        Label("チケット・会員情報はまだありません", systemImage: "person.crop.circle.badge.plus")
                             .font(FavorecoTypography.bodyStrong)
                         Text("FC、プレイガイド、劇場会員、カード枠などをここにまとめます。チケット申込ではここから名義を選ぶだけにします。")
                             .font(FavorecoTypography.caption)
@@ -122,11 +120,11 @@ struct RegistrationIntegrationSettingsView: View {
                 Button {
                     isShowingAccountEditor = true
                 } label: {
-                    FavorecoIconLabel("登録情報を追加", systemImage: "plus.circle")
+                    FavorecoIconLabel("チケット・会員情報を追加", systemImage: "plus.circle")
                 }
             }
 
-            Section("外部カレンダー") {
+            FavorecoSettingsSection("外部カレンダー") {
                 LabeledContent("連携方式", value: "iOSカレンダー経由")
                 Toggle("カレンダー画面に重ねて表示", isOn: $showsExternalCalendarEvents)
                 LabeledContent("読み取り許可", value: externalCalendarStore.authorizationStatusText)
@@ -176,9 +174,10 @@ struct RegistrationIntegrationSettingsView: View {
                     }
                 }
 
-                Text("GoogleカレンダーもiOS標準カレンダーに登録済みなら、アカウント名とカレンダー名を確認して読み込む対象を選べます。未選択のカレンダーはFavorecoへ表示しません。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                FavorecoSettingsInfoCallout(
+                    title: "表示するカレンダー",
+                    message: "GoogleカレンダーもiOS標準カレンダーに登録済みなら選べます。未選択のカレンダーはFavorecoに表示しません。"
+                )
 
                 if !externalCalendarStore.errorMessage.isEmpty {
                     Text(externalCalendarStore.errorMessage)
@@ -187,13 +186,15 @@ struct RegistrationIntegrationSettingsView: View {
                 }
             }
 
-            Section("セキュリティ") {
-                Text("パスワード本体はSwiftData/CloudKitに保存しません。必要になった場合のみKeychain参照キーを使い、Face ID/Touch ID/端末パスコードで表示・コピーします。")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+            FavorecoSettingsSection("セキュリティ") {
+                FavorecoSettingsInfoCallout(
+                    title: "パスワードの扱い",
+                    message: "パスワード本体はアプリのデータやiCloudへ保存しません。必要な場合のみKeychainを使い、端末認証後に表示・コピーします。"
+                )
             }
         }
-        .navigationTitle("登録情報・連携")
+        .favorecoSettingsListLayout()
+        .navigationTitle("チケット・会員・カレンダー")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             externalCalendarStore.updateAuthorizationStatus()
@@ -275,6 +276,7 @@ private struct TicketAccountRow: View {
 private struct EditTicketAccountView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.favorecoThemePalette) private var themePalette
     let account: TicketAccount?
 
     @State private var serviceName = ""
@@ -291,15 +293,74 @@ private struct EditTicketAccountView: View {
     @State private var note = ""
     @State private var colorHex = "#6F8F7A"
     @State private var isShowingArchiveConfirmation = false
+    @State private var selectedGuideKey: String?
+    @FocusState private var isServiceNameFocused: Bool
 
     private var canSave: Bool {
         !serviceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var ticketGuideSuggestions: [TicketGuideDefinition] {
+        guard isServiceNameFocused, selectedGuideKey == nil else { return [] }
+        return Array(TicketGuideDefinition.suggestions(matching: serviceName).prefix(5))
+    }
+
     var body: some View {
         Form {
-            Section("基本") {
+            FavorecoSettingsSection("基本情報") {
                 TextField("サービス名（例: ぴあ / FC名）", text: $serviceName)
+                    .focused($isServiceNameFocused)
+
+                if !ticketGuideSuggestions.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(ticketGuideSuggestions) { guide in
+                            Button {
+                                applyTicketGuideSuggestion(guide)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    FavorecoIcon(
+                                        systemName: "ticket",
+                                        size: 18,
+                                        fallbackWeight: .regular
+                                    )
+                                    .foregroundStyle(themePalette.globalTint)
+                                    .frame(width: 24)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(guide.name)
+                                                .font(FavorecoTypography.bodyStrong)
+                                                .foregroundStyle(.primary)
+                                            Text(guide.category)
+                                                .font(FavorecoTypography.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Text(guide.urlString)
+                                            .font(FavorecoTypography.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+
+                                    Spacer(minLength: 8)
+
+                                    Image(systemName: "arrow.up.left")
+                                        .font(FavorecoTypography.captionStrong)
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            if guide.id != ticketGuideSuggestions.last?.id {
+                                Divider()
+                                    .padding(.leading, 34)
+                            }
+                        }
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("登録済みプレイガイド候補")
+                }
 
                 Picker("種別", selection: $accountTypeKey) {
                     ForEach(TicketAccountTypeDefinition.all) { type in
@@ -312,7 +373,7 @@ private struct EditTicketAccountView: View {
                 TextField("会員種別・ランク", text: $membershipRank)
             }
 
-            Section("ログイン・リンク") {
+            FavorecoSettingsSection("ログインとリンク") {
                 TextField("サイトURL", text: $siteURL)
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
@@ -323,35 +384,34 @@ private struct EditTicketAccountView: View {
                     .textInputAutocapitalization(.never)
             }
 
-            Section("期限・費用") {
+            FavorecoSettingsSection("期限と費用") {
                 DatePicker("有効期限", selection: $expiryDate, displayedComponents: .date)
                 Toggle("期限通知", isOn: $renewalNotify)
                 TextField("年会費", text: $annualFeeText)
                     .keyboardType(.numberPad)
             }
 
-            Section("表示") {
+            FavorecoSettingsSection("表示") {
                 ColorPicker("識別色", selection: colorBinding, supportsOpacity: false)
             }
 
-            Section("メモ") {
+            FavorecoSettingsSection("メモ") {
                 TextField("備考", text: $note, axis: .vertical)
                     .lineLimit(3...6)
             }
 
             if account != nil {
-                Section {
-                    Button("この登録情報を非表示にする", role: .destructive) {
+                FavorecoSettingsSectionWithFooter("チケット・会員情報の管理") {
+                    Button("この情報を非表示にする", role: .destructive) {
                         isShowingArchiveConfirmation = true
                     }
-                } header: {
-                    Text("管理")
                 } footer: {
                     Text("非表示にすると、今後の申込フォームや期限アテンションには表示されません。既存の申込履歴は残ります。")
                 }
             }
         }
-        .navigationTitle(account == nil ? "登録情報を追加" : "登録情報を編集")
+        .favorecoSettingsListLayout()
+        .navigationTitle(account == nil ? "チケット・会員情報を追加" : "チケット・会員情報を編集")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -367,7 +427,13 @@ private struct EditTicketAccountView: View {
             }
         }
         .onAppear(perform: loadAccount)
-        .confirmationDialog("登録情報を非表示にしますか？", isPresented: $isShowingArchiveConfirmation, titleVisibility: .visible) {
+        .onChange(of: serviceName) { _, newValue in
+            guard let selectedGuideKey,
+                  let selectedGuide = TicketGuideDefinition.guide(for: selectedGuideKey),
+                  newValue != selectedGuide.name else { return }
+            self.selectedGuideKey = nil
+        }
+        .confirmationDialog("この情報を非表示にしますか？", isPresented: $isShowingArchiveConfirmation, titleVisibility: .visible) {
             Button("非表示にする", role: .destructive) {
                 archiveAccount()
             }
@@ -401,6 +467,14 @@ private struct EditTicketAccountView: View {
         renewalNotify = account.renewalNotify
         note = account.note
         colorHex = account.colorHex
+    }
+
+    private func applyTicketGuideSuggestion(_ guide: TicketGuideDefinition) {
+        serviceName = guide.name
+        accountTypeKey = "playguide"
+        siteURL = guide.urlString
+        selectedGuideKey = guide.key
+        isServiceNameFocused = false
     }
 
     private func save() {

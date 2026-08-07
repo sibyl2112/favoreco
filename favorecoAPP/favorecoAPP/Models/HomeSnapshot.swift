@@ -5,6 +5,7 @@ struct HomeSnapshot {
     let visibleVisitCount: Int
     let recentVisits: [HomeVisitSnapshot]
     let reportVisits: [HomeVisitSnapshot]
+    let galleryVisits: [HomeVisitSnapshot]
     let interestedEvents: [HomeInterestedEventSnapshot]
     let unresolvedInboxItems: [HomeInboxItemSnapshot]
     let heroItems: [HomeUpcomingItem]
@@ -29,11 +30,11 @@ struct HomeSnapshot {
             .filter { $0.event?.isArchived != true }
             .sorted { $0.visitedAt > $1.visitedAt }
         let upcomingPlans = plans
-            .filter { !$0.isArchived && $0.hasConfirmedSchedule && $0.endsAt >= now }
+            .filter { !$0.isArchived && $0.isUpcomingOrOngoing(at: now) }
             .sorted { $0.startsAt < $1.startsAt }
         let eventIDsWithActivePlans = Set(plans.compactMap { plan -> UUID? in
             guard !plan.isArchived, let eventID = plan.event?.id else { return nil }
-            let hasUpcomingSchedule = plan.hasConfirmedSchedule && plan.endsAt >= now
+            let hasUpcomingSchedule = plan.isUpcomingOrOngoing(at: now)
             let hasActiveTicket = (plan.ticketAttempts ?? []).contains { attempt in
                 !attempt.isArchived
                     && !["lost", "attended", "skipped"].contains(attempt.statusKey)
@@ -51,6 +52,12 @@ struct HomeSnapshot {
             HomeVisitSnapshot(visit: $0, peopleSummary: peopleIndex.summary(for: $0))
         }
         let visitSnapshots = Array(allVisitSnapshots.prefix(8))
+        let galleryVisits = allVisitSnapshots.sorted { lhs, rhs in
+            if lhs.registeredAt != rhs.registeredAt {
+                return lhs.registeredAt > rhs.registeredAt
+            }
+            return lhs.id.uuidString > rhs.id.uuidString
+        }
         let futureVisitSnapshots = futureVisits.map {
             HomeVisitSnapshot(visit: $0, peopleSummary: peopleIndex.summary(for: $0))
         }
@@ -76,6 +83,7 @@ struct HomeSnapshot {
             visibleVisitCount: visibleVisits.count,
             recentVisits: visitSnapshots,
             reportVisits: allVisitSnapshots,
+            galleryVisits: galleryVisits,
             interestedEvents: events
                 .filter {
                     !$0.isArchived
@@ -104,12 +112,14 @@ struct HomeSnapshot {
 
 struct HomeVisitSnapshot: Identifiable {
     let id: UUID
+    let categoryID: UUID?
     let title: String
     let categoryName: String
     let categoryIcon: String
     let categoryTemplateKey: String
     let categoryColorHex: String
     let visitedAt: Date
+    let registeredAt: Date
     let venueName: String
     let outcomeKey: String
     let note: String
@@ -123,17 +133,22 @@ struct HomeVisitSnapshot: Identifiable {
     let thumbnailReference: ThumbnailReference?
     let comingUpTimeText: String
     let officialURLString: String
+    let tagNames: [String]
+    let normalizedSearchText: String
 
     init(visit: Visit, peopleSummary: String) {
         let category = visit.event?.category
         let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+        let parsedTagNames = Self.facetNames(from: visit.tagNamesRaw)
         id = visit.id
+        categoryID = category?.id
         title = visit.event?.title.isEmpty == false ? visit.event?.title ?? "記録" : "記録"
         categoryName = category?.name ?? "記録"
         categoryIcon = category?.iconSymbol ?? "sparkles.rectangle.stack"
         categoryTemplateKey = category?.templateKey ?? ""
         categoryColorHex = category?.colorHex ?? "#147C88"
         visitedAt = visit.visitedAt
+        registeredAt = visit.createdAt
         venueName = visit.venueNameSnapshot
         outcomeKey = visit.outcomeKey
         note = visit.note
@@ -145,13 +160,40 @@ struct HomeVisitSnapshot: Identifiable {
             for: unitFields.eyecatchAspectRatioKey,
             category: category
         ).value
-        fillsEyecatchFrame = EyecatchAspectRatio.usesEyecatchFill(for: category)
+        fillsEyecatchFrame = category?.templateKey == "theater"
+            ? false
+            : EyecatchAspectRatio.usesEyecatchFill(for: category)
         self.peopleSummary = peopleSummary
         thumbnailReference = visit.event.map { .event($0.id) }
         comingUpTimeText = category?.usesOpeningTime == true
             ? "開演 \(FavorecoDateText.time(visit.visitedAt))"
             : ""
         officialURLString = visit.event?.officialURL.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        tagNames = parsedTagNames
+        normalizedSearchText = [
+            visit.event?.title ?? "",
+            visit.event?.seriesName ?? "",
+            visit.event?.organizerNameSnapshot ?? "",
+            visit.event?.memo ?? "",
+            unitFields.eventSubtitle,
+            visit.venueNameSnapshot,
+            visit.note,
+            visit.tagNamesRaw,
+            visit.companionNamesRaw,
+            visit.seatText,
+            visit.placeMaster?.name ?? "",
+            visit.placeMaster?.address ?? "",
+            category?.name ?? "",
+        ]
+        .joined(separator: " ")
+        .folding(options: [.diacriticInsensitive, .widthInsensitive, .caseInsensitive], locale: .current)
+    }
+
+    private static func facetNames(from rawValue: String) -> [String] {
+        rawValue
+            .components(separatedBy: CharacterSet(charactersIn: ",、;；\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 }
 
@@ -246,7 +288,9 @@ struct HomeInterestedEventSnapshot: Identifiable {
         memo = event.memo
         thumbnailReference = .event(event.id)
         eyecatchAspectRatio = EyecatchAspectRatio.resolved(for: event).value
-        fillsEyecatchFrame = EyecatchAspectRatio.usesEyecatchFill(for: event.category)
+        fillsEyecatchFrame = event.category?.templateKey == "theater"
+            ? false
+            : EyecatchAspectRatio.usesEyecatchFill(for: event.category)
         updatedAt = event.updatedAt
     }
 

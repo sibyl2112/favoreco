@@ -17,6 +17,7 @@ nonisolated struct PublicPlaceCatalogEntry: Codable, Identifiable, Hashable, Sen
     let latitude: Double
     let longitude: Double
     let officialURL: String
+    let sourceURL: String
     let capacity: Int?
     let operationalStatusRaw: String
     let templeSect: String
@@ -62,7 +63,7 @@ enum PublicPlaceCatalogSearch {
 }
 
 nonisolated struct PublicPlaceCatalogCache: Codable, Sendable {
-    static let schemaVersion = 1
+    static let schemaVersion = 2
 
     var schemaVersion: Int = Self.schemaVersion
     var lastSyncedAt: Date?
@@ -351,7 +352,7 @@ actor PublicPlaceCatalogRepository {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base
             .appendingPathComponent("PublicPlaceCatalog", isDirectory: true)
-            .appendingPathComponent("catalog-v1.json")
+            .appendingPathComponent("catalog-v2.json")
     }
 
     private static func change(from record: CKRecord) throws -> PublicPlaceCatalogChange {
@@ -381,6 +382,7 @@ actor PublicPlaceCatalogRepository {
                 latitude: (record["latitude"] as? NSNumber)?.doubleValue ?? 0,
                 longitude: (record["longitude"] as? NSNumber)?.doubleValue ?? 0,
                 officialURL: string(record, "officialURL"),
+                sourceURL: string(record, "sourceURL"),
                 capacity: (record["capacity"] as? NSNumber)?.intValue,
                 operationalStatusRaw: string(record, "operationalStatus", fallback: "open"),
                 templeSect: string(record, "templeSect"),

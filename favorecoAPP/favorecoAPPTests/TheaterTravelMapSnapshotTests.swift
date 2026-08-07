@@ -51,4 +51,42 @@ final class TheaterTravelMapSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.totalVisitCount, 2)
         XCTAssertEqual(snapshot.missingCoordinateCount, 1)
     }
+
+    func testPublicPerformanceVenueIsMappedWithoutVisits() {
+        let venue = TheaterTravelMapVenue(
+            id: "osaka-castle",
+            name: "大阪城天守閣",
+            latitude: 34.6873,
+            longitude: 135.5262
+        )
+
+        let snapshot = TheaterTravelMapSnapshot.make(visits: [], venues: [venue])
+
+        XCTAssertEqual(snapshot.points.count, 1)
+        XCTAssertEqual(snapshot.points.first?.name, "大阪城天守閣")
+        XCTAssertEqual(snapshot.points.first?.visitCount, 0)
+        XCTAssertEqual(snapshot.totalVisitCount, 0)
+        XCTAssertEqual(snapshot.totalVenueCount, 1)
+    }
+
+    func testPublicPerformanceVenueAndNearbyVisitShareOnePoint() {
+        let visit = Visit(
+            venueNameSnapshot: "大阪城",
+            latitude: 34.68731,
+            longitude: 135.52621
+        )
+        let venue = TheaterTravelMapVenue(
+            id: "osaka-castle",
+            name: "大阪城天守閣",
+            latitude: 34.6873,
+            longitude: 135.5262
+        )
+
+        let visitSnapshot = TheaterTravelMapSnapshot.make(visits: [visit])
+        let venueSnapshot = TheaterTravelMapSnapshot.make(visits: [], venues: [venue])
+        let snapshot = venueSnapshot.mergingVisitSnapshot(visitSnapshot)
+
+        XCTAssertEqual(snapshot.points.count, 1)
+        XCTAssertEqual(snapshot.points.first?.visitCount, 1)
+    }
 }

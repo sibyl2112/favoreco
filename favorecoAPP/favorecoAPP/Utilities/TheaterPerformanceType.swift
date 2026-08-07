@@ -11,6 +11,71 @@ enum ExplicitFormMetrics {
     static let rowSeparatorColor = Color.secondary.opacity(0.46)
 }
 
+struct FavorecoRegistrationSectionHeader: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .foregroundStyle(themePalette.registrationSectionHeaderTint)
+    }
+}
+
+struct FavorecoRegistrationSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        Section {
+            content
+        } header: {
+            FavorecoRegistrationSectionHeader(title)
+        }
+    }
+}
+
+enum ExplicitFormControlRowDensity {
+    case standard
+    case compactSchedule
+
+    var minimumHeight: CGFloat {
+        switch self {
+        case .standard: ExplicitFormMetrics.rowMinimumHeight
+        case .compactSchedule: 62
+        }
+    }
+
+    var topPadding: CGFloat {
+        switch self {
+        case .standard: ExplicitFormMetrics.rowTopPadding
+        case .compactSchedule: 6
+        }
+    }
+
+    var bottomPadding: CGFloat {
+        switch self {
+        case .standard: ExplicitFormMetrics.rowBottomPadding
+        case .compactSchedule: 8
+        }
+    }
+
+    var titleControlSpacing: CGFloat {
+        switch self {
+        case .standard: 0
+        case .compactSchedule: -4
+        }
+    }
+}
+
 enum TheaterPerformanceType: String, CaseIterable, Identifiable {
     case play = "theater_play"
     case twoPointFiveD = "theater_2_5d"
@@ -226,7 +291,20 @@ struct ExplicitFormTextField: View {
         return 24 + CGFloat(minimumLines) * 20
     }
 
+    @ViewBuilder
     var body: some View {
+        if focusesFromWholeRow {
+            fieldRow
+                .simultaneousGesture(
+                    TapGesture()
+                        .onEnded { isFocused = true }
+                )
+        } else {
+            fieldRow
+        }
+    }
+
+    private var fieldRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             fieldTitle
             HStack(alignment: .top, spacing: 6) {
@@ -252,10 +330,6 @@ struct ExplicitFormTextField: View {
         .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
         .frame(minHeight: minimumRowHeight, alignment: .topLeading)
         .contentShape(Rectangle())
-        .onTapGesture {
-            guard focusesFromWholeRow else { return }
-            isFocused = true
-        }
         .listRowInsets(
             EdgeInsets(
                 top: 0,
@@ -325,10 +399,11 @@ struct ExplicitFormTextField: View {
 struct ExplicitFormControlRow<Control: View>: View {
     let title: String
     var isOptional = false
+    var density: ExplicitFormControlRowDensity = .standard
     @ViewBuilder let control: () -> Control
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: density.titleControlSpacing) {
             ExplicitFormFieldTitle(
                 title: title,
                 isOptional: isOptional,
@@ -349,9 +424,9 @@ struct ExplicitFormControlRow<Control: View>: View {
             .frame(height: 27)
             .padding(.trailing, ExplicitFormMetrics.controlTrailingPadding)
         }
-        .padding(.top, ExplicitFormMetrics.rowTopPadding)
-        .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
-        .frame(minHeight: ExplicitFormMetrics.rowMinimumHeight, alignment: .topLeading)
+        .padding(.top, density.topPadding)
+        .padding(.bottom, density.bottomPadding)
+        .frame(minHeight: density.minimumHeight, alignment: .topLeading)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
     }
@@ -470,10 +545,13 @@ struct TicketTagInputField: View {
         .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
         .frame(minHeight: ExplicitFormMetrics.rowMinimumHeight, alignment: .topLeading)
         .contentShape(Rectangle())
-        .onTapGesture {
-            guard canAddAnotherTag else { return }
-            isInputFocused = true
-        }
+        .simultaneousGesture(
+            TapGesture()
+                .onEnded {
+                    guard canAddAnotherTag else { return }
+                    isInputFocused = true
+                }
+        )
         .onChange(of: text) { _, newValue in
             guard newValue != currentBindingText else { return }
             committedTags = TicketAttemptUnitFields.normalizedTagNames(from: newValue)

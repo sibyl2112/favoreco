@@ -399,6 +399,8 @@ struct GoshuinMapItem: Identifiable {
 
 struct GoshuinMapPreview: View {
     let visits: [Visit]
+    @State private var selectedItemID: UUID?
+    @State private var mapDestination: FavorecoMapDestination?
 
     private var items: [GoshuinMapItem] {
         visits.compactMap { visit in
@@ -415,11 +417,16 @@ struct GoshuinMapPreview: View {
     }
 
     var body: some View {
-        Map(initialPosition: .region(Self.region(for: items))) {
+        Map(
+            initialPosition: .region(Self.region(for: items)),
+            selection: $selectedItemID
+        ) {
             ForEach(items) { item in
                 Marker(item.title, coordinate: item.coordinate)
+                    .tag(item.id)
             }
         }
+        .favorecoEmbeddedMapInteraction()
         .frame(height: 210)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
@@ -436,6 +443,18 @@ struct GoshuinMapPreview: View {
                     }
             }
         }
+        .onChange(of: selectedItemID) { _, selectedID in
+            guard let selectedID,
+                  let item = items.first(where: { $0.id == selectedID }) else { return }
+            mapDestination = FavorecoMapDestination(
+                name: item.title,
+                address: "",
+                latitude: item.coordinate.latitude,
+                longitude: item.coordinate.longitude
+            )
+            selectedItemID = nil
+        }
+        .favorecoMapDestinationDialog(destination: $mapDestination)
     }
 
     private static func region(for items: [GoshuinMapItem]) -> MKCoordinateRegion {
@@ -444,6 +463,10 @@ struct GoshuinMapPreview: View {
                 center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
                 span: MKCoordinateSpan(latitudeDelta: 18, longitudeDelta: 18)
             )
+        }
+
+        if let item = items.first, items.count == 1 {
+            return FavorecoMapViewport.singlePointRegion(center: item.coordinate)
         }
 
         let latitudes = items.map { $0.coordinate.latitude }

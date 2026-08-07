@@ -7,7 +7,7 @@ struct TheaterEventExpenseSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 10) {
-                FavorecoIcon(systemName: "wallet.pass", size: 17, fallbackWeight: .medium)
+                FavorecoIcon(systemName: "yensign.circle", size: 17, fallbackWeight: .medium)
                     .foregroundStyle(accentColor)
                     .frame(width: 22)
 

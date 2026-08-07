@@ -3,6 +3,62 @@ import XCTest
 
 @MainActor
 final class TicketWorkflowTests: XCTestCase {
+    func testTicketGuideSuggestionsFindRegisteredGuideByShortNameAndAlias() {
+        XCTAssertEqual(
+            TicketGuideDefinition.suggestions(matching: "ぴあ").first?.key,
+            "pia"
+        )
+        XCTAssertTrue(
+            TicketGuideDefinition.suggestions(matching: "ローチケ")
+                .contains(where: { $0.key == "lawson" })
+        )
+        XCTAssertEqual(
+            TicketGuideDefinition.suggestions(matching: "パスマーケット").first?.key,
+            "passmarket"
+        )
+    }
+
+    func testTicketGuideSuggestionsExcludeBlankShortAndCustomEntries() {
+        XCTAssertTrue(TicketGuideDefinition.suggestions(matching: "").isEmpty)
+        XCTAssertTrue(TicketGuideDefinition.suggestions(matching: "e").isEmpty)
+        XCTAssertFalse(
+            TicketGuideDefinition.suggestions(matching: "その他")
+                .contains(where: { $0.key == TicketGuideDefinition.customKey })
+        )
+    }
+
+    func testPostAcquisitionDetailsPromptOnlyOffersForMissingPurchaseDetails() {
+        let attempt = TicketAttempt(statusKey: "waitingPayment")
+
+        XCTAssertTrue(
+            TicketPostAcquisitionDetailsPrompt.shouldOffer(
+                for: attempt,
+                afterTransitionTo: "waitingIssue"
+            )
+        )
+        XCTAssertTrue(
+            TicketPostAcquisitionDetailsPrompt.shouldOffer(
+                for: attempt,
+                afterTransitionTo: "issued"
+            )
+        )
+        XCTAssertFalse(
+            TicketPostAcquisitionDetailsPrompt.shouldOffer(
+                for: attempt,
+                afterTransitionTo: "waitingResult"
+            )
+        )
+
+        attempt.price = Decimal(12_000)
+        attempt.seatText = "1階 10列 12番"
+        XCTAssertFalse(
+            TicketPostAcquisitionDetailsPrompt.shouldOffer(
+                for: attempt,
+                afterTransitionTo: "issued"
+            )
+        )
+    }
+
     func testHomeTicketDeadlineUrgencyDistinguishesNormalTomorrowTodayAndOverdue() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -64,6 +120,23 @@ final class TicketWorkflowTests: XCTestCase {
         let plan = Plan(planKindKey: Plan.undatedTicketPlanKindKey)
 
         XCTAssertFalse(plan.hasConfirmedSchedule)
+    }
+
+    func testOngoingPlanRemainsInComingUpUntilItsEndTime() {
+        let now = date(2026, 8, 6, hour: 23, minute: 48)
+        let ongoingPlan = Plan(
+            startsAt: date(2026, 8, 6, hour: 23, minute: 20),
+            endsAt: date(2026, 8, 7, hour: 1, minute: 20)
+        )
+        let finishedPlan = Plan(
+            startsAt: date(2026, 8, 6, hour: 20),
+            endsAt: date(2026, 8, 6, hour: 22)
+        )
+        let undatedPlan = Plan(planKindKey: Plan.undatedTicketPlanKindKey)
+
+        XCTAssertTrue(ongoingPlan.isUpcomingOrOngoing(at: now))
+        XCTAssertFalse(finishedPlan.isUpcomingOrOngoing(at: now))
+        XCTAssertFalse(undatedPlan.isUpcomingOrOngoing(at: now))
     }
 
     func testUndatedTicketRemainsManagedAndDoesNotDuplicateInHomeInterests() {
@@ -465,9 +538,27 @@ final class TicketWorkflowTests: XCTestCase {
     }
 
     func testPaymentAndReceiptAreSeparateExplicitTransitions() {
+        let resultAttempt = TicketAttempt(statusKey: "waitingResult")
+        let legacyWonAttempt = TicketAttempt(statusKey: "won")
         let paymentAttempt = TicketAttempt(statusKey: "waitingPayment")
         let receiptAttempt = TicketAttempt(statusKey: "waitingIssue")
 
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.transitions(for: resultAttempt).first?.targetStatusKey,
+            "waitingPayment"
+        )
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.transitions(for: resultAttempt).first?.title,
+            "当選にする"
+        )
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.transitions(for: legacyWonAttempt).first?.targetStatusKey,
+            "waitingIssue"
+        )
+        XCTAssertEqual(
+            TicketStatusTransitionDefinition.transitions(for: legacyWonAttempt).first?.title,
+            "支払い済みにする"
+        )
         XCTAssertEqual(
             TicketStatusTransitionDefinition.transitions(for: paymentAttempt).first?.targetStatusKey,
             "waitingIssue"
@@ -498,6 +589,18 @@ final class TicketWorkflowTests: XCTestCase {
                 for: TicketAttempt(statusKey: "waitingResult", entryRouteKey: "card")
             ),
             "当落待ち"
+        )
+        XCTAssertEqual(
+            TicketProgressPresentation.currentStageLabel(
+                for: TicketAttempt(statusKey: "won", entryRouteKey: "card")
+            ),
+            "支払い待ち"
+        )
+        XCTAssertEqual(
+            TicketProgressPresentation.currentStageLabel(
+                for: TicketAttempt(statusKey: "waitingPayment", entryRouteKey: "card")
+            ),
+            "支払い待ち"
         )
         XCTAssertEqual(
             TicketProgressPresentation.currentStageLabel(
@@ -763,7 +866,8 @@ final class TicketWorkflowTests: XCTestCase {
         _ year: Int,
         _ month: Int,
         _ day: Int,
-        hour: Int = 0
+        hour: Int = 0,
+        minute: Int = 0
     ) -> Date {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -772,7 +876,8 @@ final class TicketWorkflowTests: XCTestCase {
                 year: year,
                 month: month,
                 day: day,
-                hour: hour
+                hour: hour,
+                minute: minute
             )
         )!
     }

@@ -87,11 +87,15 @@ struct HomeHeroSection: View {
                 } label: {
                     Text(mode.title)
                         .font(FavorecoTypography.jpSerif(14, weight: selectedMode == mode ? .bold : .medium, relativeTo: .body))
-                        .foregroundStyle(selectedMode == mode ? Color.white : Color.primary.opacity(0.72))
+                        .foregroundStyle(
+                            selectedMode == mode
+                                ? Color(hex: "#FFFDF7")
+                                : Color.primary.opacity(0.72)
+                        )
                         .frame(maxWidth: .infinity)
                         .frame(height: 38)
                         .background(
-                            selectedMode == mode ? themePalette.globalTint : Color.clear,
+                            selectedMode == mode ? themePalette.prominentAction : Color.clear,
                             in: UnevenRoundedRectangle(
                                 topLeadingRadius: mode == .interested ? 7 : 0,
                                 bottomLeadingRadius: 0,

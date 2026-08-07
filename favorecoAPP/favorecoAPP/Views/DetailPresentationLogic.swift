@@ -268,14 +268,21 @@ enum ExperienceDetailPresentation {
     }
 
     static func theaterVisitOrdinal(for visit: Visit) -> String {
-        guard let visits = visit.event?.visits else { return "観劇1回目" }
+        "観劇\(visitOrdinal(for: visit))回目"
+    }
+
+    static func museumVisitOrdinal(for visit: Visit) -> String {
+        "鑑賞\(visitOrdinal(for: visit))回目"
+    }
+
+    static func visitOrdinal(for visit: Visit) -> Int {
+        guard let visits = visit.event?.visits else { return 1 }
         let ordered = visits.sorted {
             if $0.visitedAt != $1.visitedAt { return $0.visitedAt < $1.visitedAt }
             if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
             return $0.id.uuidString < $1.id.uuidString
         }
-        let ordinal = (ordered.firstIndex(where: { $0.id == visit.id }) ?? 0) + 1
-        return "観劇\(ordinal)回目"
+        return (ordered.firstIndex(where: { $0.id == visit.id }) ?? 0) + 1
     }
 
     static func compactWeatherText(fields: VisitUnitFields) -> String {

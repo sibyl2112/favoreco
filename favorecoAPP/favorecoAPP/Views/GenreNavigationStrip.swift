@@ -64,16 +64,17 @@ struct GenreNavigationStrip: View {
 
     private func allLabel(isSelected: Bool, showsLeadingDivider: Bool) -> some View {
         segmentLabel(
-            title: "総合",
+            title: "Home",
             tint: themePalette.globalTint,
+            selectionIndicatorTint: themePalette.prominentAction,
             isSelected: isSelected,
             showsLeadingDivider: showsLeadingDivider
         )
         .id("all-genres")
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("ジャンル横断の総合画面")
+        .accessibilityLabel("Home")
         .accessibilityValue(isSelected ? "選択中" : "")
-        .accessibilityHint(isSelected ? "ジャンル横断の情報を表示しています" : "総合画面へ戻ります")
+        .accessibilityHint(isSelected ? "ジャンル横断の情報を表示しています" : "Homeへ戻ります")
     }
 
     private func genreLabel(category: RecordCategory, isSelected: Bool, showsLeadingDivider: Bool) -> some View {
@@ -104,6 +105,7 @@ struct GenreNavigationStrip: View {
     private func segmentLabel(
         title: String,
         tint: Color,
+        selectionIndicatorTint: Color? = nil,
         isSelected: Bool,
         showsLeadingDivider: Bool
     ) -> some View {
@@ -123,7 +125,7 @@ struct GenreNavigationStrip: View {
             .overlay(alignment: .bottom) {
                 if isSelected {
                     Rectangle()
-                        .fill(tint)
+                        .fill(selectionIndicatorTint ?? tint)
                         .frame(height: 2)
                         .padding(.horizontal, 8)
                 }

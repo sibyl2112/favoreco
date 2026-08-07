@@ -98,11 +98,15 @@ struct HomeReportSection: View {
                 } label: {
                     Text(period.title)
                         .font(FavorecoTypography.jpSerif(14, weight: selectedPeriod == period ? .bold : .medium, relativeTo: .body))
-                        .foregroundStyle(selectedPeriod == period ? Color.white : Color.primary.opacity(0.72))
+                        .foregroundStyle(
+                            selectedPeriod == period
+                                ? Color(hex: "#FFFDF7")
+                                : Color.primary.opacity(0.72)
+                        )
                         .frame(maxWidth: .infinity)
                         .frame(height: 38)
                         .background(
-                            selectedPeriod == period ? themePalette.globalTint : Color.clear,
+                            selectedPeriod == period ? themePalette.prominentAction : Color.clear,
                             in: UnevenRoundedRectangle(
                                 topLeadingRadius: period == .month ? 7 : 0,
                                 bottomLeadingRadius: 0,
@@ -217,21 +221,15 @@ private struct HomeReportArtwork: View {
     let visit: HomeVisitSnapshot
 
     var body: some View {
-        GeometryReader { geometry in
-            ThumbnailImage(
-                reference: visit.thumbnailReference,
-                displaySize: geometry.size,
-                contentMode: .fill
-            ) {
-                ZStack {
-                    Color(hex: visit.categoryColorHex).opacity(0.15)
-                    FavorecoIcon(systemName: visit.categoryIcon, size: 16)
-                        .font(.title2)
-                        .foregroundStyle(Color(hex: visit.categoryColorHex))
-                }
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
+        CategoryEyecatchArtwork(
+            reference: visit.thumbnailReference,
+            templateKey: visit.categoryTemplateKey,
+            backgroundColor: Color(hex: visit.categoryColorHex).opacity(0.15)
+        ) { size in
+            FavorecoIcon(systemName: visit.categoryIcon, size: 16)
+                .font(.title2)
+                .foregroundStyle(Color(hex: visit.categoryColorHex))
+                .frame(width: size.width, height: size.height)
         }
         .accessibilityLabel("\(visit.title)、\(visit.categoryName)")
     }

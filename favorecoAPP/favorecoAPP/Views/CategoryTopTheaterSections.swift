@@ -8,7 +8,10 @@ enum TheaterCategoryStyle {
     static let gold = Color(red: 0.82, green: 0.62, blue: 0.30)
     static let lightGold = Color(red: 0.96, green: 0.82, blue: 0.52)
     static let ivory = Color(red: 0.96, green: 0.92, blue: 0.84)
-
+    /// ワイン背景上で補助操作を読み取れる明るさに保つ観劇専用色。
+    static let ticketActionRose = Color(red: 0.96, green: 0.43, blue: 0.58)
+    /// チケット管理の補助情報用。操作色より一段抑え、状態の主役と競合させない。
+    static let ticketMetadataRose = Color(red: 0.88, green: 0.32, blue: 0.47)
     static let brandGradient = LinearGradient(
         colors: [lightGold, Color(red: 0.70, green: 0.38, blue: 0.18), lightGold],
         startPoint: .topLeading,
@@ -25,22 +28,22 @@ struct TheaterPosterView: View {
     }
 
     var body: some View {
-        ThumbnailImage(
+        TheaterPosterArtwork(
             reference: event.map { .event($0.id) },
-            displaySize: CGSize(width: width, height: height),
-            contentMode: .fill
-        ) {
+            backgroundColor: TheaterCategoryStyle.black
+        ) { size in
             CategoryDefaultArtworkImage(
                 templateKey: "theater",
-                displaySize: CGSize(width: width, height: height)
+                displaySize: size
             )
         }
         .frame(width: width, height: height)
-        .background(TheaterCategoryStyle.black)
-        .clipped()
         .overlay {
             Rectangle()
-                .stroke(TheaterCategoryStyle.gold.opacity(0.62), lineWidth: 0.7)
+                .stroke(
+                    TheaterCategoryStyle.gold.opacity(CategoryLibraryChrome.artworkBorderOpacity),
+                    lineWidth: CategoryLibraryChrome.borderLineWidth
+                )
         }
     }
 }
@@ -120,7 +123,10 @@ struct TheaterEventRow: View {
         .background(TheaterCategoryStyle.tileBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(TheaterCategoryStyle.gold.opacity(0.42), lineWidth: 0.7)
+                .stroke(
+                    TheaterCategoryStyle.gold.opacity(CategoryLibraryChrome.cardBorderOpacity),
+                    lineWidth: CategoryLibraryChrome.borderLineWidth
+                )
         }
     }
 }
@@ -214,7 +220,10 @@ struct TheaterVisitRow: View {
         .background(TheaterCategoryStyle.tileBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(TheaterCategoryStyle.gold.opacity(0.42), lineWidth: 0.7)
+                .stroke(
+                    TheaterCategoryStyle.gold.opacity(CategoryLibraryChrome.cardBorderOpacity),
+                    lineWidth: CategoryLibraryChrome.borderLineWidth
+                )
         }
     }
 }
@@ -323,21 +332,20 @@ private struct TheaterVisitCompactCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            GeometryReader { geometry in
-                ThumbnailImage(
-                    reference: event.map { .event($0.id) },
-                    displaySize: geometry.size,
-                    contentMode: .fill
-                ) {
-                    CategoryDefaultArtworkImage(
-                        templateKey: "theater",
-                        displaySize: geometry.size
-                    )
-                }
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                .clipped()
+            TheaterPosterArtwork(
+                reference: event.map { .event($0.id) },
+                backgroundColor: TheaterCategoryStyle.black
+            ) { size in
+                CategoryDefaultArtworkImage(templateKey: "theater", displaySize: size)
             }
             .frame(width: artworkWidth, height: artworkHeight)
+            .overlay {
+                Rectangle()
+                    .stroke(
+                        TheaterCategoryStyle.gold.opacity(CategoryLibraryChrome.artworkBorderOpacity),
+                        lineWidth: CategoryLibraryChrome.borderLineWidth
+                    )
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -378,7 +386,10 @@ private struct TheaterVisitCompactCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(TheaterCategoryStyle.gold.opacity(0.42), lineWidth: 0.7)
+                .stroke(
+                    TheaterCategoryStyle.gold.opacity(CategoryLibraryChrome.cardBorderOpacity),
+                    lineWidth: CategoryLibraryChrome.borderLineWidth
+                )
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title)、\(dateText)、\(performanceTimeText)、\(venueText)")

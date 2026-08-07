@@ -99,6 +99,12 @@ struct VisitUnitFields: Codable {
     var weatherFetchedAt: Date?
     var weatherAttributionURL: String = ""
     var advancedEntries: [AdvancedFieldEntry] = []
+    /// 書籍（巻）をシリーズ単位で束ねるための構造化メタデータ。
+    var bookSeriesName: String = ""
+    var bookVolumeNumber: String = ""
+    var bookAuthorName: String = ""
+    /// 書籍記録で終了日を明示したか。nil は旧データ（従来の読了日1日）として扱う。
+    var bookReadingHasEndDate: Bool?
 
     init(
         ocrText: String = "",
@@ -122,7 +128,11 @@ struct VisitUnitFields: Codable {
         weatherLowCelsius: Double? = nil,
         weatherFetchedAt: Date? = nil,
         weatherAttributionURL: String = "",
-        advancedEntries: [AdvancedFieldEntry] = []
+        advancedEntries: [AdvancedFieldEntry] = [],
+        bookSeriesName: String = "",
+        bookVolumeNumber: String = "",
+        bookAuthorName: String = "",
+        bookReadingHasEndDate: Bool? = nil
     ) {
         self.ocrText = ocrText
         self.styleNames = styleNames
@@ -146,6 +156,10 @@ struct VisitUnitFields: Codable {
         self.weatherFetchedAt = weatherFetchedAt
         self.weatherAttributionURL = weatherAttributionURL
         self.advancedEntries = advancedEntries
+        self.bookSeriesName = bookSeriesName
+        self.bookVolumeNumber = bookVolumeNumber
+        self.bookAuthorName = bookAuthorName
+        self.bookReadingHasEndDate = bookReadingHasEndDate
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -171,6 +185,10 @@ struct VisitUnitFields: Codable {
         case weatherFetchedAt
         case weatherAttributionURL
         case advancedEntries
+        case bookSeriesName
+        case bookVolumeNumber
+        case bookAuthorName
+        case bookReadingHasEndDate
     }
 
     init(from decoder: Decoder) throws {
@@ -199,6 +217,10 @@ struct VisitUnitFields: Codable {
         weatherFetchedAt = try container.decodeIfPresent(Date.self, forKey: .weatherFetchedAt)
         weatherAttributionURL = try container.decodeIfPresent(String.self, forKey: .weatherAttributionURL) ?? ""
         advancedEntries = try container.decodeIfPresent([AdvancedFieldEntry].self, forKey: .advancedEntries) ?? []
+        bookSeriesName = try container.decodeIfPresent(String.self, forKey: .bookSeriesName) ?? ""
+        bookVolumeNumber = try container.decodeIfPresent(String.self, forKey: .bookVolumeNumber) ?? ""
+        bookAuthorName = try container.decodeIfPresent(String.self, forKey: .bookAuthorName) ?? ""
+        bookReadingHasEndDate = try container.decodeIfPresent(Bool.self, forKey: .bookReadingHasEndDate)
     }
 
     init(rawValue: String) {
@@ -232,7 +254,11 @@ struct VisitUnitFields: Codable {
                 || weatherLowCelsius != nil
                 || weatherFetchedAt != nil
                 || !weatherAttributionURL.isEmpty
-                || !advancedEntries.isEmpty,
+                || !advancedEntries.isEmpty
+                || !bookSeriesName.isEmpty
+                || !bookVolumeNumber.isEmpty
+                || !bookAuthorName.isEmpty
+                || bookReadingHasEndDate != nil,
               let data = try? JSONEncoder().encode(self),
               let string = String(data: data, encoding: .utf8) else {
             return ""
@@ -254,6 +280,53 @@ struct VisitUnitFields: Codable {
 }
 
 extension ExperienceEvent {
+    var bookSeriesName: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookSeriesName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var bookVolumeNumber: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookVolumeNumber
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var bookAuthorName: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookAuthorName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var bookVolumeLabel: String {
+        let value = bookVolumeNumber
+        guard !value.isEmpty else { return "" }
+        if value.contains("巻") || value.contains("編") || value.contains("冊") {
+            return value
+        }
+        return "第\(value)巻"
+    }
+
+    var bookLegacySummary: String {
+        [bookSeriesName, bookVolumeLabel, bookAuthorName]
+            .filter { !$0.isEmpty }
+            .joined(separator: "・")
+    }
+
+    func applyBookMetadata(seriesName: String, volumeNumber: String, authorName: String) {
+        var fields = VisitUnitFields(rawValue: unitFieldsRaw)
+        fields.bookSeriesName = seriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+        fields.bookVolumeNumber = volumeNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        fields.bookAuthorName = authorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        unitFieldsRaw = fields.encodedRawValue
+        self.seriesName = [
+            fields.bookSeriesName,
+            fields.bookVolumeNumber.isEmpty
+                ? ""
+                : (fields.bookVolumeNumber.contains("巻") ? fields.bookVolumeNumber : "第\(fields.bookVolumeNumber)巻"),
+            fields.bookAuthorName,
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: "・")
+    }
+
     var screenWorkType: ScreenWorkType {
         ScreenWorkType.resolved(from: subTypeKey)
     }
@@ -276,6 +349,31 @@ extension ExperienceEvent {
             ? VisitUnitFields.normalizedSeasonNumber(seasonNumber)
             : 0
         unitFieldsRaw = fields.encodedRawValue
+    }
+}
+
+enum BookSeriesRegistrationDefaults {
+    nonisolated static func nextVolumeNumber(from volumeNumbers: [String]) -> String {
+        let values = volumeNumbers.compactMap(bookVolumeValue)
+        guard let maximum = values.max() else { return "" }
+        return String(Int(floor(maximum)) + 1)
+    }
+
+    nonisolated private static func bookVolumeValue(_ value: String) -> Double? {
+        let normalized = value.applyingTransform(.fullwidthToHalfwidth, reverse: false) ?? value
+        var numeric = ""
+        var foundDigit = false
+        for character in normalized {
+            if character.isNumber {
+                numeric.append(character)
+                foundDigit = true
+            } else if character == ".", foundDigit, !numeric.contains(".") {
+                numeric.append(character)
+            } else if foundDigit {
+                break
+            }
+        }
+        return Double(numeric)
     }
 }
 

@@ -13,17 +13,21 @@ struct DebugSampleDataSummary {
     let eventCount: Int
     let visitCount: Int
     let planCount: Int
+    let interestCount: Int
+    let catalogOnlyCount: Int
     let ticketAttemptCount: Int
 
     static let empty = DebugSampleDataSummary(
         eventCount: 0,
         visitCount: 0,
         planCount: 0,
+        interestCount: 0,
+        catalogOnlyCount: 0,
         ticketAttemptCount: 0
     )
 
     var insertedMessage: String {
-        "サンプル\(eventCount)件（記録\(visitCount)件・未来予定\(planCount)件）を追加しました。"
+        "ダミー\(eventCount)件（記録\(visitCount)・予定\(planCount)・興味あり\(interestCount)・対象情報\(catalogOnlyCount)）を追加しました。"
     }
 
     var deletedMessage: String {
@@ -32,14 +36,30 @@ struct DebugSampleDataSummary {
 }
 
 enum SampleDataSeeder {
-    static let sampleURLPrefix = "https://sample.favoreco.app/v2/"
-    static let samplePhotoPrefix = "sample/v2/"
+    static let sampleURLPrefix = "https://sample.favoreco.app/v3/"
+    static let samplePhotoPrefix = "sample/v3/"
 
+    private static let previousURLPrefix = "https://sample.favoreco.app/v2/"
+    private static let previousPhotoPrefix = "sample/v2/"
     private static let legacyURLPrefix = "https://example.com/favoreco/"
     private static let legacyPhotoPrefix = "debug/sample-"
-    private static let sampleMasterMarker = "favoreco-sample-v2"
-    private static let automaticInsertionKey = "hasInsertedAutomaticSampleDataV2"
-    private static let samplesPerCategory = 3
+    private static let sampleMasterMarker = "favoreco-sample-v3"
+    private static let automaticInsertionKey = "hasInsertedAutomaticSampleDataV3"
+    private static let completedPerCategory = 5
+    private static let plannedPerCategory = 3
+    private static let interestedPerCategory = 3
+    private static let catalogOnlyPerCategory = 5
+    private static let samplesPerCategory = completedPerCategory
+        + plannedPerCategory
+        + interestedPerCategory
+        + catalogOnlyPerCategory
+
+    private enum SampleScenario: Equatable {
+        case completed
+        case planned
+        case interested
+        case catalogOnly
+    }
 
     @MainActor
     @discardableResult
@@ -47,26 +67,11 @@ enum SampleDataSeeder {
         in context: ModelContext,
         categoryTemplateKeys: Set<String>
     ) throws -> DebugSampleDataSummary {
-        guard !UserDefaults.standard.bool(forKey: automaticInsertionKey) else {
-            return .empty
-        }
-
-        let existingEvents = try context.fetch(FetchDescriptor<ExperienceEvent>())
-        let hasPersonalData = existingEvents.contains { !isSampleEvent($0) }
-        guard !hasPersonalData else {
-            if existingEvents.contains(where: isSampleEvent) {
-                _ = try deleteSamples(in: context)
-            }
-            UserDefaults.standard.set(true, forKey: automaticInsertionKey)
-            return .empty
-        }
-
-        let summary = try replaceSamples(
-            in: context,
-            categoryTemplateKeys: categoryTemplateKeys
-        )
+        // 大量の検証データを意図せず投入しない。現在は開発者設定からのみ作成する。
+        _ = context
+        _ = categoryTemplateKeys
         UserDefaults.standard.set(true, forKey: automaticInsertionKey)
-        return summary
+        return .empty
     }
 
     @MainActor
@@ -82,7 +87,8 @@ enum SampleDataSeeder {
             sortBy: [SortDescriptor(\RecordCategory.sortOrder)]
         )
         let categories = try context.fetch(descriptor).filter { category in
-            categoryTemplateKeys?.contains(category.templateKey) ?? true
+            !category.isArchived
+                && (categoryTemplateKeys?.contains(category.templateKey) ?? true)
         }
         let now = Date()
         var placesByName: [String: PlaceMaster] = [:]
@@ -96,41 +102,72 @@ enum SampleDataSeeder {
         var eventCount = 0
         var visitCount = 0
         var planCount = 0
+        var interestCount = 0
+        var catalogOnlyCount = 0
         var ticketAttemptCount = 0
 
         for (categoryIndex, category) in categories.enumerated() {
+            // 同じジャンルの16件は共通の軽量サンプル画像を使う。
+            // Bundle読み込みとUIImageデコードを各レコードで繰り返さない。
+            let categoryImage = sampleImage(for: category, index: 0)
             for sampleIndex in 0..<samplesPerCategory {
+                let scenario = sampleScenario(for: sampleIndex)
                 if category.templateKey == "random_goods" {
                     insertCollectibleSample(
                         category: category,
                         categoryIndex: categoryIndex,
                         sampleIndex: sampleIndex,
+                        scenario: scenario,
+                        image: categoryImage,
                         now: now,
                         context: context
                     )
                     eventCount += 1
+                    switch scenario {
+                    case .interested: interestCount += 1
+                    case .catalogOnly: catalogOnlyCount += 1
+                    default: break
+                    }
                     continue
                 }
 
                 let definition = sampleDefinition(for: category, index: sampleIndex)
-                let image = sampleImage(for: category, index: sampleIndex)
-                let imagePath = "\(samplePhotoPrefix)\(category.templateKey)-\(sampleIndex + 1).jpg"
-                let isFuture = sampleIndex == samplesPerCategory - 1
-                let itemDate = isFuture
-                    ? sampleFutureDate(now: now, categoryIndex: categoryIndex)
-                    : samplePastDate(now: now, categoryIndex: categoryIndex, sampleIndex: sampleIndex)
+                let image = categoryImage
+                let imagePath = "\(samplePhotoPrefix)\(category.templateKey).jpg"
+                let itemDate = sampleDate(
+                    now: now,
+                    categoryIndex: categoryIndex,
+                    sampleIndex: sampleIndex,
+                    scenario: scenario
+                )
                 let aspectRatioKey = sampleAspectRatioKey(for: category)
+                let placeSeed = samplePlace(for: category, index: sampleIndex)
                 let unitFields = VisitUnitFields(
                     ocrText: sampleOCRText(for: category, title: definition.title),
+                    eventPeriodStartsAt: scenario == .catalogOnly ? itemDate : nil,
+                    eventPeriodEndsAt: scenario == .catalogOnly
+                        ? itemDate.addingTimeInterval(14 * 24 * 60 * 60)
+                        : nil,
+                    eventVenues: scenario == .catalogOnly
+                        ? [EventVenueEntry(
+                            name: placeSeed.name,
+                            address: placeSeed.address,
+                            performanceLabel: targetInformationLabel(for: category),
+                            startsAt: itemDate,
+                            endsAt: itemDate.addingTimeInterval(14 * 24 * 60 * 60)
+                        )]
+                        : [],
                     screenWorkSeasonNumber: sampleScreenWorkSeasonNumber(
                         for: category,
                         index: sampleIndex
                     ),
                     eyecatchAspectRatioKey: aspectRatioKey,
                     goshuinBookSizeKey: category.templateKey == "goshuin" ? GoshuinBookSize.standard.key : "",
-                    advancedEntries: sampleAdvancedEntries(for: category, index: sampleIndex)
+                    advancedEntries: sampleAdvancedEntries(for: category, index: sampleIndex),
+                    bookSeriesName: category.templateKey == "book" ? definition.seriesName : "",
+                    bookVolumeNumber: category.templateKey == "book" ? "\(sampleIndex + 1)" : "",
+                    bookAuthorName: category.templateKey == "book" ? definition.organizer : ""
                 )
-                let placeSeed = samplePlace(for: category, index: sampleIndex)
                 let place = resolvePlace(
                     placeSeed,
                     context: context,
@@ -144,6 +181,7 @@ enum SampleDataSeeder {
                     organizerNameSnapshot: definition.organizer,
                     representativeEyecatchPath: imagePath,
                     officialURL: "\(sampleURLPrefix)\(category.templateKey)/\(sampleIndex + 1)",
+                    stateKey: scenario == .interested ? "interested" : "active",
                     memo: "使い方を確認するためのサンプルデータです。いつでもサンプルだけ削除できます。",
                     unitFieldsRaw: unitFields.encodedRawValue,
                     createdAt: itemDate,
@@ -173,7 +211,7 @@ enum SampleDataSeeder {
                     ))
                 }
 
-                if isFuture {
+                if scenario == .planned {
                     let plan = Plan(
                         title: definition.title,
                         subtitle: "サンプルの未来予定",
@@ -208,7 +246,7 @@ enum SampleDataSeeder {
                         context.insert(attempt)
                         ticketAttemptCount += 1
                     }
-                } else {
+                } else if scenario == .completed {
                     let visit = Visit(
                         visitedAt: itemDate,
                         endedAt: itemDate.addingTimeInterval(sampleDuration(for: category)),
@@ -244,6 +282,10 @@ enum SampleDataSeeder {
                         visit: visit
                     ))
                     visitCount += 1
+                } else if scenario == .interested {
+                    interestCount += 1
+                } else {
+                    catalogOnlyCount += 1
                 }
             }
         }
@@ -253,6 +295,8 @@ enum SampleDataSeeder {
             eventCount: eventCount,
             visitCount: visitCount,
             planCount: planCount,
+            interestCount: interestCount,
+            catalogOnlyCount: catalogOnlyCount,
             ticketAttemptCount: ticketAttemptCount
         )
     }
@@ -261,34 +305,46 @@ enum SampleDataSeeder {
     @discardableResult
     static func deleteSamples(in context: ModelContext) throws -> DebugSampleDataSummary {
         let currentURLPrefix = sampleURLPrefix
+        let priorURLPrefix = Self.previousURLPrefix
         let oldURLPrefix = legacyURLPrefix
         let currentPhotoPrefix = samplePhotoPrefix
+        let priorPhotoPrefix = Self.previousPhotoPrefix
         let oldPhotoPrefix = legacyPhotoPrefix
 
         let sampleEvents = try context.fetch(FetchDescriptor<ExperienceEvent>(
             predicate: #Predicate {
                 $0.officialURL.starts(with: currentURLPrefix)
+                    || $0.officialURL.starts(with: priorURLPrefix)
                     || $0.officialURL.starts(with: oldURLPrefix)
             }
         ))
         let samplePlans = try context.fetch(FetchDescriptor<Plan>(
             predicate: #Predicate {
                 $0.officialURL.starts(with: currentURLPrefix)
+                    || $0.officialURL.starts(with: priorURLPrefix)
                     || $0.officialURL.starts(with: oldURLPrefix)
             }
         ))
         let sampleAttempts = try context.fetch(FetchDescriptor<TicketAttempt>(
             predicate: #Predicate {
                 $0.purchaseURL.starts(with: currentURLPrefix)
+                    || $0.purchaseURL.starts(with: priorURLPrefix)
                     || $0.purchaseURL.starts(with: oldURLPrefix)
             }
         ))
         let sampleVisits = try context.fetch(FetchDescriptor<Visit>(
             predicate: #Predicate {
                 $0.eyecatchPath.starts(with: currentPhotoPrefix)
+                    || $0.eyecatchPath.starts(with: priorPhotoPrefix)
                     || $0.eyecatchPath.starts(with: oldPhotoPrefix)
             }
         ))
+        let interestCount = sampleEvents.filter { $0.stateKey == "interested" }.count
+        let catalogOnlyCount = sampleEvents.filter {
+            $0.stateKey != "interested"
+                && ($0.visits ?? []).isEmpty
+                && ($0.plans ?? []).isEmpty
+        }.count
 
         for attempt in sampleAttempts {
             TicketNotificationScheduler.cancel(attemptID: attempt.id)
@@ -309,21 +365,27 @@ enum SampleDataSeeder {
         )
         try context.delete(
             model: PhotoBlob.self,
+            where: #Predicate { $0.relativePath.starts(with: priorPhotoPrefix) }
+        )
+        try context.delete(
+            model: PhotoBlob.self,
             where: #Predicate { $0.relativePath.starts(with: oldPhotoPrefix) }
         )
         try context.save()
-        try deleteOrphanedSampleMasters(in: context)
 
         return DebugSampleDataSummary(
             eventCount: sampleEvents.count,
             visitCount: sampleVisits.count,
             planCount: samplePlans.count,
+            interestCount: interestCount,
+            catalogOnlyCount: catalogOnlyCount,
             ticketAttemptCount: sampleAttempts.count
         )
     }
 
     static func isSampleEvent(_ event: ExperienceEvent) -> Bool {
         event.officialURL.starts(with: sampleURLPrefix)
+            || event.officialURL.starts(with: previousURLPrefix)
             || event.officialURL.starts(with: legacyURLPrefix)
     }
 
@@ -346,7 +408,7 @@ enum SampleDataSeeder {
                 continue
             }
             let image = sampleImage(for: category, index: sampleIndex)
-            let expectedPath = "\(samplePhotoPrefix)theater-\(sampleIndex + 1).jpg"
+            let expectedPath = "\(samplePhotoPrefix)theater.jpg"
             var unitFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
             let expectedRatioKey = EyecatchAspectRatio.bSeriesPoster.key
             let needsRefresh = event.eyecatchData != image.data
@@ -397,6 +459,7 @@ enum SampleDataSeeder {
     }
 
     private struct SamplePlace {
+        var catalogID: String = ""
         let name: String
         let reading: String
         let tags: String
@@ -428,23 +491,33 @@ enum SampleDataSeeder {
         category: RecordCategory,
         categoryIndex: Int,
         sampleIndex: Int,
+        scenario: SampleScenario,
+        image: SampleImage,
         now: Date,
         context: ModelContext
     ) {
         let definition = collectibleSampleDefinition(index: sampleIndex)
-        let image = sampleImage(for: category, index: sampleIndex)
-        let itemDate = samplePastDate(
+        let itemDate = sampleDate(
             now: now,
             categoryIndex: categoryIndex,
-            sampleIndex: sampleIndex
+            sampleIndex: sampleIndex,
+            scenario: scenario
         )
         let event = ExperienceEvent(
             title: definition.title,
             seriesName: definition.releaseText,
             subTypeKey: definition.kind.rawValue,
             organizerNameSnapshot: definition.maker,
+            representativeEyecatchPath: "\(samplePhotoPrefix)random_goods.jpg",
             officialURL: "\(sampleURLPrefix)random_goods/\(sampleIndex + 1)",
+            stateKey: scenario == .interested ? "interested" : "active",
             memo: "種類別の所持数、未入手、ダブり、コンプリート表示を確認するサンプルです。",
+            unitFieldsRaw: VisitUnitFields(
+                eventSubtitle: scenario == .planned ? "発売予定" : "",
+                eventPeriodStartsAt: scenario == .planned ? itemDate : nil,
+                eventPeriodEndsAt: nil,
+                eyecatchAspectRatioKey: sampleAspectRatioKey(for: category)
+            ).encodedRawValue,
             createdAt: itemDate,
             updatedAt: now,
             eyecatchData: image.data,
@@ -452,6 +525,8 @@ enum SampleDataSeeder {
         )
         context.insert(event)
 
+        // 所持履歴は「体験済み」に相当する5シリーズだけへ付与する。
+        guard scenario == .completed else { return }
         for (itemIndex, itemName) in definition.itemNames.enumerated() {
             let item = CollectibleItem(
                 name: itemName,
@@ -495,7 +570,7 @@ enum SampleDataSeeder {
     }
 
     private static func collectibleSampleDefinition(index: Int) -> CollectibleSampleDefinition {
-        let definitions = [
+        let baseDefinitions = [
             CollectibleSampleDefinition(
                 title: "星空どうぶつカプセル",
                 releaseText: "2026年7月",
@@ -527,7 +602,24 @@ enum SampleDataSeeder {
                 outgoingItemIndex: nil
             )
         ]
-        return definitions[index % definitions.count]
+        let titles = [
+            "星空どうぶつカプセル", "月影アクリルチャーム", "花色缶バッジコレクション",
+            "夜空のピンバッジ", "小さな旅のキーホルダー", "雨音ステッカーセット",
+            "灯台ミニチュア", "青のポストカード", "次のカプセルトイ",
+            "新作アクリルスタンド", "限定ピンバッジが気になる", "星座チャームシリーズ",
+            "喫茶店モチーフ雑貨", "四季の缶バッジ", "旅するマスコット", "月夜の紙もの"
+        ]
+        let base = baseDefinitions[index % baseDefinitions.count]
+        return CollectibleSampleDefinition(
+            title: titles[index % titles.count],
+            releaseText: index >= completedPerCategory ? "2026年 発売予定" : base.releaseText,
+            kind: base.kind,
+            maker: base.maker,
+            itemNames: base.itemNames,
+            acquiredQuantities: base.acquiredQuantities,
+            unitPrice: base.unitPrice,
+            outgoingItemIndex: base.outgoingItemIndex
+        )
     }
 
     private static func sampleDefinition(for category: RecordCategory, index: Int) -> SampleDefinition {
@@ -536,43 +628,43 @@ enum SampleDataSeeder {
         let organizer: String
         switch category.templateKey {
         case "theater":
-            titles = ["月影のアトリエ", "雨音の王国", "星屑の航路"]
+            titles = ["月影のアトリエ", "雨音の王国", "星屑の航路", "冬庭の手紙", "透明な客席", "青い鳥の約束", "灯台のワルツ", "夜明け前の標本", "風待ちホテル", "銀河の余白", "カーテンコールのあと", "遠雷のレクイエム", "春を待つ劇場", "黄昏のリハーサル", "白昼夢の幕間", "海辺のモノローグ"]
             seriesName = "シリーズ名"
             organizer = "灯台座"
         case "museum":
-            titles = ["透明な記憶", "風を採集する", "深海の光譜"]
+            titles = ["透明な記憶", "風を採集する", "深海の光譜", "植物と金属", "余白の地図", "光の粒子展", "青の考古学", "手ざわりの宇宙", "季節を編む", "静物の呼吸", "水脈のデザイン", "未来の民藝", "雲を測る", "夜の博物誌", "小さな建築", "色彩の標本"]
             seriesName = "企画展"
             organizer = "架空文化企画室"
         case "live":
-            titles = ["LUMINA TOUR", "ECHOES AT DAWN", "NEON TIDE"]
+            titles = ["LUMINA TOUR", "ECHOES AT DAWN", "NEON TIDE", "Moonlit Signals", "CITY LIGHTS", "Glass Horizon", "BLUE HOUR", "Parallel Lines", "Afterglow Session", "Northern Echo", "Silent Parade", "Prism Night", "Coastal Frequency", "Starlight Archive", "Dawn Circuit", "Amber Resonance"]
             seriesName = "2026 TOUR"
             organizer = "North Light Music"
         case "movie":
-            titles = ["夜を編む人", "光のメトロノーム", "白い海の記憶"]
+            titles = ["夜を編む人", "光のメトロノーム", "白い海の記憶", "雨の駅で", "水平線の手紙", "時計塔の迷子", "花束と彗星", "夏の残像", "北風の食卓", "透明な午後", "砂丘の図書館", "冬眠する街", "月を運ぶ船", "静かな交差点", "最後の青信号", "星のない夜"]
             seriesName = ""
             organizer = "Orion Pictures"
         case "sake":
-            titles = ["月灯り 純米吟醸", "山凪 クラフトビール", "燻樹 シングルモルト"]
+            titles = ["月灯り 純米吟醸", "山凪 クラフトビール", "燻樹 シングルモルト", "白雨 純米酒", "夕凪 ペールエール", "森影 ジン", "雪解け にごり酒", "青葉 セゾン", "麦星 ウイスキー", "花霞 ロゼ", "宵月 大吟醸", "潮風 ラガー", "木漏れ日 リキュール", "冬灯り 古酒", "朝霧 サワー", "深緑 ボタニカルジン"]
             seriesName = "試飲ノート"
             organizer = ""
         case "theme_park":
-            titles = ["星降る遊園地", "蒼海の冒険島", "森のからくり王国"]
+            titles = ["東京ディズニーランド", "ユニバーサル・スタジオ・ジャパン", "富士急ハイランド", "サンリオピューロランド", "東京ディズニーシー", "夜のパーク散策", "季節のパレード", "アトラクション巡り", "次のテーマパーク", "イルミネーション候補", "新エリアが気になる", "休日のパーク計画", "春のスペシャルイベント", "夏のナイトプログラム", "秋のフェスティバル", "冬のライトアップ"]
             seriesName = ""
             organizer = ""
         case "nature_living":
-            titles = ["水の森水族館", "光の丘どうぶつ園", "月草植物園"]
+            titles = ["海遊館", "沖縄美ら海水族館", "旭山動物園", "名古屋港水族館", "鳥羽水族館", "水族館へ行く", "動物園へ行く", "植物園へ行く", "クラゲ展示が気になる", "夜の水族館が気になる", "温室を見てみたい", "深海生物の特別展示", "野鳥観察イベント", "熱帯植物展", "ペンギンの生態展示", "珊瑚礁の企画展示"]
             seriesName = ""
             organizer = ""
         case "outing_facility":
-            titles = ["風見塔展望台", "港の赤レンガ倉庫", "雲上ロープウェイ"]
+            titles = ["東京スカイツリー", "大阪城天守閣", "せんだいメディアテーク", "横浜赤レンガ倉庫", "京都タワー", "展望台へ行く", "建築を見に行く", "港エリアを散策", "夜景スポットが気になる", "歴史施設が気になる", "文化施設を調べる", "屋上庭園の特別公開", "近代建築ツアー", "街を眺める展望イベント", "期間限定ライトアップ", "水辺の文化プログラム"]
             seriesName = ""
             organizer = ""
         case "goshuin":
-            titles = ["明治神宮", "浅草寺", "伏見稲荷大社"]
+            titles = ["明治神宮", "浅草寺", "伏見稲荷大社", "伊勢神宮 内宮", "伊勢神宮 外宮", "次の神社参拝", "次の寺院参拝", "御朱印帳を持って巡る", "季節の御朱印が気になる", "静かな境内を訪ねたい", "建築を見に行きたい", "夏越の祓", "秋季例大祭", "紅葉の特別拝観", "初詣", "春の限定御朱印"]
             seriesName = "参拝の記録"
             organizer = ""
         case "book":
-            titles = ["夜明けの標本室", "雨粒の図書館", "北へ帰る鳥"]
+            titles = ["夜明けの標本室", "雨粒の図書館", "北へ帰る鳥", "月光庭園", "静かな航海日誌", "星を数える部屋", "風の脚注", "冬の栞", "透明な物語", "遠雷のエッセイ", "海辺の短編集", "森を読む", "夜行列車の随筆", "青い装丁の詩集", "小さな博物誌", "灯台守の手紙"]
             seriesName = "灯台文庫"
             organizer = "架空書房"
         case "random_goods":
@@ -604,14 +696,14 @@ enum SampleDataSeeder {
             ]
         case "museum":
             places = [
-                .init(name: "国立新美術館", reading: "こくりつしんびじゅつかん", tags: "art_museum,museum,cultural_facility", prefecture: "東京都", address: "東京都港区六本木7-22-2", officialURL: "https://www.nact.jp/"),
-                .init(name: "東京国立博物館", reading: "とうきょうこくりつはくぶつかん", tags: "museum,cultural_facility,historic_site", prefecture: "東京都", address: "東京都台東区上野公園13-9", officialURL: "https://www.tnm.jp/"),
-                .init(name: "国立科学博物館", reading: "こくりつかがくはくぶつかん", tags: "museum,science_museum,cultural_facility", prefecture: "東京都", address: "東京都台東区上野公園7-20", officialURL: "https://www.kahaku.go.jp/")
+                .init(catalogID: "jp-tokyo-national-art-center", name: "国立新美術館", reading: "こくりつしんびじゅつかん", tags: "art_museum,museum,cultural_facility", prefecture: "東京都", address: "東京都港区六本木7-22-2", officialURL: "https://www.nact.jp/"),
+                .init(catalogID: "jp-tokyo-tokyo-national-museum", name: "東京国立博物館", reading: "とうきょうこくりつはくぶつかん", tags: "museum,cultural_facility,historic_site", prefecture: "東京都", address: "東京都台東区上野公園13-9", officialURL: "https://www.tnm.jp/"),
+                .init(catalogID: "jp-tokyo-national-museum-nature-science", name: "国立科学博物館", reading: "こくりつかがくはくぶつかん", tags: "museum,science_museum,cultural_facility", prefecture: "東京都", address: "東京都台東区上野公園7-20", officialURL: "https://www.kahaku.go.jp/")
             ]
         case "live":
             places = [
-                .init(name: "東京ドーム", reading: "とうきょうどーむ", tags: "dome,stadium,live_venue", prefecture: "東京都", address: "東京都文京区後楽1-3-61", officialURL: "https://www.tokyo-dome.co.jp/dome/"),
-                .init(name: "日本武道館", reading: "にっぽんぶどうかん", tags: "arena,live_venue,landmark", prefecture: "東京都", address: "東京都千代田区北の丸公園2-3", officialURL: "https://www.nipponbudokan.or.jp/"),
+                .init(catalogID: "jp-tokyo-tokyo-dome", name: "東京ドーム", reading: "とうきょうどーむ", tags: "dome,stadium,live_venue", prefecture: "東京都", address: "東京都文京区後楽1-3-61", officialURL: "https://www.tokyo-dome.co.jp/dome/"),
+                .init(catalogID: "jp-tokyo-nippon-budokan", name: "日本武道館", reading: "にっぽんぶどうかん", tags: "arena,live_venue,landmark", prefecture: "東京都", address: "東京都千代田区北の丸公園2-3", officialURL: "https://www.nipponbudokan.or.jp/"),
                 .init(name: "Zepp DiverCity (TOKYO)", reading: "ぜっぷだいばーしてぃとうきょう", tags: "live_house,music_venue", prefecture: "東京都", address: "東京都江東区青海1-1-10 ダイバーシティ東京 プラザ", officialURL: "https://www.zepp.co.jp/hall/divercity/")
             ]
         case "movie":
@@ -624,27 +716,27 @@ enum SampleDataSeeder {
             ]
         case "theme_park":
             places = [
-                .init(name: "東京ディズニーランド", reading: "とうきょうでぃずにーらんど", tags: "theme_park,leisure_facility", prefecture: "千葉県", address: "千葉県浦安市舞浜1-1", officialURL: "https://www.tokyodisneyresort.jp/tdl/"),
-                .init(name: "ユニバーサル・スタジオ・ジャパン", reading: "ゆにばーさるすたじおじゃぱん", tags: "theme_park,leisure_facility", prefecture: "大阪府", address: "大阪府大阪市此花区桜島2-1-33", officialURL: "https://www.usj.co.jp/web/"),
+                .init(catalogID: "jp-chiba-tokyo-disneyland", name: "東京ディズニーランド", reading: "とうきょうでぃずにーらんど", tags: "theme_park,leisure_facility", prefecture: "千葉県", address: "千葉県浦安市舞浜1-1", officialURL: "https://www.tokyodisneyresort.jp/tdl/"),
+                .init(catalogID: "jp-osaka-universal-studios-japan", name: "ユニバーサル・スタジオ・ジャパン", reading: "ゆにばーさるすたじおじゃぱん", tags: "theme_park,leisure_facility", prefecture: "大阪府", address: "大阪府大阪市此花区桜島2-1-33", officialURL: "https://www.usj.co.jp/web/"),
                 .init(name: "ハウステンボス", reading: "はうすてんぼす", tags: "theme_park,leisure_facility", prefecture: "長崎県", address: "長崎県佐世保市ハウステンボス町1-1", officialURL: "https://www.huistenbosch.co.jp/")
             ]
         case "nature_living":
             places = [
-                .init(name: "海遊館", reading: "かいゆうかん", tags: "aquarium,museum,leisure_facility", prefecture: "大阪府", address: "大阪府大阪市港区海岸通1-1-10", officialURL: "https://www.kaiyukan.com/"),
+                .init(catalogID: "jp-osaka-kaiyukan", name: "海遊館", reading: "かいゆうかん", tags: "aquarium,museum,leisure_facility", prefecture: "大阪府", address: "大阪府大阪市港区海岸通1-1-10", officialURL: "https://www.kaiyukan.com/"),
                 .init(name: "上野動物園", reading: "うえのどうぶつえん", tags: "zoo,leisure_facility", prefecture: "東京都", address: "東京都台東区上野公園9-83", officialURL: "https://www.tokyo-zoo.net/zoo/ueno/"),
                 .init(name: "あしかがフラワーパーク", reading: "あしかがふらわーぱーく", tags: "botanical_garden,garden,leisure_facility", prefecture: "栃木県", address: "栃木県足利市迫間町607", officialURL: "https://www.ashikaga.co.jp/")
             ]
         case "outing_facility":
             places = [
-                .init(name: "東京スカイツリー", reading: "とうきょうすかいつりー", tags: "tower,observation_deck,landmark", prefecture: "東京都", address: "東京都墨田区押上1-1-2", officialURL: "https://www.tokyo-skytree.jp/"),
+                .init(catalogID: "jp-tokyo-tokyo-skytree", name: "東京スカイツリー", reading: "とうきょうすかいつりー", tags: "tower,observation_deck,landmark", prefecture: "東京都", address: "東京都墨田区押上1-1-2", officialURL: "https://www.tokyo-skytree.jp/"),
                 .init(name: "大阪城天守閣", reading: "おおさかじょうてんしゅかく", tags: "castle,museum,historic_site", prefecture: "大阪府", address: "大阪府大阪市中央区大阪城1-1", officialURL: "https://www.osakacastle.net/"),
                 .init(name: "せんだいメディアテーク", reading: "せんだいめでぃあてーく", tags: "library,architecture,cultural_facility", prefecture: "宮城県", address: "宮城県仙台市青葉区春日町2-1", officialURL: "https://www.smt.jp/")
             ]
         case "goshuin":
             places = [
-                .init(name: "明治神宮", reading: "めいじじんぐう", tags: "shrine,landmark", prefecture: "東京都", address: "東京都渋谷区代々木神園町1-1", officialURL: "https://www.meijijingu.or.jp/"),
-                .init(name: "浅草寺", reading: "せんそうじ", tags: "temple,historic_site,landmark", prefecture: "東京都", address: "東京都台東区浅草2-3-1", officialURL: "https://www.senso-ji.jp/"),
-                .init(name: "伏見稲荷大社", reading: "ふしみいなりたいしゃ", tags: "shrine,historic_site,landmark", prefecture: "京都府", address: "京都府京都市伏見区深草薮之内町68", officialURL: "https://inari.jp/")
+                .init(catalogID: "jp-tokyo-meiji-jingu", name: "明治神宮", reading: "めいじじんぐう", tags: "shrine,landmark", prefecture: "東京都", address: "東京都渋谷区代々木神園町1-1", officialURL: "https://www.meijijingu.or.jp/"),
+                .init(catalogID: "jp-tokyo-sensoji", name: "浅草寺", reading: "せんそうじ", tags: "temple,historic_site,landmark", prefecture: "東京都", address: "東京都台東区浅草2-3-1", officialURL: "https://www.senso-ji.jp/"),
+                .init(catalogID: "jp-kyoto-fushimi-inari-taisha", name: "伏見稲荷大社", reading: "ふしみいなりたいしゃ", tags: "shrine,historic_site,landmark", prefecture: "京都府", address: "京都府京都市伏見区深草薮之内町68", officialURL: "https://inari.jp/")
             ]
         case "book":
             places = [
@@ -704,6 +796,15 @@ enum SampleDataSeeder {
         now: Date
     ) -> PlaceMaster {
         if let existing = placesByName[seed.name] {
+            if !seed.catalogID.isEmpty {
+                existing.sourceSnapshotRaw = "favoreco.public-place-catalog:\(seed.catalogID)"
+                if existing.reading.isEmpty { existing.reading = seed.reading }
+                if existing.placeTagsRaw.isEmpty { existing.placeTagsRaw = seed.tags }
+                if existing.prefecture.isEmpty { existing.prefecture = seed.prefecture }
+                if existing.address.isEmpty { existing.address = seed.address }
+                if existing.officialURL.isEmpty { existing.officialURL = seed.officialURL }
+                existing.updatedAt = now
+            }
             return existing
         }
         let place = PlaceMaster(
@@ -713,8 +814,12 @@ enum SampleDataSeeder {
             prefecture: seed.prefecture,
             address: seed.address,
             officialURL: seed.officialURL,
-            memo: "共通場所カタログからサンプル用に登録しました。",
-            sourceSnapshotRaw: sampleMasterMarker,
+            memo: seed.catalogID.isEmpty
+                ? "サンプル用の場所マスターです。"
+                : "公式確認済みの共通場所カタログから登録しました。",
+            sourceSnapshotRaw: seed.catalogID.isEmpty
+                ? sampleMasterMarker
+                : "favoreco.public-place-catalog:\(seed.catalogID)",
             normalizedName: normalized(seed.name),
             normalizedAddress: normalized(seed.address),
             createdAt: now,
@@ -771,12 +876,12 @@ enum SampleDataSeeder {
     }
 
     private static func sampleImage(for category: RecordCategory, index: Int) -> SampleImage {
-        let resourceName = "\(category.templateKey)-\(index + 1)"
+        let resourceName = "v3-\(category.templateKey)"
         let resourceURL = Bundle.main.url(forResource: resourceName, withExtension: "jpg")
             ?? Bundle.main.url(
                 forResource: resourceName,
                 withExtension: "jpg",
-                subdirectory: "Resources/SampleDataImages"
+                subdirectory: "Resources/SampleDataImagesV3"
             )
         guard let url = resourceURL,
               let data = try? Data(contentsOf: url),
@@ -789,8 +894,15 @@ enum SampleDataSeeder {
 
     private static func fallbackImage(for category: RecordCategory, title: String) -> SampleImage {
         let ratio = sampleRatio(for: category)
-        let height: CGFloat = 960
-        let size = CGSize(width: max(480, height * CGFloat(ratio)), height: height)
+        let maxDimension: CGFloat = ["live", "random_goods"].contains(category.templateKey)
+            ? 640
+            : 768
+        let size: CGSize
+        if ratio >= 1 {
+            size = CGSize(width: maxDimension, height: maxDimension / CGFloat(ratio))
+        } else {
+            size = CGSize(width: maxDimension * CGFloat(ratio), height: maxDimension)
+        }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
@@ -806,7 +918,7 @@ enum SampleDataSeeder {
                 withAttributes: attributes
             )
         }
-        let data = image.jpegData(compressionQuality: 0.86) ?? Data()
+        let data = image.jpegData(compressionQuality: 0.60) ?? Data()
         return SampleImage(data: data, width: Int(size.width), height: Int(size.height))
     }
 
@@ -815,9 +927,67 @@ enum SampleDataSeeder {
         return Calendar.current.date(byAdding: .day, value: -daysAgo, to: now) ?? now
     }
 
-    private static func sampleFutureDate(now: Date, categoryIndex: Int) -> Date {
-        let day = Calendar.current.date(byAdding: .day, value: 5 + categoryIndex * 3, to: now) ?? now
+    private static func sampleFutureDate(now: Date, categoryIndex: Int, offset: Int = 0) -> Date {
+        let day = Calendar.current.date(
+            byAdding: .day,
+            value: 5 + categoryIndex * 3 + offset * 7,
+            to: now
+        ) ?? now
         return Calendar.current.date(bySettingHour: 18, minute: 30, second: 0, of: day) ?? day
+    }
+
+    private static func sampleScenario(for index: Int) -> SampleScenario {
+        if index < completedPerCategory { return .completed }
+        if index < completedPerCategory + plannedPerCategory { return .planned }
+        if index < completedPerCategory + plannedPerCategory + interestedPerCategory {
+            return .interested
+        }
+        return .catalogOnly
+    }
+
+    private static func sampleDate(
+        now: Date,
+        categoryIndex: Int,
+        sampleIndex: Int,
+        scenario: SampleScenario
+    ) -> Date {
+        switch scenario {
+        case .completed:
+            return samplePastDate(
+                now: now,
+                categoryIndex: categoryIndex,
+                sampleIndex: sampleIndex
+            )
+        case .planned:
+            return sampleFutureDate(
+                now: now,
+                categoryIndex: categoryIndex,
+                offset: sampleIndex - completedPerCategory
+            )
+        case .interested:
+            return now.addingTimeInterval(TimeInterval(sampleIndex) * -60)
+        case .catalogOnly:
+            let offset = sampleIndex
+                - completedPerCategory
+                - plannedPerCategory
+                - interestedPerCategory
+            return sampleFutureDate(
+                now: now,
+                categoryIndex: categoryIndex,
+                offset: offset + plannedPerCategory + 1
+            )
+        }
+    }
+
+    private static func targetInformationLabel(for category: RecordCategory) -> String {
+        switch category.templateKey {
+        case "theater", "live": return "公演情報"
+        case "museum": return "展示情報"
+        case "movie": return "上映情報"
+        case "book": return "刊行情報"
+        case "theme_park", "nature_living", "outing_facility", "goshuin": return "施設情報"
+        default: return "対象情報"
+        }
     }
 
     private static func sampleAspectRatioKey(for category: RecordCategory) -> String {
@@ -980,6 +1150,15 @@ enum SampleDataSeeder {
 }
 
 #if DEBUG
+struct DebugDataRebuildSummary {
+    let deletedCount: Int
+    let inserted: DebugSampleDataSummary
+
+    var message: String {
+        "体験データ\(deletedCount)件を削除し、\(inserted.insertedMessage)"
+    }
+}
+
 enum DebugDataSeeder {
     @MainActor
     @discardableResult
@@ -991,6 +1170,21 @@ enum DebugDataSeeder {
     @discardableResult
     static func deleteSampleData(in context: ModelContext) throws -> DebugSampleDataSummary {
         try SampleDataSeeder.deleteSamples(in: context)
+    }
+
+    @MainActor
+    @discardableResult
+    static func rebuildAllExperienceData(
+        in context: ModelContext
+    ) throws -> DebugDataRebuildSummary {
+        let deletion = try RecordDeletionService.deleteAllExperienceDataPreservingMasters(
+            in: context
+        )
+        let inserted = try SampleDataSeeder.replaceSamples(in: context)
+        return DebugDataRebuildSummary(
+            deletedCount: deletion.deletedModelCount,
+            inserted: inserted
+        )
     }
 }
 #endif

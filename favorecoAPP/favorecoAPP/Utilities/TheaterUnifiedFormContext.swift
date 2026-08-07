@@ -97,7 +97,7 @@ enum TheaterUnifiedFormSection: String, CaseIterable, Identifiable {
         case .participation: "体験日程"
         case .tasks: "やる事リスト"
         case .viewing: "鑑賞記録"
-        case .photos: "写真"
+        case .photos: "写真・アイキャッチ"
         case .impressions: "感想記録"
         case .totals: "集計記録"
         }
@@ -112,7 +112,7 @@ enum TheaterUnifiedFormSection: String, CaseIterable, Identifiable {
         case .participation: "日付・開場・開演・終了"
         case .tasks: "当日までの準備"
         case .viewing: "鑑賞方法・座席・注目した人"
-        case .photos: "ポスター・資料・観劇の写真"
+        case .photos: "この回のアイキャッチ・観劇の写真"
         case .impressions: "評価・感情タグ・自由メモ"
         case .totals: "金額・レシート読み取り"
         }
@@ -129,29 +129,42 @@ enum TheaterUnifiedFormSection: String, CaseIterable, Identifiable {
 }
 
 struct TheaterUnifiedFormIntroduction: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
     let entry: TheaterUnifiedFormEntry
 
     var body: some View {
-        HStack(alignment: .top, spacing: 11) {
-            Image(
-                systemName: entry == .visitCreation || entry == .visitEditing
-                    ? "checkmark.circle"
-                    : "circle.dashed"
-            )
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(themePalette.globalTint)
                 .padding(.top, 1)
 
-            Text(entry.guidance)
-                .font(FavorecoTypography.jpSans(12, weight: .regular, relativeTo: .caption))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("この記録で入力する項目")
+                    .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(themePalette.globalTint)
+
+                Text(entry.guidance)
+                    .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(themePalette.globalTint.opacity(0.08))
+        )
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .listRowSeparator(.hidden)
+        .accessibilityElement(children: .combine)
     }
 }
 
 struct TheaterUnifiedSectionLabel: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
     let section: TheaterUnifiedFormSection
 
     var body: some View {
@@ -159,7 +172,7 @@ struct TheaterUnifiedSectionLabel: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(section.title)
                     .font(FavorecoTypography.jpSans(16, weight: .semibold, relativeTo: .body))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(themePalette.registrationSectionHeaderTint)
                 Text(section.summary)
                     .font(FavorecoTypography.jpSans(9.5, weight: .regular, relativeTo: .caption))
                     .foregroundStyle(.secondary)

@@ -115,7 +115,7 @@ struct CalendarView: View {
     private var upcomingPlans: [Plan] {
         let now = Date()
         return plans
-            .filter { !$0.isArchived && $0.hasConfirmedSchedule && $0.endsAt >= now }
+            .filter { !$0.isArchived && $0.isUpcomingOrOngoing(at: now) }
             .prefix(5)
             .map { $0 }
     }

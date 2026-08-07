@@ -4,6 +4,7 @@ import SwiftData
 struct AppSettingsHubView: View {
     var body: some View {
         List {
+            FavorecoSettingsSection("表示と記録") {
             NavigationLink {
                 DisplaySettingsView()
             } label: {
@@ -11,16 +12,6 @@ struct AppSettingsHubView: View {
                     title: "表示・外観",
                     detail: "Home表示、外観、文字、フォント、テーマ",
                     systemImage: "textformat.size"
-                )
-            }
-
-            NavigationLink {
-                GenreManagementView()
-            } label: {
-                SettingsNavigationLabel(
-                    title: "ジャンル",
-                    detail: "表示順、表示・非表示、自作ジャンル、有効ユニット",
-                    systemImage: "square.grid.2x2"
                 )
             }
 
@@ -33,17 +24,21 @@ struct AppSettingsHubView: View {
                     systemImage: "wand.and.sparkles"
                 )
             }
+            }
 
-            NavigationLink {
-                NotificationSettingsView()
-            } label: {
-                SettingsNavigationLabel(
-                    title: "通知",
-                    detail: "チケット期限、公演前日・当日、会員期限、レポート",
-                    systemImage: "bell"
-                )
+            FavorecoSettingsSection("お知らせ") {
+                NavigationLink {
+                    NotificationSettingsView()
+                } label: {
+                    SettingsNavigationLabel(
+                        title: "通知",
+                        detail: "チケット期限、公演前日・当日、会員期限、レポート",
+                        systemImage: "bell"
+                    )
+                }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("アプリ設定")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -52,6 +47,7 @@ struct AppSettingsHubView: View {
 struct DataSyncSettingsHubView: View {
     var body: some View {
         List {
+            FavorecoSettingsSection("データ") {
             NavigationLink {
                 DataManagementView()
             } label: {
@@ -71,7 +67,9 @@ struct DataSyncSettingsHubView: View {
                     systemImage: "arrow.triangle.2.circlepath.icloud"
                 )
             }
+            }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("データと同期")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -87,10 +85,11 @@ struct DeveloperSettingsView: View {
     @AppStorage(AppStorageKeys.debugForcesLocalStoreRecovery) private var debugForcesLocalStoreRecovery = false
     @State private var debugMessage = ""
     @State private var isMutatingDebugData = false
+    @State private var showsRebuildConfirmation = false
 
     var body: some View {
         Form {
-            Section("権利・表示") {
+            FavorecoSettingsSection("権利と表示") {
                 Picker("テスト権利", selection: $debugPlanOverride) {
                     Text("StoreKit購入結果").tag("storekit")
                     Text("無料版").tag(FavorecoPlan.free.rawValue)
@@ -119,7 +118,7 @@ struct DeveloperSettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            Section("診断") {
+            FavorecoSettingsSection("診断") {
                 NavigationLink {
                     NotificationDebugView()
                 } label: {
@@ -141,11 +140,18 @@ struct DeveloperSettingsView: View {
                 }
             }
 
-            Section("仮データ") {
+            FavorecoSettingsSection("仮データ") {
+                Button(role: .destructive) {
+                    showsRebuildConfirmation = true
+                } label: {
+                    Label("全体験データを削除して再作成", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .disabled(isMutatingDebugData)
+
                 Button {
                     insertDebugData()
                 } label: {
-                    Label("写真付き仮データを追加", systemImage: "hammer.fill")
+                    Label("ジャンル別ダミーデータを更新", systemImage: "photo.on.rectangle.angled")
                 }
                 .disabled(isMutatingDebugData)
 
@@ -179,6 +185,19 @@ struct DeveloperSettingsView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
+        .confirmationDialog(
+            "マスター以外の体験データを削除しますか？",
+            isPresented: $showsRebuildConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("全削除してダミーデータを作成", role: .destructive) {
+                rebuildDebugData()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("ジャンル・人物・場所などのマスターは残ります。公演・施設・作品、予定、記録、チケット進捗、写真、コレクションは削除されます。")
+        }
         .navigationTitle("開発者メニュー")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -195,12 +214,36 @@ struct DeveloperSettingsView: View {
     }
 
     private func insertDebugData() {
-        do {
-            let summary = try DebugDataSeeder.insertSampleData(in: modelContext)
-            debugMessage = summary.insertedMessage
-        } catch {
-            debugMessage = "仮データの追加に失敗しました。"
-            assertionFailure("Failed to insert debug data: \(error)")
+        guard !isMutatingDebugData else { return }
+        isMutatingDebugData = true
+        debugMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            defer { isMutatingDebugData = false }
+            do {
+                let summary = try DebugDataSeeder.insertSampleData(in: modelContext)
+                debugMessage = summary.insertedMessage
+            } catch {
+                debugMessage = "ダミーデータの更新に失敗しました。"
+                assertionFailure("Failed to insert debug data: \(error)")
+            }
+        }
+    }
+
+    private func rebuildDebugData() {
+        guard !isMutatingDebugData else { return }
+        isMutatingDebugData = true
+        debugMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            defer { isMutatingDebugData = false }
+            do {
+                let summary = try DebugDataSeeder.rebuildAllExperienceData(in: modelContext)
+                debugMessage = summary.message
+            } catch {
+                debugMessage = "体験データの再作成に失敗しました。"
+                assertionFailure("Failed to rebuild debug data: \(error)")
+            }
         }
     }
 

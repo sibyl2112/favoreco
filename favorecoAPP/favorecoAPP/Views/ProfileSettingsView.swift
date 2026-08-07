@@ -33,36 +33,48 @@ struct ProfileSettingsView: View {
     var body: some View {
         let photoActionTitle = profileImageData.isEmpty ? "写真を選ぶ" : "写真を変更"
         List {
-            Section("プロフィール") {
-                HStack(spacing: 16) {
+            FavorecoSettingsSection("プロフィール") {
+                HStack(alignment: .center, spacing: 16) {
                     ProfileAvatarView(data: profileImageData, size: 72)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        PhotosPicker(selection: $selectedProfilePhoto, matching: .images) {
-                            FavorecoIconLabel(photoActionTitle, systemImage: "photo")
-                        }
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("表示名（任意）")
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.secondary)
 
-                        if !profileImageData.isEmpty {
-                            Button("写真を削除", role: .destructive) {
-                                profileImageData = Data()
+                        TextField("SNSで使う名前など", text: $profileDisplayName)
+                            .textInputAutocapitalization(.words)
+
+                        HStack(spacing: 14) {
+                            PhotosPicker(selection: $selectedProfilePhoto, matching: .images) {
+                                FavorecoIconLabel(photoActionTitle, systemImage: "photo")
                             }
-                            .font(FavorecoTypography.caption)
+                            .font(FavorecoTypography.captionStrong)
+
+                            if !profileImageData.isEmpty {
+                                Button("削除", role: .destructive) {
+                                    profileImageData = Data()
+                                }
+                                .font(FavorecoTypography.caption)
+                            }
                         }
                     }
                 }
-                .padding(.vertical, 4)
-
-                TextField("表示名（任意）", text: $profileDisplayName)
-                    .textInputAutocapitalization(.words)
+                .padding(.vertical, 6)
 
                 if !photoErrorMessage.isEmpty {
                     Text(photoErrorMessage)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.red)
                 }
+
+                FavorecoSettingsInfoCallout(
+                    title: "プロフィールとSNSの用途",
+                    message: "他の利用者とつながる機能はありません。入力した表示名・写真・SNSアカウントがFavorecoの運営者へ送信・収集されることもありません。SNSで発信する時に、登録したアカウントをすぐ開くためのショートカットとして使います。"
+                )
             }
 
-            Section {
+            FavorecoSettingsSection("SNSアカウント") {
                 NavigationLink {
                     EditSocialAccountView(account: nil)
                 } label: {
@@ -70,7 +82,7 @@ struct ProfileSettingsView: View {
                 }
             }
 
-            Section("SNS") {
+            FavorecoSettingsSection("登録済みSNS") {
                 if activeAccounts.isEmpty {
                     Text("SNSはまだ登録されていません。")
                         .font(FavorecoTypography.caption)
@@ -86,7 +98,8 @@ struct ProfileSettingsView: View {
                 }
             }
         }
-        .navigationTitle("プロフィール")
+        .favorecoSettingsListLayout()
+        .navigationTitle("プロフィール・SNS")
         .task(id: selectedProfilePhoto) {
             await loadSelectedProfilePhoto()
         }
@@ -220,7 +233,7 @@ struct EditSocialAccountView: View {
 
     var body: some View {
         Form {
-            Section("SNS") {
+            FavorecoSettingsSection("SNS") {
                 Picker("種類", selection: $draft.platformKey) {
                     ForEach(SocialPlatform.allCases) { platform in
                         Text(platform.displayName).tag(platform.rawValue)
@@ -233,7 +246,7 @@ struct EditSocialAccountView: View {
                     .keyboardType(.URL)
             }
 
-            Section("ジャンル") {
+            FavorecoSettingsSection("ジャンル") {
                 Picker("紐付け", selection: $draft.categoryID) {
                     Text("全体プロフィール").tag(UUID?.none)
                     ForEach(visibleCategories) { category in
@@ -242,7 +255,7 @@ struct EditSocialAccountView: View {
                 }
             }
 
-            Section("メモ") {
+            FavorecoSettingsSection("メモ") {
                 TextField("用途や名義など", text: $draft.memo, axis: .vertical)
                     .lineLimit(2...4)
             }
@@ -257,6 +270,7 @@ struct EditSocialAccountView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle(account == nil ? "SNSを追加" : "SNSを編集")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

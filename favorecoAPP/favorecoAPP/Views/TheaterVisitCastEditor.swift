@@ -8,7 +8,7 @@ struct TheaterFocusPeopleEditor: View {
     var existingReactionTagKeys: Binding<[UUID: Set<String>]> = .constant([:])
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("お目当て・注目した人")
                     .font(
@@ -18,7 +18,7 @@ struct TheaterFocusPeopleEditor: View {
                             relativeTo: .body
                         )
                     )
-                Text("全キャストの登録は不要です。目当てだった人や、観劇後に気になった人だけ選びます。")
+                Text("この回で印象に残った人だけ選びます。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -30,7 +30,7 @@ struct TheaterFocusPeopleEditor: View {
                 pendingLinks: $pendingLinks,
                 personMasters: personMasters,
                 roleOptions: [PersonRoleOption.theaterFocus],
-                emptyDescription: "人物を登録しなくても観劇回を保存できます。",
+                emptyDescription: "人物は選ばなくても保存できます。",
                 showsRolePicker: false,
                 allowsOrganizations: false,
                 namePlaceholder: "人物名",

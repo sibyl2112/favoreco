@@ -29,7 +29,7 @@ enum FavorecoBaseTheme: String, CaseIterable, Identifiable {
 
     var accentHex: String {
         switch self {
-        case .favoNeon: return "#256F9C"
+        case .favoNeon: return "#3296BD"
         case .earthGlass: return "#5E7056"
         case .limeEditorial: return "#566900"
         case .skyBlue: return "#3474A3"
@@ -162,7 +162,7 @@ enum FavorecoBaseTheme: String, CaseIterable, Identifiable {
 
     var prominentActionHex: String {
         switch self {
-        case .favoNeon: return "#39D7E2"
+        case .favoNeon: return "#3296BD"
         case .earthGlass: return "#AFC09F"
         case .limeEditorial: return "#D8FF3E"
         case .skyBlue, .redMagenta: return accentHex
@@ -171,7 +171,7 @@ enum FavorecoBaseTheme: String, CaseIterable, Identifiable {
 
     var darkProminentActionHex: String {
         switch self {
-        case .favoNeon: return "#39D7E2"
+        case .favoNeon: return "#60DDE4"
         case .earthGlass: return "#8FA481"
         case .limeEditorial: return "#CEFF3B"
         case .skyBlue, .redMagenta: return darkAccentHex
@@ -327,6 +327,8 @@ enum TicketProgressColorPalette {
     static let payment = Color(hex: "#247E85")
     static let acquired = Color(hex: "#54745A")
     static let attendance = Color(hex: "#B66A32")
+    /// 参加日が未確定で、日程入力による解消が必要な状態。
+    static let scheduleUndated = Color.adaptive(lightHex: "#C85A00", darkHex: "#FF9F0A")
     static let warning = Color.adaptive(lightHex: "#E45F57", darkHex: "#FF8B82")
     static let completedNeutral = Color.adaptive(lightHex: "#53606A", darkHex: "#C5CED4")
     static let metadataChipSurface = Color.adaptive(lightHex: "#FFFDF8", darkHex: "#30383C")
@@ -415,7 +417,7 @@ struct FavorecoThemePalette {
     static let standard = FavorecoThemePalette(
         baseTheme: .favoNeon,
         mode: .categoryAccent,
-        unifiedColorHex: "#256F9C"
+        unifiedColorHex: "#3296BD"
     )
 
     var globalTint: Color {
@@ -439,6 +441,11 @@ struct FavorecoThemePalette {
             lightHex: baseTheme.prominentActionHex,
             darkHex: baseTheme.darkProminentActionHex
         )
+    }
+
+    /// 登録・編集フォームの外側Section見出し。テーマ変更時はこのトークン経由で一括追従する。
+    var registrationSectionHeaderTint: Color {
+        globalTint
     }
 
     func prominentActionForeground(for colorScheme: ColorScheme) -> Color {
@@ -543,6 +550,26 @@ extension View {
 }
 
 extension Color {
+    /// Immersive detail pages force a dark canvas, so lift a stored category color
+    /// toward white while preserving its hue. This keeps links and disclosure
+    /// controls readable even when the original category color is dark.
+    static func legibleDetailAccent(hex: String, whiteBlend: Double = 0.42) -> Color {
+        let sanitizedHex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        guard sanitizedHex.count == 6,
+              let value = UInt64(sanitizedHex, radix: 16) else {
+            return Color(red: 0.72, green: 0.91, blue: 1.0)
+        }
+        let blend = min(max(whiteBlend, 0), 1)
+        let red = Double((value & 0xFF0000) >> 16) / 255
+        let green = Double((value & 0x00FF00) >> 8) / 255
+        let blue = Double(value & 0x0000FF) / 255
+        return Color(
+            red: red + ((1 - red) * blend),
+            green: green + ((1 - green) * blend),
+            blue: blue + ((1 - blue) * blend)
+        )
+    }
+
     static func highContrastForeground(
         forBackgroundHex backgroundHex: String,
         darkHex: String = "#192735",
@@ -622,5 +649,22 @@ extension Color {
         let greenValue = Int(round(green * 255))
         let blueValue = Int(round(blue * 255))
         return String(format: "#%02X%02X%02X", redValue, greenValue, blueValue)
+    }
+}
+
+private struct FavorecoProminentActionModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    func body(content: Content) -> some View {
+        content
+            .tint(themePalette.prominentAction)
+            .foregroundStyle(themePalette.prominentActionForeground(for: colorScheme))
+    }
+}
+
+extension View {
+    func favorecoProminentActionStyle() -> some View {
+        modifier(FavorecoProminentActionModifier())
     }
 }

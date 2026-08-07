@@ -331,7 +331,7 @@ static var storeSupportDirectoryNames: [String] {
   - collection＝U11コレクション（半券・印・カード・観た絵画など＋caption）
   - label＝U16ラベル表裏（OCR対象）
   - eyecatch＝代表アイキャッチ用途（Event/Visit.eyecatchPath と整合）
-- `caption: String = ""`：任意（主に collection。空でも可・例：観た絵画の作品名）。
+- `caption: String = ""`：全purpose共通の任意説明。写真に写った生きもの、作品名、その時のひとこと等を写真単位で保存する。
 - **写真↔コレクションの移動＝`role` の変更のみ**（externalStorage の data 本体は触らない・再保存/再アップロードなし）。
 - CloudKit互換：どちらも既定値ありの非optional文字列（§2の3条件を満たす）。`byteCount` 等の既存メタと同じくメタ列でありフォールトを起こさない。
 
@@ -351,4 +351,4 @@ static var storeSupportDirectoryNames: [String] {
 - `ocrText: String = ""`: 同じ画像から読み取ったVision OCR本文。候補の根拠として画像に紐づけて保持する
 - `amount: Decimal = 0`: 利用者が確認した画像別金額。OCR結果から自動確定せず、候補を選んだ場合だけ入力する
 
-分類変更はメタデータだけを書き換え、`data`本体は再保存しない。入力中は新規写真を`PendingPhoto.metadata`、既存写真をUUIDキーの`PhotoMetadataDraft`へ保持し、記録保存時だけ`PhotoBlob`へ反映する。JSON schema 6の`BackupPhoto`では新規2列をoptionalとして符号化し、schema 5以前のバックアップは空値・0円として復元する。完全バックアップは画像本体とともに両列を往復する。
+分類変更はメタデータだけを書き換え、`data`本体は再保存しない。入力中は新規写真を`PendingPhoto.metadata`、既存写真をUUIDキーの`PhotoMetadataDraft`へ保持し、記録保存時だけ`PhotoBlob`へ反映する。`caption`はpurposeに依存せず、分類変更でも消さない。JSON schema 15の`BackupPhoto.caption`はoptionalとして符号化し、旧バックアップは空キャプションとして復元する。完全バックアップは画像本体とともにcaption／OCR／金額を往復する。

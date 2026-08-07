@@ -7,7 +7,7 @@ struct BillingPlanSettingsView: View {
 
     var body: some View {
         Form {
-            Section("現在のプラン") {
+            FavorecoSettingsSection("現在のプラン") {
                 LabeledContent("プラン", value: purchaseManager.currentPlan.displayName)
                 Text(planDescription)
                     .font(FavorecoTypography.caption)
@@ -15,7 +15,7 @@ struct BillingPlanSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Section("無料で使えること") {
+            FavorecoSettingsSection("無料で使えること") {
                 PlanFeatureRow(
                     title: "基本記録",
                     detail: "記録の作成、編集、閲覧。URL/動画リンク保存も含む。",
@@ -38,7 +38,7 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("Pro") {
+            FavorecoSettingsSection("Pro") {
                 PlanHeaderRow(
                     title: "Favoreco Pro",
                     price: "¥2,500",
@@ -71,7 +71,7 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("Premium") {
+            FavorecoSettingsSection("Premium") {
                 PlanHeaderRow(
                     title: "Favoreco Premium",
                     price: "月¥250 / 年¥2,000",
@@ -99,7 +99,7 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("Premium 永久版") {
+            FavorecoSettingsSection("Premium 永久版") {
                 PlanHeaderRow(
                     title: "Favoreco Premium 永久版",
                     price: "¥6,000",
@@ -112,7 +112,7 @@ struct BillingPlanSettingsView: View {
                 )
             }
 
-            Section("購入") {
+            FavorecoSettingsSection("購入") {
                 if purchaseManager.products.isEmpty {
                     Text("商品情報を取得できません。App Store Connectへ商品を登録すると購入ボタンが表示されます。")
                         .font(FavorecoTypography.caption)
@@ -161,14 +161,14 @@ struct BillingPlanSettingsView: View {
             }
 
             if !purchaseManager.message.isEmpty {
-                Section("購入状況") {
+                FavorecoSettingsSection("購入状況") {
                     Text(purchaseManager.message)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("補足") {
+            FavorecoSettingsSection("購入について") {
                 NavigationLink {
                     SettingsDocumentView(title: "創設メンバー特典", bodyText: "既存¥980ユーザーと発売締切までの新規購入者に同期永久無料を付与する案を保持しています。締切日は未定です。")
                 } label: {
@@ -182,6 +182,7 @@ struct BillingPlanSettingsView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("課金・プラン")
         .navigationBarTitleDisplayMode(.inline)
         .task { await purchaseManager.refresh() }

@@ -42,7 +42,6 @@ struct HomeView: View {
     @Query(sort: \TicketAccount.expiryDate, order: .forward) private var ticketAccounts: [TicketAccount]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @AppStorage(AppStorageKeys.showsHomeAttention) private var showsAttention = true
-    @AppStorage(AppStorageKeys.showsHomeCategories) private var showsCategories = true
     @AppStorage(AppStorageKeys.debugHomeCategoryLayout) private var categoryLayoutModeRaw = HomeCategoryLayoutMode.horizontal.rawValue
     @State private var isShowingNextActionList = false
     @State private var selectedQuickTicketAttempt: TicketAttempt?
@@ -51,6 +50,7 @@ struct HomeView: View {
     @State private var sampleDeletionError = ""
     @State private var categoryDestinationID: UUID?
     @State private var pickupDetailTarget: HomePickupDetailTarget?
+    @State private var isShowingCrossGenreSearch = false
 
     init(
         onCategoryReturnToRoot: @escaping () -> Void = {},
@@ -222,7 +222,7 @@ struct HomeView: View {
                     .padding(.top, -4)
                     .padding(.bottom, 6)
 
-                if showsCategories, !visibleCategories.isEmpty {
+                if !visibleCategories.isEmpty {
                     GenreNavigationStrip(
                         categories: visibleCategories,
                         onSelectCategory: navigateToCategory
@@ -266,6 +266,13 @@ struct HomeView: View {
                                 onSelectVisit: { pickupDetailTarget = .visit($0) }
                             )
 
+                            Button {
+                                isShowingCrossGenreSearch = true
+                            } label: {
+                                CrossGenreSearchEntryBar()
+                            }
+                            .buttonStyle(.plain)
+
                             if hasSampleData {
                                 HomeSampleDataNotice {
                                     isShowingSampleDeletionConfirmation = true
@@ -273,6 +280,8 @@ struct HomeView: View {
                             }
 
                             HomeReportSection(visits: snapshot.reportVisits)
+
+                            HomeGallerySection(visits: snapshot.galleryVisits)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -359,6 +368,9 @@ struct HomeView: View {
                 case .visit(let visitID):
                     HomeVisitDestination(visitID: visitID)
                 }
+            }
+            .navigationDestination(isPresented: $isShowingCrossGenreSearch) {
+                CrossGenreSearchView()
             }
             .task {
                 try? LegacyInboxMigrationService.migrateIfNeeded(in: modelContext)
@@ -567,18 +579,17 @@ private struct InterestedEventRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            ThumbnailImage(
+            CategoryEyecatchArtwork(
                 reference: event.thumbnailReference,
-                displaySize: CGSize(width: 64, height: interestedEyecatchHeight),
-                contentMode: event.fillsEyecatchFrame ? .fill : .fit
-            ) {
+                templateKey: event.categoryTemplateKey,
+                defaultContentMode: event.fillsEyecatchFrame ? .fill : .fit
+            ) { size in
                 CategoryDefaultArtworkImage(
                     templateKey: event.categoryTemplateKey,
-                    displaySize: CGSize(width: 64, height: interestedEyecatchHeight)
+                    displaySize: size
                 )
             }
             .frame(width: 64, height: interestedEyecatchHeight)
-            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 6) {
@@ -611,6 +622,9 @@ private struct InterestedEventRow: View {
     }
 
     private var interestedEyecatchHeight: CGFloat {
+        if event.categoryTemplateKey == "theater" {
+            return 64 / CGFloat(EyecatchAspectRatio.bSeriesPoster.value)
+        }
         guard event.fillsEyecatchFrame else { return 78 }
         return 64 / CGFloat(event.eyecatchAspectRatio)
     }
@@ -843,19 +857,14 @@ private struct HomeInterestingArtwork: View {
     let item: HomeInterestingItem
 
     var body: some View {
-        GeometryReader { geometry in
-            ThumbnailImage(
-                reference: item.thumbnailReference,
-                displaySize: geometry.size,
-                contentMode: .fill
-            ) {
-                CategoryDefaultArtworkImage(
-                    templateKey: item.categoryTemplateKey,
-                    displaySize: geometry.size
-                )
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
+        CategoryEyecatchArtwork(
+            reference: item.thumbnailReference,
+            templateKey: item.categoryTemplateKey
+        ) { size in
+            CategoryDefaultArtworkImage(
+                templateKey: item.categoryTemplateKey,
+                displaySize: size
+            )
         }
         .clipped()
     }
@@ -1023,19 +1032,17 @@ private struct HomeComingUpRow: View {
             title: title,
             venue: place,
             tint: tint,
-            isTheater: false
+            isTheater: categoryTemplateKey == "theater"
         ) {
-            ThumbnailImage(
+            CategoryEyecatchArtwork(
                 reference: thumbnailReference,
-                displaySize: CGSize(width: 72, height: 88),
-                contentMode: .fill
-            ) {
+                templateKey: categoryTemplateKey
+            ) { size in
                 CategoryDefaultArtworkImage(
                     templateKey: categoryTemplateKey,
-                    displaySize: CGSize(width: 72, height: 88)
+                    displaySize: size
                 )
             }
-            .clipped()
         }
     }
 }
@@ -1359,22 +1366,18 @@ struct HomeUpcomingPoster: View {
     let fillsFrame: Bool
 
     var body: some View {
-        GeometryReader { geometry in
-            ThumbnailImage(
-                reference: thumbnailReference,
-                displaySize: geometry.size,
-                contentMode: fillsFrame ? .fill : .fit
-            ) {
-                CategoryDefaultArtworkImage(
-                    templateKey: categoryTemplateKey,
-                    displaySize: geometry.size
-                )
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
-            .background(tint.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        CategoryEyecatchArtwork(
+            reference: thumbnailReference,
+            templateKey: categoryTemplateKey,
+            backgroundColor: tint.opacity(0.08),
+            defaultContentMode: fillsFrame ? .fill : .fit
+        ) { size in
+            CategoryDefaultArtworkImage(
+                templateKey: categoryTemplateKey,
+                displaySize: size
+            )
         }
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 }
 
@@ -1533,6 +1536,7 @@ struct HomePickupURLRow: View {
 }
 
 struct HomeUpcomingEmptyCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.favorecoThemePalette) private var themePalette
 
     var body: some View {
@@ -1552,10 +1556,10 @@ struct HomeUpcomingEmptyCard: View {
 
             FavorecoIconLabel("予定を立てる", systemImage: "plus", iconSize: 17)
                 .font(FavorecoTypography.bodyStrong)
-                .foregroundStyle(.white)
+                .foregroundStyle(themePalette.prominentActionForeground(for: colorScheme))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(themePalette.globalTint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .background(themePalette.prominentAction, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .padding(18)
         .frame(
@@ -1876,18 +1880,17 @@ struct HomeTicketScheduleCard: View {
                     backgroundColor: statusColor
                 )
 
-                ThumbnailImage(
+                CategoryEyecatchArtwork(
                     reference: thumbnailReference,
-                    displaySize: CGSize(width: 64, height: 64),
-                    contentMode: .fill
-                ) {
+                    templateKey: categoryTemplateKey,
+                    backgroundColor: cardSurfaceColor
+                ) { size in
                     CategoryDefaultArtworkImage(
                         templateKey: categoryTemplateKey,
-                        displaySize: CGSize(width: 64, height: 64)
+                        displaySize: size
                     )
                 }
                 .frame(width: 64, height: 64)
-                .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
             .frame(width: 64)
@@ -2477,19 +2480,16 @@ private struct ExperienceGalleryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .topLeading) {
-                GeometryReader { geometry in
-                    ThumbnailImage(
-                        reference: visit.thumbnailReference,
-                        displaySize: geometry.size,
-                        contentMode: visit.fillsEyecatchFrame ? .fill : .fit
-                    ) {
-                        CategoryDefaultArtworkImage(
-                            templateKey: visit.categoryTemplateKey,
-                            displaySize: geometry.size
-                        )
-                    }
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .clipped()
+                CategoryEyecatchArtwork(
+                    reference: visit.thumbnailReference,
+                    templateKey: visit.categoryTemplateKey,
+                    backgroundColor: categoryColor.opacity(0.08),
+                    defaultContentMode: visit.fillsEyecatchFrame ? .fill : .fit
+                ) { size in
+                    CategoryDefaultArtworkImage(
+                        templateKey: visit.categoryTemplateKey,
+                        displaySize: size
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -2648,19 +2648,18 @@ private struct HomeVisitSummaryRow: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        ThumbnailImage(
+        CategoryEyecatchArtwork(
             reference: visit.thumbnailReference,
-            displaySize: CGSize(width: 64, height: thumbnailHeight),
-            contentMode: visit.fillsEyecatchFrame ? .fill : .fit
-        ) {
+            templateKey: visit.categoryTemplateKey,
+            backgroundColor: categoryColor.opacity(0.08),
+            defaultContentMode: visit.fillsEyecatchFrame ? .fill : .fit
+        ) { size in
             CategoryDefaultArtworkImage(
                 templateKey: visit.categoryTemplateKey,
-                displaySize: CGSize(width: 64, height: thumbnailHeight)
+                displaySize: size
             )
         }
         .frame(width: 64, height: thumbnailHeight)
-        .clipped()
-        .background(categoryColor.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
@@ -2791,18 +2790,16 @@ private struct InboxItemRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            ThumbnailImage(
+            CategoryEyecatchArtwork(
                 reference: item.thumbnailReference,
-                displaySize: CGSize(width: 64, height: 78),
-                contentMode: .fill
-            ) {
+                templateKey: item.categoryTemplateKey
+            ) { size in
                 CategoryDefaultArtworkImage(
                     templateKey: item.categoryTemplateKey,
-                    displaySize: CGSize(width: 64, height: 78)
+                    displaySize: size
                 )
             }
             .frame(width: 64, height: 78)
-            .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 6) {
