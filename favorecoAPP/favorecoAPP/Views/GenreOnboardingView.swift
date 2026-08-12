@@ -1,19 +1,18 @@
-//
-//  GenreOnboardingView.swift
-//  favorecoAPP
-//
-//  Created by Codex on 2026/07/09.
-//
-
-import SwiftUI
 import SwiftData
+import SwiftUI
+import UIKit
 
 struct GenreOnboardingView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
+    @StateObject private var publicPlaceStore = PublicPlaceCatalogStore.shared
+    @StateObject private var recurringEventStore = PublicRecurringEventCatalogStore.shared
+
     @State private var selectedTemplateKeys: Set<String> = []
-    @State private var step: OnboardingStep = .intro
+    @State private var step: OnboardingStep = .genres
+    @State private var preparationTask: Task<Void, Never>?
+    @State private var saveErrorMessage = ""
 
     private var builtInCategories: [RecordCategory] {
         categories.filter {
@@ -42,8 +41,10 @@ struct GenreOnboardingView: View {
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Divider()
-            footer
+            if step != .preparing {
+                Divider()
+                footer
+            }
         }
         .background(Color(.systemGroupedBackground))
         .onAppear {
@@ -56,139 +57,238 @@ struct GenreOnboardingView: View {
                 selectedTemplateKeys = Set(keys)
             }
         }
+        .onDisappear {
+            preparationTask?.cancel()
+        }
     }
 
     @ViewBuilder
     private var content: some View {
         switch step {
+        case .genres:
+            genreSelectionContent
+        case .preparing:
+            preparationContent
         case .intro:
             OnboardingMessagePanel(
                 symbol: "bookmark.fill",
                 title: "観た・行った・体験したを、美しく一生残す。",
-                message: "favorecoは、観劇、映像作品、LIVE、書籍、ミュージアム、テーマパーク、自然・生き物の体験をジャンル横断で記録するアプリです。",
+                message: "favorecoは、選んだジャンルの予定、チケット、写真と思い出をひとつにつなげて残します。",
                 accentColor: Color(hex: "#9F2F4D")
             )
         case .records:
             VStack(alignment: .leading, spacing: 14) {
-                Text("残せるもの")
+                Text("記録のしかた")
                     .font(FavorecoTypography.sectionTitle)
-                Text("1件の記録に、必要な情報だけをまとまった形で残します。")
+                Text("画面下の「追加」から、予定でも体験後でも登録できます。必要な情報だけを選んで残せます。")
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
 
-                OnboardingFeatureRow(color: Color(hex: "#9F2F4D"), title: "体験の基本", message: "タイトル / 日付 / 場所 / 評価")
-                OnboardingFeatureRow(color: Color(hex: "#A9D4EA"), title: "写真と思い出", message: "写真 / メモ / OCR取込")
-                OnboardingFeatureRow(color: Color(hex: "#D69B4F"), title: "予定とチケット", message: "状態 / 座席 / 金額")
-                OnboardingFeatureRow(color: Color(hex: "#6F8F7A"), title: "人物・団体", message: "出演 / 作者 / ゲスト")
+                OnboardingFeatureRow(color: Color(hex: "#9F2F4D"), title: "まず対象を選ぶ", message: "作品・公演 / 本 / 展示 / 施設")
+                OnboardingFeatureRow(color: Color(hex: "#A9D4EA"), title: "体験を残す", message: "日付 / 場所 / 評価 / 写真 / メモ")
+                OnboardingFeatureRow(color: Color(hex: "#D69B4F"), title: "先の予定も管理", message: "チケット / 座席 / 金額 / 通知")
             }
         case .crossGenre:
             VStack(alignment: .leading, spacing: 14) {
-                Text("ジャンルをまたげる")
+                Text("ジャンルをまたいで振り返る")
                     .font(FavorecoTypography.sectionTitle)
-                Text("観劇も、映像作品も、LIVEも、本も、ミュージアムも、おでかけも、同じ場所に。あとから表示ジャンルは変更できます。")
+                Text("Homeでは直近の予定を、FAVOでは人物・作品・場所を軸に、ジャンルをまたいで振り返れます。")
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    OnboardingGenreBubble(name: "観劇", color: Color(hex: "#9F2F4D"), icon: "theatermasks.fill")
-                    OnboardingGenreBubble(name: "映像作品", color: Color(hex: "#D69B4F"), icon: "film.fill")
-                    OnboardingGenreBubble(name: "LIVE", color: Color(hex: "#147C88"), icon: "music.mic")
-                    OnboardingGenreBubble(name: "書籍", color: Color(hex: "#536C95"), icon: "books.vertical.fill")
-                    OnboardingGenreBubble(name: "ミュージアム", color: Color(hex: "#7D8C78"), icon: "paintpalette.fill")
-                    OnboardingGenreBubble(name: "テーマパーク", color: Color(hex: "#2F7FB8"), icon: "ticket.fill")
-                    OnboardingGenreBubble(name: "自然・生き物", color: Color(hex: "#3E8060"), icon: "pawprint.fill")
-                }
+                OnboardingInfoCard(icon: "house", title: "Home", message: "次の予定、チケット、最近の記録をまとめて確認します。")
+                OnboardingInfoCard(icon: "heart", title: "FAVO", message: "好きな人物・作品・場所から思い出をたどれます。")
+                OnboardingInfoCard(icon: "chart.bar", title: "統計", message: "月・年・ジャンルごとの体験を自動で集計します。")
             }
         case .privacy:
             VStack(alignment: .leading, spacing: 14) {
-                Text("安心して残せる")
+                Text("必要な時だけ許可")
                     .font(FavorecoTypography.sectionTitle)
-                Text("最初から権限をまとめて求めません。必要な機能を使う時だけ確認します。")
+                Text("最初に権限をまとめて求めません。写真、通知、同期は、その機能を使う時に説明してから確認します。")
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
 
-                OnboardingInfoCard(icon: "photo", title: "写真メタデータ削除", message: "位置情報などは写真ファイルではなく記録データ側で管理します。")
-                OnboardingInfoCard(icon: "icloud.slash", title: "同期はあとから選択", message: "まず端末内に保存。iCloud同期や自動バックアップは後で選べます。")
-                OnboardingInfoCard(icon: "bell.badge", title: "通知も必要な時だけ", message: "予定やチケット作成時に、用途を説明してから案内します。")
-            }
-        case .genres:
-            VStack(alignment: .leading, spacing: 14) {
-                Text("ジャンルを選ぶ")
-                    .font(FavorecoTypography.sectionTitle)
-                Text("まず使うものだけで始めます。最低ひとつ選んでください。")
-                    .font(FavorecoTypography.body)
-                    .foregroundStyle(.secondary)
-
-                if builtInCategories.isEmpty {
-                    OnboardingEmptyStateRow(
-                        icon: "square.grid.2x2",
-                        title: "ジャンルを準備中です",
-                        message: "標準ジャンルの読み込みが終わると選択できます。"
-                    )
-                    .padding(14)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(builtInCategories) { category in
-                            GenreSelectionRow(
-                                category: category,
-                                isSelected: selectedTemplateKeys.contains(category.templateKey)
-                            ) {
-                                toggle(category)
-                            }
-                            .padding(12)
-                            .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        }
-                    }
-
-                    if !hasSelection {
-                        FavorecoIconLabel("何もありません。ひとつ選ぶと開始できます。", systemImage: "exclamationmark.circle")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                OnboardingInfoCard(icon: "photo", title: "写真", message: "位置情報などのメタデータを引き継がず保存します。")
+                OnboardingInfoCard(icon: "icloud.slash", title: "同期", message: "まず端末内へ保存し、同期や自動バックアップは後から選べます。")
+                OnboardingInfoCard(icon: "bell.badge", title: "通知", message: "予定やチケットで必要になった時だけ案内します。")
             }
         case .ready:
             VStack(alignment: .leading, spacing: 14) {
                 OnboardingMessagePanel(
                     symbol: "checkmark.seal.fill",
                     title: "準備できました",
-                    message: "最初の記録は、あとからでも大丈夫。Homeに入ってから下部の「追加」で登録できます。",
+                    message: "最初の記録はあとからでも大丈夫です。Homeに入ってから画面下の「追加」で登録できます。",
                     accentColor: Color(hex: "#6F8F7A")
                 )
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("選択中")
+                    Text("使うジャンル")
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(.secondary)
-                    Text(selectedCategoryNames.isEmpty ? "未選択" : selectedCategoryNames.joined(separator: " / "))
+                    Text(selectedCategoryNames.joined(separator: " / "))
                         .font(FavorecoTypography.bodyStrong)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
-                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                OnboardingInfoCard(icon: "gearshape", title: "あとで変更可能", message: "設定 > ジャンル管理から、表示ジャンルや自作ジャンルを変更できます。")
+                OnboardingInfoCard(icon: "gearshape", title: "あとで変更可能", message: "設定 > ジャンル管理から、表示ジャンルをいつでも変更できます。")
             }
         }
+    }
+
+    private var genreSelectionContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("記録したいジャンルを選ぶ")
+                .font(FavorecoTypography.sectionTitle)
+            Text("使いたいものにチェックを入れてください。あとから変更できます。")
+                .font(FavorecoTypography.body)
+                .foregroundStyle(.secondary)
+
+            if builtInCategories.isEmpty {
+                OnboardingEmptyStateRow(
+                    icon: "square.grid.2x2",
+                    title: "ジャンルを準備中です",
+                    message: "標準ジャンルの読み込みが終わると選択できます。"
+                )
+                .padding(14)
+                .background(.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            } else {
+                genreGrid
+            }
+
+            if !saveErrorMessage.isEmpty {
+                FavorecoIconLabel(saveErrorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.red)
+            } else if !hasSelection {
+                FavorecoIconLabel("最低ひとつ選んでください。", systemImage: "exclamationmark.circle")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var genreGrid: some View {
+        let rows = stride(from: 0, to: builtInCategories.count, by: 3).map { start in
+            Array(builtInCategories[start..<min(start + 3, builtInCategories.count)])
+        }
+
+        return VStack(spacing: 9) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 9) {
+                    if row.count == 1 {
+                        Color.clear.frame(maxWidth: .infinity)
+                    }
+
+                    ForEach(row) { category in
+                        GenreVisualSelectionCard(
+                            category: category,
+                            isSelected: selectedTemplateKeys.contains(category.templateKey)
+                        ) {
+                            toggle(category)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    ForEach(0..<(3 - row.count), id: \.self) { _ in
+                        if row.count != 1 {
+                            Color.clear.frame(maxWidth: .infinity)
+                        }
+                    }
+
+                    if row.count == 1 {
+                        Color.clear.frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+    }
+
+    private var preparationContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            ProgressView()
+                .controlSize(.large)
+                .tint(Color(hex: "#3296BD"))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("選んだジャンルのDBを準備中")
+                    .font(FavorecoTypography.jpSerif(28, weight: .bold, relativeTo: .title))
+                Text(preparationMessage)
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                preparationStatusRow(title: "ジャンル設定", isReady: true)
+                if needsPlaceCatalog {
+                    preparationStatusRow(title: "会場・施設データ", isReady: !publicPlaceStore.entries.isEmpty)
+                }
+                if needsRecurringEventCatalog {
+                    preparationStatusRow(title: "定期イベントデータ", isReady: !recurringEventStore.entries.isEmpty)
+                }
+            }
+            .padding(16)
+            .background(.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 28)
+    }
+
+    private func preparationStatusRow(title: String, isReady: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: isReady ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath")
+                .foregroundStyle(isReady ? Color(hex: "#3E8060") : Color(hex: "#3296BD"))
+            Text(title)
+                .font(FavorecoTypography.bodyStrong)
+            Spacer()
+            Text(isReady ? "準備済み" : "読込中")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var preparationMessage: String {
+        if needsPlaceCatalog && publicPlaceStore.entries.isEmpty {
+            return "初回だけ、観劇やおでかけで使う全国の会場・施設データを読み込んでいます。"
+        }
+        if needsRecurringEventCatalog && recurringEventStore.entries.isEmpty {
+            return "選んだジャンルで使えるイベント候補を読み込んでいます。"
+        }
+        return "端末内の準備が整いました。最新情報を確認しています。"
+    }
+
+    private var needsPlaceCatalog: Bool {
+        // The catalog is shared across genres: cinemas, libraries, halls,
+        // museums, parks and nature facilities all live in the same cache.
+        hasSelection
+    }
+
+    private var needsRecurringEventCatalog: Bool {
+        !selectedTemplateKeys.isDisjoint(with: ["theater", "live", "museum"])
     }
 
     private var onboardingHeader: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("favoreco")
-                    .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .largeTitle))
-                Text("初期設定")
+                Text("FAVORECO")
+                    .font(FavorecoTypography.latinDisplay(25, weight: .semibold, relativeTo: .largeTitle))
+                    .tracking(2.4)
+                Text(step.headerSubtitle)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text("\(step.index + 1)/\(OnboardingStep.allCases.count)")
-                .font(FavorecoTypography.captionStrong)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.background, in: Capsule())
+            if let progressText = step.progressText {
+                Text(progressText)
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.background, in: Capsule())
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 18)
@@ -198,7 +298,7 @@ struct GenreOnboardingView: View {
     private var footer: some View {
         VStack(spacing: 12) {
             HStack(spacing: 6) {
-                ForEach(OnboardingStep.allCases) { item in
+                ForEach(OnboardingStep.guidedSteps) { item in
                     Circle()
                         .fill(item == step ? Color(hex: "#9F2F4D") : Color(.tertiaryLabel))
                         .frame(width: item == step ? 8 : 6, height: item == step ? 8 : 6)
@@ -206,7 +306,7 @@ struct GenreOnboardingView: View {
             }
 
             HStack(spacing: 12) {
-                if step != .intro {
+                if step.allowsBackNavigation {
                     Button("戻る") {
                         step = step.previous
                     }
@@ -214,11 +314,7 @@ struct GenreOnboardingView: View {
                 }
 
                 Button(primaryButtonTitle) {
-                    if step == .ready {
-                        complete()
-                    } else {
-                        step = step.next
-                    }
+                    advance()
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(step == .genres && !hasSelection)
@@ -231,36 +327,25 @@ struct GenreOnboardingView: View {
 
     private var primaryButtonTitle: String {
         switch step {
-        case .genres:
-            return "選んで次へ"
-        case .ready:
-            return "favorecoを始める"
-        default:
-            return "次へ"
+        case .genres: "このジャンルで準備する"
+        case .ready: "favorecoを始める"
+        default: "次へ"
         }
     }
 
-    private enum OnboardingStep: Int, CaseIterable, Identifiable {
-        case intro
-        case records
-        case crossGenre
-        case privacy
-        case genres
-        case ready
-
-        var id: Int { rawValue }
-        var index: Int { rawValue }
-
-        var next: OnboardingStep {
-            OnboardingStep(rawValue: min(rawValue + 1, Self.allCases.count - 1)) ?? .ready
-        }
-
-        var previous: OnboardingStep {
-            OnboardingStep(rawValue: max(rawValue - 1, 0)) ?? .intro
+    private func advance() {
+        switch step {
+        case .genres:
+            startPreparation()
+        case .ready:
+            complete()
+        default:
+            step = step.next
         }
     }
 
     private func toggle(_ category: RecordCategory) {
+        saveErrorMessage = ""
         if selectedTemplateKeys.contains(category.templateKey) {
             selectedTemplateKeys.remove(category.templateKey)
         } else {
@@ -268,61 +353,216 @@ struct GenreOnboardingView: View {
         }
     }
 
-    private func complete() {
-        let selectedKeys = selectedTemplateKeys.isEmpty
-            ? Set(builtInCategories.prefix(1).map(\.templateKey))
-            : selectedTemplateKeys
-        let now = Date()
-
-        for category in builtInCategories {
-            category.isArchived = !selectedKeys.contains(category.templateKey)
-            category.updatedAt = now
+    private func startPreparation() {
+        guard hasSelection else { return }
+        do {
+            try saveGenreSelection()
+        } catch {
+            saveErrorMessage = "ジャンルを保存できませんでした。もう一度お試しください。"
+            return
         }
 
+        step = .preparing
+        preparationTask?.cancel()
+        preparationTask = Task { @MainActor in
+            await prepareSelectedCatalogs()
+            guard !Task.isCancelled, step == .preparing else { return }
+            step = .intro
+        }
+    }
+
+    private func prepareSelectedCatalogs() async {
+        await withTaskGroup(of: Void.self) { group in
+            if needsPlaceCatalog {
+                group.addTask {
+                    await PublicPlaceCatalogStore.shared.prepare()
+                }
+            }
+            if needsRecurringEventCatalog {
+                group.addTask {
+                    await PublicRecurringEventCatalogStore.shared.prepare()
+                }
+            }
+        }
+
+        if !needsPlaceCatalog && !needsRecurringEventCatalog {
+            try? await Task.sleep(for: .milliseconds(450))
+        }
+    }
+
+    private func saveGenreSelection() throws {
+        let now = Date()
+        for category in builtInCategories {
+            category.isArchived = !selectedTemplateKeys.contains(category.templateKey)
+            category.updatedAt = now
+        }
+        try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: modelContext)
+        try modelContext.save()
+    }
+
+    private func complete() {
         do {
-            try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: modelContext)
-            _ = try SampleDataSeeder.insertAutomaticSamples(
-                in: modelContext,
-                categoryTemplateKeys: selectedKeys
-            )
-            try modelContext.save()
+            try saveGenreSelection()
             hasCompletedGenreOnboarding = true
         } catch {
-            assertionFailure("Failed to save genre onboarding: \(error)")
+            saveErrorMessage = "初期設定を保存できませんでした。もう一度お試しください。"
+            step = .genres
+        }
+    }
+
+    private enum OnboardingStep: Int, CaseIterable, Identifiable {
+        case genres
+        case preparing
+        case intro
+        case records
+        case crossGenre
+        case privacy
+        case ready
+
+        static let guidedSteps: [OnboardingStep] = [.genres, .intro, .records, .crossGenre, .privacy, .ready]
+
+        var id: Int { rawValue }
+
+        var headerSubtitle: String {
+            switch self {
+            case .genres: "ジャンル選択"
+            case .preparing: "データ準備"
+            default: "使い方"
+            }
+        }
+
+        var progressText: String? {
+            guard self != .preparing,
+                  let index = Self.guidedSteps.firstIndex(of: self) else { return nil }
+            return "\(index + 1)/\(Self.guidedSteps.count)"
+        }
+
+        var allowsBackNavigation: Bool {
+            self != .genres && self != .preparing
+        }
+
+        var next: OnboardingStep {
+            switch self {
+            case .genres: .preparing
+            case .preparing: .intro
+            case .intro: .records
+            case .records: .crossGenre
+            case .crossGenre: .privacy
+            case .privacy: .ready
+            case .ready: .ready
+            }
+        }
+
+        var previous: OnboardingStep {
+            switch self {
+            case .genres, .preparing: .genres
+            case .intro: .genres
+            case .records: .intro
+            case .crossGenre: .records
+            case .privacy: .crossGenre
+            case .ready: .privacy
+            }
         }
     }
 }
 
-private struct GenreSelectionRow: View {
+private struct GenreVisualSelectionCard: View {
     let category: RecordCategory
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
+            ZStack(alignment: .topTrailing) {
+                background
+                    .overlay {
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.08), .black.opacity(0.78)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+                    .overlay {
+                        if !isSelected {
+                            Color.black.opacity(0.18)
+                        }
+                    }
+
+                Text(category.name)
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(9)
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 25, weight: .bold))
+                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.9))
+                    .background {
+                        Circle()
+                            .fill(isSelected ? Color(hex: category.colorHex) : Color.black.opacity(0.24))
+                    }
+                    .padding(7)
+                    .shadow(color: .black.opacity(0.28), radius: 3, y: 2)
+            }
+            .frame(height: 124)
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(isSelected ? Color(hex: category.colorHex) : Color.white.opacity(0.7), lineWidth: isSelected ? 3 : 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(category.name)
+        .accessibilityValue(isSelected ? "選択中" : "未選択")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        if let image = bundledHeroImage(named: Self.resourceName(for: category.templateKey)) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            ZStack {
+                Color(hex: category.colorHex).opacity(0.82)
                 FavorecoIcon(
                     systemName: PhosphorIconGlyph.categorySystemName(
                         templateKey: category.templateKey,
                         storedSystemName: category.iconSymbol
                     ),
-                    size: 20
+                    size: 30
                 )
-                    .foregroundStyle(Color(hex: category.colorHex))
-                    .frame(width: 28)
-
-                Text(category.name)
-                    .font(FavorecoTypography.bodyStrong)
-                    .foregroundStyle(.primary)
-
-                Spacer()
-
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Color(hex: category.colorHex) : .secondary)
+                .foregroundStyle(.white.opacity(0.86))
             }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+    }
+
+    private static func resourceName(for templateKey: String) -> String {
+        switch templateKey {
+        case "theater": "theater-hero-venue-v2"
+        case "movie": "movie-hero-default"
+        case "live": "live-hero-default"
+        case "book": "book-hero-default"
+        case "museum": "museum-hero-default"
+        case "theme_park": "theme_park-hero-default"
+        case "nature_living": "nature_living-hero-zoo"
+        default: ""
+        }
+    }
+
+    private func bundledHeroImage(named resourceName: String) -> UIImage? {
+        guard !resourceName.isEmpty else { return nil }
+        if let image = UIImage(named: resourceName) { return image }
+        guard let url = Bundle.main.url(
+            forResource: resourceName,
+            withExtension: "jpg",
+            subdirectory: "CategoryHeroBackgrounds"
+        ) else { return nil }
+        return UIImage(contentsOfFile: url.path)
     }
 }
 
@@ -337,13 +577,12 @@ private struct OnboardingMessagePanel: View {
             FavorecoIcon(systemName: symbol, size: 42, fallbackWeight: .semibold)
                 .foregroundStyle(accentColor)
                 .frame(width: 74, height: 74)
-                .background(accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             VStack(alignment: .leading, spacing: 10) {
                 Text(title)
                     .font(FavorecoTypography.jpSerif(30, weight: .bold, relativeTo: .largeTitle))
                     .fixedSize(horizontal: false, vertical: true)
-
                 Text(message)
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
@@ -352,7 +591,7 @@ private struct OnboardingMessagePanel: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -363,41 +602,15 @@ private struct OnboardingFeatureRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(color)
-                .frame(width: 26, height: 26)
-
+            Circle().fill(color).frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(FavorecoTypography.bodyStrong)
-                Text(message)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                Text(title).font(FavorecoTypography.bodyStrong)
+                Text(message).font(FavorecoTypography.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
         }
         .padding(14)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-}
-
-private struct OnboardingGenreBubble: View {
-    let name: String
-    let color: Color
-    let icon: String
-
-    var body: some View {
-        VStack(spacing: 10) {
-            FavorecoIcon(systemName: icon, size: 22)
-                .foregroundStyle(color)
-                .frame(width: 54, height: 54)
-                .background(color.opacity(0.13), in: Circle())
-            Text(name)
-                .font(FavorecoTypography.bodyStrong)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(16)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -412,8 +625,7 @@ private struct OnboardingInfoCard: View {
                 .foregroundStyle(Color(hex: "#9F2F4D"))
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(FavorecoTypography.bodyStrong)
+                Text(title).font(FavorecoTypography.bodyStrong)
                 Text(message)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
@@ -422,7 +634,7 @@ private struct OnboardingInfoCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -437,8 +649,7 @@ private struct OnboardingEmptyStateRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(FavorecoTypography.bodyStrong)
+                Text(title).font(FavorecoTypography.bodyStrong)
                 Text(message)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
@@ -451,5 +662,8 @@ private struct OnboardingEmptyStateRow: View {
 
 #Preview {
     GenreOnboardingView()
-        .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self], inMemory: true)
+        .modelContainer(
+            for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self],
+            inMemory: true
+        )
 }

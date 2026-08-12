@@ -10,9 +10,49 @@ import SwiftData
 import UIKit
 import Photos
 import PhotosUI
+import Combine
 
-struct TheaterExperiencePage<Hero: View, Content: View>: View {
+private enum DetailPhotoSourceAction {
+    case library
+    case camera
+}
+
+private struct DetailPhotoSourceSheet: View {
+    let onLibrary: () -> Void
+    let onCamera: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("写真を追加")
+                .font(FavorecoTypography.sectionTitle)
+                .frame(maxWidth: .infinity)
+
+            Button(action: onLibrary) {
+                Text("写真ライブラリから選ぶ")
+                    .font(FavorecoTypography.bodyStrong)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Color.secondary.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onCamera) {
+                Text("カメラで撮影")
+                    .font(FavorecoTypography.bodyStrong)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Color.secondary.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 4)
+        .presentationDetents([.height(210)])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+struct CategoryExperiencePage<Hero: View, Content: View>: View {
     let genreColor: Color
+    let borderColor: Color
     let scrollTargetID: UUID?
     let showsScrollingFrame: Bool
     private let hero: () -> Hero
@@ -20,12 +60,14 @@ struct TheaterExperiencePage<Hero: View, Content: View>: View {
 
     init(
         genreColor: Color,
+        borderColor: Color,
         scrollTargetID: UUID? = nil,
         showsScrollingFrame: Bool = false,
         @ViewBuilder hero: @escaping () -> Hero,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.genreColor = genreColor
+        self.borderColor = borderColor
         self.scrollTargetID = scrollTargetID
         self.showsScrollingFrame = showsScrollingFrame
         self.hero = hero
@@ -49,12 +91,16 @@ struct TheaterExperiencePage<Hero: View, Content: View>: View {
                     CategoryEmbeddedDetailCardModifier(
                         isEnabled: showsScrollingFrame,
                         genreColor: genreColor,
-                        borderColor: TheaterCategoryStyle.gold
+                        borderColor: borderColor
                     )
                 )
                 .padding(.horizontal, showsScrollingFrame ? 10 : 0)
                 .padding(.top, showsScrollingFrame ? 74 : 0)
             }
+            // 没入型詳細は暗い写真・ジャンル色面の上へ表示する。
+            // Buttonのtintによって本文が低輝度のジャンル色へ解決されないよう、
+            // ページ本文の基準色を明るいアイボリーへ固定する。
+            .foregroundStyle(Color(red: 0.97, green: 0.95, blue: 0.90))
             .scrollIndicators(showsScrollingFrame ? .hidden : .automatic)
             .task(id: scrollTargetID) {
                 guard let scrollTargetID else { return }
@@ -200,7 +246,6 @@ struct ExperienceDetailView: View {
     @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @State private var isShowingEdit = false
-    @State private var calendarDraft: CalendarEventDraft?
     @State private var ticketPlanForEditor: Plan?
     @State private var navigatingPlan: Plan?
     @State private var recordPreparationPlan: Plan?
@@ -223,6 +268,7 @@ struct ExperienceDetailView: View {
     @State private var isBookInformationExpanded = false
     @State private var isBookReadingExpanded = false
     @State private var isBookPhotosExpanded = true
+    @State private var eventEyecatchRefreshVersion = 0
     @State private var isBookMemoExpanded = true
     @State private var isPlaceOfficialInfoExpanded = true
     @State private var isPlaceVenueExpanded = true
@@ -243,6 +289,8 @@ struct ExperienceDetailView: View {
     @State private var photoAddErrorMessage: String?
     @State private var pendingPhotoPurpose: ExperiencePhotoPurpose?
     @State private var isShowingPhotoSourceChoice = false
+    @State private var queuedPhotoSourceAction: DetailPhotoSourceAction?
+    @State private var isShowingDetailLibrary = false
     @State private var isShowingDetailCamera = false
     @State private var isShowingDetailCameraUnavailable = false
     @State private var backSwipeExclusionFrames: [CGRect] = []
@@ -281,8 +329,9 @@ struct ExperienceDetailView: View {
 
         Group {
             if isTheater {
-                TheaterExperiencePage(
+                CategoryExperiencePage(
                     genreColor: genreColor,
+                    borderColor: accentColor,
                     showsScrollingFrame: showsScrollingFrame
                 ) {
                     recordHero(
@@ -319,18 +368,19 @@ struct ExperienceDetailView: View {
                     ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                 }
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        recordHero(
-                            snapshot: snapshot,
-                            accentColor: accentColor,
-                            genreColor: genreColor,
-                            eyecatchPhoto: eyecatchPhoto,
-                            backgroundPhoto: backgroundPhoto
-                        )
-                        .padding(.horizontal, -20)
-                        .padding(.top, -24)
-
+                CategoryExperiencePage(
+                    genreColor: genreColor,
+                    borderColor: accentColor,
+                    showsScrollingFrame: showsScrollingFrame
+                ) {
+                    recordHero(
+                        snapshot: snapshot,
+                        accentColor: accentColor,
+                        genreColor: genreColor,
+                        eyecatchPhoto: eyecatchPhoto,
+                        backgroundPhoto: backgroundPhoto
+                    )
+                } content: {
                         if isBook {
                             AnyView(bookInformationSection(snapshot: snapshot, accentColor: accentColor))
                             AnyView(bookReadingSection(snapshot: snapshot, accentColor: accentColor))
@@ -372,29 +422,9 @@ struct ExperienceDetailView: View {
                             AnyView(advancedSection(snapshot: snapshot))
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 24)
-                    .modifier(
-                        CategoryEmbeddedDetailCardModifier(
-                            isEnabled: showsScrollingFrame,
-                            genreColor: genreColor,
-                            borderColor: accentColor
-                        )
-                    )
-                    .padding(.horizontal, showsScrollingFrame ? 10 : 0)
-                    .padding(.top, showsScrollingFrame ? 74 : 0)
-                }
-                .ignoresSafeArea(edges: showsScrollingFrame ? [] : .top)
-                .background {
-                    if !showsScrollingFrame {
-                        detailPageBackground(
-                            genreColor: genreColor,
-                            usesHighContrast: true
-                        )
-                    }
-                }
             }
         }
+        .id(eventEyecatchRefreshVersion)
         .environment(\.colorScheme, .dark)
         .toolbar(.hidden, for: .navigationBar)
         .simultaneousGesture(edgeBackGesture)
@@ -424,6 +454,15 @@ struct ExperienceDetailView: View {
         .sheet(isPresented: $isShowingEdit) {
             EditExperienceView(visit: visit)
         }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: ThumbnailLoader.didInvalidateReferenceNotification
+            )
+        ) { notification in
+            guard let event = visit.event,
+                  ThumbnailLoader.invalidation(notification, matches: .event(event.id)) else { return }
+            eventEyecatchRefreshVersion += 1
+        }
         .sheet(isPresented: $isShowingRepeatEntry) {
             if let event = visit.event {
                 let fields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
@@ -439,9 +478,6 @@ struct ExperienceDetailView: View {
                 )
             }
         }
-        .sheet(item: $calendarDraft) { draft in
-            CalendarEventEditSheet(draft: draft)
-        }
         .sheet(item: $ticketPlanForEditor) { plan in
             EditTicketAttemptView(plan: plan)
         }
@@ -450,6 +486,27 @@ struct ExperienceDetailView: View {
                 PersonMasterEditDestination(personID: target.id, showsCancelButton: true)
             }
         }
+        .sheet(
+            isPresented: $isShowingPhotoSourceChoice,
+            onDismiss: performQueuedPhotoSourceAction
+        ) {
+            DetailPhotoSourceSheet(
+                onLibrary: {
+                    queuedPhotoSourceAction = .library
+                    isShowingPhotoSourceChoice = false
+                },
+                onCamera: {
+                    queuedPhotoSourceAction = .camera
+                    isShowingPhotoSourceChoice = false
+                }
+            )
+        }
+        .photosPicker(
+            isPresented: $isShowingDetailLibrary,
+            selection: detailLibrarySelection,
+            maxSelectionCount: 20,
+            matching: .images
+        )
         .fullScreenCover(item: $photoViewerRequest) { request in
             ExperiencePhotoViewer(
                 photos: resolvedViewerPhotos(for: request),
@@ -517,19 +574,6 @@ struct ExperienceDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("この端末ではカメラを起動できません。写真ライブラリから追加してください。")
-        }
-        .confirmationDialog("写真を追加", isPresented: $isShowingPhotoSourceChoice, titleVisibility: .visible) {
-            detailLibraryPickerForPendingPurpose
-            Button("カメラで撮影") {
-                guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-                    isShowingDetailCameraUnavailable = true
-                    return
-                }
-                isShowingDetailCamera = true
-            }
-            Button("キャンセル", role: .cancel) {
-                pendingPhotoPurpose = nil
-            }
         }
         .confirmationDialog("地図で開く", isPresented: $isShowingMapChooser, titleVisibility: .visible) {
             if let url = snapshot.mapURL {
@@ -744,12 +788,11 @@ struct ExperienceDetailView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 35)
+            .padding(.bottom, 20)
         }
-        .frame(
-            minHeight: snapshot.category?.templateKey == "theater" ? 485 : 560,
-            alignment: .bottom
-        )
+        // 全ジャンルを観劇詳細と同じHero基準へ統一する。
+        // 非観劇だけ560ptにすると、背景は揃っても情報全体が下へ残って見える。
+        .frame(minHeight: 485, alignment: .bottom)
         .accessibilityElement(children: .contain)
     }
 
@@ -774,7 +817,10 @@ struct ExperienceDetailView: View {
         presetKey: String
     ) -> some View {
         GeometryReader { proxy in
-            let imageBandHeight = min(proxy.size.height * 0.74, 420)
+            // 観劇と同じく、背景写真を Hero の下端まで使う。
+            // 途中で単色へ切り替えると、観劇以外だけ Hero が低く見えるため、
+            // 下端のグラデーションでジャンル色へ自然につなぐ。
+            let imageBandHeight = proxy.size.height
             let defaultImage = defaultHeroBackgroundImage(categoryKey: categoryKey, presetKey: presetKey)
 
             ZStack(alignment: .top) {
@@ -1044,15 +1090,20 @@ struct ExperienceDetailView: View {
     }
 
     private func detailEyecatchPhoto(in snapshot: ExperienceDetailSnapshot) -> PhotoBlob? {
-        if snapshot.event?.eyecatchData != nil { return nil }
         let visitEyecatchPath = visit.eyecatchPath.trimmingCharacters(in: .whitespacesAndNewlines)
         if !visitEyecatchPath.isEmpty,
            let visitEyecatch = snapshot.photos.first(where: { $0.relativePath == visitEyecatchPath }) {
             return visitEyecatch
         }
+        // The shared event eyecatch is rendered through ThumbnailImage below.
+        // Returning a representative photo here would make the detail choose a
+        // different source from the Library tile.
+        if snapshot.event?.eyecatchData != nil {
+            return nil
+        }
         if let event = snapshot.event,
            let representative = EventRepresentativePhotoResolver.photo(for: event),
-           ExperiencePhotoPurpose.resolved(from: representative.purpose) == .memory {
+           ExperiencePhotoPurpose.resolved(from: representative.purpose).isGalleryPhoto {
             return representative
         }
         return memoryPhotos(in: snapshot).first
@@ -1077,7 +1128,7 @@ struct ExperienceDetailView: View {
 
     private func memoryPhotos(in snapshot: ExperienceDetailSnapshot) -> [PhotoBlob] {
         snapshot.photos.filter { photo in
-            ExperiencePhotoPurpose.resolved(from: photo.purpose) == .memory
+            ExperiencePhotoPurpose.resolved(from: photo.purpose).isGalleryPhoto
         }
     }
 
@@ -1176,14 +1227,20 @@ struct ExperienceDetailView: View {
                             Button {
                                 presentPhotoViewer(photos, initialPhoto: photo)
                             } label: {
-                                RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
-                                    .frame(maxWidth: .infinity)
-                                    .aspectRatio(1, contentMode: .fit)
-                                    .clipped()
-                                    .background(Color(.secondarySystemFill))
-                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                let purpose = ExperiencePhotoPurpose.resolved(from: photo.purpose)
+                                ZStack(alignment: .bottomLeading) {
+                                    RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
+                                        .frame(maxWidth: .infinity)
+                                        .aspectRatio(1, contentMode: .fit)
+                                        .clipped()
+                                        .background(Color(.secondarySystemFill))
+                                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    photoPurposeCapsule(purpose)
+                                        .padding(5)
+                                }
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("\(ExperiencePhotoPurpose.resolved(from: photo.purpose).title)の写真")
                         }
                     }
                 }
@@ -1468,7 +1525,9 @@ struct ExperienceDetailView: View {
         isTheater: Bool
     ) -> some View {
         let venueName = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
-        let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let storedAddress = visit.placeMaster?.address
+            ?? snapshot.unitFields.venueAddressSnapshot
+        let address = storedAddress.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
         let latitude = hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0)
         let longitude = hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
@@ -1483,14 +1542,11 @@ struct ExperienceDetailView: View {
                     isExpanded: $isVenueExpanded
                 )
             } else if isGenericExperienceDetail {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    genericDisclosureHeader(
-                        "会場・地図",
-                        accentColor: accentColor,
-                        isExpanded: $isPlaceVenueExpanded
-                    )
-                    mapOpenButton(snapshot: snapshot, hasMapSource: hasMapSource, accentColor: accentColor)
-                }
+                genericDisclosureHeader(
+                    "会場・地図",
+                    accentColor: accentColor,
+                    isExpanded: $isPlaceVenueExpanded
+                )
             } else {
                 HStack(alignment: .firstTextBaseline) {
                     sectionTitle("会場")
@@ -1499,7 +1555,7 @@ struct ExperienceDetailView: View {
                 }
             }
 
-            if hasMapSource && (!isGenericExperienceDetail || isPlaceVenueExpanded) {
+            if hasMapSource {
                 if !venueName.isEmpty || !address.isEmpty {
                     TheaterVenueSummary(venueName: venueName, address: address)
                 }
@@ -1516,7 +1572,7 @@ struct ExperienceDetailView: View {
                         }
                     }
 
-                    ZStack {
+                    ZStack(alignment: .topTrailing) {
                         Color.white.opacity(0.06)
                         FavorecoIcon(systemName: "map", size: 30)
                             .foregroundStyle(accentColor.opacity(0.52))
@@ -1526,6 +1582,16 @@ struct ExperienceDetailView: View {
                             latitude: latitude,
                             longitude: longitude
                         )
+
+                        if isGenericExperienceDetail {
+                            mapOpenButton(
+                                snapshot: snapshot,
+                                hasMapSource: hasMapSource,
+                                accentColor: accentColor,
+                                usesMapOverlayStyle: true
+                            )
+                            .padding(10)
+                        }
                     }
                     .frame(height: 180)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1648,7 +1714,8 @@ struct ExperienceDetailView: View {
     private func mapOpenButton(
         snapshot: ExperienceDetailSnapshot,
         hasMapSource: Bool,
-        accentColor: Color
+        accentColor: Color,
+        usesMapOverlayStyle: Bool = false
     ) -> some View {
         if snapshot.mapURL != nil, hasMapSource {
             Button {
@@ -1656,7 +1723,14 @@ struct ExperienceDetailView: View {
             } label: {
                 Label("マップで開く", systemImage: "arrow.up.right")
                     .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(accentColor)
+                    .foregroundStyle(usesMapOverlayStyle ? Color.white : accentColor)
+                    .padding(.horizontal, usesMapOverlayStyle ? 10 : 0)
+                    .frame(minHeight: usesMapOverlayStyle ? 32 : nil)
+                    .background {
+                        if usesMapOverlayStyle {
+                            Capsule().fill(Color.black.opacity(0.68))
+                        }
+                    }
             }
             .buttonStyle(.plain)
         }
@@ -1666,7 +1740,8 @@ struct ExperienceDetailView: View {
         let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
         return PlaceSearchService.googleMapsURL(
             name: visit.venueNameSnapshot,
-            address: visit.placeMaster?.address ?? "",
+            address: visit.placeMaster?.address
+                ?? VisitUnitFields(rawValue: visit.unitFieldsRaw).venueAddressSnapshot,
             latitude: hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0),
             longitude: hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
         )
@@ -1776,9 +1851,9 @@ struct ExperienceDetailView: View {
     ) -> some View {
         let labelFont = FavorecoTypography.captionStrong
         switch purpose {
-        case .memory:
+        case .memory, .placeScenery, .experienceHighlight, .food:
             Button {
-                pendingPhotoPurpose = .memory
+                pendingPhotoPurpose = purpose
                 isShowingPhotoSourceChoice = true
             } label: {
                 detailPhotoPickerLabel(title, font: labelFont, accentColor: accentColor)
@@ -1806,23 +1881,28 @@ struct ExperienceDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private var detailLibraryPickerForPendingPurpose: some View {
+    private var detailLibrarySelection: Binding<[PhotosPickerItem]> {
         switch pendingPhotoPurpose {
-        case .memory:
-            PhotosPicker(selection: $memoryPhotoItems, maxSelectionCount: 20, matching: .images) {
-                Text("写真ライブラリから選ぶ")
+        case .goods: $goodsPhotoItems
+        case .benefit: $benefitPhotoItems
+        case .memory, .placeScenery, .experienceHighlight, .food, .ticket, .none: $memoryPhotoItems
+        }
+    }
+
+    private func performQueuedPhotoSourceAction() {
+        defer { queuedPhotoSourceAction = nil }
+        switch queuedPhotoSourceAction {
+        case .library:
+            isShowingDetailLibrary = true
+        case .camera:
+            guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+                isShowingDetailCameraUnavailable = true
+                pendingPhotoPurpose = nil
+                return
             }
-        case .goods:
-            PhotosPicker(selection: $goodsPhotoItems, maxSelectionCount: 20, matching: .images) {
-                Text("写真ライブラリから選ぶ")
-            }
-        case .benefit:
-            PhotosPicker(selection: $benefitPhotoItems, maxSelectionCount: 20, matching: .images) {
-                Text("写真ライブラリから選ぶ")
-            }
-        case .ticket, .none:
-            EmptyView()
+            isShowingDetailCamera = true
+        case .none:
+            pendingPhotoPurpose = nil
         }
     }
 
@@ -2490,7 +2570,7 @@ struct ExperienceDetailView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                             }
                             .aspectRatio(1, contentMode: .fit)
-                            if showsPurpose {
+                            if showsPurpose || purpose != .memory {
                                 FavorecoIconLabel(purpose.title, systemImage: purpose.systemImage, iconSize: 9, spacing: 3)
                                     .font(.system(size: 8, weight: .semibold))
                                     .foregroundStyle(.white)
@@ -2555,20 +2635,40 @@ struct ExperienceDetailView: View {
                             spacing: 8
                         ) {
                             ForEach(galleryPhotos) { photo in
-                                ZStack(alignment: .bottomLeading) {
-                                    RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
-                                        .frame(maxWidth: .infinity)
-                                        .aspectRatio(1, contentMode: .fit)
-                                        .clipped()
-                                        .background(Color(.secondarySystemFill))
-                                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                    if photo.relativePath == visit.eyecatchPath {
-                                        Image(systemName: "star.fill")
-                                            .font(.caption2.weight(.bold))
-                                            .foregroundStyle(.white)
-                                            .padding(6)
-                                            .background(.black.opacity(0.58), in: Circle())
+                                let purpose = ExperiencePhotoPurpose.resolved(from: photo.purpose)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    ZStack(alignment: .bottomLeading) {
+                                        RepresentativePhotoImage(photo: photo, maxPixelSize: 480, contentMode: .fill)
+                                            .frame(maxWidth: .infinity)
+                                            .aspectRatio(1, contentMode: .fit)
+                                            .clipped()
+                                            .background(Color(.secondarySystemFill))
+                                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                        if photo.relativePath == visit.eyecatchPath {
+                                            Image(systemName: "star.fill")
+                                                .font(.caption2.weight(.bold))
+                                                .foregroundStyle(.white)
+                                                .padding(6)
+                                                .background(.black.opacity(0.58), in: Circle())
+                                                .padding(5)
+                                                .frame(
+                                                    maxWidth: .infinity,
+                                                    maxHeight: .infinity,
+                                                    alignment: .topTrailing
+                                                )
+                                        }
+                                        photoPurposeCapsule(purpose)
                                             .padding(5)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                                    }
+
+                                    let caption = photo.caption.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    if !caption.isEmpty {
+                                        Text(caption)
+                                            .font(FavorecoTypography.jpSans(10, weight: .regular, relativeTo: .caption2))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(2)
+                                            .fixedSize(horizontal: false, vertical: true)
                                     }
                                 }
                             }
@@ -2578,6 +2678,22 @@ struct ExperienceDetailView: View {
             }
             .sectionCard(tint: accentColor, emphasized: isTheater || isGenericExperienceDetail)
         }
+    }
+
+    private func photoPurposeCapsule(_ purpose: ExperiencePhotoPurpose) -> some View {
+        FavorecoIconLabel(
+            purpose.title,
+            systemImage: purpose.systemImage,
+            iconSize: 9,
+            spacing: 3
+        )
+        .font(.system(size: 8, weight: .semibold))
+        .foregroundStyle(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.62)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 3)
+        .background(.black.opacity(0.66), in: Capsule())
     }
 
     @ViewBuilder
@@ -2668,20 +2784,21 @@ struct ExperienceDetailView: View {
         }
     }
 
+    @ViewBuilder
     private func basicInfo(snapshot: ExperienceDetailSnapshot, template: CategoryRecordTemplate) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if isGenericExperienceDetail {
-                genericDisclosureHeader(
-                    template.visitSectionTitle,
-                    accentColor: .white,
-                    isExpanded: $isPlaceBasicInfoExpanded
-                )
-            } else {
-                sectionTitle(template.visitSectionTitle)
-            }
+        if !snapshot.unitFields.weatherSymbolName.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                if isGenericExperienceDetail {
+                    genericDisclosureHeader(
+                        template.visitSectionTitle,
+                        accentColor: .white,
+                        isExpanded: $isPlaceBasicInfoExpanded
+                    )
+                } else {
+                    sectionTitle(template.visitSectionTitle)
+                }
 
-            if !isGenericExperienceDetail || isPlaceBasicInfoExpanded {
-                if !snapshot.unitFields.weatherSymbolName.isEmpty {
+                if !isGenericExperienceDetail || isPlaceBasicInfoExpanded {
                     DetailInfoRow(
                         icon: snapshot.unitFields.weatherSymbolName,
                         title: "天気",
@@ -2690,21 +2807,13 @@ struct ExperienceDetailView: View {
                     if let weatherAttributionURL = snapshot.weatherAttributionURL {
                         Link(destination: weatherAttributionURL) {
                             Label("Apple Weather", systemImage: "apple.logo")
-                                .font(FavorecoTypography.caption)
+                            .font(FavorecoTypography.caption)
                         }
                     }
                 }
-
-                Button {
-                    calendarDraft = makeCalendarDraft(snapshot: snapshot)
-                } label: {
-                    FavorecoIconLabel("カレンダーに追加", systemImage: "calendar.badge.plus", iconSize: 17)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.bordered)
             }
+            .sectionCard(tint: .white, emphasized: isGenericExperienceDetail)
         }
-        .sectionCard(tint: .white, emphasized: isGenericExperienceDetail)
     }
 
     @ViewBuilder
@@ -2871,7 +2980,7 @@ struct ExperienceDetailView: View {
             return $isPlaceGoodsPhotosExpanded
         case .benefit:
             return $isPlaceBenefitPhotosExpanded
-        case .memory:
+        case .memory, .placeScenery, .experienceHighlight, .food:
             return $isPlacePhotosExpanded
         }
     }
@@ -2881,38 +2990,6 @@ struct ExperienceDetailView: View {
             return FavorecoTypography.sectionTitle
         }
         return FavorecoTypography.jpSans(16, weight: .semibold, relativeTo: .headline)
-    }
-
-    private func makeCalendarDraft(snapshot: ExperienceDetailSnapshot) -> CalendarEventDraft {
-        let endDate = visit.endedAt > visit.visitedAt
-            ? visit.endedAt
-            : Calendar.current.date(byAdding: .hour, value: 2, to: visit.visitedAt) ?? visit.visitedAt
-        var notes: [String] = []
-        if !visit.seatText.isEmpty {
-            notes.append("座席・チケット: \(visit.seatText)")
-        }
-        if !snapshot.ticketStatusText.isEmpty && !visit.outcomeKey.isEmpty {
-            notes.append("チケット状態: \(snapshot.ticketStatusText)")
-        }
-        if visit.amount != Decimal(0) {
-            notes.append("金額: \(snapshot.formattedAmount)")
-        }
-        if !visit.note.isEmpty {
-            notes.append("")
-            notes.append(visit.note)
-        }
-        if let url = snapshot.event?.officialURL, !url.isEmpty {
-            notes.append("")
-            notes.append(url)
-        }
-
-        return CalendarEventDraft(
-            title: snapshot.eventTitle,
-            location: snapshot.preferredLocationText,
-            notes: notes.joined(separator: "\n"),
-            startDate: visit.visitedAt,
-            endDate: endDate
-        )
     }
 
 }
@@ -3061,7 +3138,7 @@ private struct PhotoSaveResult: Identifiable {
     let message: String
 }
 
-private struct RecordDetailEyecatch: View {
+struct RecordDetailEyecatch: View {
     let event: ExperienceEvent?
     let photo: PhotoBlob?
     let aspectRatio: Double
@@ -3089,12 +3166,23 @@ private struct RecordDetailEyecatch: View {
             .theaterPosterFrame(tint: tint)
         } else {
             Group {
-                if let data = event?.eyecatchData, let image = UIImage(data: data) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else if let photo {
+                if let photo {
                     RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fill)
+                } else if let event {
+                    GeometryReader { geometry in
+                        ThumbnailImage(
+                            reference: .event(event.id),
+                            displaySize: geometry.size,
+                            contentMode: .fill
+                        ) {
+                            ZStack {
+                                tint.opacity(0.18)
+                                FavorecoIcon(systemName: fallbackSymbol, size: 34)
+                                    .foregroundStyle(tint)
+                            }
+                        }
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                    }
                 } else {
                     ZStack {
                         tint.opacity(0.18)

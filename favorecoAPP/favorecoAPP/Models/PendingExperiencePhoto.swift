@@ -9,6 +9,9 @@ import ImageIO
 
 nonisolated enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sendable {
     case memory
+    case placeScenery = "place_scenery"
+    case experienceHighlight = "experience_highlight"
+    case food
     case ticket
     case goods
     case benefit
@@ -18,6 +21,9 @@ nonisolated enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sen
     var title: String {
         switch self {
         case .memory: return "思い出"
+        case .placeScenery: return "場所・風景"
+        case .experienceHighlight: return "体験・見どころ"
+        case .food: return "フード"
         case .ticket: return "チケット"
         case .goods: return "グッズ"
         case .benefit: return "ノベルティ・特典"
@@ -27,6 +33,9 @@ nonisolated enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sen
     var systemImage: String {
         switch self {
         case .memory: return "photo.on.rectangle"
+        case .placeScenery: return "building.2"
+        case .experienceHighlight: return "sparkles"
+        case .food: return "fork.knife"
         case .ticket: return "ticket"
         case .goods: return "bag"
         case .benefit: return "gift"
@@ -34,6 +43,15 @@ nonisolated enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sen
     }
 
     var supportsAmount: Bool { self == .ticket || self == .goods }
+
+    var isGalleryPhoto: Bool {
+        switch self {
+        case .memory, .placeScenery, .experienceHighlight, .food:
+            return true
+        case .ticket, .goods, .benefit:
+            return false
+        }
+    }
 
     static func resolved(from rawValue: String) -> ExperiencePhotoPurpose {
         ExperiencePhotoPurpose(rawValue: rawValue) ?? .memory
@@ -77,7 +95,7 @@ nonisolated struct PhotoMetadataDraft: Sendable {
     }
 
     mutating func normalizeForPurpose() {
-        guard purpose == .memory else { return }
+        guard purpose.isGalleryPhoto else { return }
         ocrText = ""
         amountText = ""
     }

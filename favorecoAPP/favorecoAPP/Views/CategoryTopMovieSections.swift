@@ -5,6 +5,19 @@ struct CategoryVisitRecordItem: Identifiable {
     let visit: Visit
 
     var id: UUID { visit.id }
+
+    /// 記録ごとのアイキャッチを最優先し、未設定時だけ親作品へ戻す。
+    /// 一覧と記録詳細で同じ解決順を使うための正本。
+    var eyecatchReference: ThumbnailReference {
+        let selectedPath = visit.eyecatchPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !selectedPath.isEmpty,
+           let selected = (visit.photos ?? []).first(where: {
+               $0.relativePath == selectedPath && $0.mediaKind == "photo" && $0.hasStoredData
+           }) {
+            return .photo(selected.id)
+        }
+        return .event(event.id)
+    }
 }
 
 struct CategoryVisitRecordPosterTile: View {
@@ -21,9 +34,9 @@ struct CategoryVisitRecordPosterTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             GeometryReader { geometry in
-                ZStack(alignment: .topTrailing) {
+                ZStack(alignment: .bottomTrailing) {
                     ThumbnailImage(
-                        reference: .event(item.event.id),
+                        reference: item.eyecatchReference,
                         displaySize: geometry.size,
                         contentMode: .fill
                     ) {
@@ -37,10 +50,10 @@ struct CategoryVisitRecordPosterTile: View {
 
                     if category.templateKey == "museum" {
                         Text(ordinalBadgeText)
-                            .font(FavorecoTypography.jpSans(20, weight: .bold, relativeTo: .body))
+                            .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .caption))
                             .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.72), radius: 3, y: 1)
-                            .padding(6)
+                            .shadow(color: .black.opacity(0.78), radius: 2, y: 1)
+                            .padding(5)
                     }
                 }
             }
@@ -104,7 +117,7 @@ struct CategoryVisitRecordBannerCard: View {
         HStack(alignment: .top, spacing: 12) {
             GeometryReader { geometry in
                 ThumbnailImage(
-                    reference: .event(item.event.id),
+                    reference: item.eyecatchReference,
                     displaySize: geometry.size,
                     contentMode: .fill
                 ) {

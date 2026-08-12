@@ -131,25 +131,17 @@ struct HomeGallerySection: View {
     @State private var isShowingGallery = false
     @State private var isShowingDetailedSearch = false
 
-    private var items: [HomeGalleryItem] {
-        visits.map { HomeGalleryItem(snapshot: $0) }
-    }
-
-    private var filteredItems: [HomeGalleryItem] {
-        HomeGalleryFilterLogic.filtered(
+    var body: some View {
+        let items = visits.map { HomeGalleryItem(snapshot: $0) }
+        let filteredItems = HomeGalleryFilterLogic.filtered(
             items,
             categoryIDs: selectedCategoryIDs,
             years: selectedYears,
             searchText: searchText,
             tagNames: selectedTagNames
         )
-    }
+        let previewItems = Array(filteredItems.prefix(6))
 
-    private var previewItems: [HomeGalleryItem] {
-        Array(filteredItems.prefix(6))
-    }
-
-    var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             galleryHeading
 

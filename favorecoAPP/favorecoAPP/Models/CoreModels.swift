@@ -590,6 +590,8 @@ final class PlaceMaster {
     var externalIDsRaw: String = ""
     var sourceSnapshotRaw: String = ""
     var pilgrimageMembershipsRaw: String = "[]"
+    var templeSect: String = ""
+    var enshrinedDeitiesRaw: String = "[]"
     var operationalStatusRaw: String = ""
     var normalizedName: String = ""
     var normalizedAddress: String = ""
@@ -628,6 +630,8 @@ final class PlaceMaster {
         externalIDsRaw: String = "",
         sourceSnapshotRaw: String = "",
         pilgrimageMembershipsRaw: String = "[]",
+        templeSect: String = "",
+        enshrinedDeitiesRaw: String = "[]",
         operationalStatusRaw: String = "",
         normalizedName: String = "",
         normalizedAddress: String = "",
@@ -650,6 +654,8 @@ final class PlaceMaster {
         self.externalIDsRaw = externalIDsRaw
         self.sourceSnapshotRaw = sourceSnapshotRaw
         self.pilgrimageMembershipsRaw = pilgrimageMembershipsRaw
+        self.templeSect = templeSect
+        self.enshrinedDeitiesRaw = enshrinedDeitiesRaw
         self.operationalStatusRaw = operationalStatusRaw
         self.normalizedName = normalizedName
         self.normalizedAddress = normalizedAddress
@@ -665,6 +671,52 @@ final class PlaceMaster {
     }
 
     var isClosed: Bool { operationalStatus == .closed }
+
+    var enshrinedDeities: [String] {
+        get {
+            guard let data = enshrinedDeitiesRaw.data(using: .utf8),
+                  let values = try? JSONDecoder().decode([String].self, from: data) else {
+                return []
+            }
+            return values
+        }
+        set {
+            let values = newValue
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .reduce(into: [String]()) { result, value in
+                    if !result.contains(value) { result.append(value) }
+                }
+            enshrinedDeitiesRaw = (try? String(
+                decoding: JSONEncoder().encode(values),
+                as: UTF8.self
+            )) ?? "[]"
+        }
+    }
+
+    /// Reads values imported by older builds from memo until the place is edited again.
+    var resolvedTempleSect: String {
+        let value = templeSect.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? legacyReligiousMemoValue(prefix: "宗派:") : value
+    }
+
+    var resolvedEnshrinedDeities: [String] {
+        let values = enshrinedDeities
+        guard values.isEmpty else { return values }
+        return legacyReligiousMemoValue(prefix: "御祭神:")
+            .components(separatedBy: CharacterSet(charactersIn: "、,|"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func legacyReligiousMemoValue(prefix: String) -> String {
+        memo.components(separatedBy: .newlines)
+            .first { $0.trimmingCharacters(in: .whitespaces).hasPrefix(prefix) }
+            .map { line in
+                String(line.trimmingCharacters(in: .whitespaces).dropFirst(prefix.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            } ?? ""
+    }
 }
 
 enum PlaceOperationalStatus: String, CaseIterable, Identifiable {

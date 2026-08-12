@@ -22,6 +22,8 @@ struct CategoryPreset: Sendable {
 }
 
 enum CategoryPresetSeeder {
+    static let seedVersion = 1
+
     static let initialReleaseTemplateKeys: Set<String> = [
         "theater",
         "movie",
@@ -172,12 +174,18 @@ enum CategoryPresetSeeder {
     ]
 
     @MainActor
-    static func seedIfNeeded(in context: ModelContext) async {
+    static func seedIfNeeded(
+        in context: ModelContext,
+        defaults: UserDefaults = .standard
+    ) async {
+        let currentVersion = defaults.integer(forKey: AppStorageKeys.categoryPresetSeedVersion)
+        guard currentVersion < seedVersion else { return }
+
         do {
             let descriptor = FetchDescriptor<RecordCategory>()
             let existingCategories = try context.fetch(descriptor)
             let now = Date()
-            let hasCompletedGenreOnboarding = UserDefaults.standard.bool(forKey: AppStorageKeys.hasCompletedGenreOnboarding)
+            let hasCompletedGenreOnboarding = defaults.bool(forKey: AppStorageKeys.hasCompletedGenreOnboarding)
             let isFirstOutingSplit = !existingCategories.contains(where: { $0.isBuiltIn && $0.templateKey == "theme_park" })
                 || !existingCategories.contains(where: { $0.isBuiltIn && $0.templateKey == "nature_living" })
             var resolvedCategories: [String: RecordCategory] = [:]
@@ -185,27 +193,13 @@ enum CategoryPresetSeeder {
             for preset in presets {
                 let isReleaseTemplate = isInitialReleaseTemplate(preset.templateKey)
                 if let existing = existingCategories.first(where: { $0.isBuiltIn && $0.templateKey == preset.templateKey }) {
-                    existing.name = preset.name
-                    existing.iconSymbol = preset.iconSymbol
-                    existing.templateTypeKey = preset.templateTypeKey
-                    existing.targetNameLabel = preset.targetNameLabel
-                    existing.recordUnitName = preset.recordUnitName
-                    existing.dateLabel = preset.dateLabel
-                    // 色・並び順・有効ユニットは利用者が設定画面で変更できるため、
-                    // 起動時のプリセット更新では上書きしない。旧データの空値だけ補完する。
-                    if existing.colorHex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        existing.colorHex = preset.colorHex
-                    }
-                    if existing.sortOrder <= 0 {
-                        existing.sortOrder = preset.sortOrder
-                    }
-                    if existing.enabledUnitsRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        existing.enabledUnitsRaw = preset.enabledUnitsRaw
-                    }
-                    if !hasCompletedGenreOnboarding {
-                        existing.isArchived = !isReleaseTemplate
-                    }
-                    existing.updatedAt = now
+                    _ = apply(
+                        preset,
+                        to: existing,
+                        isReleaseTemplate: isReleaseTemplate,
+                        hasCompletedGenreOnboarding: hasCompletedGenreOnboarding,
+                        now: now
+                    )
                     resolvedCategories[preset.templateKey] = existing
                 } else {
                     let category = RecordCategory(
@@ -244,9 +238,54 @@ enum CategoryPresetSeeder {
             if context.hasChanges {
                 try context.save()
             }
+            defaults.set(seedVersion, forKey: AppStorageKeys.categoryPresetSeedVersion)
         } catch {
             assertionFailure("Failed to seed category presets: \(error)")
         }
+    }
+
+    @MainActor
+    @discardableResult
+    static func apply(
+        _ preset: CategoryPreset,
+        to category: RecordCategory,
+        isReleaseTemplate: Bool,
+        hasCompletedGenreOnboarding: Bool,
+        now: Date
+    ) -> Bool {
+        var changed = false
+
+        func update<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<RecordCategory, Value>, to value: Value) {
+            guard category[keyPath: keyPath] != value else { return }
+            category[keyPath: keyPath] = value
+            changed = true
+        }
+
+        update(\.name, to: preset.name)
+        update(\.iconSymbol, to: preset.iconSymbol)
+        update(\.templateTypeKey, to: preset.templateTypeKey)
+        update(\.targetNameLabel, to: preset.targetNameLabel)
+        update(\.recordUnitName, to: preset.recordUnitName)
+        update(\.dateLabel, to: preset.dateLabel)
+
+        // 色・並び順・有効ユニットは利用者が設定画面で変更できるため、
+        // 起動時のプリセット更新では上書きしない。旧データの空値だけ補完する。
+        if category.colorHex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            update(\.colorHex, to: preset.colorHex)
+        }
+        if category.sortOrder <= 0 {
+            update(\.sortOrder, to: preset.sortOrder)
+        }
+        if category.enabledUnitsRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            update(\.enabledUnitsRaw, to: preset.enabledUnitsRaw)
+        }
+        if !hasCompletedGenreOnboarding {
+            update(\.isArchived, to: !isReleaseTemplate)
+        }
+        if changed {
+            category.updatedAt = now
+        }
+        return changed
     }
 
     @MainActor
@@ -270,6 +309,7 @@ enum CategoryPresetSeeder {
         isFirstSplit: Bool,
         now: Date
     ) {
+        guard isFirstSplit else { return }
         guard let legacyCategory = existingCategories.first(where: {
             $0.isBuiltIn && $0.templateKey == "outing_facility"
         }),
@@ -277,7 +317,7 @@ enum CategoryPresetSeeder {
         let natureCategory = resolvedCategories["nature_living"] else { return }
 
         let legacyWasVisible = !legacyCategory.isArchived
-        if isFirstSplit && legacyWasVisible {
+        if legacyWasVisible {
             themeParkCategory.isArchived = false
             natureCategory.isArchived = false
         }
@@ -311,11 +351,9 @@ enum CategoryPresetSeeder {
 
         legacyCategory.name = "その他・未分類"
         legacyCategory.iconSymbol = "questionmark.folder.fill"
-        if isFirstSplit {
-            legacyCategory.colorHex = "#2F7FB8"
-            legacyCategory.sortOrder = 62
-            legacyCategory.isArchived = legacyWasVisible ? !(hasUnclassifiedEvents || hasUnclassifiedPlans) : true
-        }
+        legacyCategory.colorHex = "#2F7FB8"
+        legacyCategory.sortOrder = 62
+        legacyCategory.isArchived = legacyWasVisible ? !(hasUnclassifiedEvents || hasUnclassifiedPlans) : true
         legacyCategory.updatedAt = now
     }
 }

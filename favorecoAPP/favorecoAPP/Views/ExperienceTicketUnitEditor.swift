@@ -22,8 +22,8 @@ struct ExperienceTicketUnitEditor: View {
 
     private var explicitTheaterContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ExplicitFormControlRow(title: "状態", isOptional: true) {
-                Picker("状態", selection: $outcomeKey) {
+            ExplicitFormControlRow(title: "チケット取得状況", isOptional: true) {
+                Picker("チケット取得状況", selection: $outcomeKey) {
                     ForEach(ExperienceTicketPlanOption.all) { option in
                         Text(option.name).tag(option.key)
                     }
@@ -45,7 +45,7 @@ struct ExperienceTicketUnitEditor: View {
                 labelStyle: .horizontal
             )
 
-            Text("この回の状態と座席だけを記録します。")
+            Text("この回のチケット取得状況と座席を記録します。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -54,7 +54,7 @@ struct ExperienceTicketUnitEditor: View {
 
     private var standardContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("状態", selection: $outcomeKey) {
+            Picker("チケット取得状況", selection: $outcomeKey) {
                 ForEach(ExperienceTicketPlanOption.all) { option in
                     Text(option.name).tag(option.key)
                 }
@@ -67,7 +67,7 @@ struct ExperienceTicketUnitEditor: View {
             )
             .lineLimit(1...3)
 
-            Text("この回の状態と座席だけを記録します。")
+            Text("この回のチケット取得状況と座席を記録します。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

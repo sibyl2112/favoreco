@@ -90,6 +90,10 @@ struct PhotoUnitEditor: View {
         category?.templateKey == "theater"
     }
 
+    private var allowsBenefitPhotos: Bool {
+        ["theater", "movie"].contains(category?.templateKey ?? "")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if isTheater {
@@ -261,6 +265,11 @@ struct PhotoUnitEditor: View {
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             photoGrid
+
+            Text("写真をタップすると、キャプションと分類を設定できます。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         if isImportingPhotos {
@@ -305,9 +314,9 @@ struct PhotoUnitEditor: View {
                 guard let photo = activeExistingPhotos.first(where: { $0.id == item.id }) else {
                     return false
                 }
-                return existingMetadata(for: photo).purpose == .memory
+                return existingMetadata(for: photo).purpose.isGalleryPhoto
             case .pending:
-                return pendingPhotos.first(where: { $0.id == item.id })?.metadata.purpose == .memory
+                return pendingPhotos.first(where: { $0.id == item.id })?.metadata.purpose.isGalleryPhoto == true
             }
         }
     }
@@ -771,7 +780,7 @@ struct PhotoUnitEditor: View {
         } label: {
             Label("写真の情報を編集", systemImage: "slider.horizontal.3")
         }
-        if purpose == .memory {
+        if purpose.isGalleryPhoto {
             Button {
                 coverPhotoPath = path
             } label: {
@@ -808,7 +817,7 @@ struct PhotoUnitEditor: View {
                 PhotoMetadataEditor(
                     metadata: existingMetadataBinding(for: photo),
                     imageData: photo.data,
-                    allowsBenefits: category?.templateKey == "theater"
+                    allowsBenefits: allowsBenefitPhotos
                 )
             } else {
                 FavorecoContentUnavailableView("写真が見つかりません", systemImage: "photo")
@@ -820,16 +829,16 @@ struct PhotoUnitEditor: View {
                         get: { pendingPhotos[index].metadata },
                         set: { metadata in
                             pendingPhotos[index].metadata = metadata
-                            if metadata.purpose != .memory, coverPhotoPath == pendingPhotos[index].relativePath {
+                            if !metadata.purpose.isGalleryPhoto, coverPhotoPath == pendingPhotos[index].relativePath {
                                 selectFallbackCover(excluding: pendingPhotos[index].relativePath)
                             }
-                            if metadata.purpose != .memory {
+                            if !metadata.purpose.isGalleryPhoto {
                                 clearHeroBackground(excluding: pendingPhotos[index].relativePath)
                             }
                         }
                     ),
                     imageData: pendingPhotos[index].data,
-                    allowsBenefits: category?.templateKey == "theater"
+                    allowsBenefits: allowsBenefitPhotos
                 )
             } else {
                 FavorecoContentUnavailableView("写真が見つかりません", systemImage: "photo")
@@ -852,10 +861,10 @@ struct PhotoUnitEditor: View {
             get: { existingMetadata(for: photo) },
             set: { metadata in
                 existingPhotoMetadata[photo.id] = metadata
-                if metadata.purpose != .memory, coverPhotoPath == photo.relativePath {
+                if !metadata.purpose.isGalleryPhoto, coverPhotoPath == photo.relativePath {
                     selectFallbackCover(excluding: photo.relativePath)
                 }
-                if metadata.purpose != .memory {
+                if !metadata.purpose.isGalleryPhoto {
                     clearHeroBackground(excluding: photo.relativePath)
                 }
             }
@@ -903,11 +912,11 @@ struct PhotoUnitEditor: View {
         guard coverPhotoPath == path else { return }
         coverPhotoPath = activeExistingPhotos
             .first(where: {
-                $0.relativePath != path && existingMetadata(for: $0).purpose == .memory
+                $0.relativePath != path && existingMetadata(for: $0).purpose.isGalleryPhoto
             })?
             .relativePath
             ?? pendingPhotos.first(where: {
-                $0.relativePath != path && $0.metadata.purpose == .memory
+                $0.relativePath != path && $0.metadata.purpose.isGalleryPhoto
             })?.relativePath
             ?? ""
     }
@@ -988,7 +997,7 @@ private struct PhotoMetadataEditor: View {
                             Text(purpose.title).tag(purpose)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                 }
 
                 Text(purposeDescription)
@@ -1009,7 +1018,7 @@ private struct PhotoMetadataEditor: View {
                     .foregroundStyle(.secondary)
             }
 
-            if metadata.purpose != .memory {
+            if !metadata.purpose.isGalleryPhoto {
                 Section {
                     DisclosureGroup(isExpanded: $isOCRSectionExpanded) {
                         Button {
@@ -1061,12 +1070,13 @@ private struct PhotoMetadataEditor: View {
                 }
             } else {
                 Section {
-                    Text("思い出写真はトップ背景や写真一覧に使用されます。OCR本文と金額は表示・集計しません。")
+                    Text("写真一覧に表示され、必要に応じてカバーやトップ背景にも指定できます。OCR本文と金額は表示・集計しません。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         }
+        .favorecoRegistrationFormCanvas()
         .onAppear {
             refreshSuggestions()
             isOCRSectionExpanded = !metadata.ocrText.isEmpty
@@ -1078,6 +1088,12 @@ private struct PhotoMetadataEditor: View {
         switch metadata.purpose {
         case .memory:
             return "通常の写真です。カバーやトップ背景にも指定できます。"
+        case .placeScenery:
+            return "施設、会場、館内、エリアや景色の写真です。"
+        case .experienceHighlight:
+            return "アトラクション、ショー、展示、作品、生き物などの写真です。"
+        case .food:
+            return "食事、ドリンク、スイーツの写真です。"
         case .ticket:
             return "チケット画像です。必要な場合だけ文字読み取りと金額を記録できます。"
         case .goods:

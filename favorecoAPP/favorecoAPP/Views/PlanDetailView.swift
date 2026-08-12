@@ -153,7 +153,7 @@ struct PlanDetailView: View {
 
     var body: some View {
         Group {
-            if isTheaterPlan, let visit = plan.visit, !showsRecordedPlanDetail {
+            if let visit = plan.visit, !showsRecordedPlanDetail {
                 ExperienceDetailView(visit: visit, onBack: onBack)
             } else if isTheaterPlan {
                 theaterDetailContent
@@ -161,22 +161,9 @@ struct PlanDetailView: View {
                 standardDetailContent
             }
         }
-        .navigationTitle(isTheaterPlan || onBack != nil ? "" : "予定・チケット")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(isTheaterPlan || onBack != nil ? .hidden : .visible, for: .navigationBar)
-        .toolbar {
-            if !isTheaterPlan, onBack == nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    FavorecoDetailActionMenuButton(
-                        isPresented: $isShowingActionMenu,
-                        genreColor: panelGenreColor,
-                        accentColor: categoryColor,
-                        size: 34,
-                        accessibilityLabel: "予定メニュー"
-                    )
-                }
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .overlay(alignment: .top) {
             if showsDetailPanelNavigationControls {
                 detailPanelNavigationControls
@@ -192,7 +179,7 @@ struct PlanDetailView: View {
             actions: planMenuActions
         )
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if onBack != nil, (!isTheaterPlan || plan.visit == nil) {
+            if onBack != nil, showsDetailPanelNavigationControls {
                 CategoryDetailBottomActionBar(
                     shareText: detailShareText,
                     tint: categoryColor,
@@ -261,40 +248,20 @@ struct PlanDetailView: View {
     }
 
     private var standardDetailContent: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    headerSection
-                    basicSection
-                    ticketSection
-                    expenseSection
-                    preparationSection
-                    officialSection
-                    memoSection
-                }
-                .padding(20)
-                .modifier(
-                    CategoryEmbeddedDetailCardModifier(
-                        isEnabled: onBack != nil,
-                        genreColor: panelGenreColor,
-                        borderColor: categoryColor
-                    )
-                )
-                .padding(.horizontal, onBack != nil ? 10 : 0)
-                .padding(.top, onBack != nil ? 74 : 0)
-            }
-            .task(id: detailScrollTargetID) {
-                guard let detailScrollTargetID else { return }
-                await Task.yield()
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    proxy.scrollTo(detailScrollTargetID, anchor: .center)
-                }
-            }
-        }
-        .background {
-            if onBack == nil {
-                Color(.systemGroupedBackground)
-            }
+        CategoryExperiencePage(
+            genreColor: panelGenreColor,
+            borderColor: categoryColor,
+            scrollTargetID: detailScrollTargetID,
+            showsScrollingFrame: onBack != nil
+        ) {
+            categoryPlanHero
+        } content: {
+            AnyView(basicSection)
+            AnyView(ticketSection)
+            AnyView(expenseSection)
+            AnyView(preparationSection)
+            AnyView(officialSection)
+            AnyView(memoSection)
         }
     }
 
@@ -362,12 +329,13 @@ struct PlanDetailView: View {
     }
 
     private var theaterDetailContent: some View {
-        TheaterExperiencePage(
+        CategoryExperiencePage(
             genreColor: theaterGenreColor,
+            borderColor: theaterAccentColor,
             scrollTargetID: detailScrollTargetID,
             showsScrollingFrame: onBack != nil
         ) {
-            theaterHero
+            categoryPlanHero
         } content: {
             theaterVenueMapSection
             theaterNextActionsSection
@@ -390,10 +358,7 @@ struct PlanDetailView: View {
     }
 
     private var showsDetailPanelNavigationControls: Bool {
-        if isTheaterPlan {
-            return plan.visit == nil || showsRecordedPlanDetail
-        }
-        return onBack != nil && plan.visit == nil
+        plan.visit == nil || showsRecordedPlanDetail
     }
 
     private var detailPanelNavigationControls: some View {
@@ -443,9 +408,9 @@ struct PlanDetailView: View {
         .safeAreaPadding(.top, onBack != nil ? 0 : 8)
     }
 
-    private var theaterHero: some View {
+    private var categoryPlanHero: some View {
         ZStack(alignment: .bottomLeading) {
-            theaterHeroBackground
+            planHeroBackground
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -455,7 +420,7 @@ struct PlanDetailView: View {
                                 .lineLimit(1)
                             Text("•")
                         }
-                        Text("観劇予定")
+                        Text(planStatusLabel)
                     }
                     .font(FavorecoTypography.captionStrong)
                     .foregroundStyle(.white.opacity(0.76))
@@ -495,12 +460,13 @@ struct PlanDetailView: View {
                 }
 
                 HStack(alignment: .top, spacing: 16) {
-                    TheaterPlanArtwork(
+                    PlanDetailArtwork(
                         event: plan.event,
                         fallbackSymbol: (plan.event?.category ?? plan.category)?.iconSymbol ?? "theatermasks.fill",
-                        tint: theaterAccentColor
+                        tint: categoryColor,
+                        usesGoldFrame: isTheaterPlan
                     )
-                    .frame(width: 140)
+                    .frame(width: isTheaterPlan ? 140 : 112)
 
                     VStack(alignment: .leading, spacing: 6) {
                         theaterHeroDateRow
@@ -514,7 +480,7 @@ struct PlanDetailView: View {
                         let styles = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "").styleNames
                         theaterHeroMetadataRow(
                             icon: "tag.fill",
-                            text: displayText(styles.joined(separator: "・")),
+                            text: displayText(planStyleText(styles: styles)),
                             tint: .white.opacity(0.86)
                         )
 
@@ -524,11 +490,13 @@ struct PlanDetailView: View {
                             tint: .white.opacity(0.86)
                         )
 
-                        theaterHeroMetadataRow(
-                            icon: "chair",
-                            text: displayText(theaterSeatText),
-                            tint: .white.opacity(0.86)
-                        )
+                        if ["theater", "live"].contains(planTemplateKey) {
+                            theaterHeroMetadataRow(
+                                icon: "chair",
+                                text: displayText(theaterSeatText),
+                                tint: .white.opacity(0.86)
+                            )
+                        }
 
                         theaterHeroMetadataRow(
                             icon: "star.fill",
@@ -543,6 +511,28 @@ struct PlanDetailView: View {
             .padding(.bottom, 20)
         }
         .frame(minHeight: 485, alignment: .bottom)
+    }
+
+    private var planTemplateKey: String {
+        (plan.event?.category ?? plan.category)?.templateKey ?? ""
+    }
+
+    private var planStatusLabel: String {
+        switch planTemplateKey {
+        case "theater": "観劇予定"
+        case "movie", "museum": "鑑賞予定"
+        case "live": "ライブ予定"
+        case "theme_park": "来園予定"
+        case "nature_living", "goshuin": "訪問予定"
+        case "book": "読書予定"
+        default: "予定"
+        }
+    }
+
+    private func planStyleText(styles: [String]) -> String {
+        if !styles.isEmpty { return styles.joined(separator: "・") }
+        let subtype = plan.event?.subTypeKey.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return subtype
     }
 
     private var theaterHeroEventLinkLabel: some View {
@@ -597,17 +587,18 @@ struct PlanDetailView: View {
         return lines.joined(separator: "\n")
     }
 
-    private var theaterHeroBackground: some View {
+    private var planHeroBackground: some View {
         GeometryReader { proxy in
             let fields = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "")
             let resourceName = HeroBackgroundPreset.resolved(
-                categoryKey: "theater",
+                categoryKey: planTemplateKey,
                 storedKey: fields.heroBackgroundPresetKey
-            )?.resourceName ?? "theater-hero-default"
-            let imageBandHeight = min(proxy.size.height * 0.78, 440)
+            )?.resourceName ?? "\(planTemplateKey)-hero-default"
+            let imageBandHeight = proxy.size.height
+            let genreColor = isTheaterPlan ? theaterGenreColor : panelGenreColor
 
             ZStack(alignment: .top) {
-                theaterGenreColor
+                genreColor
                 if let image = theaterHeroBackgroundImage(resourceName: resourceName) {
                     Image(uiImage: image)
                         .resizable()
@@ -616,7 +607,7 @@ struct PlanDetailView: View {
                         .clipped()
                 } else {
                     LinearGradient(
-                        colors: [theaterGenreColor.opacity(0.92), Color.black.opacity(0.72)],
+                        colors: [genreColor.opacity(0.92), Color.black.opacity(0.72)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -628,9 +619,9 @@ struct PlanDetailView: View {
                         .init(color: .black.opacity(0.42), location: 0.00),
                         .init(color: .black.opacity(0.14), location: 0.24),
                         .init(color: .clear, location: 0.48),
-                        .init(color: theaterGenreColor.opacity(0.18), location: 0.70),
-                        .init(color: theaterGenreColor.opacity(0.82), location: 0.92),
-                        .init(color: theaterGenreColor, location: 1.00),
+                        .init(color: genreColor.opacity(0.18), location: 0.70),
+                        .init(color: genreColor.opacity(0.82), location: 0.92),
+                        .init(color: genreColor, location: 1.00),
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -1192,7 +1183,7 @@ struct PlanDetailView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
         }
-        .planSectionCard()
+        .theaterDetailSectionCard(tint: categoryColor)
     }
 
     private var planStatusText: String {
@@ -1230,7 +1221,7 @@ struct PlanDetailView: View {
                 PlanInfoRow(icon: "building.2", title: "主催", value: plan.organizerNameSnapshot)
             }
         }
-        .planSectionCard()
+        .theaterDetailSectionCard(tint: categoryColor)
     }
 
     private var planAddress: String {
@@ -1274,7 +1265,7 @@ struct PlanDetailView: View {
                     .tint(categoryColor)
                 }
             }
-            .modifier(PlanOrTheaterSectionCard(isTheater: isTheaterPlan, tint: theaterAccentColor))
+            .modifier(PlanOrTheaterSectionCard(isTheater: isTheaterPlan, tint: categoryColor))
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
@@ -1336,7 +1327,7 @@ struct PlanDetailView: View {
                     }
                 }
             }
-            .modifier(PlanOrTheaterSectionCard(isTheater: isTheaterPlan, tint: theaterAccentColor))
+            .modifier(PlanOrTheaterSectionCard(isTheater: isTheaterPlan, tint: categoryColor))
         }
     }
 
@@ -1382,7 +1373,7 @@ struct PlanDetailView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .planSectionCard()
+            .theaterDetailSectionCard(tint: categoryColor)
         }
     }
 
@@ -1396,7 +1387,7 @@ struct PlanDetailView: View {
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .planSectionCard()
+            .theaterDetailSectionCard(tint: categoryColor)
         }
     }
 
@@ -1540,30 +1531,22 @@ private struct PlanTheaterCreditLine: Identifiable {
     let name: String?
 }
 
-private struct TheaterPlanArtwork: View {
+private struct PlanDetailArtwork: View {
     let event: ExperienceEvent?
     let fallbackSymbol: String
     let tint: Color
+    let usesGoldFrame: Bool
 
     var body: some View {
-        TheaterPosterArtwork(
-            reference: event.map { .event($0.id) },
-            backgroundColor: Color(.secondarySystemBackground)
-        ) { size in
-            if let event, let photo = EventRepresentativePhotoResolver.photo(for: event) {
-                RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fit)
-                    .frame(width: size.width, height: size.height)
-            } else {
-                ZStack {
-                    tint.opacity(0.18)
-                    FavorecoIcon(systemName: fallbackSymbol, size: 34)
-                        .foregroundStyle(tint)
-                }
-                .frame(width: size.width, height: size.height)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .theaterPosterFrame(tint: tint)
+        RecordDetailEyecatch(
+            event: event,
+            photo: event.flatMap { EventRepresentativePhotoResolver.photo(for: $0) },
+            aspectRatio: event.map { EyecatchAspectRatio.resolved(for: $0).value }
+                ?? EyecatchAspectRatio.bSeriesPoster.value,
+            fallbackSymbol: fallbackSymbol,
+            tint: tint,
+            usesGoldFrame: usesGoldFrame
+        )
     }
 }
 
@@ -1645,7 +1628,15 @@ private struct TicketAttemptDetailCard: View {
             }
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .foregroundStyle(Color(red: 0.97, green: 0.95, blue: 0.90))
+        .background(
+            Color.black.opacity(0.66),
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(accentColor.opacity(0.34), lineWidth: 0.7)
+        }
     }
 
     private var accountName: String? {
@@ -1820,7 +1811,19 @@ struct ExperienceExpenseSummaryCard: View {
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
                 } else if summary.usesLegacyFallback {
-                    expenseRow(icon: "yensign.circle", title: "記録済み合計", amount: summary.legacyAmount)
+                    if summary.legacyEntries.isEmpty {
+                        expenseRow(icon: "yensign.circle", title: "記録済み合計", amount: summary.legacyAmount)
+                    } else {
+                        ForEach(summary.legacyEntries) { entry in
+                            expenseRow(
+                                icon: "yensign.circle",
+                                title: entry.normalizedTitle.isEmpty ? "その他" : entry.normalizedTitle,
+                                amount: entry.normalizedAmount
+                            )
+                        }
+                        Divider()
+                        expenseRow(icon: "sum", title: "合計", amount: summary.legacyAmount)
+                    }
                 } else {
                     if summary.ticketAmount > 0 {
                         expenseRow(icon: "ticket", title: "チケット", amount: summary.ticketAmount)
@@ -1906,11 +1909,7 @@ private struct PlanOrTheaterSectionCard: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if isTheater {
-            content.theaterDetailSectionCard(tint: tint)
-        } else {
-            content.planSectionCard()
-        }
+        content.theaterDetailSectionCard(tint: tint)
     }
 }
 

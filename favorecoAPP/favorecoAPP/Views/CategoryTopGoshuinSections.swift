@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import MapKit
-import SwiftData
 
 enum GoshuinVisitFilter: String, CaseIterable, Identifiable {
     case all
@@ -398,12 +397,19 @@ struct GoshuinMapItem: Identifiable {
     let coordinate: CLLocationCoordinate2D
 }
 
+private struct GoshuinMapCoordinateRevision: Equatable {
+    let visitID: UUID
+    let visitLatitude: Double
+    let visitLongitude: Double
+    let placeID: UUID?
+    let placeLatitude: Double
+    let placeLongitude: Double
+}
+
 struct GoshuinMapPreview: View {
     let visits: [Visit]
-    @Environment(\.modelContext) private var modelContext
     @State private var selectedItemID: UUID?
     @State private var mapDestination: FavorecoMapDestination?
-    @State private var resolvedCoordinates: [UUID: CLLocationCoordinate2D] = [:]
     @State private var position: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
@@ -413,8 +419,7 @@ struct GoshuinMapPreview: View {
 
     private var items: [GoshuinMapItem] {
         visits.compactMap { visit in
-            let storedCoordinate = Self.storedCoordinate(for: visit)
-            guard let coordinate = storedCoordinate ?? resolvedCoordinates[visit.id],
+            guard let coordinate = Self.storedCoordinate(for: visit),
                   CLLocationCoordinate2DIsValid(coordinate),
                   coordinate.latitude.isFinite,
                   coordinate.longitude.isFinite else { return nil }
@@ -426,19 +431,18 @@ struct GoshuinMapPreview: View {
         }
     }
 
-    private var visitSignature: String {
+    private var coordinateRevision: [GoshuinMapCoordinateRevision] {
         visits.map { visit in
             let place = visit.placeMaster
-            return [
-                visit.id.uuidString,
-                visit.venueNameSnapshot,
-                String(visit.latitude),
-                String(visit.longitude),
-                place?.address ?? "",
-                String(place?.latitude ?? 0),
-                String(place?.longitude ?? 0),
-            ].joined(separator: "|")
-        }.joined(separator: ";")
+            return GoshuinMapCoordinateRevision(
+                visitID: visit.id,
+                visitLatitude: visit.latitude,
+                visitLongitude: visit.longitude,
+                placeID: place?.id,
+                placeLatitude: place?.latitude ?? 0,
+                placeLongitude: place?.longitude ?? 0
+            )
+        }
     }
 
     var body: some View {
@@ -476,7 +480,7 @@ struct GoshuinMapPreview: View {
             )
             selectedItemID = nil
         }
-        .onChange(of: visitSignature, initial: true) { _, _ in
+        .onChange(of: coordinateRevision, initial: true) { _, _ in
             selectedItemID = nil
             position = .region(Self.region(for: items))
         }
@@ -484,42 +488,7 @@ struct GoshuinMapPreview: View {
             selectedItemID = nil
             position = .region(Self.region(for: items))
         }
-        .task(id: visitSignature) {
-            await resolveMissingCoordinates()
-        }
         .favorecoMapDestinationDialog(destination: $mapDestination)
-    }
-
-    @MainActor
-    private func resolveMissingCoordinates() async {
-        var changedStoredData = false
-        for visit in visits where Self.storedCoordinate(for: visit) == nil {
-            let address = visit.placeMaster?.address ?? ""
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !address.isEmpty else { continue }
-            do {
-                let placemarks = try await CLGeocoder().geocodeAddressString(address)
-                guard let coordinate = placemarks.first?.location?.coordinate,
-                      CLLocationCoordinate2DIsValid(coordinate) else { continue }
-                resolvedCoordinates[visit.id] = coordinate
-                if let place = visit.placeMaster {
-                    place.latitude = coordinate.latitude
-                    place.longitude = coordinate.longitude
-                    place.updatedAt = Date()
-                } else {
-                    visit.latitude = coordinate.latitude
-                    visit.longitude = coordinate.longitude
-                    visit.updatedAt = Date()
-                }
-                changedStoredData = true
-            } catch {
-                continue
-            }
-        }
-        if changedStoredData {
-            try? modelContext.save()
-        }
-        position = .region(Self.region(for: items))
     }
 
     private static func storedCoordinate(for visit: Visit) -> CLLocationCoordinate2D? {

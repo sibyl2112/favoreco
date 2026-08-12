@@ -130,6 +130,7 @@ struct InboxDetailView: View {
                 }
             }
         }
+        .favorecoRegistrationFormCanvas()
         .navigationTitle("気になる")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isShowingConvertForm) {

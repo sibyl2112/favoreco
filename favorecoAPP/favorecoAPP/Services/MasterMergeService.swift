@@ -154,6 +154,11 @@ enum MasterMergeService {
             destination.pilgrimageMembershipsRaw,
             source.pilgrimageMembershipsRaw
         )
+        destination.templeSect = preferred(destination.templeSect, fallback: source.resolvedTempleSect)
+        destination.enshrinedDeities = mergedReligiousValues(
+            destination.resolvedEnshrinedDeities,
+            source.resolvedEnshrinedDeities
+        )
         destination.operationalStatusRaw = preferred(
             destination.operationalStatusRaw,
             fallback: source.operationalStatusRaw
@@ -166,6 +171,12 @@ enum MasterMergeService {
         source.isArchived = true
         source.updatedAt = now
         try context.save()
+    }
+
+    private static func mergedReligiousValues(_ current: [String], _ source: [String]) -> [String] {
+        source.reduce(into: current) { result, value in
+            if !result.contains(value) { result.append(value) }
+        }
     }
 
     @MainActor

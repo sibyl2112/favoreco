@@ -37,7 +37,7 @@ struct EventDetailSnapshot {
                 .filter {
                     $0.mediaKind == "photo"
                         && $0.hasStoredData
-                        && ExperiencePhotoPurpose.resolved(from: $0.purpose) == .memory
+                        && ExperiencePhotoPurpose.resolved(from: $0.purpose).isGalleryPhoto
                 }
                 .sorted { $0.createdAt < $1.createdAt }
                 .map { EventDetailMemoryPhoto(photo: $0, visit: visit) }

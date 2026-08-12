@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 import UIKit
+import Combine
 
 private func bundledHeroBackgroundImage(resourceName: String) -> UIImage? {
     if let image = UIImage(named: resourceName) { return image }
@@ -138,6 +139,7 @@ struct EventDetailView: View {
     @State private var selectedPlanID: UUID?
     @State private var actionErrorMessage: String?
     @State private var backSwipeExclusionFrames: [CGRect] = []
+    @State private var eyecatchRefreshVersion = 0
 
     private var category: RecordCategory? {
         event.category
@@ -225,6 +227,7 @@ struct EventDetailView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
         }
+        .id(eyecatchRefreshVersion)
         .ignoresSafeArea(edges: isTheater ? .top : [])
         .background {
             if isTheater {
@@ -285,6 +288,14 @@ struct EventDetailView: View {
         }
         .sheet(isPresented: $isShowingRepresentativePhotoPicker) {
             RepresentativePhotoPicker(event: event)
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: ThumbnailLoader.didInvalidateReferenceNotification
+            )
+        ) { notification in
+            guard ThumbnailLoader.invalidation(notification, matches: .event(event.id)) else { return }
+            eyecatchRefreshVersion += 1
         }
         .confirmationDialog(
             "予定の登録方法",
@@ -1140,6 +1151,7 @@ struct EditEventView: View {
     @State private var showingPerformanceBasic = true
     @State private var showingPerformanceDetails = false
     @State private var showingImportDetails = false
+    @State private var artworkCropDraft: ArtworkPhotoCropDraft?
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: event.category)
@@ -1184,6 +1196,19 @@ struct EditEventView: View {
                             }
                         } else {
                             eyecatchPreview(image)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    presentArtworkCrop(image)
+                                }
+                            Button {
+                                presentArtworkCrop(image)
+                            } label: {
+                                FavorecoIconLabel(
+                                    "位置とサイズを調整",
+                                    systemImage: "crop",
+                                    iconSize: 16
+                                )
+                            }
                             Button("画像を外す", role: .destructive) {
                                 self.eyecatchData = nil
                             }
@@ -1421,6 +1446,7 @@ struct EditEventView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle(
                 event.category?.templateKey == "theater"
@@ -1461,7 +1487,23 @@ struct EditEventView: View {
             } message: {
                 Text("保存すると、この公演のビジュアルが削除されます。")
             }
+            .fullScreenCover(item: $artworkCropDraft) { cropDraft in
+                ArtworkImageCropView(
+                    image: cropDraft.image,
+                    aspectRatio: cropDraft.aspectRatio
+                ) { adjustedData in
+                    eyecatchData = adjustedData
+                }
+            }
         }
+    }
+
+    private func presentArtworkCrop(_ image: UIImage) {
+        guard event.category?.templateKey != "theater" else { return }
+        artworkCropDraft = ArtworkPhotoCropDraft(
+            image: image,
+            aspectRatio: CGFloat(selectedEyecatchAspectRatio.value)
+        )
     }
 
     @MainActor
@@ -1575,8 +1617,8 @@ struct EditEventView: View {
         unitFields.heroBackgroundPresetKey = draft.heroBackgroundPresetKey
         event.memo = draft.trimmedMemo
         event.importMemo = draft.trimmedImportMemo
+        let didChangeEyecatch = event.eyecatchData != eyecatchData
         event.eyecatchData = eyecatchData
-        ThumbnailLoader.purge()
         if event.category?.templateKey == "book" {
             unitFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
             unitFields.bookSeriesName = draft.trimmedBookSeriesName
@@ -1590,6 +1632,9 @@ struct EditEventView: View {
 
         do {
             try modelContext.save()
+            if didChangeEyecatch {
+                ThumbnailLoader.purge(reference: .event(event.id))
+            }
             dismiss()
         } catch {
             modelContext.rollback()

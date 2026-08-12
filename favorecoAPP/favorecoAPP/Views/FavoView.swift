@@ -1,6 +1,5 @@
 import SwiftData
 import SwiftUI
-import UIKit
 
 struct FavoView: View {
     @Environment(\.favorecoThemePalette) private var themePalette
@@ -806,8 +805,12 @@ private struct FavoPinnedTargetDetailView: View {
                     subtitle: snapshot.subtitle,
                     kindLabel: snapshot.kind.displayName,
                     colorHex: snapshot.colorHex,
-                    profile: profile,
-                    fallbackImage: fallbackImage,
+                    heroReference: profile.map {
+                        .profileHero($0.id, fallback: targetThumbnailReference)
+                    } ?? targetThumbnailReference,
+                    iconReference: profile.map {
+                        .profileIcon($0.id, fallback: targetThumbnailReference)
+                    } ?? targetThumbnailReference,
                     fallbackSymbol: snapshot.iconSymbol
                 )
 
@@ -906,18 +909,6 @@ private struct FavoPinnedTargetDetailView: View {
         }
     }
 
-    private var fallbackImage: UIImage? {
-        switch snapshot.kind {
-        case .person:
-            if let data = pin.person?.imageData { return UIImage(data: data) }
-            return pin.person.flatMap { PersonImageStore.image(at: $0.imagePath) }
-        case .event:
-            return pin.event?.eyecatchData.flatMap(UIImage.init(data:))
-        case .place:
-            return nil
-        }
-    }
-
     private func formattedAmount(_ amount: Decimal) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -935,6 +926,17 @@ private struct FavoPinnedTargetDetailView: View {
     private var spendingAccessibilityLabel: String {
         guard snapshot.spendingBreakdown.hasRecordedSpending else { return "記録済み支出はありません" }
         return revealsRecordedSpending ? "記録済み支出と内訳を隠す" : "記録済み支出と内訳を表示"
+    }
+
+    private var targetThumbnailReference: ThumbnailReference? {
+        switch snapshot.kind {
+        case .person:
+            .person(snapshot.targetID)
+        case .event:
+            .event(snapshot.targetID)
+        case .place:
+            nil
+        }
     }
 }
 
@@ -1004,6 +1006,7 @@ private struct FavoCollectionDetailView: View {
         .navigationTitle(collection.title)
         .navigationBarTitleDisplayMode(.inline)
     }
+
 }
 
 private struct FavoPersonDetailView: View {
@@ -1023,8 +1026,14 @@ private struct FavoPersonDetailView: View {
                     subtitle: personHeroSubtitle,
                     kindLabel: "人物・団体",
                     colorHex: snapshot.colorHex,
-                    profile: profile,
-                    fallbackImage: personImage,
+                    heroReference: .profileHero(
+                        profile.id,
+                        fallback: .person(person.id)
+                    ),
+                    iconReference: .profileIcon(
+                        profile.id,
+                        fallback: .person(person.id)
+                    ),
                     fallbackSymbol: "person.fill"
                 )
 
@@ -1096,11 +1105,6 @@ private struct FavoPersonDetailView: View {
                 }
             }
         }
-    }
-
-    private var personImage: UIImage? {
-        if let data = person.imageData { return UIImage(data: data) }
-        return PersonImageStore.image(at: person.imagePath)
     }
 
     private var personHeroSubtitle: String {
@@ -1722,60 +1726,13 @@ private struct FavoFrequentPlaceRow: View {
     }
 }
 
-private struct FavoAvatar: View {
-    let person: PersonMaster
-    let profile: FavoriteProfile
-    let size: CGFloat
-
-    var body: some View {
-        Group {
-            if let image = personImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: profile.colorHex), Color(hex: profile.colorHex).opacity(0.58)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    FavorecoIcon(
-                        systemName: PersonActivityTags.icon(for: person.roleTagsRaw, isFavorite: true),
-                        size: size * 0.36
-                    )
-                        .foregroundStyle(.white)
-                }
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(.white.opacity(0.7), lineWidth: 2))
-        .shadow(color: Color(hex: profile.colorHex).opacity(0.22), radius: 8, y: 4)
-        .accessibilityLabel(person.displayName)
-    }
-
-    private var personImage: UIImage? {
-        if let iconData = profile.iconImageData, let image = UIImage(data: iconData) {
-            return image
-        }
-        if let imageData = person.imageData, let image = UIImage(data: imageData) {
-            return image
-        }
-        return PersonImageStore.image(at: person.imagePath)
-    }
-}
-
 private struct FavoProfileHero: View {
     let title: String
     let subtitle: String
     let kindLabel: String
     let colorHex: String
-    let profile: FavoriteProfile?
-    let fallbackImage: UIImage?
+    let heroReference: ThumbnailReference?
+    let iconReference: ThumbnailReference?
     let fallbackSymbol: String
 
     var body: some View {
@@ -1818,11 +1775,11 @@ private struct FavoProfileHero: View {
 
     @ViewBuilder
     private var heroBackground: some View {
-        if let data = profile?.heroImageData, let image = UIImage(data: data) {
-            Image(uiImage: image).resizable().scaledToFill()
-        } else if let fallbackImage {
-            Image(uiImage: fallbackImage).resizable().scaledToFill()
-        } else {
+        ThumbnailImage(
+            reference: heroReference,
+            displaySize: CGSize(width: 720, height: 450),
+            contentMode: .fill
+        ) {
             LinearGradient(
                 colors: [Color(hex: colorHex), Color(hex: colorHex).opacity(0.42)],
                 startPoint: .topLeading,
@@ -1837,17 +1794,15 @@ private struct FavoProfileHero: View {
 
     @ViewBuilder
     private var icon: some View {
-        Group {
-            if let data = profile?.iconImageData, let image = UIImage(data: data) {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else if let fallbackImage {
-                Image(uiImage: fallbackImage).resizable().scaledToFill()
-            } else {
-                ZStack {
-                    Color(hex: colorHex)
-                    FavorecoIcon(systemName: fallbackSymbol, size: 24)
-                        .foregroundStyle(.white)
-                }
+        ThumbnailImage(
+            reference: iconReference,
+            displaySize: CGSize(width: 66, height: 66),
+            contentMode: .fill
+        ) {
+            ZStack {
+                Color(hex: colorHex)
+                FavorecoIcon(systemName: fallbackSymbol, size: 24)
+                    .foregroundStyle(.white)
             }
         }
         .frame(width: 66, height: 66)

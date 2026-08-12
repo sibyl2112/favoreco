@@ -12,6 +12,7 @@ import UIKit
 import ImageIO
 import SwiftData
 import SwiftUI
+import Combine
 
 struct ThumbnailReference: Hashable, Sendable {
     enum Source: String, Hashable, Sendable {
@@ -21,6 +22,7 @@ struct ThumbnailReference: Hashable, Sendable {
         case person
         case profileIcon
         case profileHero
+        case collectibleItem
     }
 
     let source: Source
@@ -47,14 +49,56 @@ struct ThumbnailReference: Hashable, Sendable {
             fallbackID: fallback?.id
         )
     }
-    static func profileHero(_ id: UUID) -> Self { Self(source: .profileHero, id: id) }
+    static func profileHero(_ id: UUID, fallback: ThumbnailReference? = nil) -> Self {
+        Self(
+            source: .profileHero,
+            id: id,
+            fallbackSource: fallback?.source,
+            fallbackID: fallback?.id
+        )
+    }
+    static func collectibleItem(_ id: UUID) -> Self { Self(source: .collectibleItem, id: id) }
 }
 
 nonisolated private final class ThumbnailCache: @unchecked Sendable {
     let images = NSCache<NSString, UIImage>()
+    private let lock = NSLock()
+    private var keys: Set<String> = []
+
+    func store(_ image: UIImage, forKey key: String, cost: Int? = nil) {
+        lock.lock()
+        keys.insert(key)
+        if let cost {
+            images.setObject(image, forKey: key as NSString, cost: cost)
+        } else {
+            images.setObject(image, forKey: key as NSString)
+        }
+        lock.unlock()
+    }
+
+    func removeAll() {
+        lock.lock()
+        keys.removeAll()
+        lock.unlock()
+        images.removeAllObjects()
+    }
+
+    func removeKeys(withPrefix prefix: String) {
+        lock.lock()
+        let matchedKeys = keys.filter { $0.hasPrefix(prefix) }
+        keys.subtract(matchedKeys)
+        for key in matchedKeys {
+            images.removeObject(forKey: key as NSString)
+        }
+        lock.unlock()
+    }
 }
 
 enum ThumbnailLoader {
+    nonisolated static let didInvalidateReferenceNotification = Notification.Name(
+        "favoreco.thumbnail-reference-invalidated"
+    )
+
     /// NSCache はスレッドセーフ（複数スレッドからの set/object/remove を内部で同期）。
     /// そのため本ローダは actor でなくても競合しない。static let の初期化も一度だけ（スレッド安全）。
     /// メモリ警告時は NSCache が自動で退避するが、明示的にも全消去する。
@@ -67,14 +111,33 @@ enum ThumbnailLoader {
             object: nil,
             queue: .main
         ) { _ in
-            cache.images.removeAllObjects()
+            cache.removeAll()
         }
         return cache
     }()
 
     /// キャッシュを全消去する（メモリ警告時などに呼ぶ）。
     nonisolated static func purge() {
-        cache.images.removeAllObjects()
+        cache.removeAll()
+    }
+
+    /// 1対象のアイキャッチ変更時は、その対象から生成したサムネイルだけを破棄する。
+    /// 一覧全体のキャッシュを消すと、保存直後に全カードの再生成が集中するため避ける。
+    nonisolated static func purge(reference: ThumbnailReference) {
+        cache.removeKeys(withPrefix: "\(reference.source.rawValue)-\(reference.id.uuidString)")
+        NotificationCenter.default.post(
+            name: didInvalidateReferenceNotification,
+            object: nil,
+            userInfo: [
+                "source": reference.source.rawValue,
+                "id": reference.id.uuidString,
+            ]
+        )
+    }
+
+    nonisolated static func invalidation(_ notification: Notification, matches reference: ThumbnailReference) -> Bool {
+        notification.userInfo?["source"] as? String == reference.source.rawValue
+            && notification.userInfo?["id"] as? String == reference.id.uuidString
     }
 
     /// キャッシュ済みサムネイルを即時取得（どのスレッドからも安全）。
@@ -86,7 +149,7 @@ enum ThumbnailLoader {
         let pixelCost = Int(image.size.width * image.scale)
             * Int(image.size.height * image.scale)
             * 4
-        cache.images.setObject(image, forKey: key as NSString, cost: pixelCost)
+        cache.store(image, forKey: key, cost: pixelCost)
     }
 
     nonisolated static func cacheKey(
@@ -131,7 +194,7 @@ enum ThumbnailLoader {
         }
 
         if let image = resolved.image {
-            cache.images.setObject(image, forKey: key as NSString)
+            cache.store(image, forKey: key)
             return image
         }
         guard let data = resolved.data else { return nil }
@@ -186,6 +249,10 @@ enum ThumbnailLoader {
             var descriptor = FetchDescriptor<FavoriteProfile>(predicate: #Predicate { $0.id == id })
             descriptor.fetchLimit = 1
             return ((try? modelContext.fetch(descriptor).first?.heroImageData) ?? nil, nil)
+        case .collectibleItem:
+            var descriptor = FetchDescriptor<CollectibleItem>(predicate: #Predicate { $0.id == id })
+            descriptor.fetchLimit = 1
+            return ((try? modelContext.fetch(descriptor).first?.imageData) ?? nil, nil)
         }
     }
 
@@ -210,7 +277,7 @@ enum ThumbnailLoader {
             return nil
         }
         let image = UIImage(cgImage: cgImage)
-        cache.images.setObject(image, forKey: cacheKey as NSString)
+        cache.store(image, forKey: cacheKey)
         return image
     }
 }
@@ -222,11 +289,13 @@ enum CategoryDefaultArtwork {
             return "theater-hero-venue-v2"
         case "goshuin":
             return "goshuin-hero-bright-shrine"
+        case "nature_living":
+            return "nature_living-hero-zoo"
         case "movie", "book", "museum", "live", "sake", "theme_park",
-             "nature_living", "outing_facility", "random_goods":
+             "outing_facility", "random_goods":
             return "\(templateKey)-hero-default"
         default:
-            return "nature_living-hero-default"
+            return "nature_living-hero-zoo"
         }
     }
 }
@@ -305,6 +374,7 @@ struct ThumbnailImage<Placeholder: View>: View {
     @Environment(\.displayScale) private var displayScale
     @Environment(\.modelContext) private var modelContext
     @State private var image: UIImage?
+    @State private var reloadVersion = 0
 
     init(
         reference: ThumbnailReference?,
@@ -320,11 +390,12 @@ struct ThumbnailImage<Placeholder: View>: View {
 
     private var taskID: String? {
         reference.map {
-            ThumbnailLoader.cacheKey(
+            let key = ThumbnailLoader.cacheKey(
                 reference: $0,
                 displaySize: displaySize,
                 displayScale: displayScale
             )
+            return "\(key)-reload:\(reloadVersion)"
         }
     }
 
@@ -351,6 +422,16 @@ struct ThumbnailImage<Placeholder: View>: View {
             )
             guard !Task.isCancelled, self.reference == reference else { return }
             image = loaded
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: ThumbnailLoader.didInvalidateReferenceNotification
+            )
+        ) { notification in
+            guard let reference,
+                  ThumbnailLoader.invalidation(notification, matches: reference) else { return }
+            image = nil
+            reloadVersion += 1
         }
     }
 }

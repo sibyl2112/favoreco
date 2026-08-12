@@ -127,6 +127,24 @@ enum PublicPlaceCatalogImporter {
         }
     }
 
+    @discardableResult
+    static func applyCatalogDetails(
+        from entry: PublicPlaceCatalogEntry,
+        to place: PlaceMaster
+    ) -> Bool {
+        var changed = false
+        if place.templeSect.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !entry.templeSect.isEmpty {
+            place.templeSect = entry.templeSect
+            changed = true
+        }
+        if place.enshrinedDeities.isEmpty, !entry.enshrinedDeities.isEmpty {
+            place.enshrinedDeities = entry.enshrinedDeities
+            changed = true
+        }
+        return changed
+    }
+
     static func matchingPlace(
         for selection: PublicPlaceSelectionDraft,
         in places: [PlaceMaster]
@@ -145,6 +163,9 @@ enum PublicPlaceCatalogImporter {
         now: Date = Date()
     ) -> PlaceMaster {
         if let existing = matchingPlace(for: selection, in: existingPlaces) {
+            if applyCatalogDetails(from: selection.entry, to: existing) {
+                existing.updatedAt = now
+            }
             return existing
         }
         let place = makePlaceMaster(from: selection.entry, now: now)
@@ -160,6 +181,15 @@ enum PublicPlaceCatalogImporter {
         now: Date = Date()
     ) throws -> PlaceMaster {
         if let existing = matchingPlace(for: entry, in: existingPlaces) {
+            if applyCatalogDetails(from: entry, to: existing) {
+                existing.updatedAt = now
+                do {
+                    try modelContext.save()
+                } catch {
+                    modelContext.rollback()
+                    throw error
+                }
+            }
             return existing
         }
         let place = makePlaceMaster(from: entry, now: now)
@@ -174,12 +204,7 @@ enum PublicPlaceCatalogImporter {
     }
 
     static func makePlaceMaster(from entry: PublicPlaceCatalogEntry, now: Date = Date()) -> PlaceMaster {
-        var memoParts: [String] = []
-        if !entry.templeSect.isEmpty { memoParts.append("宗派: \(entry.templeSect)") }
-        if !entry.enshrinedDeities.isEmpty {
-            memoParts.append("御祭神: \(entry.enshrinedDeities.joined(separator: "、"))")
-        }
-        return PlaceMaster(
+        let place = PlaceMaster(
             name: entry.officialName,
             reading: entry.reading,
             aliasesRaw: entry.aliases.joined(separator: ","),
@@ -189,15 +214,17 @@ enum PublicPlaceCatalogImporter {
             latitude: entry.latitude,
             longitude: entry.longitude,
             officialURL: entry.officialURL,
-            memo: memoParts.joined(separator: "\n"),
             sourceSnapshotRaw: sourceMarker(for: entry.id),
             pilgrimageMembershipsRaw: PlacePilgrimageMembership.encode(entry.pilgrimageMemberships),
+            templeSect: entry.templeSect,
             operationalStatusRaw: entry.operationalStatusRaw,
             normalizedName: normalizedPlaceText(entry.officialName),
             normalizedAddress: normalizedPlaceText(entry.address),
             createdAt: now,
             updatedAt: now
         )
+        place.enshrinedDeities = entry.enshrinedDeities
+        return place
     }
 }
 

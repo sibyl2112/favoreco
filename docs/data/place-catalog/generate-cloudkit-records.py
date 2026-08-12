@@ -16,6 +16,7 @@ READING_EVIDENCE_METHODS = {
     "official_name_normalization",
     "official_brand_transliteration",
 }
+RELIGIOUS_DETAILS_RELEASE_DATE = "2026-08-10"
 
 
 def read_rows(name: str) -> list[dict[str, str]]:
@@ -39,6 +40,13 @@ def iso_date(value: str) -> str:
     if not value.strip():
         raise ValueError("verifiedAt is required for published records")
     return f"{value.strip()}T00:00:00Z"
+
+
+def public_updated_at(place: dict[str, str], detail: dict[str, str]) -> str:
+    dates = [place["verifiedAt"].strip()]
+    if detail.get("templeSect", "").strip() or detail.get("enshrinedDeities", "").strip():
+        dates.append(RELIGIOUS_DETAILS_RELEASE_DATE)
+    return iso_date(max(dates))
 
 
 def main() -> None:
@@ -127,7 +135,7 @@ def main() -> None:
                 "pilgrimageMembershipsJSON": json.dumps(
                     pilgrimage, ensure_ascii=False, separators=(",", ":")
                 ),
-                "updatedAt": iso_date(row["verifiedAt"]),
+                "updatedAt": public_updated_at(row, detail),
                 "isPublished": True,
                 "isDeleted": False,
             },

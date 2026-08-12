@@ -236,6 +236,12 @@ struct FavoSnapshot {
         }, by: \.0)
         .mapValues { $0.map(\.1) }
         let visitsByID = Dictionary(uniqueKeysWithValues: visibleVisits.map { ($0.id, $0) })
+        let photoCountByVisitID = Dictionary(uniqueKeysWithValues: visibleVisits.map { visit in
+            let count = (visit.photos ?? []).lazy.filter {
+                $0.mediaKind == "photo" && $0.hasStoredData
+            }.count
+            return (visit.id, count)
+        })
         let visitsByEventID = Dictionary(grouping: visibleVisits.compactMap { visit in
             visit.event.map { ($0.id, visit) }
         }, by: \.0)
@@ -286,11 +292,10 @@ struct FavoSnapshot {
                 upcomingPlanIDs: relatedPlans.map(\.id),
                 categorySummaries: Self.categorySummaries(for: relatedVisits),
                 frequentPlaces: Self.frequentPlaces(for: relatedVisits),
-                photoCount: relatedVisits.reduce(0) { partialResult, visit in
-                    partialResult + (visit.photos ?? []).filter {
-                        $0.mediaKind == "photo" && $0.hasStoredData
-                    }.count
-                },
+                photoCount: Self.photoCount(
+                    in: relatedVisits,
+                    photoCountByVisitID: photoCountByVisitID
+                ),
                 spendingBreakdown: FavoSpendingBreakdown.make(visits: relatedVisits)
             )
         }
@@ -359,7 +364,10 @@ struct FavoSnapshot {
                         } ?? .person(person.id),
                         visitIDs: relatedVisits.map(\.id),
                         upcomingPlanIDs: relatedPlans.map(\.id),
-                        photoCount: Self.photoCount(in: relatedVisits),
+                        photoCount: Self.photoCount(
+                            in: relatedVisits,
+                            photoCountByVisitID: photoCountByVisitID
+                        ),
                         spendingBreakdown: favorite?.spendingBreakdown ?? FavoSpendingBreakdown.make(visits: relatedVisits),
                         personSnapshot: favorite
                     )
@@ -384,7 +392,10 @@ struct FavoSnapshot {
                         } ?? .event(event.id),
                         visitIDs: relatedVisits.map(\.id),
                         upcomingPlanIDs: relatedPlans.map(\.id),
-                        photoCount: Self.photoCount(in: relatedVisits),
+                        photoCount: Self.photoCount(
+                            in: relatedVisits,
+                            photoCountByVisitID: photoCountByVisitID
+                        ),
                         spendingBreakdown: FavoSpendingBreakdown.make(visits: relatedVisits),
                         personSnapshot: nil
                     )
@@ -409,7 +420,10 @@ struct FavoSnapshot {
                         thumbnailReference: targetProfile.map { .profileIcon($0.id) },
                         visitIDs: relatedVisits.map(\.id),
                         upcomingPlanIDs: relatedPlans.map(\.id),
-                        photoCount: Self.photoCount(in: relatedVisits),
+                        photoCount: Self.photoCount(
+                            in: relatedVisits,
+                            photoCountByVisitID: photoCountByVisitID
+                        ),
                         spendingBreakdown: FavoSpendingBreakdown.make(visits: relatedVisits),
                         personSnapshot: nil
                     )
@@ -421,7 +435,11 @@ struct FavoSnapshot {
             favorites: favorites,
             pinnedTargets: Array(pinnedTargets),
             stories: Self.stories(for: visibleVisits, now: now),
-            collections: Self.collections(for: visibleVisits, now: now),
+            collections: Self.collections(
+                for: visibleVisits,
+                photoCountByVisitID: photoCountByVisitID,
+                now: now
+            ),
             visibleVisitCount: visibleVisits.count,
             activePeopleCount: activePeople.count,
             activePlaceCount: activePlaceCount
@@ -477,19 +495,17 @@ struct FavoSnapshot {
         return stories
     }
 
-    private static func collections(for visits: [Visit], now: Date) -> [FavoCollectionSummary] {
+    private static func collections(
+        for visits: [Visit],
+        photoCountByVisitID: [UUID: Int],
+        now: Date
+    ) -> [FavoCollectionSummary] {
         guard !visits.isEmpty else { return [] }
 
         var summaries: [FavoCollectionSummary] = []
-        let photoVisits = visits.filter { visit in
-            (visit.photos ?? []).contains {
-                $0.mediaKind == "photo" && $0.hasStoredData
-            }
-        }
+        let photoVisits = visits.filter { (photoCountByVisitID[$0.id] ?? 0) > 0 }
         let photoCount = photoVisits.reduce(0) { result, visit in
-            result + (visit.photos ?? []).filter {
-                $0.mediaKind == "photo" && $0.hasStoredData
-            }.count
+            result + (photoCountByVisitID[visit.id] ?? 0)
         }
         if photoCount > 0 {
             summaries.append(
@@ -570,11 +586,12 @@ struct FavoSnapshot {
             }
     }
 
-    private static func photoCount(in visits: [Visit]) -> Int {
+    private static func photoCount(
+        in visits: [Visit],
+        photoCountByVisitID: [UUID: Int]
+    ) -> Int {
         visits.reduce(0) { result, visit in
-            result + (visit.photos ?? []).filter {
-                $0.mediaKind == "photo" && $0.hasStoredData
-            }.count
+            result + (photoCountByVisitID[visit.id] ?? 0)
         }
     }
 

@@ -39,6 +39,7 @@ struct TicketAttendanceScheduleSheet: View {
                     TextField("会場（任意）", text: $venueName)
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .navigationTitle("参加日を設定")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

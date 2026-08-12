@@ -887,7 +887,7 @@ private struct GenreFormSettingItem: Identifiable {
             return [
                 fixed("basic", "参加日・会場", "鑑賞日、開演・終演、鑑賞方法、会場"),
                 fixed("theaterRating", "評価", "この回の満足度"),
-                configurable("ticketPlan", "鑑賞記録", "チケット状態、座席、お目当て・注目した人", ["ticketPlan", "people"]),
+                configurable("ticketPlan", "鑑賞記録", "チケット取得状況、座席、お目当て・注目した人", ["ticketPlan", "people"]),
                 configurable("photos", "写真・アイキャッチ", "この回のアイキャッチと観劇写真"),
                 fixed("memo", "感想・感情タグ", "感想、感情タグ、その他のタグ"),
                 configurable("money", "集計記録", "チケット代などの金額"),

@@ -341,7 +341,7 @@ struct TheaterEventMemoryGallerySection: View {
                 initialPhotoID: item.photo.id
             )
         } label: {
-            ZStack(alignment: .bottomLeading) {
+            ZStack {
                 if isExpanded {
                     RepresentativePhotoImage(photo: item.photo, maxPixelSize: 520, contentMode: .fit)
                         .frame(maxWidth: .infinity)
@@ -351,13 +351,33 @@ struct TheaterEventMemoryGallerySection: View {
                     TheaterEventGalleryPhoto(photo: item.photo, height: 132)
                 }
 
-                Text(FavorecoDateText.compactDate(item.visit.visitedAt))
-                    .font(FavorecoTypography.caption)
+                VStack(alignment: .leading, spacing: 0) {
+                    let purpose = ExperiencePhotoPurpose.resolved(from: item.photo.purpose)
+                    FavorecoIconLabel(
+                        purpose.title,
+                        systemImage: purpose.systemImage,
+                        iconSize: 9,
+                        spacing: 3
+                    )
+                    .font(.system(size: 8, weight: .semibold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 5)
-                    .background(.black.opacity(0.58), in: Capsule())
-                    .padding(6)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.62)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.66), in: Capsule())
+
+                    Spacer(minLength: 0)
+
+                    Text(FavorecoDateText.compactDate(item.visit.visitedAt))
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.58), in: Capsule())
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .padding(6)
             }
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
@@ -381,7 +401,7 @@ private struct TheaterEventParticipationRow: View {
             .filter {
                 $0.mediaKind == "photo"
                     && $0.hasStoredData
-                    && ExperiencePhotoPurpose.resolved(from: $0.purpose) == .memory
+                    && ExperiencePhotoPurpose.resolved(from: $0.purpose).isGalleryPhoto
             }
             .sorted { $0.createdAt < $1.createdAt }
         if !visit.eyecatchPath.isEmpty,

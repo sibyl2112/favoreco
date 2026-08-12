@@ -34,7 +34,7 @@ final class FavoGalleryReferenceTests: XCTestCase {
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<FavoGalleryPhoto>()), 0)
     }
 
-    func testSchemaTwelveBackupContainsSourceReferenceAndFallbackImage() throws {
+    func testCurrentSchemaBackupContainsSourceReferenceAndFallbackImage() throws {
         let models = makeReferencedGalleryModels()
         let json = try JSONBackupExportService.makeBackupJSON(
             categories: [],
@@ -61,7 +61,7 @@ final class FavoGalleryReferenceTests: XCTestCase {
         let envelope = try decoder.decode(FavorecoBackupEnvelope.self, from: data)
         let backupPhoto = try XCTUnwrap(envelope.favoGalleryPhotos?.first)
 
-        XCTAssertEqual(envelope.schemaVersion, 14)
+        XCTAssertEqual(envelope.schemaVersion, JSONBackupExportService.schemaVersion)
         XCTAssertEqual(backupPhoto.sourcePhotoID, models.sourcePhoto.id)
         let fallbackData = try XCTUnwrap(Data(base64Encoded: backupPhoto.dataBase64))
         XCTAssertEqual(fallbackData, models.sourcePhoto.data)

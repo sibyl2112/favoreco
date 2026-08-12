@@ -571,6 +571,7 @@ private struct PlanPreparationTaskEditor: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .navigationTitle(task == nil ? "準備項目を追加" : "準備項目を編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

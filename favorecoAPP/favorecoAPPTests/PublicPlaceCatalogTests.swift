@@ -62,7 +62,7 @@ final class PublicPlaceCatalogTests: XCTestCase {
         XCTAssertEqual(decoded.entries.first?.sourceURL, "https://example.org/evidence")
     }
 
-    func testImporterPreservesCatalogFieldsWithoutAddingSwiftDataSchema() {
+    func testImporterPreservesCatalogFieldsInStructuredPlaceFields() {
         let entry = PublicPlaceCatalogEntry(
             id: "shrine-1",
             catalogID: "religious",
@@ -99,8 +99,51 @@ final class PublicPlaceCatalogTests: XCTestCase {
         XCTAssertEqual(place.prefecture, "東京都")
         XCTAssertEqual(place.placeTagsRaw, "shrine,pilgrimage_site")
         XCTAssertEqual(place.sourceSnapshotRaw, "favoreco.public-place-catalog:shrine-1")
-        XCTAssertTrue(place.memo.contains("天照大神、須佐之男命"))
+        XCTAssertEqual(place.templeSect, "")
+        XCTAssertEqual(place.enshrinedDeities, ["天照大神", "須佐之男命"])
+        XCTAssertTrue(place.memo.isEmpty)
         XCTAssertEqual(PlacePilgrimageMembership.decode(place.pilgrimageMembershipsRaw).first?.siteNumber, 4)
+    }
+
+    func testLegacyMemoReligiousDetailsRemainReadable() {
+        let temple = PlaceMaster(memo: "利用者メモ\n宗派: 曹洞宗")
+        let shrine = PlaceMaster(memo: "御祭神: 天照大神、須佐之男命\n利用者メモ")
+
+        XCTAssertEqual(temple.resolvedTempleSect, "曹洞宗")
+        XCTAssertEqual(shrine.resolvedEnshrinedDeities, ["天照大神", "須佐之男命"])
+    }
+
+    func testCatalogDetailsFillOnlyBlankStructuredFields() {
+        let entry = PublicPlaceCatalogEntry(
+            id: "shrine-details",
+            catalogID: "religious",
+            parentPlaceID: "",
+            typeKeys: ["shrine"],
+            officialName: "試験神社",
+            reading: "",
+            aliases: [],
+            prefecture: "東京都",
+            municipality: "",
+            address: "東京都千代田区1-1",
+            latitude: 0,
+            longitude: 0,
+            officialURL: "",
+            sourceURL: "",
+            capacity: nil,
+            operationalStatusRaw: PlaceOperationalStatus.open.rawValue,
+            templeSect: "",
+            enshrinedDeities: ["天照大神"],
+            pilgrimageMemberships: [],
+            updatedAt: date(1)
+        )
+        let blank = PlaceMaster(name: "試験神社")
+        let edited = PlaceMaster(name: "試験神社")
+        edited.enshrinedDeities = ["利用者が編集した神名"]
+
+        XCTAssertTrue(PublicPlaceCatalogImporter.applyCatalogDetails(from: entry, to: blank))
+        XCTAssertEqual(blank.enshrinedDeities, ["天照大神"])
+        XCTAssertFalse(PublicPlaceCatalogImporter.applyCatalogDetails(from: entry, to: edited))
+        XCTAssertEqual(edited.enshrinedDeities, ["利用者が編集した神名"])
     }
 
     func testSuggestionsMatchReadingAliasAndAddressAndExcludeClosedForPlans() {

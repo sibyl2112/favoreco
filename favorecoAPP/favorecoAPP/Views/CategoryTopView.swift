@@ -10,6 +10,66 @@ import SwiftData
 import UIKit
 import MapKit
 
+enum CategoryPlanningHeroPolicy {
+    static let supportedTemplateKeys: Set<String> = [
+        "movie",
+        "live",
+        "museum",
+        "theme_park",
+        "nature_living",
+    ]
+
+    static func supports(_ templateKey: String) -> Bool {
+        supportedTemplateKeys.contains(templateKey)
+    }
+}
+
+@MainActor
+private final class CategoryTopResolutionCache {
+    private var visitIDs: [UUID] = []
+    private var visits: [Visit] = []
+    private var categoryID: UUID?
+    private var eventIDs: [UUID] = []
+    private var events: [ExperienceEvent] = []
+    private var eventsByID: [UUID: ExperienceEvent] = [:]
+
+    func resolvedVisits(snapshot: CategoryTopSnapshot, allVisits: [Visit]) -> [Visit] {
+        guard visitIDs != snapshot.visitIDs else { return visits }
+        let idSet = Set(snapshot.visitIDs)
+        visitIDs = snapshot.visitIDs
+        visits = allVisits.filter { idSet.contains($0.id) }
+        return visits
+    }
+
+    func resolvedEvents(
+        snapshot: CategoryTopSnapshot,
+        category: RecordCategory
+    ) -> [ExperienceEvent] {
+        let nextEventIDs = snapshot.events.map(\.id)
+        guard categoryID != category.id || eventIDs != nextEventIDs else { return events }
+        let categoryEventsByID = Dictionary(
+            (category.events ?? []).map { ($0.id, $0) },
+            uniquingKeysWith: { current, _ in current }
+        )
+        categoryID = category.id
+        eventIDs = nextEventIDs
+        events = nextEventIDs.compactMap { categoryEventsByID[$0] }
+        eventsByID = Dictionary(
+            events.map { ($0.id, $0) },
+            uniquingKeysWith: { current, _ in current }
+        )
+        return events
+    }
+
+    func resolvedEventsByID(
+        snapshot: CategoryTopSnapshot,
+        category: RecordCategory
+    ) -> [UUID: ExperienceEvent] {
+        _ = resolvedEvents(snapshot: snapshot, category: category)
+        return eventsByID
+    }
+}
+
 struct CategoryTopView: View {
     let category: RecordCategory
 
@@ -56,6 +116,7 @@ struct CategoryTopView: View {
     @State private var ticketDetailsPromptAttempt: TicketAttempt?
     @State private var ticketDetailsEditAttempt: TicketAttempt?
     @State private var ticketStatusUpdateError = ""
+    @State private var resolutionCache = CategoryTopResolutionCache()
 
     init(category: RecordCategory) {
         self.category = category
@@ -125,9 +186,7 @@ struct CategoryTopView: View {
                                     collectibleHero(category: activeCategory, snapshot: snapshot)
                                 } else if activeCategory.templateKey == "theater" {
                                     theaterTicketManagementSection(category: activeCategory)
-                                } else if isPlaceExperienceCategory(activeCategory) {
-                                    EmptyView()
-                                } else {
+                                } else if CategoryPlanningHeroPolicy.supports(activeCategory.templateKey) {
                                     categoryPriorityHero(category: activeCategory, snapshot: snapshot)
                                 }
                             }
@@ -397,7 +456,8 @@ struct CategoryTopView: View {
     }
 
     private func theaterHero(category: RecordCategory, snapshot: CategoryTopSnapshot) -> some View {
-        let featuredEvent = snapshot.events.first.flatMap { resolvedEvent(for: $0) }
+        let eventsByID = resolvedEventsByID(in: snapshot)
+        let featuredEvent = snapshot.events.first.flatMap { eventsByID[$0.id] }
 
         return HStack(alignment: .top, spacing: 16) {
             TheaterPosterView(event: featuredEvent, width: 118)
@@ -625,8 +685,9 @@ struct CategoryTopView: View {
                     message: "最初の記録を追加すると、ここから同じ公演に回を重ねられます。"
                 )
             } else {
+                let eventsByID = resolvedEventsByID(in: snapshot)
                 ForEach(snapshot.events.prefix(10)) { eventSnapshot in
-                    if let event = resolvedEvent(for: eventSnapshot) {
+                    if let event = eventsByID[eventSnapshot.id] {
                         TheaterEventRow(snapshot: eventSnapshot, event: event) {
                             selectedEventForNewVisit = event
                         }
@@ -1500,8 +1561,9 @@ struct CategoryTopView: View {
                     message: "最初の記録を追加すると、ここから同じ対象に回を重ねられます。"
                 )
             } else {
+                let eventsByID = resolvedEventsByID(in: snapshot)
                 ForEach(snapshot.events.prefix(10)) { eventSnapshot in
-                    if let event = resolvedEvent(for: eventSnapshot) {
+                    if let event = eventsByID[eventSnapshot.id] {
                         EventRow(snapshot: eventSnapshot, event: event) {
                             selectedEventForNewVisit = event
                         }
@@ -1526,6 +1588,7 @@ struct CategoryTopView: View {
         let showsPlaceExperienceSections = isPlaceExperienceCategory(category)
         let showsPlanningSections = ["theater", "live", "museum", "movie", "theme_park", "nature_living", "outing_facility"]
             .contains(category.templateKey)
+        let showsIntegratedPlanningHero = CategoryPlanningHeroPolicy.supports(category.templateKey)
         let separatesInterests = showsPlanningSections
         let showsBookSections = category.templateKey == "book"
         let showsVisitRecordLibrary = ["museum", "movie"].contains(category.templateKey)
@@ -1561,7 +1624,7 @@ struct CategoryTopView: View {
             ? facilityPlaceMasters(for: category)
             : []
         // 施設系は PlaceMaster を唯一の施設一覧にする。旧構造の ExperienceEvent は
-        // Interests / Coming Up / Log で扱い、施設情報へ重複表示しない。
+        // 統合Heroまたは専用の予定・気になる表示とLogで扱い、施設情報へ重複表示しない。
         let displayedProductionItems = showsPlaceExperienceSections ? [] : productionItems
         let productionCount = facilityPlaces.count + displayedProductionItems.count
         let tint: Color = switch category.templateKey {
@@ -1572,27 +1635,29 @@ struct CategoryTopView: View {
 
         return VStack(alignment: .leading, spacing: 12) {
             if showsPlaceExperienceSections {
-                if showsComingUp {
+                if showsComingUp && !showsIntegratedPlanningHero {
                     categoryComingUpSection(category: category)
 
                     Spacer()
                         .frame(height: 8)
                 }
 
-                categoryLibrarySubsection(
-                    title: "Interests",
-                    items: interestedItems,
-                    sectionKey: "interests",
-                    emptyIcon: "heart",
-                    emptyTitle: category.templateKey == "theme_park"
-                        ? "気になるパークはまだありません"
-                        : "気になる施設はまだありません",
-                    category: category,
-                    tint: tint
-                )
+                if !showsIntegratedPlanningHero {
+                    categoryLibrarySubsection(
+                        title: "Interests",
+                        items: interestedItems,
+                        sectionKey: "interests",
+                        emptyIcon: "heart",
+                        emptyTitle: category.templateKey == "theme_park"
+                            ? "気になるパークはまだありません"
+                            : "気になる施設はまだありません",
+                        category: category,
+                        tint: tint
+                    )
 
-                Spacer()
-                    .frame(height: 8)
+                    Spacer()
+                        .frame(height: 8)
+                }
 
                 placeExperienceLogSection(category: category, snapshot: snapshot)
 
@@ -1610,7 +1675,7 @@ struct CategoryTopView: View {
 
                 Spacer()
                     .frame(height: 8)
-            } else if separatesInterests {
+            } else if separatesInterests && !showsIntegratedPlanningHero {
                 categoryLibrarySubsection(
                     title: "Interests",
                     items: interestedItems,
@@ -1627,7 +1692,10 @@ struct CategoryTopView: View {
                     .frame(height: 8)
             }
 
-            if showsPlanningSections && showsComingUp && !showsPlaceExperienceSections {
+            if showsPlanningSections
+                && showsComingUp
+                && !showsPlaceExperienceSections
+                && !showsIntegratedPlanningHero {
                 categoryComingUpSection(category: category)
 
                 Spacer()
@@ -2005,11 +2073,8 @@ struct CategoryTopView: View {
         case "museum": "これから・気になる展示"
         case "live": "これから・気になるライブ"
         case "movie": "これから・気になる作品"
-        case "sake": "これから・気になるお酒"
-        case "theme_park": "来園予定"
+        case "theme_park": "これから・気になるパーク"
         case "nature_living": "これから・気になる自然・いきもの"
-        case "outing_facility": "これから・気になる場所"
-        case "book": "これから・気になる本"
         default: "これから・気になるもの"
         }
     }
@@ -2103,6 +2168,7 @@ struct CategoryTopView: View {
     ) -> [CategoryLibraryItem] {
         let now = Date()
         let categoryVisits = resolvedVisits(in: snapshot)
+        let eventsByID = resolvedEventsByID(in: snapshot, category: category)
         let visitsByEventID = Dictionary(grouping: categoryVisits) { $0.event?.id }
         let plansByEventID = Dictionary(grouping: allPlans.filter { plan in
             !plan.isArchived
@@ -2112,7 +2178,7 @@ struct CategoryTopView: View {
 
         let items: [CategoryLibraryItem] = snapshot.events.compactMap {
             eventSnapshot -> CategoryLibraryItem? in
-            guard let event = resolvedEvent(for: eventSnapshot) else { return nil }
+            guard let event = eventsByID[eventSnapshot.id] else { return nil }
             let eventID = eventSnapshot.id
             let latestVisit = visitsByEventID[eventID]?.max(by: { $0.visitedAt < $1.visitedAt })
             let eventPlans = plansByEventID[eventID] ?? []
@@ -2453,27 +2519,27 @@ struct CategoryTopView: View {
     }
 
     private func resolvedVisits(in snapshot: CategoryTopSnapshot) -> [Visit] {
-        let visitIDs = Set(snapshot.visitIDs)
-        return allVisits.filter { visitIDs.contains($0.id) }
+        resolutionCache.resolvedVisits(snapshot: snapshot, allVisits: allVisits)
     }
 
     private func resolvedEvents(
         in snapshot: CategoryTopSnapshot,
         category: RecordCategory? = nil
     ) -> [ExperienceEvent] {
-        let categoryEvents = (category ?? currentCategory).events ?? []
-        let eventsByID = Dictionary(
-            categoryEvents.map { ($0.id, $0) },
-            uniquingKeysWith: { current, _ in current }
+        resolutionCache.resolvedEvents(
+            snapshot: snapshot,
+            category: category ?? currentCategory
         )
-        return snapshot.events.compactMap { eventsByID[$0.id] }
     }
 
-    private func resolvedEvent(
-        for snapshot: CategoryEventSnapshot,
+    private func resolvedEventsByID(
+        in snapshot: CategoryTopSnapshot,
         category: RecordCategory? = nil
-    ) -> ExperienceEvent? {
-        ((category ?? currentCategory).events ?? []).first { $0.id == snapshot.id }
+    ) -> [UUID: ExperienceEvent] {
+        resolutionCache.resolvedEventsByID(
+            snapshot: snapshot,
+            category: category ?? currentCategory
+        )
     }
 
     private func switchCategory(to destination: RecordCategory) {
@@ -4320,30 +4386,31 @@ private struct CategoryLibraryItem: Identifiable {
         if event.screenWorkType == .movie {
             return FavorecoDateText.compactDateWithHalfWidthWeekday(displayDate)
         }
-        if event.screenWorkType == .anime {
-            return screenWorkAnimeSeasonText(for: displayDate)
+        if event.screenWorkType != .movie {
+            return screenWorkBroadcastSeasonText(for: displayDate)
         }
-        return "\(Calendar.current.component(.year, from: displayDate))年"
+        return "—"
     }
 
     var screenWorkBannerDateText: String {
         guard let displayDate else { return "—" }
-        if event.screenWorkType == .anime {
-            return screenWorkAnimeSeasonText(for: displayDate)
+        if event.screenWorkType != .movie {
+            return screenWorkBroadcastSeasonText(for: displayDate)
         }
         return FavorecoDateText.compactDateWithHalfWidthWeekday(displayDate)
     }
 
-    private func screenWorkAnimeSeasonText(for date: Date) -> String {
+    private func screenWorkBroadcastSeasonText(for date: Date) -> String {
         let components = Calendar.current.dateComponents([.year, .month], from: date)
         guard let year = components.year, let month = components.month else { return "—" }
-        let season = switch month {
-        case 1...3: "冬アニメ"
-        case 4...6: "春アニメ"
-        case 7...9: "夏アニメ"
-        default: "秋アニメ"
+        let seasonName = switch month {
+        case 1...3: "冬"
+        case 4...6: "春"
+        case 7...9: "夏"
+        default: "秋"
         }
-        return "\(year)年 \(season)"
+        let typeName = event.screenWorkType == .drama ? "ドラマ" : "アニメ"
+        return "\(year)年 \(seasonName)\(typeName)"
     }
 
     var galleryDateColor: Color {

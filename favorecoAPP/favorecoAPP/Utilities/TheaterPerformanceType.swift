@@ -9,6 +9,38 @@ enum ExplicitFormMetrics {
     static let rowBottomPadding: CGFloat = 8
     static let controlTrailingPadding: CGFloat = 4
     static let rowSeparatorColor = Color.secondary.opacity(0.46)
+
+    /// ライトテーマの登録画面で、白い入力Sectionを判別しやすくする外側キャンバス。
+    static func canvasColor(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark
+            ? Color(.systemGroupedBackground)
+            : Color(red: 0.925, green: 0.925, blue: 0.945)
+    }
+
+    /// 入力カード外のグレー面に置く補足文。プレースホルダーより一段濃く見せる。
+    static func canvasSupportingTextColor(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? Color.secondary : Color.primary.opacity(0.62)
+    }
+}
+
+private struct FavorecoRegistrationFormCanvasModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .background(
+                ExplicitFormMetrics.canvasColor(for: colorScheme)
+                    .ignoresSafeArea()
+            )
+    }
+}
+
+extension View {
+    /// 登録・編集フォームの白い入力Sectionと外側背景の明度差を全画面で統一する。
+    func favorecoRegistrationFormCanvas() -> some View {
+        modifier(FavorecoRegistrationFormCanvasModifier())
+    }
 }
 
 struct FavorecoRegistrationSectionHeader: View {
@@ -258,6 +290,7 @@ struct ExplicitFormTextField: View {
     var labelStyle: LabelStyle = .stacked
     var inputFontSize: CGFloat = ExplicitFormMetrics.inputFontSize
     var reservesLineSpace = false
+    var showsInputBoundary = false
     var labelLineLimit = 1
     var labelNote = ""
     var focusesFromWholeRow = false
@@ -352,12 +385,25 @@ struct ExplicitFormTextField: View {
 
     @ViewBuilder
     private var inputField: some View {
-        if reservesLineSpace {
-            baseInputField
-                .lineLimit(maximumLines, reservesSpace: true)
-        } else {
-            baseInputField
-                .lineLimit(minimumLines...maximumLines)
+        Group {
+            if reservesLineSpace {
+                baseInputField
+                    .lineLimit(maximumLines, reservesSpace: true)
+            } else {
+                baseInputField
+                    .lineLimit(minimumLines...maximumLines)
+            }
+        }
+        .padding(showsInputBoundary ? 10 : 0)
+        .background {
+            if showsInputBoundary {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.secondary.opacity(0.055))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.secondary.opacity(0.24), lineWidth: 0.8)
+                    }
+            }
         }
     }
 

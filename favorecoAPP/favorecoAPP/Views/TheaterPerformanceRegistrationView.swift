@@ -45,6 +45,7 @@ struct TheaterPerformanceRegistrationView: View {
     @State private var showingNextActions = false
     @State private var showingEyecatchRemovalConfirmation = false
     @State private var savedEventForNextAction: ExperienceEvent?
+    @State private var isShowingRecurringEventCatalog = false
 
     private var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -57,6 +58,30 @@ struct TheaterPerformanceRegistrationView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Button {
+                        isShowingRecurringEventCatalog = true
+                    } label: {
+                        HStack(spacing: 9) {
+                            FavorecoIcon(systemName: "calendar.badge.clock", size: 17)
+                                .foregroundStyle(categoryTint)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("定期イベントカタログから入力")
+                                    .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                                Text("芸術祭・舞台芸術祭・野外音楽祭")
+                                    .font(FavorecoTypography.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Section {
                     DisclosureGroup(isExpanded: $showingImportDetails) {
                         ExplicitFormControlRow(title: "公式ページURL", isOptional: true) {
@@ -381,6 +406,20 @@ struct TheaterPerformanceRegistrationView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
+            .sheet(isPresented: $isShowingRecurringEventCatalog) {
+                PublicRecurringEventCatalogView(templateKey: category.templateKey) { entry, edition in
+                    title = entry.officialName
+                    officialURL = edition?.officialURL.isEmpty == false
+                        ? edition?.officialURL ?? entry.officialURL
+                        : entry.officialURL
+                    if let edition, edition.label != entry.officialName {
+                        eventSubtitle = edition.label
+                    }
+                    importStatus = "定期イベントカタログから入力しました。内容を確認して保存してください。"
+                    showingPerformanceBasic = true
+                }
+            }
             .environment(\.defaultMinListRowHeight, 48)
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle("公演を登録")
@@ -660,9 +699,10 @@ struct TheaterPerformanceRegistrationView: View {
         if !trimmedMemo.isEmpty {
             event.memo = trimmedMemo
         }
+        var didChangeEyecatch = false
         if let eyecatchData {
+            didChangeEyecatch = event.eyecatchData != eyecatchData
             event.eyecatchData = eyecatchData
-            ThumbnailLoader.purge()
         }
         let incomingVenues = normalizedVenueEntries
         if !incomingVenues.isEmpty {
@@ -676,6 +716,9 @@ struct TheaterPerformanceRegistrationView: View {
 
         do {
             try modelContext.save()
+            if didChangeEyecatch {
+                ThumbnailLoader.purge(reference: .event(event.id))
+            }
             switch nextStep {
             case .interest:
                 savedEventForNextAction = event

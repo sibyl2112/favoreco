@@ -165,6 +165,7 @@ struct TheaterUnifiedFormIntroduction: View {
 
 struct TheaterUnifiedSectionLabel: View {
     @Environment(\.favorecoThemePalette) private var themePalette
+    @Environment(\.colorScheme) private var colorScheme
     let section: TheaterUnifiedFormSection
 
     var body: some View {
@@ -175,7 +176,7 @@ struct TheaterUnifiedSectionLabel: View {
                     .foregroundStyle(themePalette.registrationSectionHeaderTint)
                 Text(section.summary)
                     .font(FavorecoTypography.jpSans(9.5, weight: .regular, relativeTo: .caption))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ExplicitFormMetrics.canvasSupportingTextColor(for: colorScheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }

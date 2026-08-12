@@ -351,6 +351,7 @@ enum RecordDeletionService {
         }
 
         UserDefaults.standard.set(false, forKey: AppStorageKeys.hasCompletedGenreOnboarding)
+        UserDefaults.standard.removeObject(forKey: AppStorageKeys.categoryPresetSeedVersion)
         SampleDataSeeder.resetAutomaticInsertionState()
         UserDefaults.standard.set(false, forKey: AppStorageKeys.hasMigratedLegacyFavoritesToFavoPins)
 

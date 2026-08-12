@@ -45,3 +45,36 @@ Favoreco が将来 CloudKit Public Database から配信する、定期開催イ
 - `eventSeriesID` が両CSVで参照整合していることを検証する
 - `announced` / `held` の開催回は公式一次情報の `sourceURL` を必須とする
 - 次回会期や名称変更が発表された場合は既存シリーズを複製せず、開催回を追加して更新する
+
+## 生成と配信
+
+```bash
+python3 docs/data/event-catalog/generate-cloudkit-records.py \
+  --output /tmp/public-recurring-events.ndjson
+```
+
+- CloudKit Public Database のレコードタイプは `PublicRecurringEvent`
+- 1シリーズを1レコードとし、開催回は `editionsJSON` にまとめる
+- `updatedAt` を使った差分取得に対応し、端末は取得済みJSONをオフラインキャッシュする
+- 非公開化は `isPublished=false`、削除同期は `isDeleted=true` の墓石レコードで行う
+
+Developmentへ同期する前に、入力件数と安定IDをローカル検証します。このコマンドはCloudKitを変更しません。
+
+```bash
+python3 docs/data/event-catalog/sync-cloudkit-development.py \
+  --input /tmp/public-recurring-events.ndjson
+```
+
+Apple Accountの利用者トークンを`cktool`へ保存した後、`--apply`を付けた時だけDevelopment Public Databaseへ同期します。
+
+```bash
+python3 docs/data/event-catalog/sync-cloudkit-development.py \
+  --input /tmp/public-recurring-events.ndjson \
+  --apply
+```
+
+- Productionは指定できず、常にDevelopmentだけを対象にする
+- `eventSeriesID`で既存レコードを照合し、同一内容は変更しない
+- 同一内容のレコードがある場合はその1件を残し、余分な重複だけ削除する
+- 内容変更時は新レコードの作成成功後に旧レコードを削除し、作成失敗による欠落を防ぐ
+- 入力に存在しないCloudKitレコードは自動削除せず、件数だけ報告する

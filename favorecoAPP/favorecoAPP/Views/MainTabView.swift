@@ -160,7 +160,9 @@ struct MainTabView: View {
                 }
                 .tag(MainTab.home)
 
-            FavoView()
+            DeferredTabContent(isActive: selectedTab == .records) {
+                FavoView()
+            }
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
                     Label {
@@ -181,12 +183,14 @@ struct MainTabView: View {
                 }
                 .tag(MainTab.create)
 
-            CalendarView(
-                displayMode: $calendarDisplayMode,
-                requestedPlanID: $pendingNotificationPlanID,
-                requestedAttemptID: $pendingNotificationAttemptID,
-                requestedPreparationTaskID: $pendingNotificationPreparationTaskID
-            )
+            DeferredTabContent(isActive: selectedTab == .calendar) {
+                CalendarView(
+                    displayMode: $calendarDisplayMode,
+                    requestedPlanID: $pendingNotificationPlanID,
+                    requestedAttemptID: $pendingNotificationAttemptID,
+                    requestedPreparationTaskID: $pendingNotificationPreparationTaskID
+                )
+            }
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
                     Label {
@@ -197,7 +201,9 @@ struct MainTabView: View {
                 }
                 .tag(MainTab.calendar)
 
-            StatsView(isActive: selectedTab == .stats)
+            DeferredTabContent(isActive: selectedTab == .stats) {
+                StatsView(isActive: selectedTab == .stats)
+            }
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
                     Label {
@@ -464,22 +470,48 @@ struct MainTabView: View {
     private func scheduleAutomaticBackupAfterInitialDisplay() async {
         guard !didScheduleStartupBackup else { return }
         didScheduleStartupBackup = true
+        let request = AutomaticBackupRequest.automatic(
+            canUseSyncFeatures: EntitlementAccess.canUseSyncFeatures
+        )
+        guard AutomaticBackupPolicy.skipStatus(for: request) == nil else { return }
         await Task.yield()
         do {
-            try await Task.sleep(for: .milliseconds(500))
+            try await Task.sleep(for: .seconds(2))
         } catch {
             return
         }
         guard !Task.isCancelled else { return }
-        let request = AutomaticBackupRequest.automatic(
-            canUseSyncFeatures: EntitlementAccess.canUseSyncFeatures
-        )
         _ = await AutomaticBackupCoordinator.shared.run(
             request: request,
             modelContainer: modelContext.container
         )
     }
 }
+
+/// 未訪問タブのQueryと集計Viewを起動時に生成しない。
+/// 一度表示した後はViewを保持し、タブ往復時のナビゲーション状態を維持する。
+private struct DeferredTabContent<Content: View>: View {
+    let isActive: Bool
+    @ViewBuilder let content: () -> Content
+    @State private var hasLoaded = false
+
+    var body: some View {
+        Group {
+            if isActive || hasLoaded {
+                content()
+            } else {
+                Color.clear
+            }
+        }
+        .onAppear {
+            if isActive { hasLoaded = true }
+        }
+        .onChange(of: isActive) { _, active in
+            if active { hasLoaded = true }
+        }
+    }
+}
+
 struct MainScreenHeader: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.favorecoThemePalette) private var themePalette

@@ -97,6 +97,12 @@ struct MasterDataSettingsHubView: View {
                 } label: {
                     LabeledContent("場所", value: "\(activePlaceCount)件")
                 }
+
+                NavigationLink {
+                    PublicRecurringEventCatalogView()
+                } label: {
+                    LabeledContent("定期イベントカタログ", value: "芸術祭・音楽祭")
+                }
             }
 
             FavorecoSettingsSectionWithFooter("記録の分類") {

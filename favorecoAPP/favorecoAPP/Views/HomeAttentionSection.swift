@@ -8,6 +8,7 @@ struct HomeAttentionSection: View {
     let onShowAll: () -> Void
     let onSelectTicket: (TicketAttempt) -> Void
     @State private var showsAllItems = false
+    @State private var hidesScheduleContent = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -22,6 +23,33 @@ struct HomeAttentionSection: View {
                 }
                 Spacer(minLength: 0)
 
+                if !items.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            hidesScheduleContent.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            FavorecoIcon(
+                                systemName: hidesScheduleContent ? "eye" : "eye.slash",
+                                size: 13
+                            )
+                            Text(hidesScheduleContent ? "表示" : "隠す")
+                        }
+                        .font(FavorecoTypography.captionStrong)
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(themePalette.globalTint)
+                    .accessibilityLabel(
+                        hidesScheduleContent
+                            ? "Ticket Scheduleを表示"
+                            : "Ticket Scheduleを一時的に隠す"
+                    )
+                    .accessibilityValue(hidesScheduleContent ? "非表示" : "表示中")
+                }
+
                 Button(action: onShowAll) {
                     HStack(spacing: 3) {
                         Text("すべて見る")
@@ -34,7 +62,9 @@ struct HomeAttentionSection: View {
                 .accessibilityLabel("チケット管理を開く")
             }
 
-            if items.isEmpty {
+            if hidesScheduleContent {
+                EmptyView()
+            } else if items.isEmpty {
                 HStack(spacing: 8) {
                     FavorecoIcon(systemName: "checkmark.circle", size: 14)
                         .foregroundStyle(Color.green)
@@ -104,6 +134,9 @@ struct HomeAttentionSection: View {
         .onChange(of: items.count) { _, itemCount in
             if itemCount <= HomeAttentionDisplay.collapsedLimit {
                 showsAllItems = false
+            }
+            if itemCount == 0 {
+                hidesScheduleContent = false
             }
         }
     }

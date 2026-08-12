@@ -14,6 +14,49 @@ enum HomeReportPeriod: String, CaseIterable, Identifiable {
     }
 }
 
+private struct HomeReportSnapshot {
+    let visits: [HomeVisitSnapshot]
+    let periodLabel: String
+    let genreCount: Int
+    let photoCount: Int
+    let topGenre: String
+
+    static func make(
+        visits: [HomeVisitSnapshot],
+        period: HomeReportPeriod,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> HomeReportSnapshot {
+        let periodVisits = visits.filter { visit in
+            switch period {
+            case .month:
+                calendar.isDate(visit.visitedAt, equalTo: now, toGranularity: .month)
+            case .year:
+                calendar.isDate(visit.visitedAt, equalTo: now, toGranularity: .year)
+            }
+        }
+        let periodLabel: String
+        switch period {
+        case .month:
+            periodLabel = now.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).year().month(.wide))
+        case .year:
+            periodLabel = now.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).year())
+        }
+        let counts = Dictionary(grouping: periodVisits, by: \.categoryName).mapValues(\.count)
+        let topGenre = counts.max { lhs, rhs in
+            if lhs.value == rhs.value { return lhs.key > rhs.key }
+            return lhs.value < rhs.value
+        }?.key ?? "ー"
+        return HomeReportSnapshot(
+            visits: periodVisits,
+            periodLabel: periodLabel,
+            genreCount: Set(periodVisits.map(\.categoryName)).count,
+            photoCount: periodVisits.lazy.filter { $0.thumbnailReference != nil }.count,
+            topGenre: topGenre
+        )
+    }
+}
+
 struct HomeReportSection: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.favorecoThemePalette) private var themePalette
@@ -27,44 +70,12 @@ struct HomeReportSection: View {
         nonmutating set { selectedPeriodRaw = newValue.rawValue }
     }
 
-    private var periodVisits: [HomeVisitSnapshot] {
-        let calendar = Calendar.current
-        return visits.filter { visit in
-            switch selectedPeriod {
-            case .month:
-                calendar.isDate(visit.visitedAt, equalTo: now, toGranularity: .month)
-            case .year:
-                calendar.isDate(visit.visitedAt, equalTo: now, toGranularity: .year)
-            }
-        }
-    }
-
-    private var periodLabel: String {
-        switch selectedPeriod {
-        case .month:
-            now.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).year().month(.wide))
-        case .year:
-            now.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).year())
-        }
-    }
-
-    private var genreCount: Int {
-        Set(periodVisits.map(\.categoryName)).count
-    }
-
-    private var photoCount: Int {
-        periodVisits.filter { $0.thumbnailReference != nil }.count
-    }
-
-    private var topGenre: String {
-        let counts = Dictionary(grouping: periodVisits, by: \.categoryName).mapValues(\.count)
-        return counts.max { lhs, rhs in
-            if lhs.value == rhs.value { return lhs.key > rhs.key }
-            return lhs.value < rhs.value
-        }?.key ?? "ー"
-    }
-
     var body: some View {
+        let snapshot = HomeReportSnapshot.make(
+            visits: visits,
+            period: selectedPeriod,
+            now: now
+        )
         VStack(alignment: .leading, spacing: 10) {
             Text("FAVORECO REPORT")
                 .font(FavorecoTypography.latinDisplay(22, weight: .semibold, relativeTo: .title3))
@@ -77,7 +88,7 @@ struct HomeReportSection: View {
                     .fill(Color.primary.opacity(0.10))
                     .frame(height: 1)
 
-                reportBody
+                reportBody(snapshot: snapshot)
                     .padding(12)
             }
             .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -130,10 +141,10 @@ struct HomeReportSection: View {
         }
     }
 
-    private var reportBody: some View {
+    private func reportBody(snapshot: HomeReportSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Text(periodLabel)
+                Text(snapshot.periodLabel)
                     .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .headline))
                 Spacer()
                 Text("あなたの体験の記録")
@@ -141,7 +152,7 @@ struct HomeReportSection: View {
                     .foregroundStyle(.secondary)
             }
 
-            if periodVisits.isEmpty {
+            if snapshot.visits.isEmpty {
                 VStack(spacing: 10) {
                     FavorecoIcon(systemName: "photo.on.rectangle.angled", size: 28)
                         .foregroundStyle(themePalette.globalTint)
@@ -154,12 +165,12 @@ struct HomeReportSection: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 176)
             } else {
-                reportCollage
-                reportMetrics
+                reportCollage(visits: snapshot.visits)
+                reportMetrics(snapshot: snapshot)
 
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles")
-                    Text("よく記録したジャンル：\(topGenre)")
+                    Text("よく記録したジャンル：\(snapshot.topGenre)")
                 }
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(themePalette.globalTint)
@@ -167,8 +178,8 @@ struct HomeReportSection: View {
         }
     }
 
-    private var reportCollage: some View {
-        let items = Array(periodVisits.prefix(3))
+    private func reportCollage(visits: [HomeVisitSnapshot]) -> some View {
+        let items = Array(visits.prefix(3))
         return HStack(spacing: 6) {
             HomeReportArtwork(visit: items[0])
                 .frame(maxWidth: .infinity)
@@ -197,13 +208,13 @@ struct HomeReportSection: View {
         }
     }
 
-    private var reportMetrics: some View {
+    private func reportMetrics(snapshot: HomeReportSnapshot) -> some View {
         HStack(spacing: 0) {
-            HomeReportMetric(value: "\(periodVisits.count)", label: "記録")
+            HomeReportMetric(value: "\(snapshot.visits.count)", label: "記録")
             reportMetricDivider
-            HomeReportMetric(value: "\(genreCount)", label: "ジャンル")
+            HomeReportMetric(value: "\(snapshot.genreCount)", label: "ジャンル")
             reportMetricDivider
-            HomeReportMetric(value: "\(photoCount)", label: "写真つき")
+            HomeReportMetric(value: "\(snapshot.photoCount)", label: "写真つき")
         }
         .frame(minHeight: 62)
         .background(themePalette.globalTint.opacity(colorScheme == .dark ? 0.10 : 0.055), in: RoundedRectangle(cornerRadius: 9, style: .continuous))

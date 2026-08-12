@@ -180,6 +180,8 @@ enum JSONBackupImportService {
             model.externalIDsRaw = item.externalIDsRaw
             model.sourceSnapshotRaw = item.sourceSnapshotRaw
             model.pilgrimageMembershipsRaw = item.pilgrimageMembershipsRaw ?? "[]"
+            model.templeSect = item.templeSect ?? ""
+            model.enshrinedDeitiesRaw = item.enshrinedDeitiesRaw ?? "[]"
             model.operationalStatusRaw = PlaceOperationalStatus(rawValue: item.operationalStatusRaw ?? "")?.rawValue ?? ""
             model.normalizedName = item.normalizedName
             model.normalizedAddress = item.normalizedAddress

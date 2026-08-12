@@ -76,6 +76,24 @@ struct EventVenueEntry: Codable, Identifiable, Equatable {
     }
 }
 
+struct VisitExpenseEntry: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var title: String = ""
+    var amount: Decimal = Decimal(0)
+
+    var normalizedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedAmount: Decimal {
+        max(amount, Decimal(0))
+    }
+
+    var isEmpty: Bool {
+        normalizedTitle.isEmpty && normalizedAmount == Decimal(0)
+    }
+}
+
 struct VisitUnitFields: Codable {
     var ocrText: String = ""
     var styleNames: [String] = []
@@ -83,6 +101,7 @@ struct VisitUnitFields: Codable {
     var eventSubtitle: String = ""
     /// 施設そのものではなく、この1回で見た展示・目的を表す短い副題。
     var visitSubtitle: String = ""
+    var venueAddressSnapshot: String = ""
     var eventCreditsText: String = ""
     var eventPerformanceTypeCustomName: String = ""
     var eventPeriodStartsAt: Date?
@@ -101,6 +120,8 @@ struct VisitUnitFields: Codable {
     var weatherFetchedAt: Date?
     var weatherAttributionURL: String = ""
     var advancedEntries: [AdvancedFieldEntry] = []
+    /// この1回に直接入力した費用内訳。旧データの Visit.amount は合計として引き続き保持する。
+    var expenseEntries: [VisitExpenseEntry] = []
     /// 書籍（巻）をシリーズ単位で束ねるための構造化メタデータ。
     var bookSeriesName: String = ""
     var bookVolumeNumber: String = ""
@@ -115,6 +136,7 @@ struct VisitUnitFields: Codable {
         socialLinks: [String] = [],
         eventSubtitle: String = "",
         visitSubtitle: String = "",
+        venueAddressSnapshot: String = "",
         eventCreditsText: String = "",
         eventPerformanceTypeCustomName: String = "",
         eventPeriodStartsAt: Date? = nil,
@@ -133,6 +155,7 @@ struct VisitUnitFields: Codable {
         weatherFetchedAt: Date? = nil,
         weatherAttributionURL: String = "",
         advancedEntries: [AdvancedFieldEntry] = [],
+        expenseEntries: [VisitExpenseEntry] = [],
         bookSeriesName: String = "",
         bookVolumeNumber: String = "",
         bookAuthorName: String = "",
@@ -144,6 +167,7 @@ struct VisitUnitFields: Codable {
         self.socialLinks = socialLinks
         self.eventSubtitle = eventSubtitle
         self.visitSubtitle = visitSubtitle
+        self.venueAddressSnapshot = venueAddressSnapshot
         self.eventCreditsText = eventCreditsText
         self.eventPerformanceTypeCustomName = eventPerformanceTypeCustomName
         self.eventPeriodStartsAt = eventPeriodStartsAt
@@ -162,6 +186,7 @@ struct VisitUnitFields: Codable {
         self.weatherFetchedAt = weatherFetchedAt
         self.weatherAttributionURL = weatherAttributionURL
         self.advancedEntries = advancedEntries
+        self.expenseEntries = expenseEntries
         self.bookSeriesName = bookSeriesName
         self.bookVolumeNumber = bookVolumeNumber
         self.bookAuthorName = bookAuthorName
@@ -175,6 +200,7 @@ struct VisitUnitFields: Codable {
         case socialLinks
         case eventSubtitle
         case visitSubtitle
+        case venueAddressSnapshot
         case eventCreditsText
         case eventPerformanceTypeCustomName
         case eventPeriodStartsAt
@@ -193,6 +219,7 @@ struct VisitUnitFields: Codable {
         case weatherFetchedAt
         case weatherAttributionURL
         case advancedEntries
+        case expenseEntries
         case bookSeriesName
         case bookVolumeNumber
         case bookAuthorName
@@ -207,6 +234,7 @@ struct VisitUnitFields: Codable {
         socialLinks = try container.decodeIfPresent([String].self, forKey: .socialLinks) ?? []
         eventSubtitle = try container.decodeIfPresent(String.self, forKey: .eventSubtitle) ?? ""
         visitSubtitle = try container.decodeIfPresent(String.self, forKey: .visitSubtitle) ?? ""
+        venueAddressSnapshot = try container.decodeIfPresent(String.self, forKey: .venueAddressSnapshot) ?? ""
         eventCreditsText = try container.decodeIfPresent(String.self, forKey: .eventCreditsText) ?? ""
         eventPerformanceTypeCustomName = try container.decodeIfPresent(String.self, forKey: .eventPerformanceTypeCustomName) ?? ""
         eventPeriodStartsAt = try container.decodeIfPresent(Date.self, forKey: .eventPeriodStartsAt)
@@ -227,6 +255,7 @@ struct VisitUnitFields: Codable {
         weatherFetchedAt = try container.decodeIfPresent(Date.self, forKey: .weatherFetchedAt)
         weatherAttributionURL = try container.decodeIfPresent(String.self, forKey: .weatherAttributionURL) ?? ""
         advancedEntries = try container.decodeIfPresent([AdvancedFieldEntry].self, forKey: .advancedEntries) ?? []
+        expenseEntries = try container.decodeIfPresent([VisitExpenseEntry].self, forKey: .expenseEntries) ?? []
         bookSeriesName = try container.decodeIfPresent(String.self, forKey: .bookSeriesName) ?? ""
         bookVolumeNumber = try container.decodeIfPresent(String.self, forKey: .bookVolumeNumber) ?? ""
         bookAuthorName = try container.decodeIfPresent(String.self, forKey: .bookAuthorName) ?? ""
@@ -249,6 +278,7 @@ struct VisitUnitFields: Codable {
                 || !socialLinks.isEmpty
                 || !eventSubtitle.isEmpty
                 || !visitSubtitle.isEmpty
+                || !venueAddressSnapshot.isEmpty
                 || !eventCreditsText.isEmpty
                 || !eventPerformanceTypeCustomName.isEmpty
                 || eventPeriodStartsAt != nil
@@ -267,6 +297,7 @@ struct VisitUnitFields: Codable {
                 || weatherFetchedAt != nil
                 || !weatherAttributionURL.isEmpty
                 || !advancedEntries.isEmpty
+                || !expenseEntries.isEmpty
                 || !bookSeriesName.isEmpty
                 || !bookVolumeNumber.isEmpty
                 || !bookAuthorName.isEmpty
@@ -446,7 +477,10 @@ struct HeroBackgroundPreset: Identifiable, Equatable {
             ]
         case "nature_living":
             [
-                .init(key: "natureDefault", title: "自然・いきもの", resourceName: "nature_living-hero-default"),
+                // 旧データの保存キーは維持し、既定背景を動物園へ差し替える。
+                .init(key: "natureDefault", title: "動物園", resourceName: "nature_living-hero-zoo"),
+                .init(key: "natureAquarium", title: "水族館", resourceName: "nature_living-hero-aquarium"),
+                .init(key: "natureBotanical", title: "植物園", resourceName: "nature_living-hero-botanical"),
             ]
         case "outing_facility":
             [

@@ -266,6 +266,7 @@ struct EditTicketAttemptView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle(editorTitle)
             .navigationBarTitleDisplayMode(.inline)

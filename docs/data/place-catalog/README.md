@@ -40,7 +40,7 @@ Favoreco が CloudKit Public Database から配信する共通場所マスター
 
 ## 現在の収録件数
 
-- `place-catalog.csv`: 3,251場所
+- `place-catalog.csv`: 3,284場所
 - `art_museum`を持つ美術館: 150件（着手前50件＋100件）
 - `museum`を持ち`art_museum`を持たない博物館・科学館等: 184件（着手前82件＋博物館100件に、複合ランドマーク2件を加えた横断件数）
 - テーマパーク: 79件（現役74件、閉館5件）。東日本遊園地協会の現役加盟施設を照合し、ジャングリア沖縄、鈴鹿サーキットパーク、モビリティリゾートもてぎ、ネスタリゾート神戸等の大規模施設も補完。`catalogID=entertainment`の興行・文化会場原稿: 703件、ランドマークカタログ: 401件
@@ -78,14 +78,34 @@ python3 docs/data/place-catalog/generate-cloudkit-records.py \
   --missing-readings-output /tmp/favoreco-missing-place-readings.csv
 ```
 
-- レコード種別は`PublicPlace`、レコード名は安定した`placeID`とする
-- `temple-shrine-selection-evidence.csv`が`confirmed`でない寺社は出力しない。2026-08-06時点の出力は3,175件で、追加確認中76件を除外する
-- 読み仮名は3,251件中1,639件（50.4%）が入力済みで、1,612件は未補完。公開候補3,175件では読みあり1,563件、未入力1,612件。読みがなくても正式名称・別名・住所で検索できるが、ひらがな検索の網羅性を上げるため公式サイト等で確認できたものから補完する。固有地名・寺社名を機械変換だけで確定しない
+- レコード種別は`PublicPlace`。`cktool create-record`の内部recordNameはUUIDとなるため、アプリと管理同期の安定IDはQuery可能な`placeID`とする
+- `temple-shrine-selection-evidence.csv`が`confirmed`でない寺社は出力しない。2026-08-12時点の出力は3,208件で、追加確認中76件を除外する
+- 読み仮名は3,284件中1,672件（50.9%）が入力済みで、1,612件は未補完。公開候補3,208件では読みあり1,596件、未入力1,612件。読みがなくても正式名称・別名・住所で検索できるが、ひらがな検索の網羅性を上げるため公式サイト等で確認できたものから補完する。固有地名・寺社名を機械変換だけで確定しない
 - `place-reading-evidence.csv`の`method`は、公式がかなを明記した`official_kana`、公式日本語名称を検索用ひらがなへ変換した`official_name_normalization`、公式英字ブランドから検索用かなを作った`official_brand_transliteration`の3種とする。生成時に場所ID、読み、方法、出典URL、確認日の一致を検証する
 - `updatedAt`はアプリの差分カーソルなので、公開項目を変更するたびに必ず進める
 - 公開終了時はCloudKitレコードを物理削除せず、`isDeleted=true`と新しい`updatedAt`を保存する。非公開へ戻す場合は`isPublished=false`を使う
 - CloudKit Dashboardでは`updatedAt`をQuery可能にし、利用者アプリはPublic Databaseを読取専用で利用する。レコード作成・更新権限は管理側だけに限定する
 - NDJSONは中立的な管理用ペイロードであり、CloudKit Developmentへの投入とProductionへのスキーマ反映はApple側の管理作業として別途行う
+
+宗派・御祭神の公開差分だけをDevelopmentへ同期する場合は、まず入力を検証する。このコマンドはCloudKitを変更しない。
+
+```bash
+python3 docs/data/place-catalog/sync-religious-details-cloudkit-development.py \
+  --input /tmp/favoreco-public-places.ndjson
+```
+
+Apple Accountの利用者トークンを`cktool`へ保存後、`--apply`を付けた時だけ公開対象252件を同期する。
+
+```bash
+python3 docs/data/place-catalog/sync-religious-details-cloudkit-development.py \
+  --input /tmp/favoreco-public-places.ndjson \
+  --apply
+```
+
+- Productionは指定できず、常にDevelopmentだけを対象にする
+- 宗派または御祭神がある公開対象だけを扱い、その他の場所レコードを変更しない
+- 内容変更時は完全な新レコードを作成してから旧版を削除し、作成失敗による欠落を防ぐ
+- 宗教詳細を含むレコードの`updatedAt`は公開反映日の2026-08-10まで進め、既存キャッシュの差分取得対象にする
 
 ## 寺社の選定根拠
 

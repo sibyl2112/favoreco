@@ -48,6 +48,7 @@ struct SimpleCategoryRegistrationView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .navigationTitle(isMovie ? "作品を登録する" : "展示・イベントを登録")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

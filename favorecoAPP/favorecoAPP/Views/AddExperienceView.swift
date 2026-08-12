@@ -70,8 +70,12 @@ struct AddExperienceView: View {
             _expandedUnitIDs = State(initialValue: ["basic"])
         } else if category.templateKey == "book" {
             _expandedUnitIDs = State(initialValue: ["photos", "memo"])
-        } else if ["movie", "museum"].contains(category.templateKey) {
+        } else if category.templateKey == "movie" {
+            _expandedUnitIDs = State(initialValue: ["screenWorkCore"])
+        } else if category.templateKey == "museum" {
             _expandedUnitIDs = State(initialValue: ["basic", "photos", "memo"])
+        } else if isStagedOutingTemplate(category.templateKey) {
+            _expandedUnitIDs = State(initialValue: ["basic"])
         }
     }
 
@@ -95,14 +99,6 @@ struct AddExperienceView: View {
                         TheaterUnifiedFormIntroduction(entry: .visitCreation)
                     }
                 }
-                if category.templateKey != "book", category.templateKey == "movie" {
-                    FavorecoRegistrationSection("作品区分") {
-                        ScreenWorkTypeAndSeasonEditor(
-                            typeKey: $draft.subTypeKey,
-                            seasonNumber: $draft.screenWorkSeasonNumber
-                        )
-                    }
-                }
                 if category.templateKey != "book", category.templateKey == "theater" {
                     ForEach(activeUnitDefinitions(for: category).filter { $0.id != "photos" }) { unit in
                         TheaterRecordUnitBlock(
@@ -113,6 +109,19 @@ struct AddExperienceView: View {
                             addContent(for: unit)
                         }
                     }
+                } else if category.templateKey == "movie" {
+                    stagedScreenWorkForm(
+                        status: addStatus(for:),
+                        isExpanded: binding(for:),
+                        content: addContent(for:)
+                    )
+                } else if category.templateKey != "book", isStagedOutingTemplate(category.templateKey) {
+                    stagedOutingForm(
+                        category: category,
+                        status: addStatus(for:),
+                        isExpanded: binding(for:),
+                        content: addContent(for:)
+                    )
                 } else if category.templateKey != "book" {
                     ForEach(activeUnitDefinitions(for: category)) { unit in
                         SeparatedRecordUnitBlock(
@@ -125,6 +134,7 @@ struct AddExperienceView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .environment(\.defaultMinListRowHeight, 48)
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .tint(themePalette.globalTint)
@@ -262,6 +272,10 @@ struct AddExperienceView: View {
 
     private func addStatus(for unitID: String) -> RecordUnitStatus {
         switch unitID {
+        case "screenWorkCore":
+            return draft.canSave ? .entered : .required
+        case "screenWorkViewing":
+            return draft.hasScreenWorkViewingDetails ? .entered : .optional
         case "basic":
             return draft.canSave && draft.hasValidPerformanceType(for: category) ? .entered : .required
         case "theaterRating":
@@ -286,6 +300,11 @@ struct AddExperienceView: View {
         case "memo":
             return draft.trimmedNote.isEmpty && draft.normalizedTagNamesRaw.isEmpty ? .optional : .entered
         case "advanced":
+            if category.templateKey == "movie" {
+                return draft.trimmedAdvancedEntries.contains { $0.trimmedLabel != "作品時間" }
+                    ? .entered
+                    : .optional
+            }
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
@@ -295,6 +314,24 @@ struct AddExperienceView: View {
     @ViewBuilder
     private func addContent(for unit: RecordUnitDefinition) -> some View {
         switch unit.id {
+        case "screenWorkCore":
+            ScreenWorkMinimumEditor(
+                fixedTitle: nil,
+                title: $draft.title,
+                typeKey: $draft.subTypeKey,
+                viewedAt: $draft.visitedAt,
+                endedAt: $draft.endedAt,
+                overallRating: $draft.overallRating,
+                ratingText: draft.ratingLabel
+            )
+        case "screenWorkViewing":
+            ScreenWorkViewingDetailsEditor(
+                typeKey: $draft.subTypeKey,
+                styleNamesText: $draft.styleNamesText,
+                venueName: venueNameBinding,
+                seatText: $draft.seatText,
+                advancedEntries: $draft.advancedEntries
+            )
         case "basic":
             VStack(alignment: .leading, spacing: 12) {
                 ExperienceBasicUnitEditor(
@@ -314,6 +351,7 @@ struct AddExperienceView: View {
                     usesPlaceSuggestions: usesInputSuggestionDictionary,
                     usesMapSearchAssist: usesMapSearchAssist,
                     supportsPerformanceTime: category.usesOpeningTime,
+                    supportsExperienceDuration: usesDurationBasedExperienceTime(category),
                     supportsStyles: category.templateKey == "theater",
                     usesExplicitTheaterLayout: category.templateKey == "theater",
                     showsRating: category.templateKey != "theater",
@@ -322,21 +360,21 @@ struct AddExperienceView: View {
                         category: category
                     ),
                     usesSimpleScreenWorkLayout: category.templateKey == "movie",
+                    categoryTemplateKey: category.templateKey,
+                    subTypeKey: $draft.subTypeKey,
+                    screenWorkSeasonNumber: $draft.screenWorkSeasonNumber,
+                    performanceTypeCustomName: $draft.performanceTypeCustomName,
                     ratingText: draft.ratingLabel,
                     onSelectPlace: { draft.apply(placeMaster: $0) },
                     onSelectPublicPlace: { draft.apply(publicPlace: $0) },
                     onOpenPlaceSearch: { isShowingPlaceSearch = true }
                 )
-                if category.templateKey == "theater" {
+                if isStagedOutingTemplate(category.templateKey) {
                     Divider()
-                    TheaterPerformanceTypePicker(
-                        selection: $draft.subTypeKey,
-                        customName: $draft.performanceTypeCustomName
+                    VisitSubtitleEditor(
+                        text: $draft.visitSubtitle,
+                        categoryTemplateKey: category.templateKey
                     )
-                }
-                if category.isOutingFacilityGenre {
-                    Divider()
-                    OutingFacilityTypePicker(selection: $draft.subTypeKey)
                 }
             }
         case "officialInfo":
@@ -378,7 +416,11 @@ struct AddExperienceView: View {
                     deletedLinkIDs: .constant([]),
                     pendingLinks: $pendingPeople,
                     personMasters: personMasters,
-                    emptyDescription: ""
+                    roleOptions: category.templateKey == "movie" ? screenWorkPeopleRoleOptions : PersonRoleOption.all,
+                    emptyDescription: "",
+                    allowsOrganizations: category.templateKey != "movie",
+                    namePlaceholder: category.templateKey == "movie" ? "監督・出演者名" : "人物・団体名",
+                    addButtonTitle: category.templateKey == "movie" ? "監督・出演者を追加" : "人物・団体を追加"
                 )
             }
         case "ticketPlan":
@@ -439,6 +481,7 @@ struct AddExperienceView: View {
         case "money":
             ExperienceMoneyUnitEditor(
                 amountText: $draft.amountText,
+                expenseEntries: $draft.expenseEntries,
                 usesExplicitTheaterLayout: category.templateKey == "theater"
             )
         case "memo":
@@ -454,7 +497,11 @@ struct AddExperienceView: View {
                 }
             }
         case "advanced":
-            ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
+            if category.templateKey == "movie" {
+                ScreenWorkAdditionalDetailsEditor(entries: $draft.advancedEntries)
+            } else {
+                ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
+            }
         default:
             ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         }
@@ -562,9 +609,10 @@ struct AddExperienceView: View {
             )
         )
 
+        let didChangeRepresentativeEyecatch = !coverPhotoPath.isEmpty
+            && event.representativeEyecatchPath != coverPhotoPath
         if !coverPhotoPath.isEmpty {
             event.representativeEyecatchPath = coverPhotoPath
-            ThumbnailLoader.purge()
         }
         modelContext.insert(visit)
         insertPendingPeople(
@@ -576,6 +624,9 @@ struct AddExperienceView: View {
 
         do {
             try modelContext.save()
+            if didChangeRepresentativeEyecatch {
+                ThumbnailLoader.purge(reference: .event(event.id))
+            }
             Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
             lastUsedCategoryTemplateKey = resolvedCategory?.templateKey ?? category.templateKey
             if afterSaveRecordAction == "openDetail" {
@@ -636,6 +687,8 @@ struct EditExperienceView: View {
     @State private var existingFocusReactionTagKeys: [UUID: Set<String>]
     @State private var isShowingPlaceSearch = false
     @State private var saveErrorMessage: String?
+    @State private var eventEyecatchData: Data?
+    @State private var artworkCropDraft: ArtworkPhotoCropDraft?
 
     private var event: ExperienceEvent? {
         visit.event
@@ -673,12 +726,15 @@ struct EditExperienceView: View {
         _draft = State(initialValue: AddExperienceDraft(visit: visit))
         let isTheater = visit.event?.category?.templateKey == "theater"
         let isScreenWork = visit.event?.category?.templateKey == "movie"
+        let isStagedOuting = isStagedOutingTemplate(visit.event?.category?.templateKey ?? "")
         let initialUnits: Set<String> = if isTheater {
             ["basic"]
         } else if visit.event?.category?.templateKey == "book" {
             ["photos", "memo"]
         } else if isScreenWork {
-            ["basic", "photos", "memo"]
+            ["screenWorkViewing", "people", "photos", "memo"]
+        } else if isStagedOuting {
+            ["photos", "memo", "money"]
         } else {
             ["basic", "people", "photos", "officialInfo", "memo"]
         }
@@ -687,6 +743,7 @@ struct EditExperienceView: View {
         let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
         _heroBackgroundPath = State(initialValue: unitFields.heroBackgroundPath)
         _heroBackgroundPresetKey = State(initialValue: unitFields.heroBackgroundPresetKey)
+        _eventEyecatchData = State(initialValue: visit.event?.eyecatchData)
         _existingFocusReactionTagKeys = State(initialValue: Dictionary(uniqueKeysWithValues:
             (visit.personLinks ?? [])
                 .filter { !$0.isArchived && $0.roleKey == PersonRoleOption.theaterFocus.key }
@@ -700,6 +757,9 @@ struct EditExperienceView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if !isBookVisit, !isTheaterVisit, eventEyecatchData != nil {
+                    editTargetEyecatchSection
+                }
                 if isBookVisit {
                     editBookRecordForm
                 } else if isTheaterVisit,
@@ -717,14 +777,6 @@ struct EditExperienceView: View {
                         TheaterUnifiedFormIntroduction(entry: .visitEditing)
                     }
                 }
-                if !isBookVisit, category?.templateKey == "movie" {
-                    FavorecoRegistrationSection("作品区分") {
-                        ScreenWorkTypeAndSeasonEditor(
-                            typeKey: $draft.subTypeKey,
-                            seasonNumber: $draft.screenWorkSeasonNumber
-                        )
-                    }
-                }
                 if !isBookVisit, isTheaterVisit {
                     ForEach(activeUnitDefinitions(for: category).filter { $0.id != "photos" }) { unit in
                         TheaterRecordUnitBlock(
@@ -735,6 +787,21 @@ struct EditExperienceView: View {
                             editContent(for: unit)
                         }
                     }
+                } else if category?.templateKey == "movie" {
+                    stagedScreenWorkForm(
+                        status: editStatus(for:),
+                        isExpanded: binding(for:),
+                        content: editContent(for:)
+                    )
+                } else if !isBookVisit,
+                          let category,
+                          isStagedOutingTemplate(category.templateKey) {
+                    stagedOutingForm(
+                        category: category,
+                        status: editStatus(for:),
+                        isExpanded: binding(for:),
+                        content: editContent(for:)
+                    )
                 } else if !isBookVisit {
                     ForEach(activeUnitDefinitions(for: category)) { unit in
                         SeparatedRecordUnitBlock(
@@ -747,6 +814,7 @@ struct EditExperienceView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .environment(\.defaultMinListRowHeight, 48)
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .tint(themePalette.globalTint)
@@ -790,7 +858,72 @@ struct EditExperienceView: View {
             } message: {
                 Text(saveErrorMessage ?? "")
             }
+            .fullScreenCover(item: $artworkCropDraft) { cropDraft in
+                ArtworkImageCropView(
+                    image: cropDraft.image,
+                    aspectRatio: cropDraft.aspectRatio
+                ) { adjustedData in
+                    eventEyecatchData = adjustedData
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private var editTargetEyecatchSection: some View {
+        if let eventEyecatchData, let image = UIImage(data: eventEyecatchData) {
+            Section {
+                Button {
+                    presentTargetEyecatchCrop(image)
+                } label: {
+                    ZStack(alignment: .bottomTrailing) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity)
+                            .aspectRatio(editTargetEyecatchAspectRatio, contentMode: .fit)
+                            .clipped()
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        FavorecoIconLabel(
+                            "位置とサイズを調整",
+                            systemImage: "crop",
+                            iconSize: 15
+                        )
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 34)
+                        .background(Color.black.opacity(0.7), in: Capsule())
+                        .padding(10)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } header: {
+                FavorecoRegistrationSectionHeader(
+                    category?.templateKey == "movie" ? "作品アイキャッチ" : "対象アイキャッチ"
+                )
+            } footer: {
+                Text("画像をタップし、一覧と詳細で見せたい位置を調整できます。")
+            }
+        }
+    }
+
+    private var editTargetEyecatchAspectRatio: CGFloat {
+        CGFloat(
+            EyecatchAspectRatio.option(
+                for: draft.eyecatchAspectRatioKey,
+                category: category
+            ).value
+        )
+    }
+
+    private func presentTargetEyecatchCrop(_ image: UIImage) {
+        artworkCropDraft = ArtworkPhotoCropDraft(
+            image: image,
+            aspectRatio: editTargetEyecatchAspectRatio
+        )
     }
 
     private func binding(for unitID: String) -> Binding<Bool> {
@@ -883,6 +1016,10 @@ struct EditExperienceView: View {
 
     private func editStatus(for unitID: String) -> RecordUnitStatus {
         switch unitID {
+        case "screenWorkCore":
+            return draft.canSave ? .entered : .required
+        case "screenWorkViewing":
+            return draft.hasScreenWorkViewingDetails ? .entered : .optional
         case "basic":
             return isTheaterVisit || draft.canSave ? .entered : .required
         case "theaterRating":
@@ -915,6 +1052,11 @@ struct EditExperienceView: View {
         case "memo":
             return draft.trimmedNote.isEmpty && draft.normalizedTagNamesRaw.isEmpty ? .optional : .entered
         case "advanced":
+            if category?.templateKey == "movie" {
+                return draft.trimmedAdvancedEntries.contains { $0.trimmedLabel != "作品時間" }
+                    ? .entered
+                    : .optional
+            }
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
@@ -924,6 +1066,24 @@ struct EditExperienceView: View {
     @ViewBuilder
     private func editContent(for unit: RecordUnitDefinition) -> some View {
         switch unit.id {
+        case "screenWorkCore":
+            ScreenWorkMinimumEditor(
+                fixedTitle: nil,
+                title: $draft.title,
+                typeKey: $draft.subTypeKey,
+                viewedAt: $draft.visitedAt,
+                endedAt: $draft.endedAt,
+                overallRating: $draft.overallRating,
+                ratingText: draft.ratingLabel
+            )
+        case "screenWorkViewing":
+            ScreenWorkViewingDetailsEditor(
+                typeKey: $draft.subTypeKey,
+                styleNamesText: $draft.styleNamesText,
+                venueName: venueNameBinding,
+                seatText: $draft.seatText,
+                advancedEntries: $draft.advancedEntries
+            )
         case "basic":
             VStack(alignment: .leading, spacing: 12) {
                 if isTheaterVisit {
@@ -944,9 +1104,14 @@ struct EditExperienceView: View {
                         usesPlaceSuggestions: usesInputSuggestionDictionary,
                         usesMapSearchAssist: usesMapSearchAssist,
                         supportsPerformanceTime: category?.usesOpeningTime == true,
+                        supportsExperienceDuration: usesDurationBasedExperienceTime(category),
                         supportsStyles: true,
                         usesExplicitTheaterLayout: true,
                         showsRating: false,
+                        categoryTemplateKey: category?.templateKey ?? "",
+                        subTypeKey: $draft.subTypeKey,
+                        screenWorkSeasonNumber: $draft.screenWorkSeasonNumber,
+                        performanceTypeCustomName: $draft.performanceTypeCustomName,
                         ratingText: draft.ratingLabel,
                         onSelectPlace: { draft.apply(placeMaster: $0) },
                         onSelectPublicPlace: { draft.apply(publicPlace: $0) },
@@ -970,21 +1135,22 @@ struct EditExperienceView: View {
                         usesPlaceSuggestions: usesInputSuggestionDictionary,
                         usesMapSearchAssist: usesMapSearchAssist,
                         supportsPerformanceTime: category?.usesOpeningTime == true,
+                        supportsExperienceDuration: usesDurationBasedExperienceTime(category),
                         supportsStyles: false,
                         datePrecision: screenWorkDatePrecision(
                             for: draft.subTypeKey,
                             category: category
                         ),
                         usesSimpleScreenWorkLayout: category?.templateKey == "movie",
+                        categoryTemplateKey: category?.templateKey ?? "",
+                        subTypeKey: $draft.subTypeKey,
+                        screenWorkSeasonNumber: $draft.screenWorkSeasonNumber,
+                        performanceTypeCustomName: $draft.performanceTypeCustomName,
                         ratingText: draft.ratingLabel,
                         onSelectPlace: { draft.apply(placeMaster: $0) },
                         onSelectPublicPlace: { draft.apply(publicPlace: $0) },
                         onOpenPlaceSearch: { isShowingPlaceSearch = true }
                     )
-                }
-                if category?.isOutingFacilityGenre == true {
-                    Divider()
-                    OutingFacilityTypePicker(selection: $draft.subTypeKey)
                 }
                 if let categoryTemplateKey = category?.templateKey,
                    ["theme_park", "nature_living"].contains(categoryTemplateKey) {
@@ -1027,7 +1193,11 @@ struct EditExperienceView: View {
                     deletedLinkIDs: $deletedPersonLinkIDs,
                     pendingLinks: $pendingPeople,
                     personMasters: personMasters,
-                    emptyDescription: ""
+                    roleOptions: category?.templateKey == "movie" ? screenWorkPeopleRoleOptions : PersonRoleOption.all,
+                    emptyDescription: "",
+                    allowsOrganizations: category?.templateKey != "movie",
+                    namePlaceholder: category?.templateKey == "movie" ? "監督・出演者名" : "人物・団体名",
+                    addButtonTitle: category?.templateKey == "movie" ? "監督・出演者を追加" : "人物・団体を追加"
                 )
             }
         case "ticketPlan":
@@ -1091,6 +1261,7 @@ struct EditExperienceView: View {
         case "money":
             ExperienceMoneyUnitEditor(
                 amountText: $draft.amountText,
+                expenseEntries: $draft.expenseEntries,
                 usesExplicitTheaterLayout: isTheaterVisit
             )
         case "memo":
@@ -1106,7 +1277,11 @@ struct EditExperienceView: View {
                 }
             }
         case "advanced":
-            ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
+            if category?.templateKey == "movie" {
+                ScreenWorkAdditionalDetailsEditor(entries: $draft.advancedEntries)
+            } else {
+                ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
+            }
         default:
             ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
         }
@@ -1137,6 +1312,7 @@ struct EditExperienceView: View {
             && visit.longitude == draft.longitude
         let existingUnitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
 
+        let didChangeEventEyecatch = event?.eyecatchData != eventEyecatchData
         if let event {
             applyTargetChangesFromExperienceEdit(
                 to: event,
@@ -1144,6 +1320,7 @@ struct EditExperienceView: View {
                 categories: categories,
                 at: now
             )
+            event.eyecatchData = eventEyecatchData
         }
 
         visit.visitedAt = draft.visitedAt
@@ -1192,6 +1369,9 @@ struct EditExperienceView: View {
 
         do {
             try modelContext.save()
+            if didChangeEventEyecatch, let event {
+                ThumbnailLoader.purge(reference: .event(event.id))
+            }
             Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
             dismiss()
         } catch {
@@ -1236,7 +1416,7 @@ struct EditExperienceView: View {
                 : ""
             photo.amount = metadata.purpose.supportsAmount ? metadata.amount : Decimal(0)
             if !isTheaterVisit,
-               metadata.purpose != .memory,
+               !metadata.purpose.isGalleryPhoto,
                event?.representativeEyecatchPath == photo.relativePath {
                 event?.representativeEyecatchPath = coverPhotoPath
             }
@@ -1343,8 +1523,12 @@ struct AddVisitView: View {
             _expandedUnitIDs = State(initialValue: ["basic"])
         } else if event.category?.templateKey == "book" {
             _expandedUnitIDs = State(initialValue: ["photos", "memo"])
-        } else if ["movie", "museum"].contains(event.category?.templateKey ?? "") {
+        } else if event.category?.templateKey == "movie" {
+            _expandedUnitIDs = State(initialValue: ["screenWorkCore"])
+        } else if event.category?.templateKey == "museum" {
             _expandedUnitIDs = State(initialValue: ["basic", "photos", "memo"])
+        } else if isStagedOutingTemplate(event.category?.templateKey ?? "") {
+            _expandedUnitIDs = State(initialValue: ["basic"])
         }
     }
 
@@ -1401,14 +1585,6 @@ struct AddVisitView: View {
                         TheaterUnifiedFormIntroduction(entry: .visitCreation)
                     }
                 }
-                if event.category?.templateKey != "book", event.category?.templateKey == "movie" {
-                    FavorecoRegistrationSection("作品区分") {
-                        ScreenWorkTypeAndSeasonEditor(
-                            typeKey: $screenWorkTypeKey,
-                            seasonNumber: $screenWorkSeasonNumber
-                        )
-                    }
-                }
                 if event.category?.templateKey != "book", event.category?.templateKey == "theater" {
                     ForEach(activeUnitDefinitions(for: event.category).filter { $0.id != "photos" }) { unit in
                         TheaterRecordUnitBlock(
@@ -1419,6 +1595,21 @@ struct AddVisitView: View {
                             visitContent(for: unit)
                         }
                     }
+                } else if event.category?.templateKey == "movie" {
+                    stagedScreenWorkForm(
+                        status: visitStatus(for:),
+                        isExpanded: binding(for:),
+                        content: visitContent(for:)
+                    )
+                } else if event.category?.templateKey != "book",
+                          let category = event.category,
+                          isStagedOutingTemplate(category.templateKey) {
+                    stagedOutingForm(
+                        category: category,
+                        status: visitStatus(for:),
+                        isExpanded: binding(for:),
+                        content: visitContent(for:)
+                    )
                 } else if event.category?.templateKey != "book" {
                     ForEach(activeUnitDefinitions(for: event.category)) { unit in
                         SeparatedRecordUnitBlock(
@@ -1431,6 +1622,7 @@ struct AddVisitView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .environment(\.defaultMinListRowHeight, 48)
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .tint(themePalette.globalTint)
@@ -1586,6 +1778,10 @@ struct AddVisitView: View {
 
     private func visitStatus(for unitID: String) -> RecordUnitStatus {
         switch unitID {
+        case "screenWorkCore":
+            return .entered
+        case "screenWorkViewing":
+            return draft.hasScreenWorkViewingDetails ? .entered : .optional
         case "basic":
             return .entered
         case "theaterRating":
@@ -1612,6 +1808,11 @@ struct AddVisitView: View {
             let hasSocialLinks = !VisitUnitFields(rawValue: event.unitFieldsRaw).socialLinks.isEmpty
             return hasOfficialURL || hasSocialLinks ? .entered : .optional
         case "advanced":
+            if event.category?.templateKey == "movie" {
+                return draft.trimmedAdvancedEntries.contains { $0.trimmedLabel != "作品時間" }
+                    ? .entered
+                    : .optional
+            }
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
         default:
             return draft.trimmedAdvancedEntries.isEmpty ? .optional : .entered
@@ -1621,6 +1822,24 @@ struct AddVisitView: View {
     @ViewBuilder
     private func visitContent(for unit: RecordUnitDefinition) -> some View {
         switch unit.id {
+        case "screenWorkCore":
+            ScreenWorkMinimumEditor(
+                fixedTitle: event.title,
+                title: nil,
+                typeKey: $screenWorkTypeKey,
+                viewedAt: $draft.visitedAt,
+                endedAt: $draft.endedAt,
+                overallRating: $draft.overallRating,
+                ratingText: draft.ratingLabel
+            )
+        case "screenWorkViewing":
+            ScreenWorkViewingDetailsEditor(
+                typeKey: $screenWorkTypeKey,
+                styleNamesText: $draft.styleNamesText,
+                venueName: venueNameBinding,
+                seatText: $draft.seatText,
+                advancedEntries: $draft.advancedEntries
+            )
         case "basic":
             VStack(alignment: .leading, spacing: 12) {
                 ExperienceBasicUnitEditor(
@@ -1640,6 +1859,7 @@ struct AddVisitView: View {
                     usesPlaceSuggestions: usesInputSuggestionDictionary,
                     usesMapSearchAssist: usesMapSearchAssist,
                     supportsPerformanceTime: event.category?.usesOpeningTime == true,
+                    supportsExperienceDuration: usesDurationBasedExperienceTime(event.category),
                     supportsStyles: event.category?.templateKey == "theater",
                     usesExplicitTheaterLayout: event.category?.templateKey == "theater",
                     showsRating: event.category?.templateKey != "theater",
@@ -1648,6 +1868,12 @@ struct AddVisitView: View {
                         category: event.category
                     ),
                     usesSimpleScreenWorkLayout: event.category?.templateKey == "movie",
+                    categoryTemplateKey: event.category?.templateKey ?? "",
+                    subTypeKey: event.category?.templateKey == "movie" ? $screenWorkTypeKey : .constant(event.subTypeKey),
+                    screenWorkSeasonNumber: event.category?.templateKey == "movie" ? $screenWorkSeasonNumber : .constant(0),
+                    performanceTypeCustomName: .constant(
+                        VisitUnitFields(rawValue: event.unitFieldsRaw).eventPerformanceTypeCustomName
+                    ),
                     ratingText: draft.ratingLabel,
                     onSelectPlace: { draft.apply(placeMaster: $0) },
                     onSelectPublicPlace: { draft.apply(publicPlace: $0) },
@@ -1722,7 +1948,11 @@ struct AddVisitView: View {
                     deletedLinkIDs: .constant([]),
                     pendingLinks: $pendingPeople,
                     personMasters: personMasters,
-                    emptyDescription: ""
+                    roleOptions: event.category?.templateKey == "movie" ? screenWorkPeopleRoleOptions : PersonRoleOption.all,
+                    emptyDescription: "",
+                    allowsOrganizations: event.category?.templateKey != "movie",
+                    namePlaceholder: event.category?.templateKey == "movie" ? "監督・出演者名" : "人物・団体名",
+                    addButtonTitle: event.category?.templateKey == "movie" ? "監督・出演者を追加" : "人物・団体を追加"
                 )
             }
         case "ticketPlan":
@@ -1750,10 +1980,15 @@ struct AddVisitView: View {
         case "money":
             ExperienceMoneyUnitEditor(
                 amountText: $draft.amountText,
+                expenseEntries: $draft.expenseEntries,
                 usesExplicitTheaterLayout: event.category?.templateKey == "theater"
             )
         case "advanced":
-            ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
+            if event.category?.templateKey == "movie" {
+                ScreenWorkAdditionalDetailsEditor(entries: $draft.advancedEntries)
+            } else {
+                ExperienceAdvancedUnitEditor(entries: $draft.advancedEntries)
+            }
         case "officialInfo":
             ExperienceOfficialInfoReferenceView()
         default:
@@ -1929,6 +2164,7 @@ struct AddExperienceDraft {
     var goshuinBookSizeKey: String = ""
     var advancedEntries: [AdvancedFieldEntry] = []
     var amountText: String = ""
+    var expenseEntries: [VisitExpenseEntry] = []
     var note: String = ""
     var tagNamesText: String = ""
     var excludedEventCastLinkIDs: Set<UUID> = []
@@ -1957,7 +2193,8 @@ struct AddExperienceDraft {
         bookReadingHasEndDate = VisitUnitFields(rawValue: visit.unitFieldsRaw).bookReadingHasEndDate ?? true
         styleNamesText = VisitUnitFields(rawValue: visit.unitFieldsRaw).styleNames.joined(separator: "、")
         venueName = visit.venueNameSnapshot
-        venueAddress = visit.placeMaster?.address ?? ""
+        venueAddress = visit.placeMaster?.address
+            ?? VisitUnitFields(rawValue: visit.unitFieldsRaw).venueAddressSnapshot
         let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
         latitude = hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0)
         longitude = hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
@@ -1970,6 +2207,7 @@ struct AddExperienceDraft {
         eyecatchAspectRatioKey = unitFields.eyecatchAspectRatioKey
         goshuinBookSizeKey = unitFields.goshuinBookSizeKey
         advancedEntries = unitFields.advancedEntries
+        expenseEntries = unitFields.expenseEntries
         amountText = formattedCurrencyAmount(visit.amount)
         note = visit.note
         tagNamesText = visit.tagNamesRaw
@@ -2120,17 +2358,28 @@ struct AddExperienceDraft {
         !outcomeKey.isEmpty || !trimmedSeatText.isEmpty
     }
 
+    var hasScreenWorkViewingDetails: Bool {
+        !styleNamesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !trimmedVenueName.isEmpty
+            || !trimmedSeatText.isEmpty
+            || trimmedAdvancedEntries.contains { $0.trimmedLabel == "作品時間" && !$0.trimmedValue.isEmpty }
+    }
+
     func makeUnitFields(for category: RecordCategory?) -> VisitUnitFields {
         VisitUnitFields(
             ocrText: trimmedOCRText,
             styleNames: normalizedStyleNames(from: styleNamesText),
             visitSubtitle: visitSubtitle.trimmingCharacters(in: .whitespacesAndNewlines),
+            venueAddressSnapshot: venueAddress.trimmingCharacters(in: .whitespacesAndNewlines),
             excludedEventCastLinkIDs: excludedEventCastLinkIDs.sorted { $0.uuidString < $1.uuidString },
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
                 : eyecatchAspectRatioKey,
             goshuinBookSizeKey: category?.templateKey == "goshuin" && goshuinBookSizeKey.isEmpty ? GoshuinBookSize.standard.key : goshuinBookSizeKey,
             advancedEntries: trimmedAdvancedEntries,
+            expenseEntries: expenseEntries
+                .map { VisitExpenseEntry(id: $0.id, title: $0.normalizedTitle, amount: $0.normalizedAmount) }
+                .filter { !$0.isEmpty },
             bookReadingHasEndDate: category?.templateKey == "book" ? bookReadingHasEndDate : nil
         )
     }
@@ -2177,7 +2426,7 @@ struct AddExperienceDraft {
     }
 }
 
-private struct OutingFacilityTypePicker: View {
+struct OutingFacilityTypePicker: View {
     @Binding var selection: String
 
     var body: some View {
@@ -2263,6 +2512,11 @@ private func screenWorkDatePrecision(
     return ScreenWorkType.resolved(from: subTypeKey) == .movie ? .day : .year
 }
 
+private func usesDurationBasedExperienceTime(_ category: RecordCategory?) -> Bool {
+    guard let templateKey = category?.templateKey else { return false }
+    return ["museum", "theme_park", "nature_living", "outing_facility"].contains(templateKey)
+}
+
 private func outingCategory(
     for subTypeKey: String,
     fallback: RecordCategory?,
@@ -2295,6 +2549,7 @@ struct VisitDraft {
     var goshuinBookSizeKey: String = ""
     var advancedEntries: [AdvancedFieldEntry] = []
     var amountText: String = ""
+    var expenseEntries: [VisitExpenseEntry] = []
     var note: String = ""
     var tagNamesText: String = ""
     var excludedEventCastLinkIDs: Set<UUID> = []
@@ -2344,7 +2599,7 @@ struct VisitDraft {
         endedAt = initialTime
         styleNamesText = previousFields.styleNames.joined(separator: "・")
         venueName = visit.venueNameSnapshot
-        venueAddress = place?.address ?? ""
+        venueAddress = place?.address ?? previousFields.venueAddressSnapshot
         latitude = hasVisitCoordinate ? visit.latitude : (place?.latitude ?? 0)
         longitude = hasVisitCoordinate ? visit.longitude : (place?.longitude ?? 0)
         eyecatchAspectRatioKey = previousFields.eyecatchAspectRatioKey
@@ -2445,17 +2700,28 @@ struct VisitDraft {
         !outcomeKey.isEmpty || !trimmedSeatText.isEmpty
     }
 
+    var hasScreenWorkViewingDetails: Bool {
+        !styleNamesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !trimmedVenueName.isEmpty
+            || !trimmedSeatText.isEmpty
+            || trimmedAdvancedEntries.contains { $0.trimmedLabel == "作品時間" && !$0.trimmedValue.isEmpty }
+    }
+
     func makeUnitFields(for category: RecordCategory?) -> VisitUnitFields {
         VisitUnitFields(
             ocrText: trimmedOCRText,
             styleNames: normalizedStyleNames(from: styleNamesText),
             visitSubtitle: visitSubtitle.trimmingCharacters(in: .whitespacesAndNewlines),
+            venueAddressSnapshot: venueAddress.trimmingCharacters(in: .whitespacesAndNewlines),
             excludedEventCastLinkIDs: excludedEventCastLinkIDs.sorted { $0.uuidString < $1.uuidString },
             eyecatchAspectRatioKey: eyecatchAspectRatioKey.isEmpty
                 ? (category?.templateKey == "book" ? EyecatchAspectRatio.hardcoverBook.key : EyecatchAspectRatio.recommended(for: category).key)
                 : eyecatchAspectRatioKey,
             goshuinBookSizeKey: category?.templateKey == "goshuin" && goshuinBookSizeKey.isEmpty ? GoshuinBookSize.standard.key : goshuinBookSizeKey,
             advancedEntries: trimmedAdvancedEntries,
+            expenseEntries: expenseEntries
+                .map { VisitExpenseEntry(id: $0.id, title: $0.normalizedTitle, amount: $0.normalizedAmount) }
+                .filter { !$0.isEmpty },
             bookReadingHasEndDate: category?.templateKey == "book" ? bookReadingHasEndDate : nil
         )
     }
@@ -2637,6 +2903,257 @@ private extension Date {
     }
 }
 
+private func isStagedOutingTemplate(_ templateKey: String) -> Bool {
+    ["theme_park", "nature_living"].contains(templateKey)
+}
+
+private let screenWorkRecordUnitDefinitions: [RecordUnitDefinition] = [
+    RecordUnitDefinition(
+        id: "screenWorkCore",
+        name: "作品・鑑賞",
+        description: "タイトル・区分・鑑賞日時／年・季節・評価",
+        isRequired: true
+    ),
+    RecordUnitDefinition(
+        id: "screenWorkViewing",
+        name: "作品時間・鑑賞方法",
+        description: "作品時間、鑑賞方法、場所、座席",
+        isRequired: false
+    ),
+    RecordUnitDefinition(
+        id: "people",
+        name: "監督・出演者",
+        description: "監督、主演、主な出演者",
+        isRequired: false
+    ),
+    RecordUnitDefinition(
+        id: "photos",
+        name: "写真",
+        description: "思い出とノベルティ・特典を写真で整理",
+        isRequired: false
+    ),
+    RecordUnitDefinition(
+        id: "memo",
+        name: "感想・メモ",
+        description: "感想、印象、あとで見返したいこと",
+        isRequired: false
+    ),
+    RecordUnitDefinition(
+        id: "officialInfo",
+        name: "公式情報",
+        description: "公式URL・SNS・参考リンク",
+        isRequired: false
+    ),
+    RecordUnitDefinition(
+        id: "importOCR",
+        name: "画像・OCR取込",
+        description: "半券、チケット、案内画像の読み取り",
+        isRequired: false
+    ),
+    RecordUnitDefinition(
+        id: "advanced",
+        name: "制作・作品の追加情報",
+        description: "脚本、原作、音楽など必要な項目だけ",
+        isRequired: false
+    ),
+]
+
+private let screenWorkPeopleRoleOptions: [PersonRoleOption] = [
+    PersonRoleOption.option(for: "director"),
+    PersonRoleOption.option(for: "lead"),
+    PersonRoleOption.option(for: "cast"),
+]
+
+private enum ScreenWorkRecordInputStage: String, CaseIterable, Identifiable {
+    case minimum
+    case standard
+    case detail
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .minimum: "最小"
+        case .standard: "普通"
+        case .detail: "詳細"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .minimum: "タイトルと鑑賞情報だけでも保存できます"
+        case .standard: "人物・鑑賞方法・写真・感想を必要な分だけ"
+        case .detail: "公式情報・画像取込・追加の制作情報"
+        }
+    }
+
+    private var unitIDs: [String] {
+        switch self {
+        case .minimum:
+            ["screenWorkCore"]
+        case .standard:
+            ["screenWorkViewing", "people", "photos", "memo"]
+        case .detail:
+            ["officialInfo", "importOCR", "advanced"]
+        }
+    }
+
+    var units: [RecordUnitDefinition] {
+        unitIDs.compactMap { id in
+            screenWorkRecordUnitDefinitions.first(where: { $0.id == id })
+        }
+    }
+}
+
+@ViewBuilder
+private func stagedScreenWorkForm<Content: View>(
+    status: @escaping (String) -> RecordUnitStatus,
+    isExpanded: @escaping (String) -> Binding<Bool>,
+    @ViewBuilder content: @escaping (RecordUnitDefinition) -> Content
+) -> some View {
+    ForEach(ScreenWorkRecordInputStage.allCases) { stage in
+        StagedRecordBlock(
+            title: stage.title,
+            description: stage.description,
+            units: stage.units,
+            status: status,
+            isExpanded: isExpanded,
+            content: content
+        )
+    }
+}
+
+private enum OutingRecordInputStage: String, CaseIterable, Identifiable {
+    case minimum
+    case standard
+    case detail
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .minimum: "最小"
+        case .standard: "普通"
+        case .detail: "詳細"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .minimum: "施設と訪問日だけでも保存できます"
+        case .standard: "写真・感想・費用を必要な分だけ"
+        case .detail: "チケット・画像取込・補足情報"
+        }
+    }
+
+    private var unitIDs: [String] {
+        switch self {
+        case .minimum:
+            ["basic"]
+        case .standard:
+            ["photos", "memo", "money"]
+        case .detail:
+            ["ticketPlan", "importOCR", "officialInfo", "advanced"]
+        }
+    }
+
+    func units(
+        from definitions: [RecordUnitDefinition],
+        templateKey: String
+    ) -> [RecordUnitDefinition] {
+        unitIDs.compactMap { id in
+            definitions
+                .first(where: { $0.id == id })
+                .map { outingRecordUnitDefinition($0, templateKey: templateKey) }
+        }
+    }
+}
+
+@ViewBuilder
+private func stagedOutingForm<Content: View>(
+    category: RecordCategory,
+    status: @escaping (String) -> RecordUnitStatus,
+    isExpanded: @escaping (String) -> Binding<Bool>,
+    @ViewBuilder content: @escaping (RecordUnitDefinition) -> Content
+) -> some View {
+    let definitions = activeUnitDefinitions(for: category)
+    ForEach(OutingRecordInputStage.allCases) { stage in
+        let units = stage.units(from: definitions, templateKey: category.templateKey)
+        if !units.isEmpty {
+            StagedRecordBlock(
+                title: stage.title,
+                description: stage.description,
+                units: units,
+                status: status,
+                isExpanded: isExpanded,
+                content: content
+            )
+        }
+    }
+}
+
+private func outingRecordUnitDefinition(
+    _ definition: RecordUnitDefinition,
+    templateKey: String
+) -> RecordUnitDefinition {
+    let isThemePark = templateKey == "theme_park"
+    switch definition.id {
+    case "basic":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: isThemePark ? "来園の記録" : "体験の記録",
+            description: isThemePark
+                ? "施設・種別・来園日・評価・イベント名"
+                : "施設・種別・訪問日・評価・今回の見どころ",
+            isRequired: true
+        )
+    case "photos":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "写真",
+            description: "分類とキャプションで思い出を整理",
+            isRequired: false
+        )
+    case "memo":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "感想・メモ",
+            description: "印象、混雑、また行きたいことなど",
+            isRequired: false
+        )
+    case "money":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "費用",
+            description: "入園料、食事、グッズ、交通費など",
+            isRequired: false
+        )
+    case "ticketPlan":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "チケット",
+            description: "取得状況やチケット情報",
+            isRequired: false
+        )
+    case "importOCR":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "画像・OCR取込",
+            description: "チケットやレシートの文字を読み取る",
+            isRequired: false
+        )
+    case "officialInfo":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "補足・公式情報",
+            description: "施設DBにないURLや補足情報",
+            isRequired: false
+        )
+    default:
+        return definition
+    }
+}
+
 private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnitDefinition] {
     let definitions = RecordUnitDefinition.definitions(for: category?.enabledUnitsRaw ?? "")
     let fallbackDefinitions = RecordUnitDefinition.definitions(for: "basic,officialInfo,memo")
@@ -2660,7 +3177,7 @@ private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnit
             RecordUnitDefinition(
                 id: "ticketPlan",
                 name: "鑑賞記録",
-                description: "チケット状態・座席・注目した人",
+                description: "チケット取得状況・座席・注目した人",
                 isRequired: false
             )
         )
@@ -2744,7 +3261,7 @@ private func theaterRecordUnitDefinition(
         return RecordUnitDefinition(
             id: definition.id,
             name: "鑑賞記録",
-            description: "チケット状態・座席・注目した人",
+            description: "チケット取得状況・座席・注目した人",
             isRequired: definition.isRequired
         )
     case "photos":
@@ -2835,6 +3352,78 @@ private enum RecordUnitStatus {
             return .green
         case .optional:
             return .secondary
+        }
+    }
+}
+
+private struct StagedRecordBlock<Content: View>: View {
+    let title: String
+    let description: String
+    let units: [RecordUnitDefinition]
+    let status: (String) -> RecordUnitStatus
+    let isExpanded: (String) -> Binding<Bool>
+    let content: (RecordUnitDefinition) -> Content
+
+    init(
+        title: String,
+        description: String,
+        units: [RecordUnitDefinition],
+        status: @escaping (String) -> RecordUnitStatus,
+        isExpanded: @escaping (String) -> Binding<Bool>,
+        @ViewBuilder content: @escaping (RecordUnitDefinition) -> Content
+    ) {
+        self.title = title
+        self.description = description
+        self.units = units
+        self.status = status
+        self.isExpanded = isExpanded
+        self.content = content
+    }
+
+    var body: some View {
+        Section {
+            ForEach(Array(units.enumerated()), id: \.element.id) { index, unit in
+                DisclosureGroup(isExpanded: isExpanded(unit.id)) {
+                    content(unit)
+                        .padding(.bottom, 4)
+                } label: {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(unit.name)
+                                .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                                .foregroundStyle(.primary)
+                            Text(unit.description)
+                                .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                                .foregroundStyle(.secondary.opacity(0.82))
+                                .lineLimit(2)
+                        }
+                        Spacer(minLength: 8)
+                        let unitStatus = status(unit.id)
+                        Text(unitStatus.title)
+                            .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                            .foregroundStyle(unitStatus.color)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(unitStatus.color.opacity(0.10), in: Capsule())
+                    }
+                    .frame(minHeight: 46)
+                }
+
+                if index < units.count - 1 {
+                    Divider()
+                }
+            }
+        } header: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .headline))
+                    .foregroundStyle(.primary)
+                Text(description)
+                    .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                    .foregroundStyle(.secondary.opacity(0.82))
+                    .textCase(nil)
+            }
+            .textCase(nil)
         }
     }
 }

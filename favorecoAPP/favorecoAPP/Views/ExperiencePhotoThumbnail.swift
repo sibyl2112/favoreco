@@ -91,11 +91,14 @@ private struct CompactPhotoThumbnail: View {
 
                 VStack {
                     HStack {
-                        Image(systemName: purpose.systemImage)
-                            .font(.system(size: 9, weight: .semibold))
+                        Label(purpose.title, systemImage: purpose.systemImage)
+                            .font(.system(size: 7.5, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 18, height: 18)
-                            .background(.black.opacity(0.58), in: Circle())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.62)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(.black.opacity(0.66), in: Capsule())
                         Spacer(minLength: 0)
                         if isCover {
                             Image(systemName: "star.fill")
@@ -120,6 +123,7 @@ private struct CompactPhotoThumbnail: View {
                 .padding(4)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
         }
         .aspectRatio(1, contentMode: .fit)
         .frame(maxWidth: .infinity)

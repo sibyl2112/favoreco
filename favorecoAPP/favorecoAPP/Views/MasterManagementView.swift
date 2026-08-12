@@ -270,6 +270,8 @@ struct PlaceMasterManagementView: View {
                 || normalizedMasterText(place.reading).contains(query)
                 || normalizedMasterText(place.address).contains(query)
                 || normalizedMasterText(prefecture).contains(query)
+                || normalizedMasterText(place.resolvedTempleSect).contains(query)
+                || place.resolvedEnshrinedDeities.contains { normalizedMasterText($0).contains(query) }
                 || PlaceMasterCategories.displayTitles(from: place.placeTagsRaw)
                     .contains { normalizedMasterText($0).contains(query) }
                 || place.aliasesRaw.components(separatedBy: CharacterSet(charactersIn: ",、\n"))
@@ -815,6 +817,42 @@ private struct PlaceMasterMergeView: View {
 
             PlaceMasterCategoryEditor(rawValue: $draft.placeTagsRaw)
 
+            if draft.showsReligiousDetails {
+                Section("宗派・御祭神") {
+                    if draft.isTemple {
+                        TextField("宗派（任意）", text: $draft.templeSect)
+                    }
+
+                    if draft.isShrine {
+                        if draft.enshrinedDeities.isEmpty {
+                            Text("御祭神は1柱ずつ追加できます。順番は入力順で保存します。")
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(draft.enshrinedDeities.indices, id: \.self) { index in
+                            HStack(spacing: 10) {
+                                TextField("御祭神", text: $draft.enshrinedDeities[index])
+                                Button(role: .destructive) {
+                                    draft.enshrinedDeities.remove(at: index)
+                                } label: {
+                                    FavorecoIcon(systemName: "trash", size: 16)
+                                }
+                                .accessibilityLabel("この御祭神を削除")
+                            }
+                        }
+                        Button {
+                            draft.enshrinedDeities.append("")
+                        } label: {
+                            FavorecoIconLabel("御祭神を追加", systemImage: "plus.circle")
+                        }
+                    }
+
+                    Text("公開カタログの値は候補として取り込みます。利用者が編集した内容は次回の候補選択で上書きしません。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("巡礼・札所") {
                 if draft.pilgrimageMemberships.isEmpty {
                     Text("西国・坂東・四国など、霊場名と札所番号を必要な場所だけ登録できます。")
@@ -950,6 +988,8 @@ private struct PlaceMasterMergeView: View {
         place.aliasesRaw = draft.trimmedAliasesRaw
         place.placeTagsRaw = draft.trimmedPlaceTagsRaw
         place.pilgrimageMembershipsRaw = PlacePilgrimageMembership.encode(draft.validPilgrimageMemberships)
+        place.templeSect = draft.trimmedTempleSect
+        place.enshrinedDeities = draft.validEnshrinedDeities
         place.operationalStatus = draft.operationalStatus
         place.officialURL = draft.trimmedOfficialURL
         place.memo = draft.trimmedMemo
@@ -1548,6 +1588,8 @@ private struct PlaceMasterDraft {
     var officialURL: String
     var memo: String
     var pilgrimageMemberships: [PlacePilgrimageMembership]
+    var templeSect: String
+    var enshrinedDeities: [String]
     var operationalStatus: PlaceOperationalStatus
 
     init(place: PlaceMaster) {
@@ -1560,6 +1602,8 @@ private struct PlaceMasterDraft {
         officialURL = place.officialURL
         memo = place.memo
         pilgrimageMemberships = PlacePilgrimageMembership.decode(place.pilgrimageMembershipsRaw)
+        templeSect = place.resolvedTempleSect
+        enshrinedDeities = place.resolvedEnshrinedDeities
         operationalStatus = place.operationalStatus
     }
 
@@ -1571,6 +1615,28 @@ private struct PlaceMasterDraft {
     var trimmedAddress: String { address.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedOfficialURL: String { officialURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedTempleSect: String { templeSect.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var validEnshrinedDeities: [String] {
+        enshrinedDeities
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+    var isTemple: Bool {
+        let tokens = normalizedReligiousTagTokens
+        return tokens.contains("temple") || tokens.contains("buddhist_temple") || placeTagsRaw.contains("寺院") || !trimmedTempleSect.isEmpty
+    }
+    var isShrine: Bool {
+        normalizedReligiousTagTokens.contains("shrine") || placeTagsRaw.contains("神社") || !validEnshrinedDeities.isEmpty
+    }
+    var showsReligiousDetails: Bool {
+        isTemple || isShrine || !trimmedTempleSect.isEmpty || !validEnshrinedDeities.isEmpty
+    }
+    private var normalizedReligiousTagTokens: Set<String> {
+        Set(placeTagsRaw
+            .lowercased()
+            .components(separatedBy: CharacterSet(charactersIn: ",、|\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+    }
     var validPilgrimageMemberships: [PlacePilgrimageMembership] {
         pilgrimageMemberships.filter {
             !$0.pilgrimageName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&

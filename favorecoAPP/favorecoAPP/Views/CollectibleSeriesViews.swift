@@ -85,6 +85,7 @@ struct AddCollectibleSeriesView: View {
                         .lineLimit(3...6)
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .navigationTitle(editingSeries == nil ? "シリーズを追加" : "シリーズを編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -442,18 +443,18 @@ private struct CollectibleItemCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
-                Group {
-                    if let data = item.imageData, let image = UIImage(data: data) {
-                        Image(uiImage: image).resizable().scaledToFill()
-                    } else {
-                        ZStack {
-                            accentColor.opacity(0.1)
-                            FavorecoIcon(
-                                systemName: item.currentQuantity > 0 ? "checkmark.seal.fill" : "photo",
-                                size: 28
-                            )
-                            .foregroundStyle(item.currentQuantity > 0 ? accentColor : .secondary)
-                        }
+                ThumbnailImage(
+                    reference: .collectibleItem(item.id),
+                    displaySize: CGSize(width: 180, height: 180),
+                    contentMode: .fill
+                ) {
+                    ZStack {
+                        accentColor.opacity(0.1)
+                        FavorecoIcon(
+                            systemName: item.currentQuantity > 0 ? "checkmark.seal.fill" : "photo",
+                            size: 28
+                        )
+                        .foregroundStyle(item.currentQuantity > 0 ? accentColor : .secondary)
                     }
                 }
                 .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit).clipped()
@@ -510,6 +511,7 @@ struct CollectibleItemEditorView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .navigationTitle(item == nil ? "種類を追加" : "種類を編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -535,7 +537,11 @@ struct CollectibleItemEditorView: View {
         target.imageData = imageData
         target.updatedAt = Date()
         series.updatedAt = Date()
-        do { try modelContext.save(); dismiss() }
+        do {
+            try modelContext.save()
+            ThumbnailLoader.purge(reference: .collectibleItem(target.id))
+            dismiss()
+        }
         catch { modelContext.rollback(); errorMessage = "種類を保存できませんでした。" }
     }
 }
@@ -602,6 +608,7 @@ struct CollectibleTransactionEditorView: View {
                     Text("先にラインナップの種類を追加してください。").foregroundStyle(.secondary)
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .navigationTitle("入手・手放しを記録")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -304,6 +304,7 @@ struct ExperienceExpenseSummary {
     let goodsAmount: Decimal
     let travelAmount: Decimal
     let legacyAmount: Decimal
+    let legacyEntries: [VisitExpenseEntry]
     let usesTicketPhotoFallback: Bool
     let usesLegacyFallback: Bool
 
@@ -323,6 +324,9 @@ struct ExperienceExpenseSummary {
         let ticketAmount = ticketAttemptAmount > 0 ? ticketAttemptAmount : ticketPhotoAmount
         let structuredAmount = ticketAmount + goodsAmount + travelAmount
         let legacyAmount = max(visit?.amount ?? Decimal(0), Decimal(0))
+        let legacyEntries = VisitUnitFields(rawValue: visit?.unitFieldsRaw ?? "")
+            .expenseEntries
+            .filter { !$0.isEmpty }
 
         return ExperienceExpenseSummary(
             ticketAttemptAmount: ticketAttemptAmount,
@@ -331,6 +335,7 @@ struct ExperienceExpenseSummary {
             goodsAmount: goodsAmount,
             travelAmount: travelAmount,
             legacyAmount: legacyAmount,
+            legacyEntries: legacyEntries,
             usesTicketPhotoFallback: ticketAttemptAmount == 0 && ticketPhotoAmount > 0,
             usesLegacyFallback: structuredAmount == 0 && legacyAmount > 0
         )

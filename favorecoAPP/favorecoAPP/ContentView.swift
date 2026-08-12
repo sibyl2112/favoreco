@@ -29,19 +29,29 @@ struct ContentView: View {
 #endif
     }()
     @State private var presentedReleaseNote: AppReleaseNote?
+    @State private var showsLaunchSplash = true
 
     var body: some View {
-        Group {
-            if !effectiveLocalStoreError.isEmpty {
-                LocalStoreRecoveryView(
-                    errorMessage: effectiveLocalStoreError,
-                    isDebugSimulation: debugRecoverySimulationAtLaunch,
-                    onDisableDebugSimulation: disableDebugRecoverySimulation
-                )
-            } else if hasCompletedGenreOnboarding {
-                MainTabView()
-            } else {
-                GenreOnboardingView()
+        ZStack {
+            Group {
+                if !effectiveLocalStoreError.isEmpty {
+                    LocalStoreRecoveryView(
+                        errorMessage: effectiveLocalStoreError,
+                        isDebugSimulation: debugRecoverySimulationAtLaunch,
+                        onDisableDebugSimulation: disableDebugRecoverySimulation
+                    )
+                } else if hasCompletedGenreOnboarding {
+                    MainTabView()
+                } else {
+                    GenreOnboardingView()
+                }
+            }
+
+            if showsLaunchSplash {
+                FavorecoSplashView {
+                    showsLaunchSplash = false
+                }
+                .zIndex(100)
             }
         }
         .modifier(AppTextSizeModifier())

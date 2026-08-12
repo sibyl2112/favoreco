@@ -377,6 +377,7 @@ struct QuickRegistrationView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .navigationTitle(screenTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -813,6 +814,7 @@ private struct BookISBNImportSheet: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .navigationTitle("ISBNから入力")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -899,6 +901,7 @@ private struct BookMetadataReviewSheet: View {
                     .buttonStyle(.borderedProminent)
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .navigationTitle("読み取り結果")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

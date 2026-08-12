@@ -49,11 +49,16 @@ struct ExperienceBasicUnitEditor: View {
     let usesPlaceSuggestions: Bool
     let usesMapSearchAssist: Bool
     let supportsPerformanceTime: Bool
+    let supportsExperienceDuration: Bool
     let supportsStyles: Bool
     let usesExplicitTheaterLayout: Bool
     let showsRating: Bool
     let datePrecision: ExperienceDatePrecision
     let usesSimpleScreenWorkLayout: Bool
+    let categoryTemplateKey: String
+    private let subTypeKey: Binding<String>?
+    private let screenWorkSeasonNumber: Binding<Int>?
+    private let performanceTypeCustomName: Binding<String>?
     let ratingText: String
     let onSelectPlace: (PlaceMaster) -> Void
     let onSelectPublicPlace: (PublicPlaceSelectionDraft) -> Void
@@ -76,11 +81,16 @@ struct ExperienceBasicUnitEditor: View {
         usesPlaceSuggestions: Bool,
         usesMapSearchAssist: Bool,
         supportsPerformanceTime: Bool,
+        supportsExperienceDuration: Bool = false,
         supportsStyles: Bool,
         usesExplicitTheaterLayout: Bool = false,
         showsRating: Bool = true,
         datePrecision: ExperienceDatePrecision = .day,
         usesSimpleScreenWorkLayout: Bool = false,
+        categoryTemplateKey: String = "",
+        subTypeKey: Binding<String>? = nil,
+        screenWorkSeasonNumber: Binding<Int>? = nil,
+        performanceTypeCustomName: Binding<String>? = nil,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
         onSelectPublicPlace: @escaping (PublicPlaceSelectionDraft) -> Void,
@@ -104,11 +114,16 @@ struct ExperienceBasicUnitEditor: View {
         self.usesPlaceSuggestions = usesPlaceSuggestions
         self.usesMapSearchAssist = usesMapSearchAssist
         self.supportsPerformanceTime = supportsPerformanceTime
+        self.supportsExperienceDuration = supportsExperienceDuration
         self.supportsStyles = supportsStyles
         self.usesExplicitTheaterLayout = usesExplicitTheaterLayout
         self.showsRating = showsRating
         self.datePrecision = datePrecision
         self.usesSimpleScreenWorkLayout = usesSimpleScreenWorkLayout
+        self.categoryTemplateKey = categoryTemplateKey
+        self.subTypeKey = subTypeKey
+        self.screenWorkSeasonNumber = screenWorkSeasonNumber
+        self.performanceTypeCustomName = performanceTypeCustomName
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
         self.onSelectPublicPlace = onSelectPublicPlace
@@ -132,11 +147,16 @@ struct ExperienceBasicUnitEditor: View {
         usesPlaceSuggestions: Bool,
         usesMapSearchAssist: Bool,
         supportsPerformanceTime: Bool,
+        supportsExperienceDuration: Bool = false,
         supportsStyles: Bool,
         usesExplicitTheaterLayout: Bool = false,
         showsRating: Bool = true,
         datePrecision: ExperienceDatePrecision = .day,
         usesSimpleScreenWorkLayout: Bool = false,
+        categoryTemplateKey: String = "",
+        subTypeKey: Binding<String>? = nil,
+        screenWorkSeasonNumber: Binding<Int>? = nil,
+        performanceTypeCustomName: Binding<String>? = nil,
         ratingText: String,
         onSelectPlace: @escaping (PlaceMaster) -> Void,
         onSelectPublicPlace: @escaping (PublicPlaceSelectionDraft) -> Void,
@@ -160,11 +180,16 @@ struct ExperienceBasicUnitEditor: View {
         self.usesPlaceSuggestions = usesPlaceSuggestions
         self.usesMapSearchAssist = usesMapSearchAssist
         self.supportsPerformanceTime = supportsPerformanceTime
+        self.supportsExperienceDuration = supportsExperienceDuration
         self.supportsStyles = supportsStyles
         self.usesExplicitTheaterLayout = usesExplicitTheaterLayout
         self.showsRating = showsRating
         self.datePrecision = datePrecision
         self.usesSimpleScreenWorkLayout = usesSimpleScreenWorkLayout
+        self.categoryTemplateKey = categoryTemplateKey
+        self.subTypeKey = subTypeKey
+        self.screenWorkSeasonNumber = screenWorkSeasonNumber
+        self.performanceTypeCustomName = performanceTypeCustomName
         self.ratingText = ratingText
         self.onSelectPlace = onSelectPlace
         self.onSelectPublicPlace = onSelectPublicPlace
@@ -173,21 +198,47 @@ struct ExperienceBasicUnitEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if usesExplicitTheaterLayout {
-                VStack(alignment: .leading, spacing: 0) {
-                    targetFields
-                    Divider()
-                    visitFields
-                }
-            } else {
-                Group {
-                    targetFields
-                    Divider()
-                    visitFields
-                }
+            targetFields
+            if showsSubtypeEditor {
+                theaterDivider
+                subtypeEditor
             }
+            theaterDivider
+            visitFields
         }
         .task { await publicPlaceStore.prepare() }
+    }
+
+    private var showsSubtypeEditor: Bool {
+        guard subTypeKey != nil else { return false }
+        return categoryTemplateKey == "theater"
+            || categoryTemplateKey == "movie"
+            || categoryTemplateKey == "theme_park"
+            || categoryTemplateKey == "nature_living"
+    }
+
+    @ViewBuilder
+    private var subtypeEditor: some View {
+        if categoryTemplateKey == "theater",
+           let subTypeKey,
+           let performanceTypeCustomName {
+            TheaterPerformanceTypePicker(
+                selection: subTypeKey,
+                customName: performanceTypeCustomName,
+                usesCompactLabelStyle: true
+            )
+        } else if categoryTemplateKey == "movie",
+                  let subTypeKey,
+                  let screenWorkSeasonNumber {
+            ScreenWorkTypeAndSeasonEditor(
+                typeKey: subTypeKey,
+                seasonNumber: screenWorkSeasonNumber
+            )
+            .padding(.vertical, 8)
+        } else if let subTypeKey {
+            OutingFacilityTypePicker(selection: subTypeKey)
+                .padding(.vertical, 8)
+        }
     }
 
     @ViewBuilder
@@ -276,6 +327,14 @@ struct ExperienceBasicUnitEditor: View {
                 .foregroundStyle(.secondary)
             if datePrecision == .year {
                 YearOnlyPicker(selection: $visitedAt)
+            } else if supportsExperienceDuration {
+                ExperienceDateTimeRangeEditor(
+                    startsAt: $visitedAt,
+                    endsAt: $endedAt,
+                    dateLabel: template.dateLabel,
+                    startTimeLabel: "開始時刻",
+                    endTimeLabel: "終了時刻"
+                )
             } else {
                 DatePicker(template.dateLabel, selection: $visitedAt, displayedComponents: .date)
             }
@@ -556,7 +615,7 @@ struct ExperienceBasicUnitEditor: View {
                     Text("登録済みの場所")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
-                    ForEach(suggestions) { place in
+                    ForEach(suggestions, id: \.id) { place in
                         Button {
                             onSelectPlace(place)
                         } label: {
@@ -738,12 +797,12 @@ struct ExperienceRatingUnitEditor: View {
         ExplicitFormControlRow(title: title, isOptional: true) {
             HStack(spacing: 8) {
                 Slider(value: $overallRating, in: 0...5, step: 0.5)
-                    .frame(maxWidth: 172)
+                    .frame(maxWidth: 205)
                 Text(ratingText)
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 40, alignment: .trailing)
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -783,6 +842,110 @@ struct ScreenWorkTypeAndSeasonEditor: View {
                 .pickerStyle(.menu)
             }
         }
+    }
+}
+
+struct ExperienceDateTimeRangeEditor: View {
+    @Binding var startsAt: Date
+    @Binding var endsAt: Date
+    let dateLabel: String
+    let startTimeLabel: String
+    let endTimeLabel: String
+    var defaultDurationMinutes = 120
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ExplicitFormControlRow(title: dateLabel) {
+                DatePicker(
+                    dateLabel,
+                    selection: startBinding,
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+                .environment(\.locale, Locale(identifier: "ja_JP"))
+                .controlSize(.small)
+                .fixedSize()
+            }
+
+            Divider().overlay(ExplicitFormMetrics.rowSeparatorColor)
+
+            ExplicitFormControlRow(title: startTimeLabel) {
+                DatePicker(
+                    startTimeLabel,
+                    selection: startBinding,
+                    displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
+                .environment(\.locale, Locale(identifier: "ja_JP"))
+                .controlSize(.small)
+                .fixedSize()
+            }
+
+            Divider().overlay(ExplicitFormMetrics.rowSeparatorColor)
+
+            ExplicitFormControlRow(title: endTimeRowLabel) {
+                DatePicker(
+                    endTimeLabel,
+                    selection: endTimeBinding,
+                    displayedComponents: .hourAndMinute
+                )
+                .labelsHidden()
+                .environment(\.locale, Locale(identifier: "ja_JP"))
+                .controlSize(.small)
+                .fixedSize()
+            }
+        }
+        .onAppear(perform: normalizeEndIfNeeded)
+    }
+
+    private var currentDuration: TimeInterval {
+        let duration = endsAt.timeIntervalSince(startsAt)
+        return duration > 0 ? duration : TimeInterval(defaultDurationMinutes * 60)
+    }
+
+    private var startBinding: Binding<Date> {
+        Binding(
+            get: { startsAt },
+            set: { newStart in
+                let duration = currentDuration
+                startsAt = newStart
+                endsAt = newStart.addingTimeInterval(duration)
+            }
+        )
+    }
+
+    private var endTimeBinding: Binding<Date> {
+        Binding(
+            get: { endsAt },
+            set: { selectedTime in
+                let calendar = Calendar.current
+                let time = calendar.dateComponents([.hour, .minute], from: selectedTime)
+                var day = calendar.dateComponents([.year, .month, .day], from: startsAt)
+                day.hour = time.hour
+                day.minute = time.minute
+                day.second = 0
+                guard var candidate = calendar.date(from: day) else { return }
+                if candidate < startsAt {
+                    candidate = calendar.date(byAdding: .day, value: 1, to: candidate) ?? candidate
+                }
+                endsAt = candidate
+            }
+        )
+    }
+
+    private var endTimeRowLabel: String {
+        Calendar.current.isDate(startsAt, inSameDayAs: endsAt)
+            ? endTimeLabel
+            : "\(endTimeLabel)（翌日）"
+    }
+
+    private func normalizeEndIfNeeded() {
+        guard endsAt <= startsAt else { return }
+        endsAt = Calendar.current.date(
+            byAdding: .minute,
+            value: defaultDurationMinutes,
+            to: startsAt
+        ) ?? startsAt
     }
 }
 

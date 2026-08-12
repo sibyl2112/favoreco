@@ -608,6 +608,8 @@ nonisolated struct BackupPlace: Codable {
     var externalIDsRaw: String
     var sourceSnapshotRaw: String
     var pilgrimageMembershipsRaw: String?
+    var templeSect: String?
+    var enshrinedDeitiesRaw: String?
     var operationalStatusRaw: String?
     var normalizedName: String
     var normalizedAddress: String
@@ -631,6 +633,8 @@ nonisolated struct BackupPlace: Codable {
         externalIDsRaw = place.externalIDsRaw
         sourceSnapshotRaw = place.sourceSnapshotRaw
         pilgrimageMembershipsRaw = place.pilgrimageMembershipsRaw
+        templeSect = place.templeSect
+        enshrinedDeitiesRaw = place.enshrinedDeitiesRaw
         operationalStatusRaw = place.operationalStatusRaw
         normalizedName = place.normalizedName
         normalizedAddress = place.normalizedAddress

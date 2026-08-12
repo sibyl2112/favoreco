@@ -1,6 +1,5 @@
 import SwiftUI
 import MapKit
-import SwiftData
 
 struct VisitedPlacesHeatMapSection: View {
     let visits: [Visit]
@@ -15,7 +14,6 @@ struct VisitedPlacesHeatMapSection: View {
     @State private var selectedPointID: String?
     @State private var mapDestination: FavorecoMapDestination?
     @State private var selectedHistoryPointID: String?
-    @Environment(\.modelContext) private var modelContext
 
     private var allPoints: [VisitedPlaceHeatPoint] {
         VisitedPlaceHeatPoint.make(from: visits)
@@ -113,9 +111,6 @@ struct VisitedPlacesHeatMapSection: View {
         .onChange(of: searchText) { _, _ in focusFilteredPoints() }
         .onChange(of: selectedPrefecture) { _, _ in focusFilteredPoints() }
         .onChange(of: filteredPoints.map(\.id)) { _, _ in focusFilteredPoints() }
-        .task(id: visits.map { "\($0.id.uuidString)-\($0.latitude)-\($0.longitude)" }.joined()) {
-            await repairMissingCoordinates()
-        }
         .sheet(isPresented: Binding(
             get: { selectedHistoryPointID != nil },
             set: { if !$0 { selectedHistoryPointID = nil } }
@@ -219,34 +214,6 @@ struct VisitedPlacesHeatMapSection: View {
             }
             .padding(.horizontal, 12)
             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
-        }
-    }
-
-    @MainActor
-    private func repairMissingCoordinates() async {
-        var didUpdate = false
-        for visit in visits where !visit.hasUsableMapCoordinate {
-            let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let venue = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
-            let query = address.isEmpty ? venue : address
-            guard !query.isEmpty,
-                  let candidates = try? await PlaceSearchService.search(query: query),
-                  let candidate = candidates.first else { continue }
-            visit.latitude = candidate.latitude
-            visit.longitude = candidate.longitude
-            if let place = visit.placeMaster {
-                place.latitude = candidate.latitude
-                place.longitude = candidate.longitude
-                if place.address.isEmpty, !candidate.address.isEmpty {
-                    place.address = candidate.address
-                }
-                place.updatedAt = Date()
-            }
-            visit.updatedAt = Date()
-            didUpdate = true
-        }
-        if didUpdate {
-            try? modelContext.save()
         }
     }
 

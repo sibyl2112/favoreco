@@ -70,6 +70,8 @@ struct AddTicketPlanView: View {
     @State private var selectedPlanID: UUID?
     @State private var isShowingInterestedEventPicker = false
     @State private var isShowingRegisteredEventPicker = false
+    @State private var isShowingRecurringEventCatalog = false
+    @State private var selectedRecurringEventEdition: PublicRecurringEventEdition?
     @State private var pendingSelectedEventID: UUID?
     @State private var isShowingPlaceSearch = false
     @State private var suppressesPlaceSuggestions = false
@@ -296,6 +298,13 @@ struct AddTicketPlanView: View {
         }
     }
 
+    private var simpleScheduleDateLabel: String {
+        switch selectedCategory?.templateKey {
+        case "movie", "museum": "鑑賞日"
+        default: "訪問日"
+        }
+    }
+
     private var usesTicketRegistration: Bool {
         entryMode == .ticketSchedule
             || (isUnifiedRegistration
@@ -506,6 +515,38 @@ struct AddTicketPlanView: View {
                                      : "作品・施設などの対象と予定を同時に登録します。")
                                 .font(FavorecoTypography.caption)
                                 .foregroundStyle(.secondary)
+
+                            if let templateKey = selectedCategory?.templateKey,
+                               ["museum", "theater", "live"].contains(templateKey) {
+                                Button {
+                                    isShowingRecurringEventCatalog = true
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        FavorecoIcon(systemName: "calendar.badge.clock", size: 17)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("定期イベントカタログから選ぶ")
+                                                .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                                            Text("芸術祭・舞台芸術祭・野外音楽祭")
+                                                .font(FavorecoTypography.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+
+                                if let edition = selectedRecurringEventEdition {
+                                    Button("会期初日を予定日に反映") {
+                                        applyRecurringEditionDate(edition)
+                                    }
+                                    .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+                                    .disabled(edition.startDate == nil)
+                                }
+                            }
                         }
                     } header: {
                         FavorecoRegistrationSectionHeader(
@@ -703,8 +744,13 @@ struct AddTicketPlanView: View {
                                 TenMinuteTimeRow(title: "開演", selection: startTimeBinding)
                                 TenMinuteTimeRow(title: "終了", selection: endTimeBinding)
                             } else {
-                                FiveMinuteDateTimeRow(title: "開始", selection: startTimeBinding)
-                                FiveMinuteDateTimeRow(title: "終了", selection: endTimeBinding)
+                                ExperienceDateTimeRangeEditor(
+                                    startsAt: startTimeBinding,
+                                    endsAt: endTimeBinding,
+                                    dateLabel: simpleScheduleDateLabel,
+                                    startTimeLabel: "開始時刻",
+                                    endTimeLabel: "終了時刻"
+                                )
                             }
                         } else if usesOpeningTime && usesPlanRegistration {
                             TheaterScheduleDateRow(
@@ -1025,6 +1071,7 @@ struct AddTicketPlanView: View {
                     }
                 }
             }
+            .favorecoRegistrationFormCanvas()
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -1061,6 +1108,7 @@ struct AddTicketPlanView: View {
                 selectedPlanID = nil
                 batchImportedScheduleDrafts.removeAll()
                 additionalApplications.removeAll { $0.isImported }
+                selectedRecurringEventEdition = nil
                 draft.clearTarget()
                 restoreInitialCategoryIfNeeded()
             }
@@ -1136,6 +1184,11 @@ struct AddTicketPlanView: View {
                 ) { eventID in
                     pendingSelectedEventID = eventID
                     isShowingRegisteredEventPicker = false
+                }
+            }
+            .sheet(isPresented: $isShowingRecurringEventCatalog) {
+                PublicRecurringEventCatalogView(templateKey: selectedCategory?.templateKey) { entry, edition in
+                    applyRecurringEventCatalogSelection(entry, edition: edition)
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
@@ -2846,6 +2899,35 @@ struct AddTicketPlanView: View {
     private func synchronizedPlanTitle(event: ExperienceEvent?) -> String {
         let eventTitle = event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return eventTitle.isEmpty ? draft.trimmedTitle : eventTitle
+    }
+
+    private func applyRecurringEventCatalogSelection(
+        _ entry: PublicRecurringEventCatalogEntry,
+        edition: PublicRecurringEventEdition?
+    ) {
+        if let category = visibleCategories.first(where: { $0.templateKey == entry.templateKey }) {
+            draft.categoryID = category.id
+        }
+        targetSelectionMode = .new
+        draft.title = entry.officialName
+        draft.officialURL = edition?.officialURL.isEmpty == false
+            ? edition?.officialURL ?? entry.officialURL
+            : entry.officialURL
+        selectedRecurringEventEdition = edition
+    }
+
+    private func applyRecurringEditionDate(_ edition: PublicRecurringEventEdition) {
+        guard let day = edition.startDate else { return }
+        let calendar = Calendar.current
+        let time = calendar.dateComponents([.hour, .minute], from: draft.startsAt)
+        draft.startsAt = calendar.date(
+            bySettingHour: time.hour ?? 12,
+            minute: time.minute ?? 0,
+            second: 0,
+            of: day
+        ) ?? day
+        draft.endsAt = calendar.date(byAdding: .hour, value: 2, to: draft.startsAt) ?? draft.startsAt
+        draft.hasConfirmedSchedule = true
     }
 
     private var eventStateKeyAfterPlanSave: String {
