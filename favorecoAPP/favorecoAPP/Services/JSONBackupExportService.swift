@@ -10,7 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    nonisolated static let schemaVersion = 16
+    nonisolated static let schemaVersion = 17
 
     nonisolated static func makeBackupJSON(
         categories: [RecordCategory],
@@ -340,6 +340,7 @@ nonisolated struct BackupInboxItem: Codable {
 nonisolated struct BackupPhoto: Codable {
     var id: UUID
     var visitID: UUID?
+    var planID: UUID?
     var relativePath: String
     var originalFilename: String
     var mediaKind: String
@@ -356,6 +357,7 @@ nonisolated struct BackupPhoto: Codable {
     nonisolated init(_ photo: PhotoBlob, includesBinaryData: Bool = false) {
         id = photo.id
         visitID = photo.visit?.id
+        planID = photo.plan?.id
         relativePath = photo.relativePath
         originalFilename = photo.originalFilename
         mediaKind = photo.mediaKind

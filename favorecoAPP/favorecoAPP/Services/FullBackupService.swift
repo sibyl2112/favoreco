@@ -96,6 +96,8 @@ enum FullBackupService {
 
         let visits = Dictionary(grouping: try context.fetch(FetchDescriptor<Visit>()), by: \.id)
             .compactMapValues(\.first)
+        let plans = Dictionary(grouping: try context.fetch(FetchDescriptor<Plan>()), by: \.id)
+            .compactMapValues(\.first)
         var photos = Dictionary(grouping: try context.fetch(FetchDescriptor<PhotoBlob>()), by: \.id)
             .compactMapValues(\.first)
         var insertedPhotoCount = 0
@@ -132,6 +134,7 @@ enum FullBackupService {
             model.createdAt = item.createdAt
             model.data = data
             model.visit = item.visitID.flatMap { visits[$0] }
+            model.plan = item.planID.flatMap { plans[$0] }
         }
 
         let galleryPhotos = Dictionary(

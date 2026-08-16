@@ -210,6 +210,52 @@ final class TheaterFullBackupRoundTripTests: XCTestCase {
         )
     }
 
+    func testPlanPhotoSurvivesFullBackupRoundTrip() throws {
+        let plan = Plan(title: "写真付き予定")
+        let photo = PhotoBlob(
+            originalFilename: "plan-memory.jpg",
+            purpose: "memory",
+            byteCount: 3,
+            width: 1_200,
+            height: 800,
+            data: Data([0x21, 0x22, 0x23]),
+            plan: plan
+        )
+        let json = try JSONBackupExportService.makeBackupJSON(
+            categories: [],
+            events: [],
+            visits: [],
+            inboxItems: [],
+            photos: [photo],
+            socialAccounts: [],
+            people: [],
+            companions: [],
+            favoriteProfiles: [],
+            favoGalleryPhotos: [],
+            favoAnniversaries: [],
+            favoPins: [],
+            personLinks: [],
+            places: [],
+            plans: [plan],
+            ticketAccounts: [],
+            ticketAttempts: [],
+            isFullBackupManifest: true
+        )
+        let packageURL = try FullBackupService.makePackage(json: json, photos: [photo])
+        defer { try? FileManager.default.removeItem(at: packageURL) }
+
+        let context = try makeContext()
+        let result = try FullBackupService.restore(packageURL: packageURL, in: context)
+
+        XCTAssertEqual(result.insertedPhotoCount, 1)
+        let restoredPlan = try fetch(Plan.self, id: plan.id, keyPath: \.id, in: context)
+        let restoredPhoto = try fetch(PhotoBlob.self, id: photo.id, keyPath: \.id, in: context)
+        XCTAssertEqual(restoredPhoto.plan?.id, restoredPlan.id)
+        XCTAssertNil(restoredPhoto.visit)
+        XCTAssertEqual(restoredPhoto.data, photo.data)
+        XCTAssertEqual(restoredPlan.photos?.map(\.id), [photo.id])
+    }
+
     func testRestoreRemainsIdempotentAfterPersistentStoreReopen() throws {
         let fixture = makeFixture()
         let packageURL = try makePackage(for: fixture)

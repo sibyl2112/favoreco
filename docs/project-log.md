@@ -4,6 +4,72 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-08-16: 体験後詳細の主要情報を連続ナラティブへ統合
+
+### 原因と変更意図
+- 公式URL、会場、写真等が各々の角丸カードと20pt間隔を持ち、思い出を上から読むたびに視線が分断されていた。
+- Mystoriumの記録詳細を基準に、主要情報を一覧として接続し、カード面ではなく細い罫線で内容の切り替わりを示す。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 全ジャンルのHero直下から感想までを共通ナラティブコンテナへまとめ、各Sectionのカード装飾を環境値で連続行へ切り替える共通実装を追加。
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`: 連続一覧、0.7pt罫線、独立セクションを維持する範囲を記録。
+
+### 影響範囲・確認
+- 観劇、書籍、ライブ、テーマパーク、自然・生き物、御朱印、酒を含む全ジャンルの参加済み記録詳細へ反映する。各ジャンル固有の順序、保存データ、編集、履歴、Todo、補助情報の開閉は変更しない。
+- Swift構文解析、差分検査、署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView.swift`と`BookMetadataLookupService.swift`のMainActor警告のみ。実機で情報0／1／多数、最後に表示される行の罫線、小幅端末、Dynamic Typeを確認する。
+
+## 2026-08-16: 予定詳細へ直接写真追加と操作競合の防止を追加
+
+### 原因と変更意図
+- 標準予定の`公式情報`だけ静的見出しのままで、ほかの情報カードと同じように閉じられなかった。
+- 準備・遠征の終了スワイプ除外が予約候補の細い横列だけだったため、指が少し上下へ外れると詳細パネルが閉じる判定へ入った。
+- Planに写真の保存先がなく、観劇予定の旧`写真を追加`は記録入力を開くだけで、予定詳細から直接追加できなかった。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 公式情報の開閉、全ジャンル共通の写真カード、ライブラリ／カメラからの直接追加、サムネイルと全画面表示を追加。
+- `favorecoAPP/favorecoAPP/Views/PlanPreparationChecklistView.swift`: 準備・遠征カード全体を詳細終了スワイプの除外範囲へ変更。
+- `favorecoAPP/favorecoAPP/Models/CoreModels.swift`、`Models/PendingExperiencePhoto.swift`: PlanとPhotoBlobの任意関係と予定写真生成を追加。
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 予定から参加記録を保存する時にPlan写真をVisitへ付け替える。
+- `favorecoAPP/favorecoAPP/Services/JSONBackupExportService.swift`、`FullBackupService.swift`: schema 17で予定写真のPlan関係を完全バックアップ／復元。
+- `favorecoAPP/favorecoAPPTests/TheaterFullBackupRoundTripTests.swift`: Plan写真の完全バックアップ往復テストを追加。
+
+### 影響範囲・保存規則
+- 全ジャンルの保存済み予定詳細、準備・遠征Todo、予定から記録への状態進行、完全バックアップ。
+- 予定写真は`PhotoBlob.plan`を正本とし、Visit作成までは体験済み扱いにしない。記録確定時に同じPhotoBlobの関係をVisitへ移すため、画像データを複製しない。
+- 写真0枚でもカードと追加操作を残す。チケット・費用・予定編集・通知の保存内容は変更しない。
+
+### 確認結果
+- 変更Swiftの構文解析と差分検査に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView` MainActor警告2件のみ。
+- Plan写真の完全バックアップ往復テストを含むSimulator向け`build-for-testing`に成功。同テストをiOS 26.5 Simulatorで実行し、1件成功・失敗0件。
+
+### 残課題
+- 実機で公式情報の開閉、Todoカード内の左右操作、写真0／1／多数、閉じた状態からの追加、ライブラリ／カメラ、全画面送り、記録化後の引継ぎ、完全バックアップ復元を確認する。
+
+## 2026-08-16: 予定詳細の開閉・地図・費用配置を統一
+
+### 原因と変更意図
+- 標準予定の`基本情報`と`チケット`は静的見出しで閉じられず、長い予定詳細の情報量を調整できなかった。
+- 予定詳細だけ旧`地図で見る`がApple Mapsへ直行し、記録詳細等で使う埋め込みMapと地図アプリ選択の規則から外れていた。
+- 費用合計が準備・遠征Todoより前にあり、Todoへ登録した宿泊・交通費と集計結果の読み順が逆だった。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 基本情報／チケットの開閉見出し、基本情報内の埋め込みMap、Apple／Google Maps選択、準備・遠征Todo直下への費用移動を実装。
+- `favoreco/favoreco/CLAUDE.md`、`favoreco/docs/15-画面情報設計.md`: 保存済み予定詳細の表示・操作規則を更新。
+- `favoreco/docs/00-開発状況と残課題.md`: 実装済み内容と実機確認項目を更新。
+
+### 影響範囲
+- 全ジャンルの保存済み予定詳細。標準表示では基本情報とチケット、観劇表示では地図直行導線と費用の位置が変わる。
+- Plan、TicketAttempt、準備・遠征Todoの保存値、費用集計、予定編集の保存処理は変更しない。
+
+### 確認結果
+- `PlanDetailView.swift`のSwift構文解析に成功。
+- 差分検査に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView`にあるMainActor警告2件のみ。
+
+### 残課題
+- 実機で基本情報・チケットの開閉、0／1／複数申込、会場情報なし／住所のみ／座標あり、Apple／Google Mapsの選択、Todoと費用の順を確認する。
+
 ## 2026-08-16: 体験後の記録詳細を思い出中心の読み順へ再構成
 
 ### 原因と変更意図

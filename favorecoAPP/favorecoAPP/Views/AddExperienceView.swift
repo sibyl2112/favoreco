@@ -2332,6 +2332,10 @@ struct AddVisitView: View {
         }
         event.updatedAt = now
         if let sourcePlan {
+            for photo in sourcePlan.photos ?? [] {
+                photo.plan = nil
+                photo.visit = visit
+            }
             sourcePlan.visit = visit
             sourcePlan.stateKey = "attended"
             sourcePlan.updatedAt = now

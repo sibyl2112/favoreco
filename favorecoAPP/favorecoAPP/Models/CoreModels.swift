@@ -913,6 +913,9 @@ final class Plan {
     @Relationship(deleteRule: .cascade, inverse: \TicketAttempt.plan)
     var ticketAttempts: [TicketAttempt]? = []
 
+    @Relationship(deleteRule: .cascade, inverse: \PhotoBlob.plan)
+    var photos: [PhotoBlob]? = []
+
     init(
         id: UUID = UUID(),
         title: String = "",
@@ -1259,6 +1262,8 @@ final class PhotoBlob {
 
     var visit: Visit?
 
+    var plan: Plan?
+
     @Relationship(deleteRule: .cascade, inverse: \FavoGalleryPhoto.sourcePhoto)
     var favoGallerySelections: [FavoGalleryPhoto]? = []
 
@@ -1280,7 +1285,8 @@ final class PhotoBlob {
         height: Int = 0,
         createdAt: Date = Date(),
         data: Data = Data(),
-        visit: Visit? = nil
+        visit: Visit? = nil,
+        plan: Plan? = nil
     ) {
         self.id = id
         self.relativePath = relativePath
@@ -1296,5 +1302,6 @@ final class PhotoBlob {
         self.createdAt = createdAt
         self.data = data
         self.visit = visit
+        self.plan = plan
     }
 }

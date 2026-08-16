@@ -350,16 +350,18 @@ struct ExperienceDetailView: View {
                         backgroundPhoto: backgroundPhoto
                     )
                 } content: {
-                    primaryOfficialURLSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
-                    venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
-                    primaryPeopleSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
-                    theaterPhotoCollectionSection(
-                        snapshot: snapshot,
-                        excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
-                        accentColor: accentColor
-                    )
-                    companionsSection(accentColor: accentColor, isTheater: true)
-                    memoSection(template: template, accentColor: accentColor, isTheater: true)
+                    primaryNarrative {
+                        primaryOfficialURLSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
+                        venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
+                        primaryPeopleSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
+                        theaterPhotoCollectionSection(
+                            snapshot: snapshot,
+                            excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
+                            accentColor: accentColor
+                        )
+                        companionsSection(accentColor: accentColor, isTheater: true)
+                        memoSection(template: template, accentColor: accentColor, isTheater: true)
+                    }
                     detailStoryDivider(label: "この公演の鑑賞履歴", accentColor: accentColor)
                     experienceHistorySection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                     detailStoryDivider(label: "その他の情報", accentColor: accentColor)
@@ -383,20 +385,22 @@ struct ExperienceDetailView: View {
                     )
                 } content: {
                         if isBook {
-                            AnyView(primaryOfficialURLSection(
-                                snapshot: snapshot,
-                                accentColor: accentColor,
-                                isTheater: false,
-                                allowsVenueFallback: false
-                            ))
-                            AnyView(bookPrimaryInformationSection(snapshot: snapshot, accentColor: accentColor))
-                            AnyView(bookPeopleSection(snapshot: snapshot, accentColor: accentColor))
-                            AnyView(bookPhotosSection(
-                                snapshot: snapshot,
-                                excluding: Set([eyecatchPhoto?.id].compactMap { $0 }),
-                                accentColor: accentColor
-                            ))
-                            AnyView(bookMemoSection(accentColor: accentColor))
+                            AnyView(primaryNarrative {
+                                primaryOfficialURLSection(
+                                    snapshot: snapshot,
+                                    accentColor: accentColor,
+                                    isTheater: false,
+                                    allowsVenueFallback: false
+                                )
+                                bookPrimaryInformationSection(snapshot: snapshot, accentColor: accentColor)
+                                bookPeopleSection(snapshot: snapshot, accentColor: accentColor)
+                                bookPhotosSection(
+                                    snapshot: snapshot,
+                                    excluding: Set([eyecatchPhoto?.id].compactMap { $0 }),
+                                    accentColor: accentColor
+                                )
+                                bookMemoSection(accentColor: accentColor)
+                            })
                             AnyView(detailStoryDivider(label: "この本の読書履歴", accentColor: accentColor))
                             AnyView(experienceHistorySection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
                             AnyView(detailStoryDivider(label: "その他の情報", accentColor: accentColor))
@@ -404,29 +408,31 @@ struct ExperienceDetailView: View {
                             AnyView(ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
                             AnyView(advancedSection(snapshot: snapshot))
                         } else {
-                            AnyView(primaryOfficialURLSection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
-                            AnyView(venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
-                            if ["theme_park", "nature_living"].contains(templateKey) {
-                                AnyView(outingMomentsSection(snapshot: snapshot, accentColor: accentColor))
-                            }
-                            if templateKey == "goshuin" {
-                                AnyView(goshuinBookSection(snapshot: snapshot))
-                            } else {
-                                AnyView(primaryPeopleSection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
-                            }
-                            if templateKey == "live" {
-                                AnyView(liveSetlistSection(snapshot: snapshot, accentColor: accentColor))
-                            }
-                            if templateKey == "sake" {
-                                AnyView(sakePrimaryInformationSection(snapshot: snapshot, accentColor: accentColor))
-                            }
-                            AnyView(theaterPhotoCollectionSection(
-                                snapshot: snapshot,
-                                excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
-                                accentColor: accentColor
-                            ))
-                            AnyView(companionsSection(accentColor: accentColor, isTheater: false))
-                            AnyView(memoSection(template: template, accentColor: accentColor, isTheater: false))
+                            AnyView(primaryNarrative {
+                                primaryOfficialURLSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                                venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                                if ["theme_park", "nature_living"].contains(templateKey) {
+                                    outingMomentsSection(snapshot: snapshot, accentColor: accentColor)
+                                }
+                                if templateKey == "goshuin" {
+                                    goshuinBookSection(snapshot: snapshot)
+                                } else {
+                                    primaryPeopleSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
+                                }
+                                if templateKey == "live" {
+                                    liveSetlistSection(snapshot: snapshot, accentColor: accentColor)
+                                }
+                                if templateKey == "sake" {
+                                    sakePrimaryInformationSection(snapshot: snapshot, accentColor: accentColor)
+                                }
+                                theaterPhotoCollectionSection(
+                                    snapshot: snapshot,
+                                    excluding: Set([backgroundPhoto?.id, eyecatchPhoto?.id].compactMap { $0 }),
+                                    accentColor: accentColor
+                                )
+                                companionsSection(accentColor: accentColor, isTheater: false)
+                                memoSection(template: template, accentColor: accentColor, isTheater: false)
+                            })
                             AnyView(detailStoryDivider(label: historySectionTitle(snapshot: snapshot), accentColor: accentColor))
                             AnyView(experienceHistorySection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
                             AnyView(detailStoryDivider(label: "その他の情報", accentColor: accentColor))
@@ -1190,6 +1196,15 @@ struct ExperienceDetailView: View {
         }
     }
 
+    private func primaryNarrative<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+        }
+        .environment(\.experienceNarrativeSectionMode, true)
+    }
+
     @ViewBuilder
     private func bookPrimaryInformationSection(
         snapshot: ExperienceDetailSnapshot,
@@ -1232,7 +1247,7 @@ struct ExperienceDetailView: View {
                     value: bookReadingPeriodText(snapshot: snapshot)
                 )
             }
-            .sectionCard(tint: accentColor, emphasized: true)
+            .modifier(ExperienceOrTheaterSectionCard(isTheater: false, tint: accentColor))
         }
     }
 
@@ -1257,7 +1272,7 @@ struct ExperienceDetailView: View {
                     DetailInfoRow(icon: "building.2", title: "出版社", value: publisher)
                 }
             }
-            .sectionCard(tint: accentColor, emphasized: true)
+            .modifier(ExperienceOrTheaterSectionCard(isTheater: false, tint: accentColor))
         }
     }
 
@@ -1447,7 +1462,7 @@ struct ExperienceDetailView: View {
                 }
             }
         }
-        .sectionCard(tint: accentColor, emphasized: false)
+        .modifier(ExperienceOrTheaterSectionCard(isTheater: false, tint: accentColor))
     }
 
     private func bookMemoSection(accentColor: Color) -> some View {
@@ -1465,7 +1480,7 @@ struct ExperienceDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .sectionCard(tint: accentColor, emphasized: false)
+        .modifier(ExperienceOrTheaterSectionCard(isTheater: false, tint: accentColor))
     }
 
     private func bookSectionHeader(
@@ -2911,7 +2926,11 @@ struct ExperienceDetailView: View {
                 }
             }
         }
-        .theaterDetailSectionCard(tint: accentColor)
+        .modifier(ExperienceOrTheaterSectionCard(
+            isTheater: snapshot.category?.templateKey == "theater",
+            tint: accentColor,
+            emphasizesGenericCard: true
+        ))
     }
 
     private func theaterPhotoGrid(
@@ -3084,7 +3103,7 @@ struct ExperienceDetailView: View {
                     )
                 }
             }
-            .sectionCard(tint: .white, emphasized: true)
+            .modifier(ExperienceOrTheaterSectionCard(isTheater: false, tint: .white))
         }
     }
 
@@ -3145,7 +3164,7 @@ struct ExperienceDetailView: View {
                     .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
-            .sectionCard(tint: accentColor, emphasized: true)
+            .modifier(ExperienceOrTheaterSectionCard(isTheater: false, tint: accentColor))
         }
     }
 
@@ -3191,7 +3210,7 @@ struct ExperienceDetailView: View {
                         )
                     }
                 }
-                .sectionCard(tint: accentColor, emphasized: true)
+                .modifier(ExperienceOrTheaterSectionCard(isTheater: false, tint: accentColor))
             }
         }
     }
@@ -3447,7 +3466,11 @@ struct ExperienceDetailView: View {
                     }
                 }
             }
-            .sectionCard(tint: .white, emphasized: isGenericExperienceDetail)
+            .modifier(ExperienceOrTheaterSectionCard(
+                isTheater: false,
+                tint: accentColor,
+                emphasizesGenericCard: isGenericExperienceDetail
+            ))
         }
     }
 
@@ -4064,7 +4087,20 @@ private struct DetailInfoRow: View {
     }
 }
 
+private struct ExperienceNarrativeSectionModeKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var experienceNarrativeSectionMode: Bool {
+        get { self[ExperienceNarrativeSectionModeKey.self] }
+        set { self[ExperienceNarrativeSectionModeKey.self] = newValue }
+    }
+}
+
 private struct ExperienceOrTheaterSectionCard: ViewModifier {
+    @Environment(\.experienceNarrativeSectionMode) private var isNarrativeSection
+
     let isTheater: Bool
     let tint: Color
     let emphasizesGenericCard: Bool
@@ -4077,7 +4113,17 @@ private struct ExperienceOrTheaterSectionCard: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if isTheater {
+        if isNarrativeSection {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 18)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(tint.opacity(isTheater ? 0.34 : 0.24))
+                        .frame(height: 0.7)
+                }
+        } else if isTheater {
             content.theaterDetailSectionCard(tint: tint)
         } else {
             content.sectionCard(tint: tint, emphasized: emphasizesGenericCard)

@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import PhotosUI
 
 struct PlanDetailView: View {
     private static let theaterPreparationSectionID = UUID(uuidString: "A115DB05-31BE-4BF5-870B-BDF5846A8E0A")!
@@ -35,7 +36,10 @@ struct PlanDetailView: View {
     @State private var navigatingVisit: Visit?
     @State private var navigatingEventID: UUID?
     @State private var operationError = ""
+    @State private var isBasicSectionExpanded = true
     @State private var isTicketSectionExpanded = true
+    @State private var isOfficialSectionExpanded = true
+    @State private var isPlanPhotosExpanded = true
     @State private var isTheaterVenueExpanded = false
     @State private var isTheaterNextActionsExpanded = true
     @State private var isTheaterPlanMemoExpanded = false
@@ -43,11 +47,16 @@ struct PlanDetailView: View {
     @State private var isTheaterEventInformationExpanded = false
     @State private var isTheaterCastExpanded = false
     @State private var isTheaterReviewExpanded = false
-    @State private var isTheaterPhotosExpanded = false
     @State private var isTheaterOCRExpanded = false
     @State private var requestedTheaterScrollTargetID: UUID?
     @State private var ticketDetailsPromptAttempt: TicketAttempt?
     @State private var isShowingActionMenu = false
+    @State private var isShowingPlanPhotoSourceChoice = false
+    @State private var isShowingPlanPhotoLibrary = false
+    @State private var isShowingPlanPhotoCamera = false
+    @State private var isShowingPlanPhotoCameraUnavailable = false
+    @State private var planPhotoPickerItems: [PhotosPickerItem] = []
+    @State private var planPhotoViewerRequest: PlanPhotoViewerRequest?
     @State private var createContextToken = UUID()
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
 
@@ -226,6 +235,30 @@ struct PlanDetailView: View {
                 }
             }
         }
+        .photosPicker(
+            isPresented: $isShowingPlanPhotoLibrary,
+            selection: $planPhotoPickerItems,
+            maxSelectionCount: 20,
+            matching: .images
+        )
+        .fullScreenCover(isPresented: $isShowingPlanPhotoCamera) {
+            CameraImagePicker(
+                onCapture: { image in
+                    addCapturedPlanPhoto(image)
+                    isShowingPlanPhotoCamera = false
+                },
+                onCancel: {
+                    isShowingPlanPhotoCamera = false
+                }
+            )
+            .ignoresSafeArea()
+        }
+        .fullScreenCover(item: $planPhotoViewerRequest) { request in
+            ExperiencePhotoViewer(
+                photos: resolvedPlanViewerPhotos(for: request),
+                initialPhotoID: request.initialPhotoID
+            )
+        }
         .navigationDestination(item: $navigatingVisit) { visit in
             ExperienceDetailView(visit: visit)
         }
@@ -265,6 +298,28 @@ struct PlanDetailView: View {
         } message: {
             Text("予定を追加するカレンダーを選んでください。")
         }
+        .confirmationDialog(
+            "写真を追加",
+            isPresented: $isShowingPlanPhotoSourceChoice,
+            titleVisibility: .visible
+        ) {
+            Button("写真ライブラリから選ぶ") {
+                isShowingPlanPhotoLibrary = true
+            }
+            Button("カメラで撮影") {
+                guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+                    isShowingPlanPhotoCameraUnavailable = true
+                    return
+                }
+                isShowingPlanPhotoCamera = true
+            }
+            Button("キャンセル", role: .cancel) {}
+        }
+        .alert("カメラを使用できません", isPresented: $isShowingPlanPhotoCameraUnavailable) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("この端末ではカメラを起動できません。写真ライブラリから追加してください。")
+        }
         .alert("処理に失敗しました", isPresented: Binding(
             get: { !operationError.isEmpty },
             set: { if !$0 { operationError = "" } }
@@ -272,6 +327,13 @@ struct PlanDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(operationError)
+        }
+        .onChange(of: planPhotoPickerItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task {
+                await addPlanPhotos(items)
+                planPhotoPickerItems = []
+            }
         }
     }
 
@@ -286,9 +348,10 @@ struct PlanDetailView: View {
         } content: {
             AnyView(basicSection)
             AnyView(ticketSection)
-            AnyView(expenseSection)
             AnyView(preparationSection)
+            AnyView(expenseSection)
             AnyView(officialSection)
+            AnyView(planPhotoSection)
             AnyView(memoSection)
         }
     }
@@ -369,7 +432,6 @@ struct PlanDetailView: View {
             theaterNextActionsSection
             ticketSection
             preparationSection
-            theaterPlanMemoSection
             ExperienceExpenseSummaryCard(
                 summary: ExperienceExpenseSummary.make(visit: plan.visit, plan: plan),
                 tint: categoryColor,
@@ -377,10 +439,11 @@ struct PlanDetailView: View {
                 isExpanded: $isTheaterExpenseExpanded,
                 titleFont: TheaterDetailSectionStyle.titleFont
             )
+            planPhotoSection
+            theaterPlanMemoSection
             theaterEventInformationSection
             theaterCastSection
             theaterReviewSection
-            theaterPhotoCollectionSection
             theaterOCRSection
         }
     }
@@ -771,18 +834,6 @@ struct PlanDetailView: View {
 
             if isTheaterVenueExpanded {
                 if hasMapSource {
-                    if let planMapURL {
-                        Button {
-                            openURL(planMapURL)
-                        } label: {
-                            FavorecoIconLabel("地図を開く", systemImage: "map", iconSize: 15)
-                                .font(FavorecoTypography.captionStrong)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(theaterAccentColor)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-
                     ZStack {
                         Color.white.opacity(0.06)
                         FavorecoIcon(systemName: "map", size: 30)
@@ -1091,35 +1142,139 @@ struct PlanDetailView: View {
         .theaterDetailSectionCard(tint: theaterAccentColor)
     }
 
-    private var theaterPhotoCollectionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                TheaterDetailDisclosureHeader(
-                    .photos,
-                    countText: "0枚",
-                    tint: theaterAccentColor,
-                    isExpanded: $isTheaterPhotosExpanded
-                )
+    private var planPhotoSection: some View {
+        let photos = planPhotos
 
-                Spacer()
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                if isTheaterPlan {
+                    TheaterDetailDisclosureHeader(
+                        .photos,
+                        countText: "\(photos.count)枚",
+                        tint: theaterAccentColor,
+                        isExpanded: $isPlanPhotosExpanded
+                    )
+                } else {
+                    PlanDetailDisclosureHeader(
+                        title: "写真",
+                        systemImage: "photo.on.rectangle",
+                        countText: "\(photos.count)枚",
+                        tint: categoryColor,
+                        isExpanded: $isPlanPhotosExpanded
+                    )
+                }
+
+                Spacer(minLength: 4)
 
                 Button {
-                    prepareRecordEntry()
+                    isShowingPlanPhotoSourceChoice = true
                 } label: {
                     FavorecoIconLabel("写真を追加", systemImage: "plus", iconSize: 13)
                         .font(FavorecoTypography.captionStrong)
-                        .foregroundStyle(theaterAccentColor)
+                        .foregroundStyle(isTheaterPlan ? theaterAccentColor : categoryColor)
+                        .frame(minHeight: 44)
                 }
                 .buttonStyle(.borderless)
             }
 
-            if isTheaterPhotosExpanded {
-                Text("観劇記録を作成すると、思い出・グッズ・ノベルティや特典の写真を分類して追加できます。")
-                    .font(FavorecoTypography.body)
-                    .foregroundStyle(.secondary)
+            if isPlanPhotosExpanded {
+                if photos.isEmpty {
+                    Text("予定に関する写真を、記録入力を開かずに追加できます。")
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+                } else {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
+                        spacing: 8
+                    ) {
+                        ForEach(photos) { photo in
+                            Button {
+                                planPhotoViewerRequest = PlanPhotoViewerRequest(
+                                    photoIDs: photos.map(\.id),
+                                    initialPhotoID: photo.id
+                                )
+                            } label: {
+                                GeometryReader { proxy in
+                                    RepresentativePhotoImage(
+                                        photo: photo,
+                                        maxPixelSize: 360,
+                                        contentMode: .fill
+                                    )
+                                    .frame(width: proxy.size.width, height: proxy.size.width)
+                                    .clipped()
+                                    .background(Color(.secondarySystemFill))
+                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                                }
+                                .aspectRatio(1, contentMode: .fit)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("予定の写真")
+                            .accessibilityHint("開いて左右に送れます")
+                        }
+                    }
+                }
             }
         }
-        .theaterDetailSectionCard(tint: theaterAccentColor)
+        .modifier(PlanOrTheaterSectionCard(isTheater: isTheaterPlan, tint: categoryColor))
+    }
+
+    private var planPhotos: [PhotoBlob] {
+        (plan.photos ?? [])
+            .filter(\.hasStoredData)
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private func resolvedPlanViewerPhotos(for request: PlanPhotoViewerRequest) -> [PhotoBlob] {
+        let photosByID = Dictionary(uniqueKeysWithValues: planPhotos.map { ($0.id, $0) })
+        return request.photoIDs.compactMap { photosByID[$0] }
+    }
+
+    private func addCapturedPlanPhoto(_ image: UIImage) {
+        guard let sourceData = image.jpegData(compressionQuality: 0.9),
+              let pending = PendingPhoto.make(
+                from: sourceData,
+                filename: "plan-camera.jpg",
+                compressionQuality: 0.82
+              ) else {
+            operationError = "撮影した画像を読み込めませんでした。もう一度お試しください。"
+            return
+        }
+        modelContext.insert(pending.makePhotoBlob(plan: plan))
+        plan.updatedAt = Date()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            operationError = "写真を保存できませんでした。もう一度お試しください。"
+        }
+    }
+
+    @MainActor
+    private func addPlanPhotos(_ items: [PhotosPickerItem]) async {
+        var inserted = 0
+        for item in items {
+            guard let sourceData = try? await item.loadTransferable(type: Data.self),
+                  let pending = await Task.detached(priority: .userInitiated, operation: {
+                    PendingPhoto.make(
+                        from: sourceData,
+                        filename: "plan-photo.jpg",
+                        compressionQuality: 0.82
+                    )
+                  }).value else { continue }
+            modelContext.insert(pending.makePhotoBlob(plan: plan))
+            inserted += 1
+        }
+        guard inserted > 0 else {
+            operationError = "選択した画像を読み込めませんでした。別の写真をお試しください。"
+            return
+        }
+        plan.updatedAt = Date()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            operationError = "写真を保存できませんでした。もう一度お試しください。"
+        }
     }
 
     private var theaterOCRSection: some View {
@@ -1249,30 +1404,47 @@ struct PlanDetailView: View {
 
     private var basicSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            planSectionTitle("基本情報")
-            PlanInfoRow(icon: "calendar", title: "日時", value: dateRangeText)
-            if plan.usesOpeningTime, plan.opensAt != Date.distantPast {
-                PlanInfoRow(icon: "door.left.hand.open", title: "開場", value: FavorecoDateText.time(plan.opensAt))
-            }
-            if !plan.venueNameSnapshot.isEmpty {
-                PlanInfoRow(icon: "mappin.and.ellipse", title: "会場", value: plan.venueNameSnapshot)
-            }
-            if !planAddress.isEmpty {
-                PlanInfoRow(icon: "signpost.right", title: "住所", value: planAddress)
-            }
-            PlaceOfficialWebsiteLink(urlString: plan.placeMaster?.officialURL ?? "")
-            if let mapURL = planMapURL {
-                Button {
-                    openURL(mapURL)
-                } label: {
-                    FavorecoIconLabel("地図で見る", systemImage: "map", iconSize: 17)
-                        .frame(maxWidth: .infinity)
+            PlanDetailDisclosureHeader(
+                title: "基本情報",
+                systemImage: "info.circle",
+                countText: nil,
+                tint: categoryColor,
+                isExpanded: $isBasicSectionExpanded
+            )
+
+            if isBasicSectionExpanded {
+                PlanInfoRow(icon: "calendar", title: "日時", value: dateRangeText)
+                if plan.usesOpeningTime, plan.opensAt != Date.distantPast {
+                    PlanInfoRow(icon: "door.left.hand.open", title: "開場", value: FavorecoDateText.time(plan.opensAt))
                 }
-                .buttonStyle(.bordered)
-                .tint(categoryColor)
-            }
-            if !plan.organizerNameSnapshot.isEmpty {
-                PlanInfoRow(icon: "building.2", title: "主催", value: plan.organizerNameSnapshot)
+                if !plan.venueNameSnapshot.isEmpty {
+                    PlanInfoRow(icon: "mappin.and.ellipse", title: "会場", value: plan.venueNameSnapshot)
+                }
+                if !planAddress.isEmpty {
+                    PlanInfoRow(icon: "signpost.right", title: "住所", value: planAddress)
+                }
+                PlaceOfficialWebsiteLink(urlString: plan.placeMaster?.officialURL ?? "")
+                if hasPlanMapSource {
+                    PlaceMapPreview(
+                        venueName: plan.venueNameSnapshot,
+                        address: planAddress,
+                        latitude: plan.placeMaster?.latitude ?? 0,
+                        longitude: plan.placeMaster?.longitude ?? 0
+                    )
+                    .overlay(alignment: .bottomTrailing) {
+                        Text("タップして地図を選択")
+                            .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 9)
+                            .frame(height: 25)
+                            .background(.black.opacity(0.58), in: Capsule())
+                            .padding(8)
+                            .allowsHitTesting(false)
+                    }
+                }
+                if !plan.organizerNameSnapshot.isEmpty {
+                    PlanInfoRow(icon: "building.2", title: "主催", value: plan.organizerNameSnapshot)
+                }
             }
         }
         .theaterDetailSectionCard(tint: categoryColor)
@@ -1291,6 +1463,13 @@ struct PlanDetailView: View {
         )
     }
 
+    private var hasPlanMapSource: Bool {
+        !plan.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !planAddress.isEmpty
+            || (plan.placeMaster?.latitude ?? 0) != 0
+            || (plan.placeMaster?.longitude ?? 0) != 0
+    }
+
     @ViewBuilder
     private var ticketSection: some View {
         if attempts.isEmpty {
@@ -1303,9 +1482,15 @@ struct PlanDetailView: View {
                         isExpanded: $isTicketSectionExpanded
                     )
                 } else {
-                    planSectionTitle("チケット")
+                    PlanDetailDisclosureHeader(
+                        title: "チケット",
+                        systemImage: "ticket",
+                        countText: "0件",
+                        tint: categoryColor,
+                        isExpanded: $isTicketSectionExpanded
+                    )
                 }
-                if !isTheaterPlan || isTicketSectionExpanded {
+                if isTicketSectionExpanded {
                     Text("チケット申込はまだ登録されていません。")
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
@@ -1331,7 +1516,13 @@ struct PlanDetailView: View {
                             isExpanded: $isTicketSectionExpanded
                         )
                     } else {
-                        planSectionTitle("チケット")
+                        PlanDetailDisclosureHeader(
+                            title: "チケット",
+                            systemImage: "ticket",
+                            countText: "\(attempts.count)件",
+                            tint: categoryColor,
+                            isExpanded: $isTicketSectionExpanded
+                        )
                     }
                     Spacer()
                     Button {
@@ -1342,7 +1533,7 @@ struct PlanDetailView: View {
                     }
                     .buttonStyle(.borderless)
                 }
-                if !isTheaterPlan || isTicketSectionExpanded {
+                if isTicketSectionExpanded {
                     ForEach(attempts) { attempt in
                         Button {
                             editingAttempt = attempt
@@ -1413,18 +1604,26 @@ struct PlanDetailView: View {
     private var officialSection: some View {
         if !plan.officialURL.isEmpty || !plan.sourceURL.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                planSectionTitle("公式情報")
-                if let officialURL = URL(string: plan.officialURL), !plan.officialURL.isEmpty {
-                    Link(destination: officialURL) {
-                        PlanInfoRow(icon: "safari", title: "公式", value: plan.officialURL)
+                PlanDetailDisclosureHeader(
+                    title: "公式情報",
+                    systemImage: "safari",
+                    countText: nil,
+                    tint: categoryColor,
+                    isExpanded: $isOfficialSectionExpanded
+                )
+                if isOfficialSectionExpanded {
+                    if let officialURL = URL(string: plan.officialURL), !plan.officialURL.isEmpty {
+                        Link(destination: officialURL) {
+                            PlanInfoRow(icon: "safari", title: "公式", value: plan.officialURL)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                }
-                if let sourceURL = URL(string: plan.sourceURL), !plan.sourceURL.isEmpty {
-                    Link(destination: sourceURL) {
-                        PlanInfoRow(icon: "link", title: "参考", value: plan.sourceURL)
+                    if let sourceURL = URL(string: plan.sourceURL), !plan.sourceURL.isEmpty {
+                        Link(destination: sourceURL) {
+                            PlanInfoRow(icon: "link", title: "参考", value: plan.sourceURL)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .theaterDetailSectionCard(tint: categoryColor)
@@ -1846,6 +2045,47 @@ private struct PlanInfoRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(3)
         }
+    }
+}
+
+private struct PlanPhotoViewerRequest: Identifiable {
+    let id = UUID()
+    let photoIDs: [UUID]
+    let initialPhotoID: UUID
+}
+
+private struct PlanDetailDisclosureHeader: View {
+    let title: String
+    let systemImage: String
+    let countText: String?
+    let tint: Color
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                FavorecoIconLabel(title, systemImage: systemImage, iconSize: 20)
+                    .font(TheaterDetailSectionStyle.titleFont)
+                if let countText, !countText.isEmpty {
+                    Text(countText)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(tint)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(isExpanded ? "開いています" : "閉じています")
+        .accessibilityHint(isExpanded ? "ダブルタップで閉じます" : "ダブルタップで開きます")
     }
 }
 

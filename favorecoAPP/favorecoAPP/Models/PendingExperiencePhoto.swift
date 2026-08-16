@@ -137,6 +137,25 @@ nonisolated struct PendingPhoto: Identifiable, Sendable {
         )
     }
 
+    @MainActor func makePhotoBlob(plan: Plan) -> PhotoBlob {
+        PhotoBlob(
+            id: id,
+            relativePath: relativePath,
+            originalFilename: originalFilename,
+            mediaKind: "photo",
+            purpose: metadata.purpose.rawValue,
+            caption: metadata.caption.trimmingCharacters(in: .whitespacesAndNewlines),
+            ocrText: metadata.ocrText.trimmingCharacters(in: .whitespacesAndNewlines),
+            amount: metadata.purpose.supportsAmount ? metadata.amount : Decimal(0),
+            byteCount: data.count,
+            width: width,
+            height: height,
+            createdAt: Date(),
+            data: data,
+            plan: plan
+        )
+    }
+
     nonisolated static func make(
         from data: Data,
         filename: String,

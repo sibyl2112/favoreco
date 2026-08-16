@@ -77,6 +77,14 @@ struct PlanPreparationChecklistView: View {
                 content
             }
         }
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: CategoryDetailSwipeExclusionPreferenceKey.self,
+                    value: [proxy.frame(in: .global).insetBy(dx: -6, dy: -6)]
+                )
+            }
+        }
         .sheet(item: $editorRequest) { request in
             PlanPreparationTaskEditor(
                 task: request.task,
@@ -174,14 +182,6 @@ struct PlanPreparationChecklistView: View {
                                 ForEach(availableSuggestions, id: \.self) { title in
                                     suggestionButton(title)
                                 }
-                            }
-                        }
-                        .background {
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: CategoryDetailSwipeExclusionPreferenceKey.self,
-                                    value: [proxy.frame(in: .global).insetBy(dx: -6, dy: -6)]
-                                )
                             }
                         }
                     }
