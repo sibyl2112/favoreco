@@ -21,8 +21,16 @@ struct QuickRegistrationView: View {
     @State private var selectedOCRItem: PhotosPickerItem?
     @State private var selectedBookImportImageItem: PhotosPickerItem?
     @State private var isShowingOCRCamera = false
+    @State private var isShowingBookImageSource = false
+    @State private var isShowingBookImagePicker = false
+    @State private var isShowingBookImportCamera = false
     @State private var isShowingBookISBNImport = false
     @State private var bookMetadataCandidate: BookMetadataCandidate?
+    @State private var bookOCRMetadataCandidate: BookOCRMetadataCandidate?
+    @State private var screenWorkSearchQuery = ""
+    @State private var screenWorkCandidates: [ScreenWorkMetadataCandidate] = []
+    @State private var isSearchingScreenWorks = false
+    @State private var screenWorkSearchStatus = ""
     @State private var isShowingCameraUnavailableAlert = false
     @State private var isProcessingImage = false
     @State private var isFetchingURL = false
@@ -104,33 +112,22 @@ struct QuickRegistrationView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if isMovieRegistration {
+                    screenWorkSearchSection
+                }
+
                 if isBookRegistration {
                     FavorecoRegistrationSection("入力を省く") {
                         Button {
-                            isShowingBookISBNImport = true
+                            isShowingBookImageSource = true
                         } label: {
                             bookImportActionLabel(
-                                title: "ISBN・バーコードから入力",
-                                detail: "番号入力または裏表紙を撮影",
-                                systemImage: "barcode.viewfinder"
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isProcessingImage)
-
-                        PhotosPicker(selection: $selectedBookImportImageItem, matching: .images) {
-                            bookImportActionLabel(
-                                title: "画像から本の情報を入力",
-                                detail: "表紙・奥付の文字を読み取る",
+                                title: "画像から入力",
                                 systemImage: "text.viewfinder"
                             )
                         }
                         .buttonStyle(.plain)
-                        .disabled(isProcessingImage || !usesOCRImportAssist)
-                        .onChange(of: selectedBookImportImageItem) { _, item in
-                            guard let item else { return }
-                            Task { await readBookInformation(from: item) }
-                        }
+                        .disabled(isProcessingImage)
 
                         if !usesOCRImportAssist {
                             Text("画像からの読み取りは設定でOFFになっています。ISBN入力と手入力は利用できます。")
@@ -151,11 +148,13 @@ struct QuickRegistrationView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        if !titleCandidate.isEmpty {
+                        if let bookOCRMetadataCandidate {
+                            bookOCRMetadataCandidateView(bookOCRMetadataCandidate)
+                        } else if !titleCandidate.isEmpty {
                             bookTitleCandidateView
                         }
 
-                        if !recognizedOCRLines.isEmpty {
+                        if bookOCRMetadataCandidate == nil, !recognizedOCRLines.isEmpty {
                             bookOCRCandidateView
                         }
                     }
@@ -211,12 +210,56 @@ struct QuickRegistrationView: View {
                         )
 
                         ExplicitFormTextField(
+                            title: "訳者",
+                            prompt: "訳者名（任意）",
+                            text: $draft.bookTranslatorName,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
+                        )
+
+                        ExplicitFormTextField(
+                            title: "出版社",
+                            prompt: "出版社（任意）",
+                            text: $draft.bookPublisherName,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
+                        )
+
+                        ExplicitFormTextField(
+                            title: "発行日",
+                            prompt: "YYYY-MM-DD（任意）",
+                            text: $draft.bookPublishedDate,
+                            labelStyle: .horizontal
+                        )
+                        .keyboardType(.numbersAndPunctuation)
+
+                        ExplicitFormTextField(
                             title: "ISBN",
                             prompt: "ISBN（任意）",
                             text: $draft.bookISBN,
                             labelStyle: .horizontal
                         )
                         .keyboardType(.asciiCapableNumberPad)
+
+                        ExplicitFormTextField(
+                            title: "価格",
+                            prompt: "価格（任意）",
+                            text: $draft.bookPriceText,
+                            labelStyle: .horizontal
+                        )
+                        .keyboardType(.decimalPad)
+
+                        ExplicitFormTextField(
+                            title: "ページ数",
+                            prompt: "ページ数（任意）",
+                            text: $draft.bookPageCountText,
+                            labelStyle: .horizontal
+                        )
+                        .keyboardType(.numberPad)
 
                         ExplicitFormControlRow(title: "読書状態") {
                             Picker("読書状態", selection: $draft.bookStateKey) {
@@ -236,11 +279,6 @@ struct QuickRegistrationView: View {
                             .labelsHidden()
                             .pickerStyle(.menu)
                         }
-                    } else if isMovieRegistration {
-                        ScreenWorkTypeAndSeasonEditor(
-                            typeKey: $draft.subTypeKey,
-                            seasonNumber: $draft.screenWorkSeasonNumber
-                        )
                     }
                 }
 
@@ -401,6 +439,33 @@ struct QuickRegistrationView: View {
                     draft.targetTemplateKey = visibleCategories.first?.templateKey ?? ""
                 }
             }
+            .photosPicker(
+                isPresented: $isShowingBookImagePicker,
+                selection: $selectedBookImportImageItem,
+                matching: .images
+            )
+            .onChange(of: selectedBookImportImageItem) { _, item in
+                guard let item else { return }
+                Task { await readBookInformation(from: item) }
+            }
+            .confirmationDialog(
+                "画像から入力",
+                isPresented: $isShowingBookImageSource,
+                titleVisibility: .visible
+            ) {
+                Button("写真ライブラリから選ぶ") {
+                    isShowingBookImagePicker = true
+                }
+                Button("カメラで撮影") {
+                    openBookImportCamera()
+                }
+                Button("ISBN番号を入力") {
+                    isShowingBookISBNImport = true
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("ISBN・奥付・表紙のいずれかを自動で判定します。ISBNが読み取れた場合は本の情報を優先して検索します。")
+            }
         }
         .fullScreenCover(isPresented: $isShowingOCRCamera) {
             CameraImagePicker(
@@ -410,6 +475,17 @@ struct QuickRegistrationView: View {
                     Task { await processOCRImage(data) }
                 },
                 onCancel: { isShowingOCRCamera = false }
+            )
+            .ignoresSafeArea()
+        }
+        .fullScreenCover(isPresented: $isShowingBookImportCamera) {
+            CameraImagePicker(
+                onCapture: { image in
+                    isShowingBookImportCamera = false
+                    guard let data = image.jpegData(compressionQuality: 1) else { return }
+                    Task { await readBookInformation(from: data) }
+                },
+                onCancel: { isShowingBookImportCamera = false }
             )
             .ignoresSafeArea()
         }
@@ -455,7 +531,14 @@ struct QuickRegistrationView: View {
                 seriesName: draft.trimmedBookSeriesName,
                 volumeNumber: draft.trimmedBookVolumeNumber,
                 authorName: draft.trimmedBookAuthorName,
-                isbn: draft.trimmedBookISBN
+                translatorName: draft.trimmedBookTranslatorName,
+                isbn: draft.trimmedBookISBN,
+                publisherName: draft.trimmedBookPublisherName,
+                publishedDate: draft.trimmedBookPublishedDate,
+                priceText: draft.trimmedBookPriceText,
+                pageCount: draft.bookPageCount,
+                informationSourceName: draft.trimmedBookInformationSourceName,
+                informationSourceURL: draft.trimmedBookInformationSourceURL
             )
         }
 
@@ -475,6 +558,125 @@ struct QuickRegistrationView: View {
         case "movie": "ポスター・公式情報（任意）"
         default: "画像・公式情報（任意）"
         }
+    }
+
+    private var screenWorkSearchSection: some View {
+        FavorecoRegistrationSection("作品を検索") {
+            ScreenWorkTypeAndSeasonEditor(
+                typeKey: $draft.subTypeKey,
+                seasonNumber: $draft.screenWorkSeasonNumber
+            )
+            .onChange(of: draft.subTypeKey) { _, _ in
+                screenWorkCandidates = []
+                screenWorkSearchStatus = ""
+            }
+
+            ExplicitFormTextField(
+                title: "作品名",
+                prompt: "映画・ドラマ・アニメのタイトル",
+                text: $screenWorkSearchQuery,
+                axis: .vertical,
+                minimumLines: 1,
+                maximumLines: 2,
+                labelStyle: .horizontal,
+                focusesFromWholeRow: true
+            )
+            .submitLabel(.search)
+            .onSubmit { Task { await searchScreenWorks() } }
+
+            Button {
+                Task { await searchScreenWorks() }
+            } label: {
+                FavorecoIconLabel(
+                    isSearchingScreenWorks ? "検索しています" : "作品を検索",
+                    systemImage: "magnifyingglass",
+                    iconSize: 16
+                )
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isSearchingScreenWorks || screenWorkSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            if !ScreenWorkMetadataLookupService.isConfigured {
+                Text("作品検索は現在利用できません。作品情報は手入力で登録できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !screenWorkCandidates.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(screenWorkCandidates) { candidate in
+                        Button {
+                            Task { await applyScreenWorkMetadata(candidate) }
+                        } label: {
+                            screenWorkCandidateRow(candidate)
+                        }
+                        .buttonStyle(.plain)
+
+                        if candidate.id != screenWorkCandidates.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+            }
+
+            if !screenWorkSearchStatus.isEmpty {
+                Text(screenWorkSearchStatus)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("作品情報提供: TMDB（候補を選んだ後に内容を確認して保存します）")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func screenWorkCandidateRow(_ candidate: ScreenWorkMetadataCandidate) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            AsyncImage(url: candidate.posterURL) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFill()
+                } else {
+                    ZStack {
+                        Color.secondary.opacity(0.10)
+                        Image(systemName: "film")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(width: 48, height: 68)
+            .clipped()
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(candidate.title)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(candidate.type.displayName)
+                    if !candidate.yearText.isEmpty {
+                        Text(candidate.yearText)
+                    }
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                if !candidate.originalTitle.isEmpty {
+                    Text(candidate.originalTitle)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: "arrow.down.to.line")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 4)
+        }
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
     }
 
     private var memoSectionTitle: String {
@@ -502,14 +704,26 @@ struct QuickRegistrationView: View {
                 bookSeriesName: draft.trimmedBookSeriesName,
                 bookVolumeNumber: draft.trimmedBookVolumeNumber,
                 bookAuthorName: draft.trimmedBookAuthorName,
-                bookISBN: draft.trimmedBookISBN
+                bookTranslatorName: draft.trimmedBookTranslatorName,
+                bookISBN: draft.trimmedBookISBN,
+                bookPublisherName: draft.trimmedBookPublisherName,
+                bookPublishedDate: draft.trimmedBookPublishedDate,
+                bookPriceText: draft.trimmedBookPriceText,
+                bookPageCount: draft.bookPageCount,
+                bookInformationSourceName: draft.trimmedBookInformationSourceName,
+                bookInformationSourceURL: draft.trimmedBookInformationSourceURL
             ).encodedRawValue
         }
         if isMovieRegistration {
             return VisitUnitFields(
                 screenWorkSeasonNumber: ScreenWorkType.resolved(from: draft.subTypeKey).supportsSeason
                     ? draft.screenWorkSeasonNumber
-                    : 0
+                    : 0,
+                screenWorkOriginalTitle: draft.trimmedScreenWorkOriginalTitle,
+                screenWorkReleaseDate: draft.screenWorkReleaseDate,
+                screenWorkOverview: draft.trimmedScreenWorkOverview,
+                screenWorkTMDBID: draft.screenWorkTMDBID,
+                screenWorkTMDBMediaType: draft.screenWorkTMDBMediaType
             ).encodedRawValue
         }
         return ""
@@ -531,6 +745,47 @@ struct QuickRegistrationView: View {
         }
         eyecatchData = compressed
         inputStatus = "アイキャッチを追加しました。"
+    }
+
+    @MainActor
+    private func searchScreenWorks() async {
+        isSearchingScreenWorks = true
+        screenWorkCandidates = []
+        screenWorkSearchStatus = ""
+        defer { isSearchingScreenWorks = false }
+        do {
+            let type = ScreenWorkType.resolved(from: draft.subTypeKey)
+            screenWorkCandidates = try await ScreenWorkMetadataLookupService.search(
+                query: screenWorkSearchQuery,
+                type: type
+            )
+            screenWorkSearchStatus = screenWorkCandidates.isEmpty
+                ? "一致する作品が見つかりませんでした。作品名を変えるか、手入力で続けられます。"
+                : "候補を選ぶと作品情報をフォームへ入力します。"
+        } catch {
+            screenWorkSearchStatus = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func applyScreenWorkMetadata(_ candidate: ScreenWorkMetadataCandidate) async {
+        draft.subTypeKey = candidate.type.rawValue
+        draft.title = candidate.title
+        draft.screenWorkOriginalTitle = candidate.originalTitle
+        draft.screenWorkReleaseDate = candidate.releaseDate
+        draft.screenWorkOverview = candidate.overview
+        draft.screenWorkTMDBID = candidate.tmdbID
+        draft.screenWorkTMDBMediaType = candidate.mediaType
+        if draft.trimmedSourceURL.isEmpty {
+            draft.sourceURL = candidate.informationURL
+        }
+        if let poster = await ScreenWorkMetadataLookupService.posterData(from: candidate.posterURL),
+           let compressed = await Task.detached(priority: .userInitiated, operation: {
+               QuickCaptureImageService.compressedJPEG(from: poster)
+           }).value {
+            eyecatchData = compressed
+        }
+        screenWorkSearchStatus = "作品情報を入力しました。内容を確認して保存してください。"
     }
 
     @MainActor
@@ -595,6 +850,7 @@ struct QuickRegistrationView: View {
         draft.ocrText = ""
         titleCandidate = ""
         recognizedOCRLines = []
+        bookOCRMetadataCandidate = nil
         isTitleCandidateFromOCR = false
     }
 
@@ -608,17 +864,19 @@ struct QuickRegistrationView: View {
 
     private func bookImportActionLabel(
         title: String,
-        detail: String,
+        detail: String? = nil,
         systemImage: String
     ) -> some View {
         HStack(spacing: 12) {
             FavorecoIcon(systemName: systemImage, size: 20)
                 .foregroundStyle(selectedCategory.map { Color(hex: $0.colorHex) } ?? .accentColor)
                 .frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(FavorecoTypography.bodyStrong)
-                    .foregroundStyle(.primary)
+            Text(title)
+                .font(FavorecoTypography.bodyStrong)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+            if let detail, !detail.isEmpty {
                 Text(detail)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
@@ -630,6 +888,43 @@ struct QuickRegistrationView: View {
         }
         .contentShape(Rectangle())
         .frame(minHeight: 48)
+    }
+
+    private func openBookImportCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            isShowingCameraUnavailableAlert = true
+            return
+        }
+        isShowingBookImportCamera = true
+    }
+
+    private func bookOCRMetadataCandidateView(
+        _ candidate: BookOCRMetadataCandidate
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("奥付から仮入力しました", systemImage: "checkmark.circle")
+                .font(FavorecoTypography.captionStrong)
+
+            if !candidate.title.isEmpty {
+                LabeledContent("書名", value: candidate.title)
+            }
+            if !candidate.volumeNumber.isEmpty {
+                LabeledContent("巻数", value: candidate.volumeNumber)
+            }
+            if !candidate.author.isEmpty {
+                LabeledContent("著者", value: candidate.author)
+            }
+            if !candidate.publisher.isEmpty {
+                LabeledContent("出版社", value: candidate.publisher)
+            }
+            if !candidate.publishedDate.isEmpty {
+                LabeledContent("発行日", value: candidate.publishedDate)
+            }
+
+            Text("フォームへ仮入力済みです。保存前に各項目を修正できます。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var bookTitleCandidateView: some View {
@@ -677,26 +972,36 @@ struct QuickRegistrationView: View {
             inputStatus = "画像を読み込めませんでした。"
             return
         }
+        await readBookInformation(from: data)
+    }
+
+    @MainActor
+    private func readBookInformation(from data: Data) async {
         isProcessingImage = true
         inputStatus = "本の情報を読み取っています。"
         resetOCRResult()
+        bookMetadataCandidate = nil
+        let allowsTextRecognition = usesOCRImportAssist
 
         let result = await Task.detached(priority: .userInitiated) {
             let compressed = QuickCaptureImageService.compressedJPEG(from: data)
-            let analysis = QuickCaptureImageService.recognizedTextAnalysis(from: data)
             let barcodeISBNs = BookMetadataLookupService.isbnCandidates(fromImageData: data)
+            // バーコードは文字OCRより判定精度が高い。ISBNを取得できた場合は
+            // 重い文字認識を省き、そのまま書誌検索へ進める。
+            let analysis = allowsTextRecognition && barcodeISBNs.isEmpty
+                ? QuickCaptureImageService.recognizedTextAnalysis(from: data)
+                : .empty
             let textISBNs = BookMetadataLookupService.isbnCandidates(from: analysis.fullText)
             return (compressed, analysis, barcodeISBNs + textISBNs)
         }.value
 
-        if let compressed = result.0 {
-            eyecatchData = compressed
-        }
         let analysis = result.1
         draft.ocrText = analysis.fullText
-        recognizedOCRLines = analysis.lines
-        titleCandidate = analysis.suggestedTitle
-        isTitleCandidateFromOCR = analysis.isTitleSuggestionReliable
+        let ocrMetadata = BookMetadataLookupService.ocrMetadata(from: analysis.fullText)
+        recognizedOCRLines = []
+        titleCandidate = ""
+        isTitleCandidateFromOCR = false
+        var resolvedFromReverseLookup = false
 
         if let isbn = result.2.first {
             draft.bookISBN = isbn
@@ -707,11 +1012,124 @@ struct QuickRegistrationView: View {
                 inputStatus = error.localizedDescription
             }
         } else if analysis.fullText.isEmpty {
-            inputStatus = "文字を読み取れませんでした。手入力で続けられます。"
+            inputStatus = allowsTextRecognition
+                ? "ISBN・奥付・表紙の情報を読み取れませんでした。手入力で続けられます。"
+                : "バーコードからISBNを読み取れませんでした。画像OCRは設定でOFFになっています。"
         } else {
-            inputStatus = "ISBNを特定できませんでした。書名候補を確認してください。"
+            if ocrMetadata.hasStructuredMetadata {
+                bookOCRMetadataCandidate = ocrMetadata
+                applyBookOCRMetadata(ocrMetadata)
+                inputStatus = "奥付から本を検索しています。"
+                if let matchedBook = await BookMetadataLookupService.reverseLookup(from: ocrMetadata) {
+                    let didLoadCover = await applyReverseLookedUpBookMetadata(matchedBook)
+                    inputStatus = didLoadCover
+                        ? "奥付からISBNと正式な表紙を取得しました。内容を確認してください。"
+                        : "奥付からISBNと書誌情報を取得しました。表紙は見つかりませんでした。"
+                } else {
+                    inputStatus = "奥付から\(ocrMetadata.detectedFieldNames.joined(separator: "・"))を読み取りました。"
+                }
+            } else {
+                let searchableMetadata = !ocrMetadata.title.isEmpty
+                    ? ocrMetadata
+                    : BookOCRMetadataCandidate(
+                        title: analysis.isTitleSuggestionReliable ? analysis.suggestedTitle : "",
+                        alternateTitles: [],
+                        seriesName: "",
+                        volumeNumber: "",
+                        author: "",
+                        publisher: "",
+                        publishedDate: "",
+                        pageCount: 0
+                    )
+                if !searchableMetadata.title.isEmpty,
+                   let matchedBook = await BookMetadataLookupService.reverseLookup(
+                    from: searchableMetadata
+                   ) {
+                    applyBookOCRMetadata(searchableMetadata)
+                    let didLoadCover = await applyReverseLookedUpBookMetadata(matchedBook)
+                    resolvedFromReverseLookup = true
+                    inputStatus = didLoadCover
+                        ? "表紙からISBNと正式な表紙を取得しました。内容を確認してください。"
+                        : "表紙からISBNと書誌情報を取得しました。正式な表紙は見つかりませんでした。"
+                } else {
+                    titleCandidate = searchableMetadata.title
+                    recognizedOCRLines = Array(
+                        ([ocrMetadata.title] + ocrMetadata.alternateTitles + analysis.titleCandidates)
+                            .filter { !$0.isEmpty && $0 != titleCandidate }
+                            .prefix(2)
+                    )
+                }
+            }
+            if !ocrMetadata.hasStructuredMetadata,
+               !resolvedFromReverseLookup,
+               analysis.isTitleSuggestionReliable,
+               let compressed = result.0 {
+                eyecatchData = compressed
+            }
+            if bookOCRMetadataCandidate == nil, !resolvedFromReverseLookup {
+                inputStatus = analysis.isTitleSuggestionReliable
+                    ? "表紙の可能性が高い画像です。書名候補を確認してください。"
+                    : "本の情報を特定できませんでした。手入力で続けられます。"
+            }
         }
         isProcessingImage = false
+    }
+
+    private func applyBookOCRMetadata(_ candidate: BookOCRMetadataCandidate) {
+        if draft.trimmedTitle.isEmpty, !candidate.title.isEmpty {
+            draft.title = candidate.title
+        }
+        if draft.trimmedBookSeriesName.isEmpty, !candidate.seriesName.isEmpty {
+            draft.bookSeriesName = candidate.seriesName
+        }
+        if draft.trimmedBookVolumeNumber.isEmpty, !candidate.volumeNumber.isEmpty {
+            draft.bookVolumeNumber = candidate.volumeNumber
+        }
+        if draft.trimmedBookAuthorName.isEmpty, !candidate.author.isEmpty {
+            draft.bookAuthorName = candidate.author
+        }
+        if draft.trimmedBookPublisherName.isEmpty, !candidate.publisher.isEmpty {
+            draft.bookPublisherName = candidate.publisher
+        }
+        if draft.trimmedBookPublishedDate.isEmpty, !candidate.publishedDate.isEmpty {
+            draft.bookPublishedDate = candidate.publishedDate
+        }
+        if draft.bookPageCount == 0, candidate.pageCount > 0 {
+            draft.bookPageCountText = String(candidate.pageCount)
+        }
+    }
+
+    @MainActor
+    private func applyReverseLookedUpBookMetadata(_ candidate: BookMetadataCandidate) async -> Bool {
+        draft.bookISBN = candidate.isbn
+        if draft.trimmedBookAuthorName.isEmpty, !candidate.authorText.isEmpty {
+            draft.bookAuthorName = candidate.authorText
+        }
+        if draft.trimmedBookTranslatorName.isEmpty, !candidate.translatorText.isEmpty {
+            draft.bookTranslatorName = candidate.translatorText
+        }
+        if draft.trimmedBookPublisherName.isEmpty, !candidate.publisher.isEmpty {
+            draft.bookPublisherName = candidate.publisher
+        }
+        if draft.trimmedBookPublishedDate.isEmpty, !candidate.publishedDate.isEmpty {
+            draft.bookPublishedDate = candidate.publishedDate
+        }
+        if draft.trimmedBookPriceText.isEmpty, !candidate.priceText.isEmpty {
+            draft.bookPriceText = candidate.priceText
+        }
+        if draft.bookPageCount == 0, candidate.pageCount > 0 {
+            draft.bookPageCountText = String(candidate.pageCount)
+        }
+        draft.bookInformationSourceName = candidate.sourceName
+        draft.bookInformationSourceURL = candidate.informationURL
+        if let cover = await BookMetadataLookupService.coverData(from: candidate.coverURL),
+           let compressed = await Task.detached(priority: .userInitiated, operation: {
+               QuickCaptureImageService.compressedJPEG(from: cover)
+           }).value {
+            eyecatchData = compressed
+            return true
+        }
+        return false
     }
 
     @MainActor
@@ -721,9 +1139,13 @@ struct QuickRegistrationView: View {
         if !candidate.authorText.isEmpty {
             draft.bookAuthorName = candidate.authorText
         }
-        if draft.trimmedSourceURL.isEmpty, !candidate.informationURL.isEmpty {
-            draft.sourceURL = candidate.informationURL
-        }
+        draft.bookTranslatorName = candidate.translatorText
+        draft.bookPublisherName = candidate.publisher
+        draft.bookPublishedDate = candidate.publishedDate
+        draft.bookPriceText = candidate.priceText
+        draft.bookPageCountText = candidate.pageCount > 0 ? String(candidate.pageCount) : ""
+        draft.bookInformationSourceName = candidate.sourceName
+        draft.bookInformationSourceURL = candidate.informationURL
         if let cover = await BookMetadataLookupService.coverData(from: candidate.coverURL),
            let compressed = await Task.detached(priority: .userInitiated, operation: {
                QuickCaptureImageService.compressedJPEG(from: cover)
@@ -742,6 +1164,7 @@ private struct BookISBNImportSheet: View {
     @State private var candidate: BookMetadataCandidate?
     @State private var isLoading = false
     @State private var isShowingCamera = false
+    @State private var selectedBarcodeImageItem: PhotosPickerItem?
     @State private var statusText = ""
 
     var body: some View {
@@ -750,12 +1173,16 @@ private struct BookISBNImportSheet: View {
                 FavorecoRegistrationSection("ISBNから検索") {
                     ExplicitFormTextField(
                         title: "ISBN",
-                        prompt: "978から始まる番号など",
+                        prompt: "978・979から始まる番号など",
                         text: $isbn,
                         labelStyle: .horizontal,
                         focusesFromWholeRow: true
                     )
                     .keyboardType(.asciiCapableNumberPad)
+
+                    Text("上段の978・979から始まる番号がISBNです。192から始まる下段は価格コードのため検索しません。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
 
                     Button {
                         Task { await lookup() }
@@ -780,6 +1207,19 @@ private struct BookISBNImportSheet: View {
                         )
                     }
                     .disabled(isLoading)
+
+                    PhotosPicker(selection: $selectedBarcodeImageItem, matching: .images) {
+                        FavorecoIconLabel(
+                            "写真ライブラリから選ぶ",
+                            systemImage: "photo.on.rectangle",
+                            iconSize: 16
+                        )
+                    }
+                    .disabled(isLoading)
+                    .onChange(of: selectedBarcodeImageItem) { _, item in
+                        guard let item else { return }
+                        Task { await readBarcode(from: item) }
+                    }
                 }
 
                 if let candidate {
@@ -788,8 +1228,20 @@ private struct BookISBNImportSheet: View {
                         if !candidate.authorText.isEmpty {
                             LabeledContent("著者", value: candidate.authorText)
                         }
+                        if !candidate.translatorText.isEmpty {
+                            LabeledContent("訳者", value: candidate.translatorText)
+                        }
                         LabeledContent("ISBN", value: candidate.isbn)
-                        Text("書名・著者・ISBN・表紙・参照URLをフォームへ入力します。保存前に修正できます。")
+                        if !candidate.publishedDate.isEmpty {
+                            LabeledContent("発売日", value: candidate.publishedDate)
+                        }
+                        if !candidate.publisher.isEmpty {
+                            LabeledContent("出版社", value: candidate.publisher)
+                        }
+                        if !candidate.priceText.isEmpty {
+                            LabeledContent("価格", value: "¥\(candidate.priceText)")
+                        }
+                        Text("書名・著者・訳者・発売日・出版社・価格・ISBN・表紙・参照URLを、取得できた範囲で入力します。保存前に修正できます。")
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                         Text("情報元: \(candidate.sourceName)")
@@ -853,18 +1305,32 @@ private struct BookISBNImportSheet: View {
     private func readBarcode(from data: Data) async {
         isLoading = true
         candidate = nil
-        statusText = "バーコードを読み取っています。"
+        statusText = "バーコードと印字された番号を読み取っています。"
         let candidates = await Task.detached(priority: .userInitiated) {
-            BookMetadataLookupService.isbnCandidates(fromImageData: data)
+            let barcodeCandidates = BookMetadataLookupService.isbnCandidates(fromImageData: data)
+            guard barcodeCandidates.isEmpty else { return barcodeCandidates }
+
+            let recognizedText = QuickCaptureImageService.recognizedText(from: data)
+            return BookMetadataLookupService.isbnCandidates(from: recognizedText)
         }.value
         guard let value = candidates.first else {
-            statusText = "ISBNバーコードを読み取れませんでした。番号を入力して検索できます。"
+            statusText = "ISBNを読み取れませんでした。番号を入力して検索できます。"
             isLoading = false
             return
         }
         isbn = value
         isLoading = false
         await lookup()
+    }
+
+    @MainActor
+    private func readBarcode(from item: PhotosPickerItem) async {
+        defer { selectedBarcodeImageItem = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            statusText = "画像を読み込めませんでした。別の写真を選ぶか、番号を入力してください。"
+            return
+        }
+        await readBarcode(from: data)
     }
 }
 
@@ -881,8 +1347,20 @@ private struct BookMetadataReviewSheet: View {
                     if !candidate.authorText.isEmpty {
                         LabeledContent("著者", value: candidate.authorText)
                     }
+                    if !candidate.translatorText.isEmpty {
+                        LabeledContent("訳者", value: candidate.translatorText)
+                    }
                     LabeledContent("ISBN", value: candidate.isbn)
-                    Text("書名・著者・ISBN・表紙・参照URLをフォームへ入力します。保存前に修正できます。")
+                    if !candidate.publishedDate.isEmpty {
+                        LabeledContent("発売日", value: candidate.publishedDate)
+                    }
+                    if !candidate.publisher.isEmpty {
+                        LabeledContent("出版社", value: candidate.publisher)
+                    }
+                    if !candidate.priceText.isEmpty {
+                        LabeledContent("価格", value: "¥\(candidate.priceText)")
+                    }
+                    Text("書名・著者・訳者・発売日・出版社・価格・ISBN・表紙・参照URLを、取得できた範囲で入力します。保存前に修正できます。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                     Text("情報元: \(candidate.sourceName)")
@@ -919,7 +1397,14 @@ private struct QuickRegistrationDraft {
     var bookSeriesName: String = ""
     var bookVolumeNumber: String = ""
     var bookAuthorName: String = ""
+    var bookTranslatorName: String = ""
     var bookISBN: String = ""
+    var bookPublisherName: String = ""
+    var bookPublishedDate: String = ""
+    var bookPriceText: String = ""
+    var bookPageCountText: String = ""
+    var bookInformationSourceName: String = ""
+    var bookInformationSourceURL: String = ""
     var bookStateKey: String = "interested"
     var body: String = ""
     var sourceURL: String = ""
@@ -928,6 +1413,11 @@ private struct QuickRegistrationDraft {
     var eyecatchAspectRatioKey = EyecatchAspectRatio.hardcoverBook.key
     var subTypeKey = ScreenWorkType.movie.rawValue
     var screenWorkSeasonNumber = 0
+    var screenWorkOriginalTitle = ""
+    var screenWorkReleaseDate = ""
+    var screenWorkOverview = ""
+    var screenWorkTMDBID = 0
+    var screenWorkTMDBMediaType = ""
 
     var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -953,12 +1443,48 @@ private struct QuickRegistrationDraft {
         bookAuthorName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var trimmedBookTranslatorName: String {
+        bookTranslatorName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var trimmedBookISBN: String {
         bookISBN.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var trimmedBookPublisherName: String {
+        bookPublisherName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookPublishedDate: String {
+        bookPublishedDate.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookPriceText: String {
+        bookPriceText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var bookPageCount: Int {
+        max(Int(bookPageCountText.filter(\.isNumber)) ?? 0, 0)
+    }
+
+    var trimmedBookInformationSourceName: String {
+        bookInformationSourceName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookInformationSourceURL: String {
+        bookInformationSourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var trimmedSourceURL: String {
         sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedScreenWorkOriginalTitle: String {
+        screenWorkOriginalTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedScreenWorkOverview: String {
+        screenWorkOverview.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var canSave: Bool {

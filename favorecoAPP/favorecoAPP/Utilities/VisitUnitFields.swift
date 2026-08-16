@@ -94,6 +94,29 @@ struct VisitExpenseEntry: Codable, Identifiable, Equatable {
     }
 }
 
+/// パークや自然系の1回の体験に含まれる、繰り返し追加可能な見どころ。
+/// 写真本体は複製せず、同じVisitに属するPhotoBlobのUUIDだけを参照する。
+struct VisitMomentEntry: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var title: String = ""
+    var note: String = ""
+    var linkedPhotoIDs: [UUID] = []
+
+    var normalized: VisitMomentEntry {
+        VisitMomentEntry(
+            id: id,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+            linkedPhotoIDs: Array(Set(linkedPhotoIDs)).sorted { $0.uuidString < $1.uuidString }
+        )
+    }
+
+    var isEmpty: Bool {
+        let value = normalized
+        return value.title.isEmpty && value.note.isEmpty && value.linkedPhotoIDs.isEmpty
+    }
+}
+
 struct VisitUnitFields: Codable {
     var ocrText: String = ""
     var styleNames: [String] = []
@@ -107,9 +130,16 @@ struct VisitUnitFields: Codable {
     var eventPeriodStartsAt: Date?
     var eventPeriodEndsAt: Date?
     var eventVenues: [EventVenueEntry] = []
+    /// 観劇・LIVEの参加回で使う任意の開場日時。
+    var performanceOpensAt: Date?
     var excludedEventCastLinkIDs: [UUID] = []
     var hasVisitCastSnapshot: Bool = false
     var screenWorkSeasonNumber: Int = 0
+    var screenWorkOriginalTitle: String = ""
+    var screenWorkReleaseDate: String = ""
+    var screenWorkOverview: String = ""
+    var screenWorkTMDBID: Int = 0
+    var screenWorkTMDBMediaType: String = ""
     var eyecatchAspectRatioKey: String = ""
     var heroBackgroundPath: String = ""
     var heroBackgroundPresetKey: String = ""
@@ -120,13 +150,28 @@ struct VisitUnitFields: Codable {
     var weatherFetchedAt: Date?
     var weatherAttributionURL: String = ""
     var advancedEntries: [AdvancedFieldEntry] = []
+    /// LIVE参戦回のセットリスト。MCとアンコールは曲とは別種別で保持する。
+    var liveSetlistEntries: [LiveSetlistEntry] = []
     /// この1回に直接入力した費用内訳。旧データの Visit.amount は合計として引き続き保持する。
     var expenseEntries: [VisitExpenseEntry] = []
+    /// テーマパークのイベント、自然・生き物の「見たもの・体験」。
+    var momentEntries: [VisitMomentEntry] = []
     /// 書籍（巻）をシリーズ単位で束ねるための構造化メタデータ。
     var bookSeriesName: String = ""
     var bookVolumeNumber: String = ""
     var bookAuthorName: String = ""
+    var bookTranslatorName: String = ""
     var bookISBN: String = ""
+    var bookPublisherName: String = ""
+    var bookPublishedDate: String = ""
+    var bookPriceText: String = ""
+    var bookPageCount: Int = 0
+    /// 紙・電子・音声など、表紙比率とは独立した読書媒体。
+    var bookMediumKey: String = ""
+    /// ISBN検索で書誌情報を取得したサービス名。ユーザー入力の公式URLとは分離する。
+    var bookInformationSourceName: String = ""
+    /// ISBN検索結果の参照ページ。公式URLとして扱わない。
+    var bookInformationSourceURL: String = ""
     /// 書籍記録で終了日を明示したか。nil は旧データ（従来の読了日1日）として扱う。
     var bookReadingHasEndDate: Bool?
 
@@ -142,9 +187,15 @@ struct VisitUnitFields: Codable {
         eventPeriodStartsAt: Date? = nil,
         eventPeriodEndsAt: Date? = nil,
         eventVenues: [EventVenueEntry] = [],
+        performanceOpensAt: Date? = nil,
         excludedEventCastLinkIDs: [UUID] = [],
         hasVisitCastSnapshot: Bool = false,
         screenWorkSeasonNumber: Int = 0,
+        screenWorkOriginalTitle: String = "",
+        screenWorkReleaseDate: String = "",
+        screenWorkOverview: String = "",
+        screenWorkTMDBID: Int = 0,
+        screenWorkTMDBMediaType: String = "",
         eyecatchAspectRatioKey: String = "",
         heroBackgroundPath: String = "",
         heroBackgroundPresetKey: String = "",
@@ -155,11 +206,21 @@ struct VisitUnitFields: Codable {
         weatherFetchedAt: Date? = nil,
         weatherAttributionURL: String = "",
         advancedEntries: [AdvancedFieldEntry] = [],
+        liveSetlistEntries: [LiveSetlistEntry] = [],
         expenseEntries: [VisitExpenseEntry] = [],
+        momentEntries: [VisitMomentEntry] = [],
         bookSeriesName: String = "",
         bookVolumeNumber: String = "",
         bookAuthorName: String = "",
+        bookTranslatorName: String = "",
         bookISBN: String = "",
+        bookPublisherName: String = "",
+        bookPublishedDate: String = "",
+        bookPriceText: String = "",
+        bookPageCount: Int = 0,
+        bookMediumKey: String = "",
+        bookInformationSourceName: String = "",
+        bookInformationSourceURL: String = "",
         bookReadingHasEndDate: Bool? = nil
     ) {
         self.ocrText = ocrText
@@ -173,9 +234,15 @@ struct VisitUnitFields: Codable {
         self.eventPeriodStartsAt = eventPeriodStartsAt
         self.eventPeriodEndsAt = eventPeriodEndsAt
         self.eventVenues = eventVenues
+        self.performanceOpensAt = performanceOpensAt
         self.excludedEventCastLinkIDs = excludedEventCastLinkIDs
         self.hasVisitCastSnapshot = hasVisitCastSnapshot
         self.screenWorkSeasonNumber = Self.normalizedSeasonNumber(screenWorkSeasonNumber)
+        self.screenWorkOriginalTitle = screenWorkOriginalTitle
+        self.screenWorkReleaseDate = screenWorkReleaseDate
+        self.screenWorkOverview = screenWorkOverview
+        self.screenWorkTMDBID = max(screenWorkTMDBID, 0)
+        self.screenWorkTMDBMediaType = screenWorkTMDBMediaType
         self.eyecatchAspectRatioKey = eyecatchAspectRatioKey
         self.heroBackgroundPath = heroBackgroundPath
         self.heroBackgroundPresetKey = heroBackgroundPresetKey
@@ -186,11 +253,21 @@ struct VisitUnitFields: Codable {
         self.weatherFetchedAt = weatherFetchedAt
         self.weatherAttributionURL = weatherAttributionURL
         self.advancedEntries = advancedEntries
+        self.liveSetlistEntries = liveSetlistEntries
         self.expenseEntries = expenseEntries
+        self.momentEntries = momentEntries
         self.bookSeriesName = bookSeriesName
         self.bookVolumeNumber = bookVolumeNumber
         self.bookAuthorName = bookAuthorName
+        self.bookTranslatorName = bookTranslatorName
         self.bookISBN = bookISBN
+        self.bookPublisherName = bookPublisherName
+        self.bookPublishedDate = bookPublishedDate
+        self.bookPriceText = bookPriceText
+        self.bookPageCount = max(bookPageCount, 0)
+        self.bookMediumKey = bookMediumKey
+        self.bookInformationSourceName = bookInformationSourceName
+        self.bookInformationSourceURL = bookInformationSourceURL
         self.bookReadingHasEndDate = bookReadingHasEndDate
     }
 
@@ -206,9 +283,15 @@ struct VisitUnitFields: Codable {
         case eventPeriodStartsAt
         case eventPeriodEndsAt
         case eventVenues
+        case performanceOpensAt
         case excludedEventCastLinkIDs
         case hasVisitCastSnapshot
         case screenWorkSeasonNumber
+        case screenWorkOriginalTitle
+        case screenWorkReleaseDate
+        case screenWorkOverview
+        case screenWorkTMDBID
+        case screenWorkTMDBMediaType
         case eyecatchAspectRatioKey
         case heroBackgroundPath
         case heroBackgroundPresetKey
@@ -219,11 +302,21 @@ struct VisitUnitFields: Codable {
         case weatherFetchedAt
         case weatherAttributionURL
         case advancedEntries
+        case liveSetlistEntries
         case expenseEntries
+        case momentEntries
         case bookSeriesName
         case bookVolumeNumber
         case bookAuthorName
+        case bookTranslatorName
         case bookISBN
+        case bookPublisherName
+        case bookPublishedDate
+        case bookPriceText
+        case bookPageCount
+        case bookMediumKey
+        case bookInformationSourceName
+        case bookInformationSourceURL
         case bookReadingHasEndDate
     }
 
@@ -240,11 +333,17 @@ struct VisitUnitFields: Codable {
         eventPeriodStartsAt = try container.decodeIfPresent(Date.self, forKey: .eventPeriodStartsAt)
         eventPeriodEndsAt = try container.decodeIfPresent(Date.self, forKey: .eventPeriodEndsAt)
         eventVenues = try container.decodeIfPresent([EventVenueEntry].self, forKey: .eventVenues) ?? []
+        performanceOpensAt = try container.decodeIfPresent(Date.self, forKey: .performanceOpensAt)
         excludedEventCastLinkIDs = try container.decodeIfPresent([UUID].self, forKey: .excludedEventCastLinkIDs) ?? []
         hasVisitCastSnapshot = try container.decodeIfPresent(Bool.self, forKey: .hasVisitCastSnapshot) ?? false
         screenWorkSeasonNumber = Self.normalizedSeasonNumber(
             try container.decodeIfPresent(Int.self, forKey: .screenWorkSeasonNumber) ?? 0
         )
+        screenWorkOriginalTitle = try container.decodeIfPresent(String.self, forKey: .screenWorkOriginalTitle) ?? ""
+        screenWorkReleaseDate = try container.decodeIfPresent(String.self, forKey: .screenWorkReleaseDate) ?? ""
+        screenWorkOverview = try container.decodeIfPresent(String.self, forKey: .screenWorkOverview) ?? ""
+        screenWorkTMDBID = max(try container.decodeIfPresent(Int.self, forKey: .screenWorkTMDBID) ?? 0, 0)
+        screenWorkTMDBMediaType = try container.decodeIfPresent(String.self, forKey: .screenWorkTMDBMediaType) ?? ""
         eyecatchAspectRatioKey = try container.decodeIfPresent(String.self, forKey: .eyecatchAspectRatioKey) ?? ""
         heroBackgroundPath = try container.decodeIfPresent(String.self, forKey: .heroBackgroundPath) ?? ""
         heroBackgroundPresetKey = try container.decodeIfPresent(String.self, forKey: .heroBackgroundPresetKey) ?? ""
@@ -255,11 +354,21 @@ struct VisitUnitFields: Codable {
         weatherFetchedAt = try container.decodeIfPresent(Date.self, forKey: .weatherFetchedAt)
         weatherAttributionURL = try container.decodeIfPresent(String.self, forKey: .weatherAttributionURL) ?? ""
         advancedEntries = try container.decodeIfPresent([AdvancedFieldEntry].self, forKey: .advancedEntries) ?? []
+        liveSetlistEntries = try container.decodeIfPresent([LiveSetlistEntry].self, forKey: .liveSetlistEntries) ?? []
         expenseEntries = try container.decodeIfPresent([VisitExpenseEntry].self, forKey: .expenseEntries) ?? []
+        momentEntries = try container.decodeIfPresent([VisitMomentEntry].self, forKey: .momentEntries) ?? []
         bookSeriesName = try container.decodeIfPresent(String.self, forKey: .bookSeriesName) ?? ""
         bookVolumeNumber = try container.decodeIfPresent(String.self, forKey: .bookVolumeNumber) ?? ""
         bookAuthorName = try container.decodeIfPresent(String.self, forKey: .bookAuthorName) ?? ""
+        bookTranslatorName = try container.decodeIfPresent(String.self, forKey: .bookTranslatorName) ?? ""
         bookISBN = try container.decodeIfPresent(String.self, forKey: .bookISBN) ?? ""
+        bookPublisherName = try container.decodeIfPresent(String.self, forKey: .bookPublisherName) ?? ""
+        bookPublishedDate = try container.decodeIfPresent(String.self, forKey: .bookPublishedDate) ?? ""
+        bookPriceText = try container.decodeIfPresent(String.self, forKey: .bookPriceText) ?? ""
+        bookPageCount = max(try container.decodeIfPresent(Int.self, forKey: .bookPageCount) ?? 0, 0)
+        bookMediumKey = try container.decodeIfPresent(String.self, forKey: .bookMediumKey) ?? ""
+        bookInformationSourceName = try container.decodeIfPresent(String.self, forKey: .bookInformationSourceName) ?? ""
+        bookInformationSourceURL = try container.decodeIfPresent(String.self, forKey: .bookInformationSourceURL) ?? ""
         bookReadingHasEndDate = try container.decodeIfPresent(Bool.self, forKey: .bookReadingHasEndDate)
     }
 
@@ -284,9 +393,15 @@ struct VisitUnitFields: Codable {
                 || eventPeriodStartsAt != nil
                 || eventPeriodEndsAt != nil
                 || !eventVenues.isEmpty
+                || performanceOpensAt != nil
                 || !excludedEventCastLinkIDs.isEmpty
                 || hasVisitCastSnapshot
                 || screenWorkSeasonNumber > 0
+                || !screenWorkOriginalTitle.isEmpty
+                || !screenWorkReleaseDate.isEmpty
+                || !screenWorkOverview.isEmpty
+                || screenWorkTMDBID > 0
+                || !screenWorkTMDBMediaType.isEmpty
                 || !eyecatchAspectRatioKey.isEmpty
                 || !heroBackgroundPath.isEmpty
                 || !heroBackgroundPresetKey.isEmpty
@@ -297,11 +412,21 @@ struct VisitUnitFields: Codable {
                 || weatherFetchedAt != nil
                 || !weatherAttributionURL.isEmpty
                 || !advancedEntries.isEmpty
+                || !liveSetlistEntries.isEmpty
                 || !expenseEntries.isEmpty
+                || !momentEntries.isEmpty
                 || !bookSeriesName.isEmpty
                 || !bookVolumeNumber.isEmpty
                 || !bookAuthorName.isEmpty
+                || !bookTranslatorName.isEmpty
                 || !bookISBN.isEmpty
+                || !bookPublisherName.isEmpty
+                || !bookPublishedDate.isEmpty
+                || !bookPriceText.isEmpty
+                || bookPageCount > 0
+                || !bookMediumKey.isEmpty
+                || !bookInformationSourceName.isEmpty
+                || !bookInformationSourceURL.isEmpty
                 || bookReadingHasEndDate != nil,
               let data = try? JSONEncoder().encode(self),
               let string = String(data: data, encoding: .utf8) else {
@@ -344,6 +469,55 @@ extension ExperienceEvent {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var bookTranslatorName: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookTranslatorName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var bookPublisherName: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookPublisherName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var bookPublishedDate: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookPublishedDate
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var bookPriceText: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookPriceText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var sortedBookShelfNames: [String] {
+        (bookShelves ?? [])
+            .sorted {
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
+                if $0.createdAt != $1.createdAt {
+                    return $0.createdAt < $1.createdAt
+                }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+            .map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    var bookPageCount: Int {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookPageCount
+    }
+
+    var bookInformationSourceName: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookInformationSourceName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var bookInformationSourceURL: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookInformationSourceURL
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var bookVolumeLabel: String {
         let value = bookVolumeNumber
         guard !value.isEmpty else { return "" }
@@ -363,25 +537,44 @@ extension ExperienceEvent {
         seriesName: String,
         volumeNumber: String,
         authorName: String,
-        isbn: String? = nil
+        translatorName: String? = nil,
+        isbn: String? = nil,
+        publisherName: String? = nil,
+        publishedDate: String? = nil,
+        priceText: String? = nil,
+        pageCount: Int? = nil,
+        informationSourceName: String? = nil,
+        informationSourceURL: String? = nil
     ) {
         var fields = VisitUnitFields(rawValue: unitFieldsRaw)
         fields.bookSeriesName = seriesName.trimmingCharacters(in: .whitespacesAndNewlines)
         fields.bookVolumeNumber = volumeNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         fields.bookAuthorName = authorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let translatorName {
+            fields.bookTranslatorName = translatorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         if let isbn {
             fields.bookISBN = isbn.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        if let publisherName {
+            fields.bookPublisherName = publisherName.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let publishedDate {
+            fields.bookPublishedDate = publishedDate.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let priceText {
+            fields.bookPriceText = priceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let pageCount {
+            fields.bookPageCount = max(pageCount, 0)
+        }
+        if let informationSourceName {
+            fields.bookInformationSourceName = informationSourceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let informationSourceURL {
+            fields.bookInformationSourceURL = informationSourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         unitFieldsRaw = fields.encodedRawValue
-        self.seriesName = [
-            fields.bookSeriesName,
-            fields.bookVolumeNumber.isEmpty
-                ? ""
-                : (fields.bookVolumeNumber.contains("巻") ? fields.bookVolumeNumber : "第\(fields.bookVolumeNumber)巻"),
-            fields.bookAuthorName,
-        ]
-        .filter { !$0.isEmpty }
-        .joined(separator: "・")
     }
 
     var screenWorkType: ScreenWorkType {
@@ -526,5 +719,39 @@ struct AdvancedFieldEntry: Codable, Identifiable, Equatable {
 
     var normalized: AdvancedFieldEntry {
         AdvancedFieldEntry(id: id, label: trimmedLabel, value: trimmedValue)
+    }
+}
+
+enum LiveSetlistEntryKind: String, Codable, CaseIterable, Identifiable {
+    case song
+    case mc
+    case encore
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .song: "曲"
+        case .mc: "MC"
+        case .encore: "アンコール"
+        }
+    }
+}
+
+struct LiveSetlistEntry: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var kind: LiveSetlistEntryKind = .song
+    var text: String = ""
+
+    var normalized: LiveSetlistEntry {
+        LiveSetlistEntry(
+            id: id,
+            kind: kind,
+            text: text.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
+    var isEmpty: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

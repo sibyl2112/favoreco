@@ -120,6 +120,7 @@ nonisolated struct PendingPhoto: Identifiable, Sendable {
 
     @MainActor func makePhotoBlob(visit: Visit) -> PhotoBlob {
         PhotoBlob(
+            id: id,
             relativePath: relativePath,
             originalFilename: originalFilename,
             mediaKind: "photo",

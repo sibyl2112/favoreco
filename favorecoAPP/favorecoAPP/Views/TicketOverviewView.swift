@@ -188,7 +188,7 @@ struct TicketOverviewView: View {
             return ("result-action", "当落確認")
         }
         if deadlineLabel == "チケ支払" {
-            return ("payment-action", "入金・支払")
+            return ("payment-action", "支払")
         }
         if deadlineLabel == "チケ受取" || deadlineLabel == "チケ取得" {
             return ("acquired-action", "チケット受取")
@@ -233,7 +233,7 @@ struct TicketOverviewView: View {
         case .result:
             return ("progress-result", "当落待ち")
         case .payment:
-            return ("progress-payment", "入金・支払")
+            return ("progress-payment", "支払")
         case .acquired:
             return ("progress-acquired", "チケット受取")
         }
@@ -999,7 +999,7 @@ enum TicketOverviewFilter: String, CaseIterable, Identifiable {
     var emptyMessage: String {
         switch self {
         case .needsAction:
-            "申込締切、当落発表、入金締切、チケット受取開始が近づくとここに表示されます。"
+            "申込締切、当落発表、支払締切、チケット受取開始が近づくとここに表示されます。"
         case .undated:
             "参加日が決まったチケットは Coming Up に表示されます。"
         case .archived:
@@ -1153,40 +1153,6 @@ private struct TicketOverviewCardShape: Shape {
     }
 }
 
-private struct TicketOverviewCornerCutLines: View {
-    let color: Color
-
-    private let cornerCut = TicketOverviewCardGeometry.cornerCut
-    private let edgeInset: CGFloat = 0.5
-
-    var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            let height = proxy.size.height
-
-            Path { path in
-                path.move(to: CGPoint(x: edgeInset, y: cornerCut))
-                path.addLine(to: CGPoint(x: cornerCut, y: edgeInset))
-
-                path.move(to: CGPoint(x: width - cornerCut, y: edgeInset))
-                path.addLine(to: CGPoint(x: width - edgeInset, y: cornerCut))
-
-                path.move(to: CGPoint(x: width - edgeInset, y: height - cornerCut))
-                path.addLine(to: CGPoint(x: width - cornerCut, y: height - edgeInset))
-
-                path.move(to: CGPoint(x: cornerCut, y: height - edgeInset))
-                path.addLine(to: CGPoint(x: edgeInset, y: height - cornerCut))
-            }
-            .stroke(
-                color,
-                style: StrokeStyle(lineWidth: 1.4, lineCap: .square, lineJoin: .miter)
-            )
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
 private struct TicketOverviewPerforation: View {
     let color: Color
 
@@ -1329,9 +1295,9 @@ private struct TicketOverviewRow: View {
             return "申込状況を確認"
         case "当落発表", "当落を確認":
             return "当落結果を入力"
-        case "入金締切":
-            return "入金を完了する"
-        case "入金期限超過":
+        case "支払締切", "入金締切":
+            return "支払を完了する"
+        case "支払期限超過", "入金期限超過":
             return "支払状況を更新"
         case "チケット受取開始", "チケットを受け取る":
             return "チケットを受け取る"
@@ -1468,14 +1434,8 @@ private struct TicketOverviewRow: View {
         .background(TicketOverviewStyle.surface)
         .clipShape(TicketOverviewCardShape())
         .overlay {
-            ZStack {
-                TicketOverviewCardShape()
-                    .stroke(deadlineStatusColor.opacity(0.46), lineWidth: 1)
-
-                TicketOverviewCornerCutLines(
-                    color: deadlineStatusColor.opacity(0.82)
-                )
-            }
+            TicketOverviewCardShape()
+                .stroke(deadlineStatusColor.opacity(0.46), lineWidth: 1)
         }
         .contentShape(TicketOverviewCardShape())
         .accessibilityElement(children: .combine)

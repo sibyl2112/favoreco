@@ -91,6 +91,7 @@ final class CollectibleItem {
     var id: UUID = UUID()
     var name: String = ""
     var variantName: String = ""
+    var memo: String = ""
     var sortOrder: Int = 0
     var isCompletionTarget: Bool = true
     var isArchived: Bool = false
@@ -109,6 +110,7 @@ final class CollectibleItem {
         id: UUID = UUID(),
         name: String = "",
         variantName: String = "",
+        memo: String = "",
         sortOrder: Int = 0,
         isCompletionTarget: Bool = true,
         isArchived: Bool = false,
@@ -120,6 +122,7 @@ final class CollectibleItem {
         self.id = id
         self.name = name
         self.variantName = variantName
+        self.memo = memo
         self.sortOrder = sortOrder
         self.isCompletionTarget = isCompletionTarget
         self.isArchived = isArchived

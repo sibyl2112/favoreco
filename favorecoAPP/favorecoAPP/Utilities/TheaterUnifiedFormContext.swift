@@ -131,6 +131,7 @@ enum TheaterUnifiedFormSection: String, CaseIterable, Identifiable {
 struct TheaterUnifiedFormIntroduction: View {
     @Environment(\.favorecoThemePalette) private var themePalette
     let entry: TheaterUnifiedFormEntry
+    var isLive = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -144,7 +145,7 @@ struct TheaterUnifiedFormIntroduction: View {
                     .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
                     .foregroundStyle(themePalette.globalTint)
 
-                Text(entry.guidance)
+                Text(liveAdjustedGuidance)
                     .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -157,9 +158,32 @@ struct TheaterUnifiedFormIntroduction: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(themePalette.globalTint.opacity(0.08))
         )
-        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(themePalette.globalTint.opacity(0.30), lineWidth: 0.8)
+        }
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 6, trailing: 16))
+        .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .accessibilityElement(children: .combine)
+    }
+
+    private var liveAdjustedGuidance: String {
+        guard isLive else { return entry.guidance }
+        return switch entry {
+        case .performanceRegistration:
+            "まず公演名だけでも保存できます。アーティストや日程は後から追加できます。"
+        case .planCreation:
+            "ライブ情報を引き継ぎ、参戦する日時と会場を登録します。"
+        case .visitCreation:
+            "ライブ情報を引き継ぎ、参戦日時・写真・感想・セトリを記録できます。"
+        case .visitEditing:
+            "予定を引き継ぎ、写真・感想・同行者・セトリを記録できます。"
+        case .performanceEditing:
+            "ライブそのものの公式情報を編集します。参戦ごとの情報は変更しません。"
+        case .planEditing:
+            "ライブ情報はそのまま、参戦する日時と会場を更新します。"
+        }
     }
 }
 
@@ -167,14 +191,15 @@ struct TheaterUnifiedSectionLabel: View {
     @Environment(\.favorecoThemePalette) private var themePalette
     @Environment(\.colorScheme) private var colorScheme
     let section: TheaterUnifiedFormSection
+    var isLive = false
 
     var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(section.title)
+                Text(sectionTitle)
                     .font(FavorecoTypography.jpSans(16, weight: .semibold, relativeTo: .body))
                     .foregroundStyle(themePalette.registrationSectionHeaderTint)
-                Text(section.summary)
+                Text(sectionSummary)
                     .font(FavorecoTypography.jpSans(9.5, weight: .regular, relativeTo: .caption))
                     .foregroundStyle(ExplicitFormMetrics.canvasSupportingTextColor(for: colorScheme))
                     .lineLimit(1)
@@ -183,6 +208,28 @@ struct TheaterUnifiedSectionLabel: View {
             Spacer(minLength: 8)
         }
         .textCase(nil)
+    }
+
+    private var sectionTitle: String {
+        guard isLive else { return section.title }
+        return switch section {
+        case .viewing: "参戦記録"
+        case .impressions: "感想・タグ"
+        default: section.title
+        }
+    }
+
+    private var sectionSummary: String {
+        guard isLive else { return section.summary }
+        return switch section {
+        case .performanceBasic: "公演名・アーティスト・種別・公式URL"
+        case .venueSchedule: "開催日程・会場・公演メモ"
+        case .performanceDetails: "SNS・制作情報・読み取り情報"
+        case .participation: "参戦日・開場・開演・終了"
+        case .viewing: "チケット・座席・同行者・タグ"
+        case .photos: "この回のアイキャッチ・ライブの写真"
+        default: section.summary
+        }
     }
 }
 

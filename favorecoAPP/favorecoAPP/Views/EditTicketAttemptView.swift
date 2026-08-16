@@ -99,7 +99,7 @@ struct EditTicketAttemptView: View {
                                 )
                             }
 
-                            Text("当落や支払い、受取の記録を間違えた場合に使います。工程日は変更しません。")
+                            Text("当落や支払、受取の記録を間違えた場合に使います。工程日は変更しません。")
                                 .font(FavorecoTypography.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -208,6 +208,12 @@ struct EditTicketAttemptView: View {
 
                 if draft.showsTicketDetails {
                     FavorecoRegistrationSection("金額・座席") {
+                        TicketDetailsOCRInput(
+                            priceText: $draft.priceText,
+                            feeText: $draft.feeText,
+                            quantity: $draft.quantity,
+                            seatText: $draft.seatText
+                        )
                         ExplicitFormTextField(
                             title: "チケット代（任意）",
                             prompt: "金額を入力",
@@ -354,6 +360,7 @@ struct EditTicketAttemptView: View {
     private var dateFieldsSection: some View {
         if draft.showsDateSection {
             FavorecoRegistrationSection("工程日") {
+                TicketMilestoneDateGuidance()
                 if draft.showsSaleStart {
                     DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
                 }
@@ -368,11 +375,11 @@ struct EditTicketAttemptView: View {
                     DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
                 }
                 if draft.showsPaymentDeadline {
-                    DateToggleRow(title: "入金締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
+                    DateToggleRow(title: "支払締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
                 }
                 if draft.showsIssueStart {
                     DateToggleRow(
-                        title: "チケット受取開始（任意）",
+                        title: "チケット受取開始",
                         isOn: $draft.hasIssueStart,
                         date: $draft.issueStartAt
                     )
@@ -621,7 +628,7 @@ private struct TicketAttemptDraft {
             return "当落発表は抽選申込締切以降にしてください。"
         }
         if hasResultAnnounce && hasPaymentDeadline && resultAnnounceAt > paymentDeadlineAt {
-            return "入金締切は当落発表以降にしてください。"
+            return "支払締切は当落発表以降にしてください。"
         }
         return nil
     }

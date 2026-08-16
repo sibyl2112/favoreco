@@ -38,6 +38,12 @@ struct SupportLinksView: View {
                     Label("Favoreco公式サイト", systemImage: "arrow.up.right.square")
                 }
 
+                NavigationLink {
+                    SettingsDocumentView(title: "データ提供クレジット", bodyText: FavorecoLegalText.credits)
+                } label: {
+                    Label("データ提供クレジット", systemImage: "info.circle")
+                }
+
                 LabeledContent("バージョン", value: AppReleaseNotes.currentVersion)
             }
 
@@ -92,6 +98,16 @@ struct SettingsDocumentView: View {
 }
 
 private enum FavorecoLegalText {
+    static let credits = """
+    作品情報: TMDB（The Movie Database）
+
+    This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+    映画・ドラマ・アニメの作品検索を利用した場合、検索語をTMDBへ送信し、公開されている作品情報と画像の候補を取得します。候補は利用者が選択した場合だけFavorecoの登録フォームへ反映します。
+
+    https://www.themoviedb.org
+    """
+
     static let terms = """
     最終更新日: 2026年7月12日
 
@@ -123,7 +139,7 @@ private enum FavorecoLegalText {
     """
 
     static let privacy = """
-    最終更新日: 2026年7月12日
+    最終更新日: 2026年8月14日
 
     RANOVIQOは、Favorecoに保存される情報と外部サービスの利用について、以下のとおり取り扱います。
 
@@ -139,8 +155,8 @@ private enum FavorecoLegalText {
     4. カレンダー・通知
     利用者が許可した場合に限り、外部カレンダーの表示や予定追加、端末内通知の予約を行います。権限はiOSの設定から変更できます。
 
-    5. Web・天気・OCR
-    URL候補取得、地図検索、天気取得には入力されたURL、場所、日付など必要な情報を各サービスへ送る場合があります。OCRは端末上のApple Visionを使用し、読み取った文字は利用者が保存した場合だけ記録へ残ります。
+    5. Web・作品検索・天気・OCR
+    URL候補取得、地図検索、天気取得には入力されたURL、場所、日付など必要な情報を各サービスへ送る場合があります。映画・ドラマ・アニメの作品検索を実行すると、検索語をTMDBへ送信し、作品情報と画像候補を取得します。候補は利用者が選択した場合だけ登録フォームへ反映します。OCRは端末上のApple Visionを使用し、読み取った文字は利用者が保存した場合だけ記録へ残ります。
 
     6. 課金
     購入処理はAppleのStoreKitを利用します。運営者がクレジットカード番号を取得・保存することはありません。アプリは購入状態と利用可能な権利を確認します。

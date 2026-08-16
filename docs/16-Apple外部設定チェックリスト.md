@@ -152,3 +152,12 @@ Xcode Organizerから配布する場合:
 5. App Store ConnectでProcessing完了を待つ
 6. TestFlight内部テストへ追加
 7. 実機総合確認手順をTestFlightビルドでも再実施する
+
+## 9. TMDB作品検索（配布前ゲート）
+
+- TMDBへFavorecoの課金形態を伝え、商用利用ライセンスの要否と条件を確認する
+- 開発中の実API確認に限り、TMDBアカウントのAPI設定からRead Access Tokenを発行し、Scheme > Run > Arguments > Environment Variablesへ`TMDB_READ_ACCESS_TOKEN`を設定する
+- Read Access TokenをInfo.plist、ソースコード、追跡対象のxcconfig、アプリバンドルへ保存しない
+- 配布版は商用条件確認後、資格情報をサーバー側だけに保持するFavoreco中継APIへ切り替える
+- 設定 > リンク・サポート > データ提供クレジットに規定文言を表示する。配布前にTMDB公式の承認済みロゴを無改変で追加する
+- 映画・ドラマ・アニメ各1件、同名作、候補0件、通信失敗、ポスターなし、日本語あらすじなし、手入力フォールバックを実機確認する

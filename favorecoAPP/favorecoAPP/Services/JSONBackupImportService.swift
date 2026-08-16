@@ -35,6 +35,7 @@ enum JSONBackupImportService {
         var ticketAccounts = Dictionary(grouping: try context.fetch(FetchDescriptor<TicketAccount>()), by: \.id).compactMapValues(\.first)
         var inboxItems = Dictionary(grouping: try context.fetch(FetchDescriptor<InboxItem>()), by: \.id).compactMapValues(\.first)
         var events = Dictionary(grouping: try context.fetch(FetchDescriptor<ExperienceEvent>()), by: \.id).compactMapValues(\.first)
+        var bookShelves = Dictionary(grouping: try context.fetch(FetchDescriptor<BookShelf>()), by: \.id).compactMapValues(\.first)
         var visits = Dictionary(grouping: try context.fetch(FetchDescriptor<Visit>()), by: \.id).compactMapValues(\.first)
         var socialAccounts = Dictionary(grouping: try context.fetch(FetchDescriptor<SocialAccount>()), by: \.id).compactMapValues(\.first)
         var plans = Dictionary(grouping: try context.fetch(FetchDescriptor<Plan>()), by: \.id).compactMapValues(\.first)
@@ -284,6 +285,24 @@ enum JSONBackupImportService {
             model.category = item.categoryID.flatMap { categories[$0] }
         }
 
+        for item in envelope.bookShelves ?? [] {
+            let model: BookShelf
+            if let existing = bookShelves[item.id] {
+                model = existing
+                updatedCount += 1
+            } else {
+                model = BookShelf(id: item.id)
+                context.insert(model)
+                bookShelves[item.id] = model
+                insertedCount += 1
+            }
+            model.name = item.name
+            model.sortOrder = item.sortOrder
+            model.createdAt = item.createdAt
+            model.updatedAt = item.updatedAt
+            model.books = item.bookIDs.compactMap { events[$0] }
+        }
+
         for eventBackup in envelope.events {
             guard let series = events[eventBackup.id] else { continue }
             for itemBackup in eventBackup.collectibleItems ?? [] {
@@ -299,6 +318,7 @@ enum JSONBackupImportService {
                 }
                 model.name = itemBackup.name
                 model.variantName = itemBackup.variantName
+                model.memo = itemBackup.memo ?? ""
                 model.sortOrder = itemBackup.sortOrder
                 model.isCompletionTarget = itemBackup.isCompletionTarget
                 model.isArchived = itemBackup.isArchived
@@ -652,6 +672,7 @@ struct JSONBackupPreview {
     let note: String
     let categoryCount: Int
     let eventCount: Int
+    let bookShelfCount: Int
     let visitCount: Int
     let inboxCount: Int
     let photoMetadataCount: Int
@@ -674,6 +695,7 @@ struct JSONBackupPreview {
         note = envelope.note
         categoryCount = envelope.categories.count
         eventCount = envelope.events.count
+        bookShelfCount = envelope.bookShelves?.count ?? 0
         visitCount = envelope.visits.count
         inboxCount = envelope.inboxItems.count
         photoMetadataCount = envelope.photos.count
@@ -694,6 +716,7 @@ struct JSONBackupPreview {
     var totalModelCount: Int {
         categoryCount
             + eventCount
+            + bookShelfCount
             + visitCount
             + inboxCount
             + socialAccountCount

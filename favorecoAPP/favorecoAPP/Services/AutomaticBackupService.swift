@@ -196,6 +196,7 @@ actor AutomaticBackupModelActor {
         modelContext.autosaveEnabled = false
         let categories = try modelContext.fetch(FetchDescriptor<RecordCategory>())
         let events = try modelContext.fetch(FetchDescriptor<ExperienceEvent>())
+        let bookShelves = try modelContext.fetch(FetchDescriptor<BookShelf>())
         let visits = try modelContext.fetch(FetchDescriptor<Visit>())
         let inboxItems = try modelContext.fetch(FetchDescriptor<InboxItem>())
         let photos = try modelContext.fetch(FetchDescriptor<PhotoBlob>())
@@ -212,7 +213,7 @@ actor AutomaticBackupModelActor {
         let ticketAccounts = try modelContext.fetch(FetchDescriptor<TicketAccount>())
         let ticketAttempts = try modelContext.fetch(FetchDescriptor<TicketAttempt>())
         let primaryContentCount = categories.filter { !$0.isBuiltIn }.count
-            + events.count + visits.count + inboxItems.count + photos.count
+            + events.count + bookShelves.count + visits.count + inboxItems.count + photos.count
         let profileContentCount = socialAccounts.count + people.count + companions.count
             + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count
         let linkedContentCount = favoPins.count + personLinks.count + places.count
@@ -239,6 +240,7 @@ actor AutomaticBackupModelActor {
         let json = try JSONBackupExportService.makeBackupJSON(
             categories: categories,
             events: events,
+            bookShelves: bookShelves,
             visits: visits,
             inboxItems: inboxItems,
             photos: photos,

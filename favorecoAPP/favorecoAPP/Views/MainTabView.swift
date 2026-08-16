@@ -15,16 +15,82 @@ import Combine
 final class CreateEntryContextRouter: ObservableObject {
     struct Context: Equatable {
         let categoryID: UUID
+
+        fileprivate let baseCategoryID: UUID?
+        fileprivate let detailContexts: [DetailContext]
+
+        fileprivate init(
+            categoryID: UUID,
+            baseCategoryID: UUID? = nil,
+            detailContexts: [DetailContext] = []
+        ) {
+            self.categoryID = categoryID
+            self.baseCategoryID = baseCategoryID ?? (detailContexts.isEmpty ? categoryID : nil)
+            self.detailContexts = detailContexts
+        }
+    }
+
+    fileprivate struct DetailContext: Equatable {
+        let token: UUID
+        let categoryID: UUID
     }
 
     @Published private(set) var activeContext: Context?
 
     func activate(categoryID: UUID) {
-        activeContext = Context(categoryID: categoryID)
+        guard let context = activeContext, !context.detailContexts.isEmpty else {
+            activeContext = Context(categoryID: categoryID)
+            return
+        }
+        activeContext = Context(
+            categoryID: context.categoryID,
+            baseCategoryID: categoryID,
+            detailContexts: context.detailContexts
+        )
     }
 
     func resetToHome() {
-        activeContext = nil
+        guard let context = activeContext, !context.detailContexts.isEmpty else {
+            activeContext = nil
+            return
+        }
+        activeContext = Context(
+            categoryID: context.categoryID,
+            detailContexts: context.detailContexts
+        )
+    }
+
+    func activateDetail(categoryID: UUID, token: UUID) {
+        let context = activeContext
+        var detailContexts = context?.detailContexts ?? []
+        detailContexts.removeAll { $0.token == token }
+        detailContexts.append(DetailContext(token: token, categoryID: categoryID))
+        let baseCategoryID = if let context, context.detailContexts.isEmpty {
+            context.categoryID
+        } else {
+            context?.baseCategoryID
+        }
+        activeContext = Context(
+            categoryID: categoryID,
+            baseCategoryID: baseCategoryID,
+            detailContexts: detailContexts
+        )
+    }
+
+    func deactivateDetail(token: UUID) {
+        guard let context = activeContext else { return }
+        let detailContexts = context.detailContexts.filter { $0.token != token }
+        if let frontmost = detailContexts.last {
+            activeContext = Context(
+                categoryID: frontmost.categoryID,
+                baseCategoryID: context.baseCategoryID,
+                detailContexts: detailContexts
+            )
+        } else if let baseCategoryID = context.baseCategoryID {
+            activeContext = Context(categoryID: baseCategoryID)
+        } else {
+            activeContext = nil
+        }
     }
 
     func categoryIDForCreateMenu(isHomeTabActive: Bool) -> UUID? {
@@ -59,6 +125,7 @@ struct MainTabView: View {
     @StateObject private var createEntryContextRouter = CreateEntryContextRouter()
     @State private var selectedTab: MainTab = .home
     @State private var presentedCreateContextCategoryID: UUID?
+    @State private var presentedCreateContextTemplateKey: String?
     @State private var presentedCreateMenuRequest: CreateEntryMenuRequest?
     @State private var isShowingRecordTargetSelection = false
     @State private var isShowingTheaterMemorySelection = false
@@ -230,6 +297,7 @@ struct MainTabView: View {
                 definition: definition,
                 onSelect: { action in
                     presentedCreateContextCategoryID = request.categoryID
+                    presentedCreateContextTemplateKey = category?.templateKey
                     pendingCreateAction = action
                     presentedCreateMenuRequest = nil
                 }
@@ -338,9 +406,9 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $isShowingQuickRegistration) {
             QuickRegistrationView(
-                initialTemplateKey: presentedCreateContextCategory?.templateKey,
+                initialTemplateKey: presentedCreateContextTemplateKey,
                 screenTitle: quickRegistrationScreenTitle,
-                locksCategory: presentedCreateContextCategory != nil
+                locksCategory: presentedCreateContextTemplateKey != nil
             )
         }
         .sheet(isPresented: $isShowingPublicPlaceCatalog) {
@@ -401,6 +469,8 @@ struct MainTabView: View {
             isShowingPublicPlaceCatalog = true
         case .theaterRegistration:
             isShowingUnifiedTheaterRegistration = true
+        case .performanceRegistration:
+            theaterRegistrationCategory = presentedCreateContextCategory
         case .simpleCategoryRegistration:
             isShowingSimpleCategoryRegistration = true
         case .ticketSchedule:
@@ -438,7 +508,7 @@ struct MainTabView: View {
     }
 
     private var quickRegistrationScreenTitle: String {
-        switch presentedCreateContextCategory?.templateKey {
+        switch presentedCreateContextTemplateKey {
         case "book": "本を登録する"
         case "movie": "観たい作品を登録"
         case "museum": "気になる展示を登録"
@@ -1214,6 +1284,7 @@ private enum CreateAction: String, Identifiable {
     case quick
     case placeCatalog
     case theaterRegistration
+    case performanceRegistration
     case simpleCategoryRegistration
     case ticketSchedule
 
@@ -1252,6 +1323,25 @@ private struct CreateEntryMenuDefinition {
                         title: "観劇の思い出を記録",
                         detail: "参加した公演を選んで記録を残す",
                         systemImage: "square.and.pencil"
+                    ),
+                ]
+            )
+        case "live":
+            CreateEntryMenuDefinition(
+                templateKey: templateKey,
+                items: [
+                    CreateEntryMenuItem(
+                        action: .performanceRegistration,
+                        title: "ライブを登録",
+                        detail: "公演情報を登録して予定・チケットへ進む",
+                        systemImage: "music.mic"
+                    ),
+                    CreateEntryMenuItem(
+                        action: .record,
+                        title: "参戦の記録をつける",
+                        detail: "登録済みライブへ今回の記録を追加",
+                        systemImage: "square.and.pencil",
+                        requiresExistingRecord: true
                     ),
                 ]
             )

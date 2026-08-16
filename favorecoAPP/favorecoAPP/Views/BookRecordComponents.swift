@@ -139,6 +139,12 @@ struct BookInformationEditor: View {
     @Binding var seriesName: String
     @Binding var volumeNumber: String
     @Binding var authorName: String
+    @Binding var translatorName: String
+    @Binding var isbn: String
+    @Binding var publisherName: String
+    @Binding var publishedDate: String
+    @Binding var priceText: String
+    @Binding var pageCountText: String
     @Binding var officialURL: String
     @Binding var aspectRatioKey: String
     let isEditable: Bool
@@ -151,23 +157,114 @@ struct BookInformationEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             if isEditable {
-                TextField("書名", text: $title, axis: .vertical)
-                    .lineLimit(1...2)
-                TextField("シリーズ名（任意）", text: $seriesName, axis: .vertical)
-                    .lineLimit(1...2)
-                TextField("巻数（任意）", text: $volumeNumber)
+                ExplicitFormTextField(
+                    title: "書名（必須）",
+                    prompt: "書名を入力",
+                    text: $title,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "シリーズ名（任意）",
+                    prompt: "シリーズ名を入力",
+                    text: $seriesName,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "巻数（任意）",
+                    prompt: "例：3",
+                    text: $volumeNumber,
+                    labelStyle: .horizontal
+                )
                     .keyboardType(.numbersAndPunctuation)
-                TextField("著者（任意）", text: $authorName, axis: .vertical)
-                    .lineLimit(1...2)
-                Picker("本の種類", selection: $aspectRatioKey) {
-                    ForEach(formats) { format in
-                        Text(format.name).tag(format.key)
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "著者（任意）",
+                    prompt: "著者名を入力",
+                    text: $authorName,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "訳者（任意）",
+                    prompt: "訳者名を入力",
+                    text: $translatorName,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "出版社（任意）",
+                    prompt: "出版社名を入力",
+                    text: $publisherName,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "発行日（任意）",
+                    prompt: "例：2026/08/14",
+                    text: $publishedDate,
+                    labelStyle: .horizontal
+                )
+                    .keyboardType(.numbersAndPunctuation)
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "ISBN（任意）",
+                    prompt: "ISBN-10またはISBN-13",
+                    text: $isbn,
+                    labelStyle: .horizontal
+                )
+                    .keyboardType(.asciiCapableNumberPad)
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "価格（任意）",
+                    prompt: "例：1980",
+                    text: $priceText,
+                    labelStyle: .horizontal
+                )
+                    .keyboardType(.decimalPad)
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "ページ数（任意）",
+                    prompt: "例：320",
+                    text: $pageCountText,
+                    labelStyle: .horizontal
+                )
+                    .keyboardType(.numberPad)
+                fieldDivider
+                ExplicitFormControlRow(title: "表紙の比率", isOptional: true) {
+                    Picker("表紙の比率", selection: $aspectRatioKey) {
+                        ForEach(formats) { format in
+                            Text(format.name).tag(format.key)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
-                TextField("公式URL（任意）", text: $officialURL)
+                fieldDivider
+                ExplicitFormTextField(
+                    title: "公式URL（任意）",
+                    prompt: "https://example.com",
+                    text: $officialURL,
+                    labelStyle: .horizontal
+                )
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
             } else {
@@ -175,8 +272,14 @@ struct BookInformationEditor: View {
                 if !seriesName.isEmpty { LabeledContent("シリーズ", value: seriesName) }
                 if !volumeNumber.isEmpty { LabeledContent("巻数", value: volumeNumber) }
                 if !authorName.isEmpty { LabeledContent("著者", value: authorName) }
+                if !translatorName.isEmpty { LabeledContent("訳者", value: translatorName) }
+                if !publisherName.isEmpty { LabeledContent("出版社", value: publisherName) }
+                if !publishedDate.isEmpty { LabeledContent("発行日", value: publishedDate) }
+                if !isbn.isEmpty { LabeledContent("ISBN", value: isbn) }
+                if !priceText.isEmpty { LabeledContent("価格", value: "¥\(priceText)") }
+                if !pageCountText.isEmpty { LabeledContent("ページ数", value: "\(pageCountText)ページ") }
                 LabeledContent(
-                    "本の種類",
+                    "表紙の比率",
                     value: EyecatchAspectRatio.option(forKey: aspectRatioKey)?.name ?? "未設定"
                 )
                 if !officialURL.isEmpty {
@@ -190,6 +293,10 @@ struct BookInformationEditor: View {
             }
         }
     }
+
+    private var fieldDivider: some View {
+        Divider().overlay(ExplicitFormMetrics.rowSeparatorColor)
+    }
 }
 
 struct BookReadingPeriodEditor: View {
@@ -198,11 +305,23 @@ struct BookReadingPeriodEditor: View {
     @Binding var hasEndDate: Bool
     @Binding var rating: Double
     let ratingText: String
+    var showsRating: Bool = true
 
     @State private var isShowingCalendar = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            ExplicitFormControlRow(title: "読書状態", isOptional: false) {
+                Picker("読書状態", selection: readingStatusBinding) {
+                    Text("読書中").tag(false)
+                    Text("読了").tag(true)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+            }
+
+            Divider()
+
             Button {
                 isShowingCalendar = true
             } label: {
@@ -224,15 +343,17 @@ struct BookReadingPeriodEditor: View {
             }
             .buttonStyle(.plain)
 
-            Divider()
+            if showsRating {
+                Divider()
 
-            HStack(spacing: 10) {
-                Text("評価")
-                    .font(FavorecoTypography.body)
-                Slider(value: $rating, in: 0...5, step: 0.5)
-                Text(ratingText)
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 42, alignment: .trailing)
+                HStack(spacing: 10) {
+                    Text("評価")
+                        .font(FavorecoTypography.body)
+                    Slider(value: $rating, in: 0...5, step: 0.5)
+                    Text(ratingText)
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 42, alignment: .trailing)
+                }
             }
         }
         .sheet(isPresented: $isShowingCalendar) {
@@ -259,12 +380,72 @@ struct BookReadingPeriodEditor: View {
         return "\(start)〜\(Self.dateFormatter.string(from: endsAt))"
     }
 
+    private var readingStatusBinding: Binding<Bool> {
+        Binding {
+            hasEndDate
+        } set: { isRead in
+            hasEndDate = isRead
+            if isRead {
+                endsAt = max(endsAt, startsAt)
+            }
+        }
+    }
+
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "yyyy/M/d"
         return formatter
     }()
+}
+
+enum BookReadingMedium: String, CaseIterable, Identifiable {
+    case paper
+    case ebook
+    case audiobook
+    case other
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .paper: "書籍"
+        case .ebook: "電子書籍"
+        case .audiobook: "オーディオブック"
+        case .other: "その他"
+        }
+    }
+
+    static func resolved(_ key: String) -> BookReadingMedium {
+        BookReadingMedium(rawValue: key) ?? .paper
+    }
+}
+
+struct BookReadingMediumEditor: View {
+    @Binding var mediumKey: String
+
+    var body: some View {
+        ExplicitFormControlRow(title: "媒体", isOptional: false) {
+            Picker("媒体", selection: mediumBinding) {
+                ForEach(BookReadingMedium.allCases) { medium in
+                    Text(medium.displayName).tag(medium.rawValue)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+        }
+        .onAppear {
+            if mediumKey.isEmpty {
+                mediumKey = BookReadingMedium.paper.rawValue
+            }
+        }
+    }
+
+    private var mediumBinding: Binding<String> {
+        Binding {
+            BookReadingMedium.resolved(mediumKey).rawValue
+        } set: { mediumKey = $0 }
+    }
 }
 
 private struct BookReadingCalendarSheet: View {

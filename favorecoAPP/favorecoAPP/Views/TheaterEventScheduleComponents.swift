@@ -141,7 +141,7 @@ struct TheaterEventTicketProgressSection: View {
                             .foregroundStyle(accentColor)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint("申込日、当落日、入金期限、取得日を編集します")
+                    .accessibilityHint("申込日、当落日、支払期限、取得日を編集します")
                 }
                 Text("\(references.count)")
                     .font(FavorecoTypography.captionStrong)

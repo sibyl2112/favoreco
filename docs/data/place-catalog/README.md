@@ -87,6 +87,36 @@ python3 docs/data/place-catalog/generate-cloudkit-records.py \
 - CloudKit Dashboardでは`updatedAt`をQuery可能にし、利用者アプリはPublic Databaseを読取専用で利用する。レコード作成・更新権限は管理側だけに限定する
 - NDJSONは中立的な管理用ペイロードであり、CloudKit Developmentへの投入とProductionへのスキーマ反映はApple側の管理作業として別途行う
 
+場所カタログ全体をDevelopmentへ同期する前に、まず入力だけを検証する。
+
+```bash
+python3 docs/data/place-catalog/sync-cloudkit-development.py \
+  --input /tmp/favoreco-public-places.ndjson
+```
+
+Apple Accountの利用者トークンを保存後、書き込みを行わない`--plan`でCloudKitとの差分件数を確認する。
+
+```bash
+python3 docs/data/place-catalog/sync-cloudkit-development.py \
+  --input /tmp/favoreco-public-places.ndjson \
+  --plan
+```
+
+表示された期待件数が原稿と一致した場合だけ、その件数を明示してDevelopmentへ反映する。
+
+```bash
+python3 docs/data/place-catalog/sync-cloudkit-development.py \
+  --input /tmp/favoreco-public-places.ndjson \
+  --apply \
+  --confirm-expected-count 3208
+```
+
+- Productionは指定できず、常にDevelopmentだけを対象にする
+- 既存`PublicPlace`が3,000件未満の場合は誤った環境と判断して中断する
+- 同じ`placeID`の完全一致は維持し、重複だけを削除する
+- 変更時は新レコードの作成成功後に旧レコードを削除し、作成失敗による欠落を防ぐ
+- 入力にないCloudKitレコードは自動削除しない
+
 宗派・御祭神の公開差分だけをDevelopmentへ同期する場合は、まず入力を検証する。このコマンドはCloudKitを変更しない。
 
 ```bash

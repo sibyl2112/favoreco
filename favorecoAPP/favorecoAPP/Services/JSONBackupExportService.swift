@@ -10,11 +10,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    nonisolated static let schemaVersion = 15
+    nonisolated static let schemaVersion = 16
 
     nonisolated static func makeBackupJSON(
         categories: [RecordCategory],
         events: [ExperienceEvent],
+        bookShelves: [BookShelf] = [],
         visits: [Visit],
         inboxItems: [InboxItem],
         photos: [PhotoBlob],
@@ -44,6 +45,10 @@ enum JSONBackupExportService {
             events: events.sorted { $0.updatedAt > $1.updatedAt }.map {
                 BackupEvent($0, includesBinaryData: includesPhotoBinaryData || isFullBackupManifest)
             },
+            bookShelves: bookShelves.sorted { lhs, rhs in
+                if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+                return lhs.createdAt < rhs.createdAt
+            }.map(BackupBookShelf.init),
             visits: visits.sorted { $0.visitedAt > $1.visitedAt }.map(BackupVisit.init),
             inboxItems: inboxItems.sorted { $0.updatedAt > $1.updatedAt }.map {
                 BackupInboxItem($0, includesBinaryData: includesPhotoBinaryData || isFullBackupManifest)
@@ -86,6 +91,7 @@ nonisolated struct FavorecoBackupEnvelope: Codable {
     var note: String
     var categories: [BackupCategory]
     var events: [BackupEvent]
+    var bookShelves: [BackupBookShelf]?
     var visits: [BackupVisit]
     var inboxItems: [BackupInboxItem]
     var photos: [BackupPhoto]
@@ -101,6 +107,24 @@ nonisolated struct FavorecoBackupEnvelope: Codable {
     var plans: [BackupPlan]
     var ticketAccounts: [BackupTicketAccount]
     var ticketAttempts: [BackupTicketAttempt]
+}
+
+nonisolated struct BackupBookShelf: Codable {
+    var id: UUID
+    var name: String
+    var sortOrder: Int
+    var createdAt: Date
+    var updatedAt: Date
+    var bookIDs: [UUID]
+
+    nonisolated init(_ shelf: BookShelf) {
+        id = shelf.id
+        name = shelf.name
+        sortOrder = shelf.sortOrder
+        createdAt = shelf.createdAt
+        updatedAt = shelf.updatedAt
+        bookIDs = (shelf.books ?? []).map(\.id)
+    }
 }
 
 nonisolated struct BackupCategory: Codable {
@@ -193,6 +217,7 @@ nonisolated struct BackupCollectibleItem: Codable {
     var id: UUID
     var name: String
     var variantName: String
+    var memo: String?
     var sortOrder: Int
     var isCompletionTarget: Bool
     var isArchived: Bool
@@ -205,6 +230,7 @@ nonisolated struct BackupCollectibleItem: Codable {
         id = item.id
         name = item.name
         variantName = item.variantName
+        memo = item.memo
         sortOrder = item.sortOrder
         isCompletionTarget = item.isCompletionTarget
         isArchived = item.isArchived

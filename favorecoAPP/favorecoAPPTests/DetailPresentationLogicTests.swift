@@ -3,6 +3,11 @@ import XCTest
 
 @MainActor
 final class DetailPresentationLogicTests: XCTestCase {
+    func testCalendarYearNeverUsesDigitGrouping() {
+        XCTAssertEqual(FavorecoDateText.year(2026), "2026年")
+        XCTAssertFalse(FavorecoDateText.year(2026).contains(","))
+    }
+
     func testBackSwipeAcceptsDeliberateLeadingEdgeSwipe() {
         XCTAssertTrue(DetailBackSwipePolicy.shouldClose(
             startLocation: CGPoint(x: 20, y: 100),

@@ -479,6 +479,7 @@ struct CollectibleItemEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var name: String
     @State private var variantName: String
+    @State private var memo: String
     @State private var isCompletionTarget: Bool
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var imageData: Data?
@@ -489,6 +490,7 @@ struct CollectibleItemEditorView: View {
         self.item = item
         _name = State(initialValue: item?.name ?? "")
         _variantName = State(initialValue: item?.variantName ?? "")
+        _memo = State(initialValue: item?.memo ?? "")
         _isCompletionTarget = State(initialValue: item?.isCompletionTarget ?? true)
         _imageData = State(initialValue: item?.imageData)
     }
@@ -500,6 +502,10 @@ struct CollectibleItemEditorView: View {
                     TextField("名前（例：赤・キャラクター名）", text: $name)
                     TextField("バリエーション・レア度（任意）", text: $variantName)
                     Toggle("コンプリート対象に含める", isOn: $isCompletionTarget)
+                }
+                FavorecoRegistrationSection("メモ") {
+                    TextField("このGoodsについて残したいこと（任意）", text: $memo, axis: .vertical)
+                        .lineLimit(3...5)
                 }
                 FavorecoRegistrationSection("画像") {
                     let photoActionTitle = imageData == nil ? "画像を選ぶ" : "画像を変更"
@@ -533,6 +539,7 @@ struct CollectibleItemEditorView: View {
         if item == nil { modelContext.insert(target) }
         target.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         target.variantName = variantName.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.memo = memo.trimmingCharacters(in: .whitespacesAndNewlines)
         target.isCompletionTarget = isCompletionTarget
         target.imageData = imageData
         target.updatedAt = Date()
@@ -664,6 +671,12 @@ private struct CollectibleItemDetailView: View {
                 Button { isShowingTransaction = true } label: {
                     FavorecoIconLabel("入手・手放しを記録", systemImage: "plusminus.circle.fill")
                 }.tint(accentColor)
+            }
+            if !item.memo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                FavorecoRegistrationSection("メモ") {
+                    Text(item.memo)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             FavorecoRegistrationSection("履歴") {
                 let transactions = (item.transactions ?? []).sorted { $0.occurredAt > $1.occurredAt }

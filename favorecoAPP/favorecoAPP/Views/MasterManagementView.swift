@@ -80,7 +80,7 @@ private struct PersonMasterCreateView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
     @State private var displayName = ""
-    @State private var entityKind = PersonEntityKind.person
+    @State private var entityKind: PersonEntityKind
     @State private var parentOrganizationID: UUID?
     @State private var reading = ""
     @State private var roleTagsRaw = ""
@@ -93,6 +93,18 @@ private struct PersonMasterCreateView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var selectedPhotoData: Data?
     @State private var photoErrorMessage = ""
+    private let locksEntityKind: Bool
+    private let onSaved: ((PersonMaster) -> Void)?
+
+    init(
+        initialEntityKind: PersonEntityKind = .person,
+        locksEntityKind: Bool = false,
+        onSaved: ((PersonMaster) -> Void)? = nil
+    ) {
+        _entityKind = State(initialValue: initialEntityKind)
+        self.locksEntityKind = locksEntityKind
+        self.onSaved = onSaved
+    }
 
     private var trimmedName: String {
         displayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -119,12 +131,16 @@ private struct PersonMasterCreateView: View {
                     )
                     TextField("表示名", text: $displayName)
                     TextField("よみ（任意）", text: $reading)
-                    Picker("区分", selection: $entityKind) {
-                        ForEach(PersonEntityKind.allCases) { kind in
-                            Text(kind.displayName).tag(kind)
+                    if locksEntityKind {
+                        LabeledContent("区分", value: entityKind.displayName)
+                    } else {
+                        Picker("区分", selection: $entityKind) {
+                            ForEach(PersonEntityKind.allCases) { kind in
+                                Text(kind.displayName).tag(kind)
+                            }
                         }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
                     if entityKind == .organization {
                         Picker("所属する上位団体", selection: $parentOrganizationID) {
                             Text("なし").tag(UUID?.none)
@@ -177,7 +193,7 @@ private struct PersonMasterCreateView: View {
                     Section { Text(photoErrorMessage).foregroundStyle(.red) }
                 }
             }
-            .navigationTitle("人物・団体を追加")
+            .navigationTitle(locksEntityKind ? "団体を追加" : "人物・団体を追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -218,6 +234,7 @@ private struct PersonMasterCreateView: View {
         do {
             person.imageData = selectedPhotoData
             try modelContext.save()
+            onSaved?(person)
             dismiss()
         } catch {
             modelContext.rollback()
@@ -491,6 +508,8 @@ private struct PersonMasterMergeView: View {
     @State private var selectedPhotoData: Data?
     @State private var removesStoredPhoto = false
     @State private var photoErrorMessage = ""
+    @State private var showsCreateParentOrganization = false
+    @State private var parentOrganizationToEdit: PersonMaster?
 
     init(person: PersonMaster, showsCancelButton: Bool = false) {
         self.person = person
@@ -527,6 +546,28 @@ private struct PersonMasterMergeView: View {
                         Text("なし").tag(UUID?.none)
                         ForEach(eligibleParentOrganizations(for: person.id, among: people)) { organization in
                             Text(organization.displayName).tag(Optional(organization.id))
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            showsCreateParentOrganization = true
+                        } label: {
+                            FavorecoIconLabel("団体を追加", systemImage: "person.3.fill", iconSize: 15)
+                                .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .subheadline))
+                                .frame(maxWidth: .infinity, minHeight: 40)
+                        }
+                        .buttonStyle(.bordered)
+
+                        if let parentOrganization = selectedParentOrganization {
+                            Button {
+                                parentOrganizationToEdit = parentOrganization
+                            } label: {
+                                FavorecoIconLabel("選択中を編集", systemImage: "pencil", iconSize: 15)
+                                    .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .subheadline))
+                                    .frame(maxWidth: .infinity, minHeight: 40)
+                            }
+                            .buttonStyle(.bordered)
                         }
                     }
                 }
@@ -630,6 +671,24 @@ private struct PersonMasterMergeView: View {
             Button("キャンセル", role: .cancel) { selectedDestination = nil }
         } message: {
             Text("すべての人物リンクとFAVO設定を統合先へ付け替え、現在のマスターをアーカイブします。過去の表示名スナップショットは変更しません。")
+        }
+        .sheet(isPresented: $showsCreateParentOrganization) {
+            PersonMasterCreateView(initialEntityKind: .organization, locksEntityKind: true) { organization in
+                guard organization.isOrganization else { return }
+                draft.parentOrganizationID = organization.id
+            }
+        }
+        .sheet(item: $parentOrganizationToEdit) { organization in
+            NavigationStack {
+                PersonMasterEditDestination(personID: organization.id, showsCancelButton: true)
+            }
+        }
+    }
+
+    private var selectedParentOrganization: PersonMaster? {
+        guard let parentOrganizationID = draft.parentOrganizationID else { return nil }
+        return people.first {
+            !$0.isArchived && $0.isOrganization && $0.id == parentOrganizationID
         }
     }
 
@@ -761,16 +820,25 @@ private struct PlaceMasterMergeView: View {
                     imageData: selectedPhotoData ?? (removesStoredPhoto ? nil : place.imageData),
                     tint: .accentColor
                 )
+                .listRowSeparator(.hidden)
 
-                HStack {
-                    Spacer()
+                VStack(alignment: .trailing, spacing: 8) {
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         FavorecoIconLabel(
                             selectedPhotoData == nil && place.imageData == nil ? "写真を選ぶ" : "写真を変更",
-                            systemImage: "photo"
+                            systemImage: "photo.badge.plus",
+                            iconSize: 18
                         )
-                        .font(FavorecoTypography.captionStrong)
+                        .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                        .background(
+                            Color.accentColor.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
                     }
+                    .buttonStyle(.plain)
+
                     if selectedPhotoData != nil || (!removesStoredPhoto && place.imageData != nil) {
                         Button("画像を外す", role: .destructive) {
                             selectedPhotoData = nil
@@ -778,16 +846,20 @@ private struct PlaceMasterMergeView: View {
                         }
                         .font(FavorecoTypography.captionStrong)
                     }
-                    Spacer()
                 }
+                .listRowSeparator(.hidden)
 
-                Text("横長（16:9）で軽量保存します。縦長・正方形の表示では中央を基準に切り抜きます。")
-                    .font(FavorecoTypography.caption)
+                Text("横長（16:9）で軽量保存します。\n縦長・正方形では中央を基準に切り抜きます。")
+                    .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .listRowSeparator(.hidden)
                 if !photoErrorMessage.isEmpty {
                     Text(photoErrorMessage)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.red)
+                        .listRowSeparator(.hidden)
                 }
             }
 
@@ -1005,6 +1077,10 @@ private struct PlaceMasterMergeView: View {
             }
             try modelContext.save()
             errorMessage = ""
+            selectedPhotoData = nil
+            removesStoredPhoto = false
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            dismiss()
         } catch {
             modelContext.rollback()
             draft = PlaceMasterDraft(place: place)
@@ -1143,7 +1219,14 @@ private struct PersonActivityTagEditor: View {
 
     var body: some View {
         Section {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 8)], alignment: .leading, spacing: 8) {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 8, alignment: .top),
+                    GridItem(.flexible(), spacing: 8, alignment: .top),
+                ],
+                alignment: .leading,
+                spacing: 8
+            ) {
                 ForEach(PersonActivityTags.presets) { tag in
                     Button {
                         toggle(tag)
@@ -1151,10 +1234,12 @@ private struct PersonActivityTagEditor: View {
                         HStack(spacing: 6) {
                             Image(systemName: selectedIDs.contains(tag.id) ? "checkmark.circle.fill" : "circle")
                             FavorecoIcon(systemName: tag.systemImage, size: 14)
-                            Text(tag.title).lineLimit(1)
+                            Text(tag.title)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .font(FavorecoTypography.caption)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 8)
                         .background(

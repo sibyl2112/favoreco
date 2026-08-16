@@ -17,6 +17,7 @@ struct PlanDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @Environment(\.favorecoThemePalette) private var themePalette
+    @EnvironmentObject private var createEntryContextRouter: CreateEntryContextRouter
     let plan: Plan
     var highlightedPreparationTaskID: UUID? = nil
     var highlightedTicketAttemptID: UUID? = nil
@@ -28,6 +29,7 @@ struct PlanDetailView: View {
     @State private var editingAttempt: TicketAttempt?
     @State private var quickActionAttempt: TicketAttempt?
     @State private var calendarDraft: CalendarEventDraft?
+    @State private var isShowingCalendarDestinationPicker = false
     @State private var isShowingDeleteConfirmation = false
     @State private var recordEventForVisit: ExperienceEvent?
     @State private var navigatingVisit: Visit?
@@ -46,6 +48,7 @@ struct PlanDetailView: View {
     @State private var requestedTheaterScrollTargetID: UUID?
     @State private var ticketDetailsPromptAttempt: TicketAttempt?
     @State private var isShowingActionMenu = false
+    @State private var createContextToken = UUID()
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
 
     init(
@@ -229,6 +232,16 @@ struct PlanDetailView: View {
         .navigationDestination(item: $navigatingEventID) { eventID in
             EventDetailDestination(eventID: eventID)
         }
+        .onAppear {
+            guard let categoryID = (plan.event?.category ?? plan.category)?.id else { return }
+            createEntryContextRouter.activateDetail(
+                categoryID: categoryID,
+                token: createContextToken
+            )
+        }
+        .onDisappear {
+            createEntryContextRouter.deactivateDetail(token: createContextToken)
+        }
         .confirmationDialog("予定を削除しますか？", isPresented: $isShowingDeleteConfirmation, titleVisibility: .visible) {
             Button("予定を削除", role: .destructive) {
                 archivePlan()
@@ -236,6 +249,21 @@ struct PlanDetailView: View {
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("予定と紐づく申込を非表示にし、予約済み通知をキャンセルします。記録済みVisitは削除しません。")
+        }
+        .confirmationDialog(
+            "追加先カレンダー",
+            isPresented: $isShowingCalendarDestinationPicker,
+            titleVisibility: .visible
+        ) {
+            Button("Appleカレンダーへ追加") {
+                prepareAppleCalendarDraft()
+            }
+            Button("Googleカレンダーへ追加") {
+                prepareGoogleCalendarDraft()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("予定を追加するカレンダーを選んでください。")
         }
         .alert("処理に失敗しました", isPresented: Binding(
             get: { !operationError.isEmpty },
@@ -280,7 +308,7 @@ struct PlanDetailView: View {
             FavorecoDetailAction(
                 title: "カレンダーに追加",
                 systemImage: "calendar.badge.plus",
-                action: { calendarDraft = makeCalendarDraft() }
+                action: { isShowingCalendarDestinationPicker = true }
             )
         ]
 
@@ -480,7 +508,8 @@ struct PlanDetailView: View {
                         let styles = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "").styleNames
                         theaterHeroMetadataRow(
                             icon: "tag.fill",
-                            text: displayText(planStyleText(styles: styles)),
+                            text: planStyleText(styles: styles),
+                            placeholder: "公演種別・鑑賞方法は未設定",
                             tint: .white.opacity(0.86)
                         )
 
@@ -493,14 +522,16 @@ struct PlanDetailView: View {
                         if ["theater", "live"].contains(planTemplateKey) {
                             theaterHeroMetadataRow(
                                 icon: "chair",
-                                text: displayText(theaterSeatText),
+                                text: theaterSeatText,
+                                placeholder: "座席は未設定",
                                 tint: .white.opacity(0.86)
                             )
                         }
 
                         theaterHeroMetadataRow(
                             icon: "star.fill",
-                            text: "—",
+                            text: "",
+                            placeholder: "評価は観劇後に記録できます",
                             tint: .white.opacity(0.90)
                         )
                     }
@@ -532,6 +563,15 @@ struct PlanDetailView: View {
     private func planStyleText(styles: [String]) -> String {
         if !styles.isEmpty { return styles.joined(separator: "・") }
         let subtype = plan.event?.subTypeKey.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !subtype.isEmpty else { return "" }
+        let customName = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "")
+            .eventPerformanceTypeCustomName
+        if planTemplateKey == "theater" {
+            return TheaterPerformanceType.displayName(for: subtype, customName: customName)
+        }
+        if planTemplateKey == "live" {
+            return LivePerformanceType.displayName(for: subtype, customName: customName)
+        }
         return subtype
     }
 
@@ -676,14 +716,28 @@ struct PlanDetailView: View {
         .fixedSize()
     }
 
-    private func theaterHeroMetadataRow(icon: String, text: String, tint: Color) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+    private func theaterHeroMetadataRow(
+        icon: String,
+        text: String,
+        placeholder: String? = nil,
+        tint: Color
+    ) -> some View {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let usesPlaceholder = trimmed.isEmpty && placeholder != nil
+        let displayedText = usesPlaceholder ? (placeholder ?? "") : displayText(trimmed)
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
             FavorecoIcon(systemName: icon, size: 17)
-                .foregroundStyle(tint)
+                .foregroundStyle(usesPlaceholder ? tint.opacity(0.52) : tint)
                 .frame(width: 20)
-            Text(text)
-                .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
-                .foregroundStyle(.white.opacity(0.96))
+            Text(displayedText)
+                .font(
+                    FavorecoTypography.jpSans(
+                        usesPlaceholder ? 12.5 : 15,
+                        weight: .regular,
+                        relativeTo: .body
+                    )
+                )
+                .foregroundStyle(usesPlaceholder ? .white.opacity(0.52) : .white.opacity(0.96))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -846,7 +900,7 @@ struct PlanDetailView: View {
                     .buttonStyle(.plain)
                     .accessibilityHint("進捗管理を開きます")
                 } else if attempts.isEmpty {
-                    Text("チケット申込を追加すると、申込・当落・入金・受取の次の期限をここに表示します。")
+                    Text("チケット申込を追加すると、申込・当落・支払・受取の次の期限をここに表示します。")
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
                 } else {
@@ -1419,6 +1473,33 @@ struct PlanDetailView: View {
         )
     }
 
+    private func prepareGoogleCalendarDraft() {
+        prepareExternalCalendarDraft {
+            try await ExternalCalendarDestinationResolver.googleCalendarIdentifier()
+        }
+    }
+
+    private func prepareAppleCalendarDraft() {
+        prepareExternalCalendarDraft {
+            try await ExternalCalendarDestinationResolver.appleCalendarIdentifier()
+        }
+    }
+
+    private func prepareExternalCalendarDraft(
+        identifier: @escaping @MainActor () async throws -> String
+    ) {
+        Task { @MainActor in
+            do {
+                let identifier = try await identifier()
+                var draft = makeCalendarDraft()
+                draft.preferredCalendarIdentifier = identifier
+                calendarDraft = draft
+            } catch {
+                operationError = error.localizedDescription
+            }
+        }
+    }
+
     private func archivePlan() {
         let hasExternalCalendarLink = !ExternalCalendarLinkStore.identifier(for: plan).isEmpty
         plan.externalCalendarEventIdentifier = ""
@@ -1599,7 +1680,7 @@ private struct TicketAttemptDetailCard: View {
                 PlanInfoRow(icon: "checkmark.seal", title: "当落", value: FavorecoDateText.fullDateTime(attempt.resultAnnounceAt))
             }
             if attempt.paymentDeadlineAt != Date.distantPast {
-                PlanInfoRow(icon: "yensign.circle", title: "入金", value: FavorecoDateText.fullDateTime(attempt.paymentDeadlineAt))
+                PlanInfoRow(icon: "yensign.circle", title: "支払", value: FavorecoDateText.fullDateTime(attempt.paymentDeadlineAt))
             }
             if attempt.issueStartAt != Date.distantPast {
                 PlanInfoRow(icon: "ticket.fill", title: "チケット受取", value: FavorecoDateText.fullDateTime(attempt.issueStartAt))
@@ -1674,7 +1755,7 @@ private func ticketProgressUpdateTitle(for attempt: TicketAttempt) -> String {
     case "waitingResult":
         return "当落結果を入力"
     case "won", "waitingPayment":
-        return "支払い済みにする"
+        return "支払済みにする"
     case "waitingIssue":
         return "受取済みにする"
     default:

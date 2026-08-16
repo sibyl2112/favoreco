@@ -55,6 +55,8 @@ struct TheaterPerformanceRegistrationView: View {
         officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var isLive: Bool { category.templateKey == "live" }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -68,7 +70,7 @@ struct TheaterPerformanceRegistrationView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("定期イベントカタログから入力")
                                     .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
-                                Text("芸術祭・舞台芸術祭・野外音楽祭")
+                                Text(isLive ? "音楽祭・フェス・定期ライブ" : "芸術祭・舞台芸術祭・野外音楽祭")
                                     .font(FavorecoTypography.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -186,7 +188,7 @@ struct TheaterPerformanceRegistrationView: View {
                 }
 
                 Section {
-                    TheaterUnifiedFormIntroduction(entry: .performanceRegistration)
+                    TheaterUnifiedFormIntroduction(entry: .performanceRegistration, isLive: isLive)
                 }
 
                 Section {
@@ -200,10 +202,26 @@ struct TheaterPerformanceRegistrationView: View {
                             maximumLines: 1,
                             labelStyle: .horizontal
                         )
-                        TheaterPerformanceTypePicker(
-                            selection: $performanceTypeKey,
-                            customName: $performanceTypeCustomName,
-                            usesCompactLabelStyle: true
+                        if isLive {
+                            LivePerformanceTypePicker(
+                                selection: $performanceTypeKey,
+                                customName: $performanceTypeCustomName
+                            )
+                        } else {
+                            TheaterPerformanceTypePicker(
+                                selection: $performanceTypeKey,
+                                customName: $performanceTypeCustomName,
+                                usesCompactLabelStyle: true
+                            )
+                        }
+                        ExplicitFormTextField(
+                            title: isLive ? "アーティスト（任意）" : "主催（任意）",
+                            prompt: isLive ? "出演アーティスト名" : "主催・制作団体",
+                            text: $creditsText,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 3,
+                            labelStyle: .horizontal
                         )
                         ExplicitFormTextField(
                             title: "公式URL",
@@ -321,7 +339,7 @@ struct TheaterPerformanceRegistrationView: View {
                             Task { await loadLocalEyecatch(from: item) }
                         }
                     } label: {
-                        TheaterUnifiedSectionLabel(section: .performanceBasic)
+                        TheaterUnifiedSectionLabel(section: .performanceBasic, isLive: isLive)
                     }
                 } footer: {
                     if showingPerformanceBasic {
@@ -351,8 +369,17 @@ struct TheaterPerformanceRegistrationView: View {
                         FavorecoIconLabel("公演地を追加", systemImage: "plus.circle.fill")
                     }
                     .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                    ExplicitFormTextField(
+                        title: "公演メモ（任意）",
+                        prompt: isLive ? "チケットサイト、注意事項など" : "会期、チケットサイト、注意事項など",
+                        text: $performanceMemo,
+                        axis: .vertical,
+                        minimumLines: 3,
+                        maximumLines: 5,
+                        labelStyle: .stacked
+                    )
                     } label: {
-                        TheaterUnifiedSectionLabel(section: .venueSchedule)
+                        TheaterUnifiedSectionLabel(section: .venueSchedule, isLive: isLive)
                     }
                 } header: {
                     EmptyView()
@@ -365,27 +392,13 @@ struct TheaterPerformanceRegistrationView: View {
                             instagramURL: $instagramURL,
                             threadsURL: $threadsURL
                         )
-                        ExplicitFormTextField(
-                            title: "主催・出演（任意）",
-                            prompt: "主催／制作団体、キャスト・スタッフ",
-                            text: $creditsText,
-                            axis: .vertical,
-                            minimumLines: 1,
-                            maximumLines: 4,
-                            labelStyle: .horizontal
-                        )
-                        ExplicitFormTextField(
-                            title: "メモ（任意）",
-                            prompt: "あらすじなど必要な情報",
-                            text: $performanceMemo,
-                            axis: .vertical,
-                            minimumLines: 5,
-                            maximumLines: 5,
-                            labelStyle: .horizontal,
-                            reservesLineSpace: true
-                        )
+                        Text(isLive
+                             ? "出演者構成や制作情報は、必要な時だけ追加します。セトリは参戦記録側に保存します。"
+                             : "出演者・スタッフやあらすじは、必要な時だけ追加します。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
                     } label: {
-                        TheaterUnifiedSectionLabel(section: .performanceDetails)
+                        TheaterUnifiedSectionLabel(section: .performanceDetails, isLive: isLive)
                     }
                 }
 
@@ -422,7 +435,7 @@ struct TheaterPerformanceRegistrationView: View {
             }
             .environment(\.defaultMinListRowHeight, 48)
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
-            .navigationTitle("公演を登録")
+            .navigationTitle(isLive ? "ライブを登録" : "公演を登録")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -489,7 +502,7 @@ struct TheaterPerformanceRegistrationView: View {
 
             HStack(spacing: 8) {
                 postSaveActionButton(
-                    title: "観劇予定を追加",
+                    title: isLive ? "参戦予定を追加" : "観劇予定を追加",
                     systemImage: "calendar.badge.plus"
                 ) {
                     openSavedEventNextStep(.plan)
@@ -668,10 +681,9 @@ struct TheaterPerformanceRegistrationView: View {
         }
         if !performanceTypeKey.isEmpty {
             event.subTypeKey = performanceTypeKey
-            fields.eventPerformanceTypeCustomName = TheaterPerformanceType.customNameForStorage(
-                key: performanceTypeKey,
-                input: performanceTypeCustomName
-            )
+            fields.eventPerformanceTypeCustomName = isLive
+                ? LivePerformanceType.customNameForStorage(key: performanceTypeKey, input: performanceTypeCustomName)
+                : TheaterPerformanceType.customNameForStorage(key: performanceTypeKey, input: performanceTypeCustomName)
         }
         let trimmedSubtitle = eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedSubtitle.isEmpty {

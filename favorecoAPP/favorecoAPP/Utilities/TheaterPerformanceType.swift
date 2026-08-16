@@ -155,6 +155,95 @@ enum TheaterPerformanceType: String, CaseIterable, Identifiable {
     }
 }
 
+enum LivePerformanceType: String, CaseIterable, Identifiable {
+    case oneMan = "live_one_man"
+    case joint = "live_joint"
+    case festival = "live_festival"
+    case concert = "live_concert"
+    case releaseEvent = "live_release_event"
+    case streaming = "live_streaming"
+    case other = "live_other"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .oneMan: "ワンマン"
+        case .joint: "対バン"
+        case .festival: "フェス"
+        case .concert: "コンサート"
+        case .releaseEvent: "リリースイベント"
+        case .streaming: "配信ライブ"
+        case .other: "その他"
+        }
+    }
+
+    static func displayName(for key: String, customName: String) -> String {
+        let trimmedCustomName = customName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let type = LivePerformanceType(rawValue: key) else {
+            return trimmedCustomName.isEmpty ? key : trimmedCustomName
+        }
+        return type == .other && !trimmedCustomName.isEmpty ? trimmedCustomName : type.displayName
+    }
+
+    static func customNameForStorage(key: String, input: String) -> String {
+        guard key == LivePerformanceType.other.rawValue else { return "" }
+        return input.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+struct LivePerformanceTypePicker: View {
+    @Binding var selection: String
+    @Binding var customName: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ExplicitFormControlRow(title: "公演種別", isOptional: true) {
+                Menu {
+                    selectionButton(title: "未設定", key: "")
+                    ForEach(LivePerformanceType.allCases) { type in
+                        selectionButton(title: type.displayName, key: type.rawValue)
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Spacer(minLength: 0)
+                        Text(selection.isEmpty ? "未設定" : LivePerformanceType.displayName(for: selection, customName: customName))
+                            .font(FavorecoTypography.jpSans(ExplicitFormMetrics.inputFontSize, weight: .regular, relativeTo: .body))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(.primary)
+                }
+            }
+
+            if selection == LivePerformanceType.other.rawValue {
+                ExplicitFormTextField(
+                    title: "その他の種別",
+                    prompt: "例：トーク＆ライブ",
+                    text: $customName,
+                    labelStyle: .horizontal
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func selectionButton(title: String, key: String) -> some View {
+        Button {
+            selection = key
+            if key != LivePerformanceType.other.rawValue { customName = "" }
+        } label: {
+            if selection == key {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+}
+
 struct TheaterPerformanceTypePicker: View {
     @Binding var selection: String
     @Binding var customName: String
@@ -473,6 +562,39 @@ struct ExplicitFormControlRow<Control: View>: View {
         .padding(.top, density.topPadding)
         .padding(.bottom, density.bottomPadding)
         .frame(minHeight: density.minimumHeight, alignment: .topLeading)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+    }
+}
+
+/// セグメントなど、入力領域を行幅いっぱいに使う選択項目。
+/// 明示ラベル・入力領域・区切り線の寸法をテキスト入力行と揃える。
+struct ExplicitFormFullWidthControlRow<Control: View>: View {
+    let title: String
+    var isOptional = false
+    @ViewBuilder let control: () -> Control
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ExplicitFormFieldTitle(
+                title: title,
+                isOptional: isOptional,
+                isRequired: false
+            )
+
+            control()
+                .font(
+                    FavorecoTypography.jpSans(
+                        ExplicitFormMetrics.inputFontSize,
+                        weight: .regular,
+                        relativeTo: .body
+                    )
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.top, ExplicitFormMetrics.rowTopPadding)
+        .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
+        .frame(minHeight: ExplicitFormMetrics.rowMinimumHeight, alignment: .topLeading)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
     }

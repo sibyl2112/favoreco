@@ -12,6 +12,7 @@ struct ContentView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @Environment(\.colorScheme) private var systemColorScheme
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
+    @AppStorage(AppStorageKeys.showsGenreOnboarding) private var showsGenreOnboarding = false
     @AppStorage(AppStorageKeys.appearanceMode) private var appearanceModeRaw = AppAppearanceMode.system.rawValue
     @AppStorage(AppStorageKeys.baseTheme) private var baseThemeRaw = FavorecoBaseTheme.favoNeon.rawValue
     @AppStorage(AppStorageKeys.themeMode) private var themeModeRaw = FavorecoThemeMode.categoryAccent.rawValue
@@ -40,7 +41,7 @@ struct ContentView: View {
                         isDebugSimulation: debugRecoverySimulationAtLaunch,
                         onDisableDebugSimulation: disableDebugRecoverySimulation
                     )
-                } else if hasCompletedGenreOnboarding {
+                } else if hasCompletedGenreOnboarding && !showsGenreOnboarding {
                     MainTabView()
                 } else {
                     GenreOnboardingView()
@@ -65,7 +66,7 @@ struct ContentView: View {
         .tint(effectiveThemePalette.globalTint)
         .animation(nil, value: fontStyleRaw)
         .animation(nil, value: fontWeightRaw)
-        .task(id: hasCompletedGenreOnboarding) {
+        .task(id: onboardingPresentationState) {
             prepareReleaseUpdateIfNeeded()
         }
         .sheet(item: $presentedReleaseNote, onDismiss: acknowledgeCurrentRelease) { release in
@@ -75,6 +76,10 @@ struct ContentView: View {
 
     private var appearanceMode: AppAppearanceMode {
         AppAppearanceMode(rawValue: appearanceModeRaw) ?? .system
+    }
+
+    private var onboardingPresentationState: String {
+        "\(hasCompletedGenreOnboarding)-\(showsGenreOnboarding)"
     }
 
     private var effectiveLocalStoreError: String {
@@ -108,6 +113,7 @@ struct ContentView: View {
 
     private func prepareReleaseUpdateIfNeeded() {
         guard effectiveLocalStoreError.isEmpty else { return }
+        guard !showsGenreOnboarding else { return }
         let currentVersion = AppReleaseNotes.currentVersion
         guard !currentVersion.isEmpty else { return }
 

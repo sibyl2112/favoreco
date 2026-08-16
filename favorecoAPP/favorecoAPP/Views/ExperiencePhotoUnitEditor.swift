@@ -32,6 +32,8 @@ struct PhotoUnitEditor: View {
     @State private var editingTargetAfterGallery: PhotoEditorTarget?
     @State private var isShowingCoverPicker = false
     @State private var isTheaterPhotoManagerExpanded = false
+    @State private var selectedTheaterEyecatchItem: PhotosPickerItem?
+    @State private var isLoadingTheaterEyecatch = false
 
     private let largePhotoNoticeThreshold = 50
     private let compactPhotoLimit = 8
@@ -117,6 +119,10 @@ struct PhotoUnitEditor: View {
                 await appendPhotos(from: newItems)
                 selectedItems.removeAll()
             }
+        }
+        .onChange(of: selectedTheaterEyecatchItem) { _, newItem in
+            guard let newItem else { return }
+            Task { await replaceTheaterEyecatch(from: newItem) }
         }
         .fullScreenCover(isPresented: $isShowingCamera) {
             CameraImagePicker(
@@ -241,7 +247,7 @@ struct PhotoUnitEditor: View {
         } label: {
             HStack(spacing: 8) {
                 FavorecoIconLabel(
-                    currentPhotoCount == 0 ? "写真を追加" : "写真一覧・追加",
+                    "思い出・資料写真",
                     systemImage: "photo.on.rectangle.angled",
                     iconSize: 14
                 )
@@ -348,37 +354,56 @@ struct PhotoUnitEditor: View {
     }
 
     private var theaterEyecatchPicker: some View {
-        HStack(spacing: 12) {
-            coverPhotoPreview
-                .frame(width: 54, height: 54)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 14) {
+                coverPhotoPreview
+                    .frame(width: 70, height: 99)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text("この回のアイキャッチ")
-                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.86)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(hasActiveCoverPhoto ? "設定済み" : "未設定")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(hasActiveCoverPhoto ? Color.green : Color.secondary)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("この回のアイキャッチ")
+                        .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                    Text("一覧・カレンダー・詳細の代表画像に表示します。")
+                        .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
             }
 
-            Spacer(minLength: 4)
-
-            if coverEligiblePhotoItems.isEmpty {
-                eyecatchPhotoAddPicker
-            } else {
-                Button(hasActiveCoverPhoto ? "変更" : "選ぶ") {
-                    isShowingCoverPicker = true
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $selectedTheaterEyecatchItem, matching: .images) {
+                    FavorecoIconLabel(
+                        hasActiveCoverPhoto ? "アイキャッチを変更" : "アイキャッチを選ぶ",
+                        systemImage: "photo",
+                        iconSize: 14
+                    )
+                    .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+                .disabled(isLoadingTheaterEyecatch || !canAddPhotos)
 
                 if hasActiveCoverPhoto {
-                    Button("解除") {
+                    Button(role: .destructive) {
                         coverPhotoPath = ""
+                    } label: {
+                        FavorecoIconLabel("解除", systemImage: "xmark.circle", iconSize: 14)
                     }
                     .buttonStyle(.bordered)
                 }
+            }
+
+            if isLoadingTheaterEyecatch {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("アイキャッチを準備しています")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if !canAddPhotos {
+                Text(photoLimitMessage)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .controlSize(.small)
@@ -420,22 +445,6 @@ struct PhotoUnitEditor: View {
                         .stroke(Color.secondary.opacity(0.25), lineWidth: 0.8)
                 }
         }
-    }
-
-    private var eyecatchPhotoAddPicker: some View {
-        PhotosPicker(
-            selection: $selectedItems,
-            maxSelectionCount: remainingPhotoSlots,
-            matching: .images
-        ) {
-            FavorecoIconLabel("写真を追加", systemImage: "photo.badge.plus", iconSize: 13)
-                .font(FavorecoTypography.jpSans(12.5, weight: .semibold, relativeTo: .caption))
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .disabled(!canAddPhotos)
     }
 
     @ViewBuilder
@@ -908,6 +917,27 @@ struct PhotoUnitEditor: View {
         }
     }
 
+    @MainActor
+    private func replaceTheaterEyecatch(from item: PhotosPickerItem) async {
+        isLoadingTheaterEyecatch = true
+        defer {
+            isLoadingTheaterEyecatch = false
+            selectedTheaterEyecatchItem = nil
+        }
+        guard canAddPhotos,
+              let data = try? await item.loadTransferable(type: Data.self) else { return }
+        let quality = compressionQuality
+        guard let pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
+            PendingPhoto.make(
+                from: data,
+                filename: item.itemIdentifier ?? "theater-eyecatch.jpg",
+                compressionQuality: quality
+            )
+        }).value else { return }
+        pendingPhotos.append(pendingPhoto)
+        coverPhotoPath = pendingPhoto.relativePath
+    }
+
     private func selectFallbackCover(excluding path: String) {
         guard coverPhotoPath == path else { return }
         coverPhotoPath = activeExistingPhotos
@@ -971,7 +1001,7 @@ private struct PhotoGridItem: Identifiable {
     }
 }
 
-private struct PhotoMetadataEditor: View {
+struct PhotoMetadataEditor: View {
     @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
     @Binding var metadata: PhotoMetadataDraft
     let imageData: Data

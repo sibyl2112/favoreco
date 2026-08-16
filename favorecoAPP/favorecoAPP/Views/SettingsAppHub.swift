@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 
 struct AppSettingsHubView: View {
+    @AppStorage(AppStorageKeys.showsGenreOnboarding) private var showsGenreOnboarding = false
+
     var body: some View {
         List {
             FavorecoSettingsSection("表示と記録") {
@@ -36,6 +38,14 @@ struct AppSettingsHubView: View {
                         systemImage: "bell"
                     )
                 }
+            }
+
+            FavorecoSettingsSection("使い方") {
+                FavorecoSettingsToggleRow(
+                    title: "オンボーディングを表示",
+                    detail: "オンにすると初期案内をもう一度確認できます",
+                    isOn: $showsGenreOnboarding
+                )
             }
         }
         .favorecoSettingsListLayout()

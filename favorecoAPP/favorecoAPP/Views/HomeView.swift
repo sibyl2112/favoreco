@@ -2084,10 +2084,10 @@ struct HomeTicketScheduleCard: View {
 
                 HStack(spacing: 0) {
                     Text(FavorecoDateText.monthDay(item.dueDate))
-                        .font(FavorecoTypography.latinDisplay(15, weight: .bold, relativeTo: .caption))
+                        .font(FavorecoTypography.latinDisplay(17, weight: .bold, relativeTo: .body))
                         .monospacedDigit()
                     Text("(\(shortWeekday))")
-                        .font(FavorecoTypography.jpSerif(12, weight: .bold, relativeTo: .caption2))
+                        .font(FavorecoTypography.jpSerif(9, weight: .semibold, relativeTo: .caption2))
                 }
                 .foregroundStyle(cardSecondaryTextColor)
                 .lineLimit(1)
@@ -2355,7 +2355,7 @@ struct AppNotificationCenterView: View {
                     FavorecoContentUnavailableView(
                         "お知らせはありません",
                         systemImage: "bell",
-                        description: "申込期限や入金、チケット受取、会員期限などをここで確認できます。"
+                        description: "申込期限や支払、チケット受取、会員期限などをここで確認できます。"
                     )
                 } else {
                     List(items) { item in
@@ -2416,7 +2416,7 @@ struct AppNotificationCenterView: View {
         appendAttention(&result, if: attempt.saleStartAt > now, attempt: attempt, suffix: "sale-start", icon: "ticket", label: "申込開始", title: title, date: attempt.saleStartAt, plan: plan, tint: tint, priority: 12)
         appendAttention(&result, if: attempt.applyDeadlineAt > now, attempt: attempt, suffix: "apply-deadline", icon: "hourglass", label: "申込締切", title: title, date: attempt.applyDeadlineAt, plan: plan, tint: .red, priority: 1)
         appendAttention(&result, if: attempt.resultAnnounceAt > now, attempt: attempt, suffix: "result", icon: "checkmark.seal", label: "当落発表", title: title, date: attempt.resultAnnounceAt, plan: plan, tint: .purple, priority: 5)
-        appendAttention(&result, if: attempt.paymentDeadlineAt > now, attempt: attempt, suffix: "payment", icon: "yensign.circle", label: "入金締切", title: title, date: attempt.paymentDeadlineAt, plan: plan, tint: .orange, priority: 2)
+        appendAttention(&result, if: attempt.paymentDeadlineAt > now, attempt: attempt, suffix: "payment", icon: "yensign.circle", label: "支払締切", title: title, date: attempt.paymentDeadlineAt, plan: plan, tint: .orange, priority: 2)
         appendAttention(&result, if: attempt.issueStartAt > now, attempt: attempt, suffix: "issue-start", icon: "ticket.fill", label: "チケット受取開始", title: title, date: attempt.issueStartAt, plan: plan, tint: .teal, priority: 10)
         return result
     }
@@ -2888,7 +2888,7 @@ private func visitTicketStatusText(_ key: String) -> String? {
     case "planned": return "予定"
     case "applied": return "申込中"
     case "won": return "当選"
-    case "paid": return "入金済み"
+    case "paid": return "支払済み"
     case "ticketed": return "発券済み"
     case "attended": return "参加済み"
     case "canceled": return "中止"

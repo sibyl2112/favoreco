@@ -38,13 +38,14 @@ struct ExperienceBasicUnitEditor: View {
     private let existingSeriesName: String
     @Binding private var visitedAt: Date
     @Binding private var endedAt: Date
+    private let performanceOpensAt: Binding<Date?>?
     @Binding private var styleNamesText: String
     @Binding private var venueName: String
     @Binding private var venueAddress: String
     @Binding private var overallRating: Double
     let latitude: Double
     let longitude: Double
-    let venueOfficialURL: String
+    @Binding private var venueOfficialURL: String
     let placeMasters: [PlaceMaster]
     let usesPlaceSuggestions: Bool
     let usesMapSearchAssist: Bool
@@ -70,13 +71,14 @@ struct ExperienceBasicUnitEditor: View {
         seriesName: Binding<String>,
         visitedAt: Binding<Date>,
         endedAt: Binding<Date>,
+        performanceOpensAt: Binding<Date?>? = nil,
         styleNamesText: Binding<String>,
         venueName: Binding<String>,
         venueAddress: Binding<String>,
         overallRating: Binding<Double>,
         latitude: Double,
         longitude: Double,
-        venueOfficialURL: String = "",
+        venueOfficialURL: Binding<String> = .constant(""),
         placeMasters: [PlaceMaster],
         usesPlaceSuggestions: Bool,
         usesMapSearchAssist: Bool,
@@ -103,13 +105,14 @@ struct ExperienceBasicUnitEditor: View {
         existingSeriesName = ""
         _visitedAt = visitedAt
         _endedAt = endedAt
+        self.performanceOpensAt = performanceOpensAt
         _styleNamesText = styleNamesText
         _venueName = venueName
         _venueAddress = venueAddress
         _overallRating = overallRating
         self.latitude = latitude
         self.longitude = longitude
-        self.venueOfficialURL = venueOfficialURL
+        _venueOfficialURL = venueOfficialURL
         self.placeMasters = placeMasters
         self.usesPlaceSuggestions = usesPlaceSuggestions
         self.usesMapSearchAssist = usesMapSearchAssist
@@ -136,13 +139,14 @@ struct ExperienceBasicUnitEditor: View {
         eventSeriesName: String,
         visitedAt: Binding<Date>,
         endedAt: Binding<Date>,
+        performanceOpensAt: Binding<Date?>? = nil,
         styleNamesText: Binding<String>,
         venueName: Binding<String>,
         venueAddress: Binding<String>,
         overallRating: Binding<Double>,
         latitude: Double,
         longitude: Double,
-        venueOfficialURL: String = "",
+        venueOfficialURL: Binding<String> = .constant(""),
         placeMasters: [PlaceMaster],
         usesPlaceSuggestions: Bool,
         usesMapSearchAssist: Bool,
@@ -169,13 +173,14 @@ struct ExperienceBasicUnitEditor: View {
         existingSeriesName = eventSeriesName
         _visitedAt = visitedAt
         _endedAt = endedAt
+        self.performanceOpensAt = performanceOpensAt
         _styleNamesText = styleNamesText
         _venueName = venueName
         _venueAddress = venueAddress
         _overallRating = overallRating
         self.latitude = latitude
         self.longitude = longitude
-        self.venueOfficialURL = venueOfficialURL
+        _venueOfficialURL = venueOfficialURL
         self.placeMasters = placeMasters
         self.usesPlaceSuggestions = usesPlaceSuggestions
         self.usesMapSearchAssist = usesMapSearchAssist
@@ -244,11 +249,16 @@ struct ExperienceBasicUnitEditor: View {
     @ViewBuilder
     private var targetFields: some View {
         if usesSimpleScreenWorkLayout, let editableTitle {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(template.targetSectionTitle)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                TextField(template.titlePlaceholder, text: editableTitle)
+            VStack(alignment: .leading, spacing: 0) {
+                ExplicitFormTextField(
+                    title: "作品名（必須）",
+                    prompt: template.titlePlaceholder,
+                    text: editableTitle,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
             }
         } else if usesSimpleScreenWorkLayout {
             Text(existingTitle.isEmpty ? "映像作品" : existingTitle)
@@ -286,12 +296,26 @@ struct ExperienceBasicUnitEditor: View {
                 }
             }
         } else if let editableTitle, let editableSeriesName {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(template.targetSectionTitle)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                TextField(template.titlePlaceholder, text: editableTitle)
-                TextField(template.seriesPlaceholder, text: editableSeriesName)
+            VStack(alignment: .leading, spacing: 0) {
+                ExplicitFormTextField(
+                    title: "\(template.titlePlaceholder)（必須）",
+                    prompt: "\(template.titlePlaceholder)を入力",
+                    text: editableTitle,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+                theaterDivider
+                ExplicitFormTextField(
+                    title: template.seriesPlaceholder,
+                    prompt: template.seriesPlaceholder,
+                    text: editableSeriesName,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
             }
         } else {
             VStack(alignment: .leading, spacing: 6) {
@@ -321,10 +345,11 @@ struct ExperienceBasicUnitEditor: View {
         }
 
         return AnyView(
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(template.visitSectionTitle)
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
+                .padding(.bottom, 8)
             if datePrecision == .year {
                 YearOnlyPicker(selection: $visitedAt)
             } else if supportsExperienceDuration {
@@ -339,6 +364,9 @@ struct ExperienceBasicUnitEditor: View {
                 DatePicker(template.dateLabel, selection: $visitedAt, displayedComponents: .date)
             }
             if supportsPerformanceTime {
+                if let performanceOpensAt {
+                    optionalOpeningTimeControl(binding: performanceOpensAt, usesExplicitLayout: false)
+                }
                 DatePicker("開演", selection: $visitedAt, displayedComponents: .hourAndMinute)
                 DatePicker("終演", selection: $endedAt, in: visitedAt..., displayedComponents: .hourAndMinute)
             }
@@ -374,22 +402,61 @@ struct ExperienceBasicUnitEditor: View {
                         }
                     }
 
-                    TextField("選択内容・自由入力（カンマ区切り）", text: $styleNamesText, axis: .vertical)
+                    ExplicitFormTextField(
+                        title: "その他の鑑賞方法（任意）",
+                        prompt: "カンマ区切りで入力",
+                        text: $styleNamesText,
+                        axis: .vertical,
+                        minimumLines: 1,
+                        maximumLines: 3,
+                        labelStyle: .horizontal
+                    )
                         .textInputAutocapitalization(.never)
                 }
             }
-            TextField(
-                supportsStyles ? "会場（任意）" : template.venuePlaceholder,
-                text: $venueName
+            theaterDivider
+            ExplicitFormTextField(
+                title: venueFieldTitle,
+                prompt: venueFieldPrompt,
+                text: $venueName,
+                labelStyle: .horizontal
             )
             placeSuggestionList
             if usesMapSearchAssist {
-                TextField("住所（地図では住所を優先）", text: $venueAddress)
+                theaterDivider
+                ExplicitFormTextField(
+                    title: "住所（任意）",
+                    prompt: "地図・カレンダーでは住所を優先",
+                    text: $venueAddress,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
                     .textContentType(.fullStreetAddress)
+                theaterDivider
                 Button(action: onOpenPlaceSearch) {
-                    FavorecoIconLabel("Apple Mapsから会場を選択", systemImage: "map")
+                    FavorecoIconLabel(mapSearchTitle, systemImage: "map")
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 }
-                PlaceOfficialWebsiteLink(urlString: resolvedVenueOfficialURL)
+                theaterDivider
+                ExplicitFormTextField(
+                    title: "施設公式サイト（任意）",
+                    prompt: "https://",
+                    text: $venueOfficialURL,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                PlaceOfficialWebsiteLink(
+                    urlString: resolvedVenueOfficialURL,
+                    title: "施設サイトを開く"
+                )
+                .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                theaterDivider
                 PlaceMapPreview(
                     venueName: venueName,
                     address: venueAddress,
@@ -397,7 +464,9 @@ struct ExperienceBasicUnitEditor: View {
                     longitude: longitude
                 )
             }
+            theaterDivider
             ratingSlider
+                .padding(.vertical, 8)
         }
         .onChange(of: visitedAt) { oldValue, newValue in
             guard supportsPerformanceTime else { return }
@@ -461,6 +530,10 @@ struct ExperienceBasicUnitEditor: View {
             }
 
             if supportsPerformanceTime {
+                if let performanceOpensAt {
+                    theaterDivider
+                    optionalOpeningTimeControl(binding: performanceOpensAt, usesExplicitLayout: true)
+                }
                 theaterDivider
                 ExplicitFormControlRow(title: "開演") {
                     TheaterFiveMinuteTimeField(
@@ -542,6 +615,43 @@ struct ExperienceBasicUnitEditor: View {
             guard supportsPerformanceTime else { return }
             let duration = max(endedAt.timeIntervalSince(oldValue), 0)
             endedAt = newValue.addingTimeInterval(duration)
+        }
+    }
+
+    @ViewBuilder
+    private func optionalOpeningTimeControl(
+        binding: Binding<Date?>,
+        usesExplicitLayout: Bool
+    ) -> some View {
+        let value = Binding<Date>(
+            get: { binding.wrappedValue ?? visitedAt.addingTimeInterval(-1800) },
+            set: { binding.wrappedValue = $0 }
+        )
+        if let _ = binding.wrappedValue {
+            if usesExplicitLayout {
+                ExplicitFormControlRow(title: "開場", isOptional: true) {
+                    HStack(spacing: 8) {
+                        TheaterFiveMinuteTimeField(selection: value, accessibilityLabel: "開場")
+                        Button {
+                            binding.wrappedValue = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else {
+                DatePicker("開場", selection: value, displayedComponents: .hourAndMinute)
+            }
+        } else {
+            Button {
+                binding.wrappedValue = visitedAt.addingTimeInterval(-1800)
+            } label: {
+                Label("開場時刻を追加", systemImage: "plus.circle")
+                    .font(FavorecoTypography.captionStrong)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -701,6 +811,30 @@ struct ExperienceBasicUnitEditor: View {
         }?.officialURL ?? ""
     }
 
+    private var venueFieldTitle: String {
+        switch categoryTemplateKey {
+        case "theme_park", "outing_facility": "施設名"
+        case "nature_living": "スポット・施設名"
+        case "museum": "美術館・博物館名"
+        default: supportsStyles ? "会場（任意）" : "場所・会場（任意）"
+        }
+    }
+
+    private var venueFieldPrompt: String {
+        switch categoryTemplateKey {
+        case "theme_park", "outing_facility": "施設名を入力"
+        case "nature_living": "動物園・水族館・植物園などを入力"
+        case "museum": "美術館・博物館などを入力"
+        default: supportsStyles ? "映画館・会場名を入力" : "場所・会場名を入力"
+        }
+    }
+
+    private var mapSearchTitle: String {
+        ["theme_park", "nature_living", "outing_facility", "museum"].contains(categoryTemplateKey)
+            ? "Apple Mapsから施設を選択"
+            : "Apple Mapsから会場を選択"
+    }
+
     private var placeSuggestions: [PlaceMaster] {
         guard !hasResolvedVenueSelection else { return [] }
         let normalizedQuery = normalizedPlaceText(venueName)
@@ -728,6 +862,7 @@ struct ExperienceBasicUnitEditor: View {
             excludingSourceMarkers: importedMarkers,
             includesClosed: true
         )
+        .filter { PublicPlaceCatalogImporter.matchingPlace(for: $0, in: placeMasters) == nil }
     }
 
     private var hasResolvedVenueSelection: Bool {
@@ -824,22 +959,29 @@ struct ScreenWorkTypeAndSeasonEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Picker("種別", selection: selection) {
-                ForEach(ScreenWorkType.allCases) { type in
-                    Text(type.displayName).tag(type)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            if selection.wrappedValue.supportsSeason {
-                Picker("シーズン", selection: $seasonNumber) {
-                    Text("なし").tag(0)
-                    ForEach(1...10, id: \.self) { number in
-                        Text("シーズン\(number)").tag(number)
+        VStack(alignment: .leading, spacing: 0) {
+            ExplicitFormFullWidthControlRow(title: "作品区分") {
+                Picker("作品区分", selection: selection) {
+                    ForEach(ScreenWorkType.allCases) { type in
+                        Text(type.displayName).tag(type)
                     }
                 }
-                .pickerStyle(.menu)
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+
+            if selection.wrappedValue.supportsSeason {
+                Divider().overlay(ExplicitFormMetrics.rowSeparatorColor)
+                ExplicitFormControlRow(title: "シーズン", isOptional: true) {
+                    Picker("シーズン", selection: $seasonNumber) {
+                        Text("なし").tag(0)
+                        ForEach(1...10, id: \.self) { number in
+                            Text("シーズン\(number)").tag(number)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
             }
         }
     }
@@ -1099,7 +1241,7 @@ private struct YearOnlyPicker: View {
     var body: some View {
         Picker("鑑賞年", selection: selectedYear) {
             ForEach(years, id: \.self) { year in
-                Text(verbatim: "\(year)年").tag(year)
+                Text(verbatim: FavorecoDateText.year(year)).tag(year)
             }
         }
         .pickerStyle(.menu)

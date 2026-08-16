@@ -7,6 +7,7 @@ struct FullBackupView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
+    @Query(sort: \BookShelf.sortOrder) private var bookShelves: [BookShelf]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \InboxItem.updatedAt, order: .reverse) private var inboxItems: [InboxItem]
     @Query(sort: \PhotoBlob.createdAt, order: .reverse) private var photos: [PhotoBlob]
@@ -34,7 +35,7 @@ struct FullBackupView: View {
     @State private var message = ""
 
     private var totalModelCount: Int {
-        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count
+        categories.count + events.count + bookShelves.count + visits.count + inboxItems.count + socialAccounts.count
             + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
     }
 
@@ -130,6 +131,7 @@ struct FullBackupView: View {
             let json = try JSONBackupExportService.makeBackupJSON(
                 categories: categories,
                 events: events,
+                bookShelves: bookShelves,
                 visits: visits,
                 inboxItems: inboxItems,
                 photos: photos,

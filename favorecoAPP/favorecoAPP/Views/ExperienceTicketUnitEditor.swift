@@ -86,7 +86,7 @@ private struct ExperienceTicketPlanOption: Identifiable {
         ExperienceTicketPlanOption(key: "planned", name: "予定"),
         ExperienceTicketPlanOption(key: "applied", name: "申込中"),
         ExperienceTicketPlanOption(key: "won", name: "当選"),
-        ExperienceTicketPlanOption(key: "paid", name: "入金済み"),
+        ExperienceTicketPlanOption(key: "paid", name: "支払済み"),
         ExperienceTicketPlanOption(key: "ticketed", name: "発券済み"),
         ExperienceTicketPlanOption(key: "attended", name: "参加済み"),
         ExperienceTicketPlanOption(key: "canceled", name: "中止・キャンセル")

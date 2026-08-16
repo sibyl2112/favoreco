@@ -42,7 +42,15 @@ struct PlaceMasterFacilityRow: View {
     }
 
     private var visitLabel: String {
-        category.templateKey == "theme_park" ? "来園" : "訪問"
+        switch category.templateKey {
+        case "theme_park": "来園"
+        case "museum": "来館"
+        default: "訪問"
+        }
+    }
+
+    private var visitCount: Int {
+        PlaceFacilityCardMetrics.uniqueVisitDayCount(in: visits)
     }
 
     var body: some View {
@@ -67,10 +75,10 @@ struct PlaceMasterFacilityRow: View {
                     if upcomingCount > 0 {
                         Label("予定\(upcomingCount)件", systemImage: "calendar")
                     }
-                    if !visits.isEmpty {
-                        Label("\(visitLabel)\(visits.count)回", systemImage: "checkmark.circle")
+                    if visitCount > 0 {
+                        Label("\(visitLabel)\(visitCount)回", systemImage: "checkmark.circle")
                     }
-                    if upcomingCount == 0 && visits.isEmpty {
+                    if upcomingCount == 0 && visitCount == 0 {
                         Text("登録済み")
                     }
                 }
@@ -93,6 +101,151 @@ struct PlaceMasterFacilityRow: View {
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityHint("施設の詳細を開きます")
+    }
+}
+
+enum PlaceFacilityCardMetrics {
+    static func uniqueVisitDayCount(
+        in visits: [Visit],
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> Int {
+        Set(visits.map { calendar.startOfDay(for: $0.visitedAt) }).count
+    }
+
+    static func recentPhotos(in visits: [Visit], limit: Int = 8) -> [PhotoBlob] {
+        guard limit > 0 else { return [] }
+        return visits
+            .sorted { lhs, rhs in
+                if lhs.visitedAt != rhs.visitedAt { return lhs.visitedAt > rhs.visitedAt }
+                return lhs.updatedAt > rhs.updatedAt
+            }
+            .flatMap { visit in
+                (visit.photos ?? [])
+                    .filter { $0.mediaKind == "photo" && $0.hasStoredData }
+                    .sorted { $0.createdAt > $1.createdAt }
+            }
+            .prefix(limit)
+            .map { $0 }
+    }
+}
+
+struct PlaceMasterFacilityGridCard: View {
+    let place: PlaceMaster
+    let category: RecordCategory
+    let plans: [Plan]
+    let visits: [Visit]
+    let tint: Color
+    let onOpen: () -> Void
+
+    private var upcomingCount: Int {
+        plans.filter { $0.hasConfirmedSchedule && $0.startsAt >= Date() }.count
+    }
+
+    private var visitLabel: String {
+        switch category.templateKey {
+        case "theme_park": "来園"
+        case "museum": "来館"
+        default: "訪問"
+        }
+    }
+
+    private var visitCount: Int {
+        PlaceFacilityCardMetrics.uniqueVisitDayCount(in: visits)
+    }
+
+    private var recentPhotos: [PhotoBlob] {
+        PlaceFacilityCardMetrics.recentPhotos(in: visits)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PlaceMasterEyecatch(imageData: place.imageData, tint: tint)
+                .frame(maxWidth: .infinity)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(place.name.isEmpty ? "名称未設定" : place.name)
+                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, minHeight: 38, alignment: .topLeading)
+
+                Label {
+                    Text(place.address.isEmpty ? "住所未登録" : place.address)
+                        .lineLimit(2)
+                } icon: {
+                    FavorecoIcon(systemName: "mappin.and.ellipse", size: 11)
+                }
+                .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 30, alignment: .topLeading)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    if upcomingCount > 0 {
+                        Label("予定\(upcomingCount)件", systemImage: "calendar")
+                    }
+                    Label("\(visitLabel)\(visitCount)回", systemImage: "checkmark.circle")
+                }
+                .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 9)
+            .padding(.bottom, recentPhotos.isEmpty ? 10 : 8)
+
+            if !recentPhotos.isEmpty {
+                Divider()
+                    .overlay(tint.opacity(0.16))
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 6) {
+                        ForEach(recentPhotos) { photo in
+                            ThumbnailImage(
+                                reference: .photo(photo.id),
+                                displaySize: CGSize(width: 44, height: 44),
+                                contentMode: .fill
+                            ) {
+                                tint.opacity(0.10)
+                            }
+                            .frame(width: 44, height: 44)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .stroke(tint.opacity(0.28), lineWidth: 0.7)
+                            }
+                            .accessibilityHidden(true)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                }
+                .frame(height: 56)
+                .accessibilityLabel("最新の\(visitLabel)写真\(recentPhotos.count)枚")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(tint.opacity(0.30), lineWidth: 0.8)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onTapGesture(perform: onOpen)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+        .accessibilityHint("施設の詳細を開きます")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: Text("施設詳細を開く"), onOpen)
+    }
+
+    private var accessibilitySummary: String {
+        var parts = [
+            place.name.isEmpty ? "名称未設定" : place.name,
+            place.address.isEmpty ? "住所未登録" : place.address,
+        ]
+        if upcomingCount > 0 { parts.append("予定\(upcomingCount)件") }
+        parts.append("\(visitLabel)\(visitCount)回")
+        if !recentPhotos.isEmpty { parts.append("最新写真\(recentPhotos.count)枚") }
+        return parts.joined(separator: "、")
     }
 }
 
@@ -128,7 +281,23 @@ private struct PlaceExperienceDetailView: View {
     }
 
     private var recordActionTitle: String {
-        category.templateKey == "theme_park" ? "来園を記録" : "体験を記録"
+        switch category.templateKey {
+        case "theme_park": "来園を記録"
+        case "museum": "鑑賞を記録"
+        default: "体験を記録"
+        }
+    }
+
+    private var recordSectionTitle: String {
+        switch category.templateKey {
+        case "theme_park": "来園記録"
+        case "museum": "鑑賞記録"
+        default: "体験記録"
+        }
+    }
+
+    private var planActionTitle: String {
+        category.templateKey == "museum" ? "観覧予定" : "行く予定"
     }
 
     private func planTitle(_ plan: Plan) -> String {
@@ -224,7 +393,7 @@ private struct PlaceExperienceDetailView: View {
                 }
             }
 
-            Section(category.templateKey == "theme_park" ? "来園記録" : "体験記録") {
+            Section(recordSectionTitle) {
                 if categoryVisits.isEmpty {
                     Text("記録はまだありません")
                         .font(FavorecoTypography.caption)
@@ -276,7 +445,7 @@ private struct PlaceExperienceDetailView: View {
                 Button {
                     isShowingPlanCreation = true
                 } label: {
-                    FavorecoIconLabel("行く予定", systemImage: "calendar.badge.plus", iconSize: 16)
+                    FavorecoIconLabel(planActionTitle, systemImage: "calendar.badge.plus", iconSize: 16)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -287,7 +456,7 @@ private struct PlaceExperienceDetailView: View {
                     FavorecoIconLabel(recordActionTitle, systemImage: "square.and.pencil", iconSize: 16)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
             }
             .font(FavorecoTypography.captionStrong)
             .padding(.horizontal, 16)

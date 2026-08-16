@@ -126,6 +126,7 @@ struct EventDetailView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.favorecoThemePalette) private var themePalette
     @EnvironmentObject private var purchaseManager: PurchaseManager
+    @EnvironmentObject private var createEntryContextRouter: CreateEntryContextRouter
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     @State private var isShowingAddVisit = false
     @State private var isShowingAddPlan = false
@@ -133,6 +134,7 @@ struct EventDetailView: View {
     @State private var isShowingTheaterPlanChoice = false
     @State private var isShowingEditEvent = false
     @State private var isShowingRepresentativePhotoPicker = false
+    @State private var isShowingBookShelfAssignment = false
     @State private var isShowingArchiveConfirmation = false
     @State private var isShowingDeleteConfirmation = false
     @State private var isShowingActionMenu = false
@@ -140,6 +142,7 @@ struct EventDetailView: View {
     @State private var actionErrorMessage: String?
     @State private var backSwipeExclusionFrames: [CGRect] = []
     @State private var eyecatchRefreshVersion = 0
+    @State private var createContextToken = UUID()
 
     private var category: RecordCategory? {
         event.category
@@ -217,8 +220,12 @@ struct EventDetailView: View {
                     CollectibleSeriesDashboard(series: event, accentColor: accentColor)
                 } else {
                     hero(snapshot: snapshot)
-                    eventMemoSection
-                    if !isBook {
+                    if isBook {
+                        bookInformationSection
+                        bookReadingHistorySection(snapshot: snapshot)
+                        bookMemoSection
+                    } else {
+                        eventMemoSection
                         stats(snapshot: snapshot)
                         visitHistory(snapshot: snapshot)
                     }
@@ -289,6 +296,19 @@ struct EventDetailView: View {
         .sheet(isPresented: $isShowingRepresentativePhotoPicker) {
             RepresentativePhotoPicker(event: event)
         }
+        .sheet(isPresented: $isShowingBookShelfAssignment) {
+            BookShelfAssignmentView(event: event)
+        }
+        .onAppear {
+            guard let categoryID = category?.id else { return }
+            createEntryContextRouter.activateDetail(
+                categoryID: categoryID,
+                token: createContextToken
+            )
+        }
+        .onDisappear {
+            createEntryContextRouter.deactivateDetail(token: createContextToken)
+        }
         .onReceive(
             NotificationCenter.default.publisher(
                 for: ThumbnailLoader.didInvalidateReferenceNotification
@@ -358,6 +378,16 @@ struct EventDetailView: View {
                 action: { isShowingEditEvent = true }
             )
         ]
+
+        if category?.templateKey == "book" {
+            actions.append(
+                FavorecoDetailAction(
+                    title: "本棚に追加・変更",
+                    systemImage: "books.vertical",
+                    action: { isShowingBookShelfAssignment = true }
+                )
+            )
+        }
 
         if !EventRepresentativePhotoResolver.resolve(
             for: event,
@@ -780,15 +810,23 @@ struct EventDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
-            HStack(alignment: .top, spacing: 14) {
-                FavorecoIcon(systemName: category?.iconSymbol ?? "rectangle.stack", size: 22)
-                    .foregroundStyle(accentColor)
-                    .frame(width: 44, height: 44)
-                    .background(accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            HStack(alignment: .top, spacing: category?.templateKey == "book" ? 0 : 14) {
+                if category?.templateKey != "book" {
+                    FavorecoIcon(systemName: category?.iconSymbol ?? "rectangle.stack", size: 22)
+                        .foregroundStyle(accentColor)
+                        .frame(width: 44, height: 44)
+                        .background(accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(snapshot.eventTitle)
-                        .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
+                        .font(
+                            FavorecoTypography.jpSerif(
+                                category?.templateKey == "book" ? 22 : 26,
+                                weight: .bold,
+                                relativeTo: category?.templateKey == "book" ? .title3 : .title2
+                            )
+                        )
                         .fixedSize(horizontal: false, vertical: true)
                     Text(category?.name ?? "未分類")
                         .font(FavorecoTypography.bodyStrong)
@@ -802,7 +840,29 @@ struct EventDetailView: View {
                 }
             }
 
-            if !event.seriesName.isEmpty {
+            if category?.templateKey == "book" {
+                if !event.bookSeriesName.isEmpty {
+                    FavorecoIconLabel(
+                        "シリーズ  \(event.bookSeriesName)",
+                        systemImage: "books.vertical",
+                        iconSize: 17
+                    )
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.secondary)
+                }
+
+                if !event.sortedBookShelfNames.isEmpty {
+                    FavorecoIconLabel(
+                        "本棚  \(event.sortedBookShelfNames.joined(separator: "・"))",
+                        systemImage: "rectangle.stack.fill",
+                        iconSize: 17
+                    )
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("本棚 \(event.sortedBookShelfNames.joined(separator: "、"))")
+                }
+            } else if !event.seriesName.isEmpty {
                 FavorecoIconLabel(event.seriesName, systemImage: "rectangle.stack", iconSize: 17)
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
@@ -818,25 +878,14 @@ struct EventDetailView: View {
     @ViewBuilder
     private func detailPrimaryActions(snapshot: EventDetailSnapshot) -> some View {
         if category?.templateKey == "book" {
-            if let readingRecord = snapshot.visits.first {
-                NavigationLink {
-                    ExperienceDetailView(visit: readingRecord)
-                } label: {
-                    FavorecoIconLabel("読書記録を見る", systemImage: "book.closed", iconSize: 17)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(accentColor)
-            } else {
-                Button {
-                    isShowingAddVisit = true
-                } label: {
-                    FavorecoIconLabel("読書を記録", systemImage: "book.closed", iconSize: 17)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(accentColor)
+            Button {
+                isShowingAddVisit = true
+            } label: {
+                FavorecoIconLabel("読書を記録", systemImage: "book.closed", iconSize: 17)
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(accentColor)
         } else {
             HStack(spacing: 10) {
                 Button {
@@ -856,6 +905,135 @@ struct EventDetailView: View {
                 .buttonStyle(.borderedProminent)
             }
             .tint(accentColor)
+        }
+    }
+
+    private var bookInformationSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("本の情報")
+                .font(FavorecoTypography.sectionTitle)
+
+            EventBookInfoRow(icon: "text.book.closed", title: "書名", value: event.title)
+            if !event.bookSeriesName.isEmpty {
+                EventBookInfoRow(icon: "books.vertical", title: "シリーズ", value: event.bookSeriesName)
+            }
+            if !event.bookVolumeLabel.isEmpty {
+                EventBookInfoRow(icon: "number", title: "巻数", value: event.bookVolumeLabel)
+            }
+            if !event.bookAuthorName.isEmpty {
+                EventBookInfoRow(icon: "person.text.rectangle", title: "著者", value: event.bookAuthorName)
+            }
+            if !event.bookTranslatorName.isEmpty {
+                EventBookInfoRow(icon: "character.book.closed", title: "訳者", value: event.bookTranslatorName)
+            }
+            if !event.bookPublisherName.isEmpty {
+                EventBookInfoRow(icon: "building.2", title: "出版社", value: event.bookPublisherName)
+            }
+            if !event.bookPublishedDate.isEmpty {
+                EventBookInfoRow(icon: "calendar.badge.clock", title: "発行日", value: event.bookPublishedDate)
+            }
+            if !event.bookISBN.isEmpty {
+                EventBookInfoRow(icon: "barcode", title: "ISBN", value: event.bookISBN)
+            }
+            if !event.bookPriceText.isEmpty {
+                EventBookInfoRow(icon: "yensign.circle", title: "価格", value: event.bookPriceText)
+            }
+            if event.bookPageCount > 0 {
+                EventBookInfoRow(icon: "doc.text", title: "ページ数", value: "\(event.bookPageCount)ページ")
+            }
+            EventBookInfoRow(
+                icon: "rectangle.portrait",
+                title: "種類",
+                value: EyecatchAspectRatio.resolved(for: event).name
+            )
+            if let url = URL(string: event.officialURL), !event.officialURL.isEmpty {
+                Link(destination: url) {
+                    EventBookInfoRow(icon: "link", title: "公式URL", value: event.officialURL)
+                }
+                .buttonStyle(.plain)
+            }
+            if !event.bookInformationSourceName.isEmpty {
+                if let url = URL(string: event.bookInformationSourceURL),
+                   !event.bookInformationSourceURL.isEmpty {
+                    Link(destination: url) {
+                        EventBookInfoRow(
+                            icon: "info.circle",
+                            title: "情報元",
+                            value: event.bookInformationSourceName
+                        )
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    EventBookInfoRow(
+                        icon: "info.circle",
+                        title: "情報元",
+                        value: event.bookInformationSourceName
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func bookReadingHistorySection(snapshot: EventDetailSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("読書記録")
+                    .font(FavorecoTypography.sectionTitle)
+                Text("\(snapshot.visitCount)回")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            if snapshot.visits.isEmpty {
+                Text("読書記録はまだありません")
+                    .font(FavorecoTypography.body)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+            } else {
+                ForEach(snapshot.visits) { readingRecord in
+                    NavigationLink {
+                        ExperienceDetailView(visit: readingRecord)
+                    } label: {
+                        VisitSummaryRow(visit: readingRecord, showsCategory: false)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var bookMemoSection: some View {
+        if !event.memo.isEmpty || !event.importMemo.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("本のメモ")
+                    .font(FavorecoTypography.sectionTitle)
+                if !event.memo.isEmpty {
+                    Text(event.memo)
+                        .font(FavorecoTypography.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !event.importMemo.isEmpty {
+                    if !event.memo.isEmpty { Divider() }
+                    Text(event.importMemo)
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 
@@ -941,6 +1119,30 @@ struct EventDetailView: View {
         }
     }
 
+}
+
+private struct EventBookInfoRow: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            FavorecoIcon(systemName: icon, size: 16)
+                .foregroundStyle(.secondary)
+                .frame(width: 20, alignment: .center)
+            Text(title)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 64, alignment: .leading)
+            Text(value)
+                .font(FavorecoTypography.bodyStrong)
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
 }
 
 private struct EventPlanDestination: View {
@@ -1157,6 +1359,12 @@ struct EditEventView: View {
         CategoryRecordTemplate.template(for: event.category)
     }
 
+    private var isPerformanceEvent: Bool {
+        ["theater", "live"].contains(event.category?.templateKey ?? "")
+    }
+
+    private var isLiveEvent: Bool { event.category?.templateKey == "live" }
+
     init(event: ExperienceEvent) {
         self.event = event
         _draft = State(initialValue: EventDraft(event: event))
@@ -1166,15 +1374,15 @@ struct EditEventView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if event.category?.templateKey == "theater" {
+                if isPerformanceEvent {
                     Section {
-                        TheaterUnifiedFormIntroduction(entry: .performanceEditing)
+                        TheaterUnifiedFormIntroduction(entry: .performanceEditing, isLive: isLiveEvent)
                     }
                 }
                 Section {
                     let photoActionTitle = eyecatchData == nil ? "写真を選ぶ" : "写真を変更"
                     if let eyecatchData, let image = UIImage(data: eyecatchData) {
-                        if event.category?.templateKey == "theater" {
+                        if isPerformanceEvent {
                             HStack {
                                 Spacer(minLength: 0)
                                 ZStack(alignment: .topTrailing) {
@@ -1213,11 +1421,11 @@ struct EditEventView: View {
                                 self.eyecatchData = nil
                             }
                         }
-                    } else if event.category?.templateKey == "theater" {
+                    } else if isPerformanceEvent {
                         theaterVisualPlaceholder
                     }
 
-                    if event.category?.templateKey == "theater" {
+                    if isPerformanceEvent {
                         PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
                             FavorecoIconLabel(photoActionTitle, systemImage: "photo", iconSize: 13)
                                 .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .caption))
@@ -1251,41 +1459,28 @@ struct EditEventView: View {
                         }
                     }
 
-                    if event.category?.templateKey == "book" {
-                        Picker("本の種類", selection: $draft.eyecatchAspectRatioKey) {
-                            ForEach(bookFormatOptions) { format in
-                                Text(format.name).tag(format.key)
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-                        Text(selectedEyecatchAspectRatio.note)
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if event.category?.templateKey == "theater" {
+                    if isPerformanceEvent {
                         EventHeroBackgroundPicker(
-                            categoryKey: "theater",
+                            categoryKey: isLiveEvent ? "live" : "theater",
                             selection: $draft.heroBackgroundPresetKey
                         )
                     }
                 } header: {
-                    if event.category?.templateKey == "theater" {
+                    if isPerformanceEvent {
                         FavorecoRegistrationSectionHeader("公演ビジュアル")
                     } else {
                         FavorecoRegistrationSectionHeader("対象アイキャッチ")
                     }
                 } footer: {
                     Text(
-                        event.category?.templateKey == "theater"
+                        isPerformanceEvent
                             ? "公演ページや、記録写真がない観劇記録の代表画像として表示します。"
                             : "クイック登録の表紙や、記録写真がない対象の代表画像として表示します。"
                     )
                 }
 
                 Section {
-                    if event.category?.templateKey == "theater" {
+                    if isPerformanceEvent {
                         DisclosureGroup(isExpanded: $showingPerformanceBasic) {
                             ExplicitFormTextField(
                                 title: "公演名",
@@ -1299,10 +1494,26 @@ struct EditEventView: View {
                                 text: $draft.seriesName,
                                 labelStyle: .horizontal
                             )
-                            TheaterPerformanceTypePicker(
-                                selection: $draft.subTypeKey,
-                                customName: $draft.performanceTypeCustomName,
-                                usesCompactLabelStyle: true
+                            if isLiveEvent {
+                                LivePerformanceTypePicker(
+                                    selection: $draft.subTypeKey,
+                                    customName: $draft.performanceTypeCustomName
+                                )
+                            } else {
+                                TheaterPerformanceTypePicker(
+                                    selection: $draft.subTypeKey,
+                                    customName: $draft.performanceTypeCustomName,
+                                    usesCompactLabelStyle: true
+                                )
+                            }
+                            ExplicitFormTextField(
+                                title: isLiveEvent ? "アーティスト（任意）" : "主催（任意）",
+                                prompt: isLiveEvent ? "出演アーティスト名" : "主催・制作団体",
+                                text: $draft.creditsText,
+                                axis: .vertical,
+                                minimumLines: 1,
+                                maximumLines: 3,
+                                labelStyle: .horizontal
                             )
                             ExplicitFormTextField(
                                 title: "サブタイトル",
@@ -1324,15 +1535,24 @@ struct EditEventView: View {
                                 threadsURL: $draft.threadsURL
                             )
                         } label: {
-                            TheaterUnifiedSectionLabel(section: .performanceBasic)
+                            TheaterUnifiedSectionLabel(section: .performanceBasic, isLive: isLiveEvent)
                         }
                     } else if event.category?.templateKey == "movie" {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 0) {
                             ScreenWorkTypeAndSeasonEditor(
                                 typeKey: $draft.subTypeKey,
                                 seasonNumber: $draft.screenWorkSeasonNumber
                             )
-                            TextField(template.titlePlaceholder, text: $draft.title)
+                            explicitFieldDivider
+                            ExplicitFormTextField(
+                                title: "作品名（必須）",
+                                prompt: template.titlePlaceholder,
+                                text: $draft.title,
+                                axis: .vertical,
+                                minimumLines: 1,
+                                maximumLines: 2,
+                                labelStyle: .horizontal
+                            )
                         }
                     } else if event.category?.templateKey == "book" {
                         BookInformationEditor(
@@ -1340,29 +1560,75 @@ struct EditEventView: View {
                             seriesName: $draft.bookSeriesName,
                             volumeNumber: $draft.bookVolumeNumber,
                             authorName: $draft.bookAuthorName,
+                            translatorName: $draft.bookTranslatorName,
+                            isbn: $draft.bookISBN,
+                            publisherName: $draft.bookPublisherName,
+                            publishedDate: $draft.bookPublishedDate,
+                            priceText: $draft.bookPriceText,
+                            pageCountText: $draft.bookPageCountText,
                             officialURL: $draft.officialURL,
                             aspectRatioKey: $draft.eyecatchAspectRatioKey,
                             isEditable: true
                         )
                     } else {
-                        TextField(template.titlePlaceholder, text: $draft.title)
-                        TextField(template.seriesPlaceholder, text: $draft.seriesName)
-                        TextField("サブタイトル（任意）", text: $draft.eventSubtitle)
-                        TextField("公式URL（任意）", text: $draft.officialURL)
+                        ExplicitFormTextField(
+                            title: "\(template.titlePlaceholder)（必須）",
+                            prompt: "\(template.titlePlaceholder)を入力",
+                            text: $draft.title,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
+                        )
+                        explicitFieldDivider
+                        ExplicitFormTextField(
+                            title: template.seriesPlaceholder,
+                            prompt: template.seriesPlaceholder,
+                            text: $draft.seriesName,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
+                        )
+                        explicitFieldDivider
+                        ExplicitFormTextField(
+                            title: "サブタイトル（任意）",
+                            prompt: "サブタイトルを入力",
+                            text: $draft.eventSubtitle,
+                            axis: .vertical,
+                            minimumLines: 1,
+                            maximumLines: 2,
+                            labelStyle: .horizontal
+                        )
+                        explicitFieldDivider
+                        ExplicitFormTextField(
+                            title: "公式URL（任意）",
+                            prompt: "https://example.com",
+                            text: $draft.officialURL,
+                            labelStyle: .horizontal
+                        )
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
-                        TextField("SNSリンク（1行1件・任意）", text: $draft.socialLinksText, axis: .vertical)
+                        explicitFieldDivider
+                        ExplicitFormTextField(
+                            title: "SNSリンク（任意）",
+                            prompt: "1行に1件ずつ入力",
+                            text: $draft.socialLinksText,
+                            axis: .vertical,
+                            minimumLines: 2,
+                            maximumLines: 5,
+                            labelStyle: .horizontal
+                        )
                             .textInputAutocapitalization(.never)
                             .keyboardType(.URL)
-                            .lineLimit(2...5)
                     }
                 } header: {
-                    if event.category?.templateKey != "theater" {
+                    if !isPerformanceEvent {
                         FavorecoRegistrationSectionHeader(template.targetSectionTitle)
                     }
                 }
 
-                if event.category?.templateKey == "theater" {
+                if isPerformanceEvent {
                     Section {
                         ForEach($draft.venueEntries) { $venue in
                             TheaterScheduleEntryEditor(
@@ -1388,17 +1654,15 @@ struct EditEventView: View {
                             FavorecoIconLabel("公演地を追加", systemImage: "plus.circle", iconSize: 17)
                         }
                     } header: {
-                        TheaterUnifiedSectionLabel(section: .venueSchedule)
+                        TheaterUnifiedSectionLabel(section: .venueSchedule, isLive: isLiveEvent)
                     } footer: {
                         Text("東京公演・大阪公演など、公演地ごとに会期と会場を登録します。未登録の場合は予定と参加履歴から補完表示します。")
                     }
                 }
 
-                if event.category?.templateKey == "theater" {
+                if isPerformanceEvent {
                     Section {
                         DisclosureGroup(isExpanded: $showingPerformanceDetails) {
-                            TheaterCreditsTextEditor(text: $draft.creditsText)
-                            Divider()
                             PeopleUnitEditor(
                                 existingLinks: visibleEventOrganizationLinks,
                                 deletedLinkIDs: $deletedPersonLinkIDs,
@@ -1419,38 +1683,48 @@ struct EditEventView: View {
                                 reservesLineSpace: true
                             )
                         } label: {
-                            TheaterUnifiedSectionLabel(section: .performanceDetails)
+                            TheaterUnifiedSectionLabel(section: .performanceDetails, isLive: isLiveEvent)
                         }
                     }
                 } else {
                     FavorecoRegistrationSection("対象メモ") {
-                        ZStack(alignment: .topLeading) {
-                            if draft.memo.isEmpty {
-                                Text("対象そのものについて残しておきたいこと")
-                                    .foregroundStyle(.tertiary)
-                                    .padding(.top, 8)
-                                    .padding(.leading, 5)
-                            }
-                            TextEditor(text: $draft.memo)
-                                .frame(minHeight: 120)
-                        }
+                        ExplicitFormTextField(
+                            title: "メモ（任意）",
+                            prompt: "対象そのものについて残しておきたいこと",
+                            text: $draft.memo,
+                            axis: .vertical,
+                            minimumLines: 5,
+                            maximumLines: 5,
+                            labelStyle: .horizontal,
+                            reservesLineSpace: true,
+                            showsInputBoundary: true
+                        )
                     }
                 }
 
                 Section {
                     DisclosureGroup(isExpanded: $showingImportDetails) {
-                        TextEditor(text: $draft.importMemo)
-                            .frame(minHeight: 140)
+                        ExplicitFormTextField(
+                            title: "読み取り原文（任意）",
+                            prompt: "URL・OCRから取得した原文",
+                            text: $draft.importMemo,
+                            axis: .vertical,
+                            minimumLines: 6,
+                            maximumLines: 6,
+                            labelStyle: .horizontal,
+                            reservesLineSpace: true,
+                            showsInputBoundary: true
+                        )
                     } label: {
-                        TheaterUnifiedSectionLabel(section: .importDetails)
+                        TheaterUnifiedSectionLabel(section: .importDetails, isLive: isLiveEvent)
                     }
                 }
             }
             .favorecoRegistrationFormCanvas()
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle(
-                event.category?.templateKey == "theater"
-                    ? TheaterUnifiedFormEntry.performanceEditing.navigationTitle
+                isPerformanceEvent
+                    ? (isLiveEvent ? "ライブ情報を編集" : TheaterUnifiedFormEntry.performanceEditing.navigationTitle)
                     : "対象を編集"
             )
             .navigationBarTitleDisplayMode(.inline)
@@ -1498,8 +1772,12 @@ struct EditEventView: View {
         }
     }
 
+    private var explicitFieldDivider: some View {
+        Divider().overlay(ExplicitFormMetrics.rowSeparatorColor)
+    }
+
     private func presentArtworkCrop(_ image: UIImage) {
-        guard event.category?.templateKey != "theater" else { return }
+        guard !isPerformanceEvent else { return }
         artworkCropDraft = ArtworkPhotoCropDraft(
             image: image,
             aspectRatio: CGFloat(selectedEyecatchAspectRatio.value)
@@ -1525,7 +1803,7 @@ struct EditEventView: View {
 
     @ViewBuilder
     private func eyecatchPreview(_ image: UIImage) -> some View {
-        if event.category?.templateKey == "theater" {
+        if isPerformanceEvent {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
@@ -1577,12 +1855,18 @@ struct EditEventView: View {
             event.applyBookMetadata(
                 seriesName: draft.trimmedBookSeriesName,
                 volumeNumber: draft.trimmedBookVolumeNumber,
-                authorName: draft.trimmedBookAuthorName
+                authorName: draft.trimmedBookAuthorName,
+                translatorName: draft.trimmedBookTranslatorName,
+                isbn: draft.trimmedBookISBN,
+                publisherName: draft.trimmedBookPublisherName,
+                publishedDate: draft.trimmedBookPublishedDate,
+                priceText: draft.trimmedBookPriceText,
+                pageCount: draft.bookPageCount
             )
         } else {
             event.seriesName = draft.trimmedSeriesName
         }
-        if event.category?.templateKey == "theater" {
+        if isPerformanceEvent {
             event.subTypeKey = draft.subTypeKey
             for plan in event.plans ?? [] {
                 plan.title = updatedTitle
@@ -1596,10 +1880,9 @@ struct EditEventView: View {
         unitFields.socialLinks = draft.normalizedSocialLinks
         unitFields.eventSubtitle = draft.trimmedEventSubtitle
         unitFields.eventCreditsText = draft.trimmedCreditsText
-        unitFields.eventPerformanceTypeCustomName = TheaterPerformanceType.customNameForStorage(
-            key: draft.subTypeKey,
-            input: draft.performanceTypeCustomName
-        )
+        unitFields.eventPerformanceTypeCustomName = isLiveEvent
+            ? LivePerformanceType.customNameForStorage(key: draft.subTypeKey, input: draft.performanceTypeCustomName)
+            : TheaterPerformanceType.customNameForStorage(key: draft.subTypeKey, input: draft.performanceTypeCustomName)
         if event.category?.templateKey == "movie" {
             unitFields.screenWorkSeasonNumber = ScreenWorkType.resolved(from: draft.subTypeKey).supportsSeason
                 ? draft.screenWorkSeasonNumber
@@ -1624,6 +1907,12 @@ struct EditEventView: View {
             unitFields.bookSeriesName = draft.trimmedBookSeriesName
             unitFields.bookVolumeNumber = draft.trimmedBookVolumeNumber
             unitFields.bookAuthorName = draft.trimmedBookAuthorName
+            unitFields.bookTranslatorName = draft.trimmedBookTranslatorName
+            unitFields.bookISBN = draft.trimmedBookISBN
+            unitFields.bookPublisherName = draft.trimmedBookPublisherName
+            unitFields.bookPublishedDate = draft.trimmedBookPublishedDate
+            unitFields.bookPriceText = draft.trimmedBookPriceText
+            unitFields.bookPageCount = draft.bookPageCount
         }
         event.unitFieldsRaw = unitFields.encodedRawValue
         event.updatedAt = now
@@ -1678,12 +1967,6 @@ struct EditEventView: View {
         EyecatchAspectRatio.option(for: draft.eyecatchAspectRatioKey, category: event.category)
     }
 
-    private var bookFormatOptions: [EyecatchAspectRatio] {
-        if draft.eyecatchAspectRatioKey == EyecatchAspectRatio.bookCover.key {
-            return [EyecatchAspectRatio.bookCover] + EyecatchAspectRatio.selectableBookFormats
-        }
-        return EyecatchAspectRatio.selectableBookFormats
-    }
 }
 
 private struct EventDraft {
@@ -1692,6 +1975,12 @@ private struct EventDraft {
     var bookSeriesName: String
     var bookVolumeNumber: String
     var bookAuthorName: String
+    var bookTranslatorName: String
+    var bookISBN: String
+    var bookPublisherName: String
+    var bookPublishedDate: String
+    var bookPriceText: String
+    var bookPageCountText: String
     var subTypeKey: String
     var screenWorkSeasonNumber: Int
     var performanceTypeCustomName: String
@@ -1722,6 +2011,12 @@ private struct EventDraft {
         bookSeriesName = fields.bookSeriesName
         bookVolumeNumber = fields.bookVolumeNumber
         bookAuthorName = fields.bookAuthorName
+        bookTranslatorName = fields.bookTranslatorName
+        bookISBN = fields.bookISBN
+        bookPublisherName = fields.bookPublisherName
+        bookPublishedDate = fields.bookPublishedDate
+        bookPriceText = fields.bookPriceText
+        bookPageCountText = fields.bookPageCount > 0 ? String(fields.bookPageCount) : ""
         if event.category?.templateKey == "movie" {
             subTypeKey = ScreenWorkType.resolved(from: subTypeKey).rawValue
         }
@@ -1740,7 +2035,7 @@ private struct EventDraft {
             TheaterSocialPlatform.platform(for: $0) == nil
         }
         socialLinksText = fields.socialLinks.joined(separator: "\n")
-        usesPlatformSocialLinks = event.category?.templateKey == "theater"
+        usesPlatformSocialLinks = ["theater", "live"].contains(event.category?.templateKey ?? "")
         eventSubtitle = fields.eventSubtitle
         creditsText = fields.eventCreditsText
         memo = event.memo
@@ -1781,6 +2076,30 @@ private struct EventDraft {
 
     var trimmedBookAuthorName: String {
         bookAuthorName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookTranslatorName: String {
+        bookTranslatorName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookISBN: String {
+        bookISBN.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookPublisherName: String {
+        bookPublisherName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookPublishedDate: String {
+        bookPublishedDate.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBookPriceText: String {
+        bookPriceText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var bookPageCount: Int {
+        max(Int(bookPageCountText.filter(\.isNumber)) ?? 0, 0)
     }
 
     var trimmedOfficialURL: String {
@@ -1898,5 +2217,6 @@ private struct EventEmptyState: View {
     NavigationStack {
         EventDetailView(event: event)
     }
+    .environmentObject(CreateEntryContextRouter())
     .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self], inMemory: true)
 }

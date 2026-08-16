@@ -557,7 +557,7 @@ final class TicketWorkflowTests: XCTestCase {
         )
         XCTAssertEqual(
             TicketStatusTransitionDefinition.transitions(for: legacyWonAttempt).first?.title,
-            "支払い済みにする"
+            "支払済みにする"
         )
         XCTAssertEqual(
             TicketStatusTransitionDefinition.transitions(for: paymentAttempt).first?.targetStatusKey,
@@ -565,7 +565,7 @@ final class TicketWorkflowTests: XCTestCase {
         )
         XCTAssertEqual(
             TicketStatusTransitionDefinition.transitions(for: paymentAttempt).first?.title,
-            "支払い済みにする"
+            "支払済みにする"
         )
         XCTAssertEqual(
             TicketStatusTransitionDefinition.transitions(for: receiptAttempt).first?.targetStatusKey,
@@ -575,6 +575,45 @@ final class TicketWorkflowTests: XCTestCase {
             TicketStatusTransitionDefinition.transitions(for: receiptAttempt).first?.title,
             "チケットを受け取った"
         )
+    }
+
+    func testTicketOCRParsesPriceFeeQuantityAndSeatSeparately() {
+        let result = TicketOCRImportParser.parse(
+            text: """
+            チケット代 9,800円
+            各種手数料 1,100円
+            枚数 2枚
+            座席 1階 10列 12番
+            """,
+            referenceDate: Date()
+        )
+
+        XCTAssertEqual(result.priceText, "9800")
+        XCTAssertEqual(result.feeText, "1100")
+        XCTAssertEqual(result.quantity, 2)
+        XCTAssertEqual(result.seatText, "1階 10列 12番")
+    }
+
+    func testTicketOCRDoesNotTreatFeeAsTicketPrice() {
+        let result = TicketOCRImportParser.parse(
+            text: "システム利用料 550円",
+            referenceDate: Date()
+        )
+
+        XCTAssertNil(result.priceText)
+        XCTAssertEqual(result.feeText, "550")
+    }
+
+    func testTicketOCRPrefersTotalFeeOverAnIndividualFee() {
+        let result = TicketOCRImportParser.parse(
+            text: """
+            システム利用料 550円
+            手数料合計 1,100円
+            """,
+            referenceDate: Date()
+        )
+
+        XCTAssertEqual(result.feeText, "1100")
     }
 
     func testCurrentStageLabelsExplainWhatTheUserIsWaitingFor() {
@@ -594,13 +633,13 @@ final class TicketWorkflowTests: XCTestCase {
             TicketProgressPresentation.currentStageLabel(
                 for: TicketAttempt(statusKey: "won", entryRouteKey: "card")
             ),
-            "支払い待ち"
+            "支払待ち"
         )
         XCTAssertEqual(
             TicketProgressPresentation.currentStageLabel(
                 for: TicketAttempt(statusKey: "waitingPayment", entryRouteKey: "card")
             ),
-            "支払い待ち"
+            "支払待ち"
         )
         XCTAssertEqual(
             TicketProgressPresentation.currentStageLabel(

@@ -48,55 +48,77 @@ struct CalendarNextActionItem: Identifiable {
     let systemImage: String
     let isOverdue: Bool
     let priority: Int
+    let ticketVisualStage: TicketProgressVisualStage?
 }
 
 struct CalendarNextActionRow: View {
     let item: CalendarNextActionItem
     @Environment(\.favorecoThemePalette) private var themePalette
 
-    private var tint: Color {
-        item.isOverdue
-            ? .red
-            : themePalette.categoryColor(hex: item.plan.category?.colorHex ?? "#147C88")
+    private var fallbackTint: Color {
+        themePalette.categoryColor(hex: item.plan.category?.colorHex ?? "#147C88")
+    }
+
+    private var actionTint: Color {
+        if let ticketVisualStage = item.ticketVisualStage {
+            return TicketProgressColorPalette.color(for: ticketVisualStage)
+        }
+        return fallbackTint
+    }
+
+    private var planTitle: String {
+        let title = item.plan.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title }
+        let eventTitle = item.plan.event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return eventTitle.isEmpty ? "予定" : eventTitle
     }
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(alignment: .center, spacing: 9) {
             FavorecoIcon(systemName: item.systemImage, size: 13)
-                .foregroundStyle(tint)
+                .foregroundStyle(actionTint)
                 .frame(width: 20)
 
-            Text(FavorecoDateText.compactDateTime(item.date))
-                .font(FavorecoTypography.captionStrong)
-                .foregroundStyle(item.isOverdue ? Color.red : .secondary)
-                .fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(FavorecoDateText.compactDate(item.date))
+                Text(FavorecoDateText.time(item.date))
+            }
+            .font(FavorecoTypography.captionStrong)
+            .foregroundStyle(item.isOverdue ? Color.red : .secondary)
+            .fixedSize(horizontal: true, vertical: false)
 
-            Text(item.title)
-                .font(FavorecoTypography.bodyStrong)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(actionTint)
+                    .lineLimit(1)
 
-            Text(item.plan.title.isEmpty ? "予定" : item.plan.title)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+                Text(planTitle)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer(minLength: 0)
             Image(systemName: "chevron.right")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(tint.opacity(0.22), lineWidth: 0.75)
+                .stroke(actionTint.opacity(0.22), lineWidth: 0.75)
         }
     }
 }
 
 struct CalendarPlanSummaryRow: View {
     let plan: Plan
+    var showsDate = false
+    var showsEyecatch = false
     @Environment(\.favorecoThemePalette) private var themePalette
 
     private var categoryColor: Color {
@@ -130,12 +152,71 @@ struct CalendarPlanSummaryRow: View {
             .first
     }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+    private var eyecatchAspectRatio: CGFloat {
+        CGFloat(EyecatchAspectRatio.resolved(for: plan.event).value)
+    }
+
+    private var eyecatchHeight: CGFloat {
+        44 / max(0.45, eyecatchAspectRatio)
+    }
+
+    /// 公演に直接保存した画像だけでなく、記録写真から選ばれた公演代表写真も
+    /// カレンダーの予定カードへ同じ優先順位で反映する。
+    private var eyecatchReference: ThumbnailReference? {
+        if let visit = plan.visit {
+            let path = visit.eyecatchPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !path.isEmpty,
+               let photo = (visit.photos ?? []).first(where: {
+                   $0.relativePath == path && $0.mediaKind == "photo" && $0.hasStoredData
+               }) {
+                return .photo(photo.id)
+            }
+        }
+        if let event = plan.event {
+            if let photo = EventRepresentativePhotoResolver.photo(for: event) {
+                return .photo(photo.id)
+            }
+            return .event(event.id)
+        }
+        return nil
+    }
+
+    private var scheduleText: String {
+        showsDate
+            ? FavorecoDateText.compactDateTime(plan.startsAt)
+            : FavorecoDateText.time(plan.startsAt)
+    }
+
+    @ViewBuilder
+    private var leadingArtwork: some View {
+        if showsEyecatch {
+            CategoryEyecatchArtwork(
+                reference: eyecatchReference,
+                templateKey: plan.category?.templateKey ?? plan.event?.category?.templateKey ?? "",
+                backgroundColor: categoryColor.opacity(0.08),
+                defaultContentMode: .fit
+            ) { size in
+                CategoryDefaultArtworkImage(
+                    templateKey: plan.category?.templateKey ?? plan.event?.category?.templateKey ?? "",
+                    displaySize: size
+                )
+            }
+            .frame(width: 44, height: eyecatchHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
             FavorecoIcon(systemName: plan.category?.iconSymbol ?? "ticket", size: 20)
                 .foregroundStyle(categoryColor)
                 .frame(width: 44, height: 44)
-                .background(categoryColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(
+                    categoryColor.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            leadingArtwork
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
@@ -155,7 +236,7 @@ struct CalendarPlanSummaryRow: View {
                 }
 
                 HStack(spacing: 8) {
-                    FavorecoIconLabel(FavorecoDateText.time(plan.startsAt), systemImage: "clock", iconSize: 13)
+                    FavorecoIconLabel(scheduleText, systemImage: "clock", iconSize: 13)
                     if !plan.venueNameSnapshot.isEmpty {
                         FavorecoIconLabel(plan.venueNameSnapshot, systemImage: "mappin.and.ellipse", iconSize: 13)
                     }
@@ -253,13 +334,11 @@ struct CalendarPlanListSection: View {
                         Text(yearMonth(group.month))
                             .font(FavorecoTypography.sectionTitle)
 
-                        ForEach(group.plans) { plan in
-                            NavigationLink {
-                                PlanDetailView(plan: plan)
-                            } label: {
-                                CalendarPlanSummaryRow(plan: plan)
-                            }
-                            .buttonStyle(.plain)
+                        ForEach(dayGroups(for: group.plans), id: \.date) { dayGroup in
+                            CalendarPlanTimelineDay(
+                                date: dayGroup.date,
+                                plans: dayGroup.plans
+                            )
                         }
                     }
                 }
@@ -269,7 +348,83 @@ struct CalendarPlanListSection: View {
 
     private func yearMonth(_ date: Date) -> String {
         let components = Calendar.current.dateComponents([.year, .month], from: date)
-        return "\(components.year ?? 0)年\(components.month ?? 0)月"
+        return "\(FavorecoDateText.year(components.year ?? 0))\(components.month ?? 0)月"
+    }
+
+    private func dayGroups(for plans: [Plan]) -> [(date: Date, plans: [Plan])] {
+        let calendar = Calendar.current
+        return Dictionary(grouping: plans) { plan in
+            calendar.startOfDay(for: plan.startsAt)
+        }
+        .map { date, plans in
+            (date: date, plans: plans.sorted { $0.startsAt < $1.startsAt })
+        }
+        .sorted { $0.date < $1.date }
+    }
+}
+
+private struct CalendarPlanTimelineDay: View {
+    let date: Date
+    let plans: [Plan]
+
+    private var dayNumber: String {
+        String(Calendar.current.component(.day, from: date))
+    }
+
+    private var weekday: String {
+        FavorecoDateText.weekdayName(date).replacingOccurrences(of: "曜", with: "")
+    }
+
+    private var weekdayColor: Color {
+        switch FavorecoDateText.weekdayNumber(date) {
+        case 1: return .red.opacity(0.85)
+        case 7: return .blue.opacity(0.85)
+        default: return .secondary
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 20) {
+            VStack(spacing: 1) {
+                Text(dayNumber)
+                    .font(.system(size: 21, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text(weekday)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(weekdayColor)
+            }
+            .frame(width: 38)
+
+            VStack(spacing: 10) {
+                ForEach(plans) { plan in
+                    NavigationLink {
+                        PlanDetailView(plan: plan)
+                    } label: {
+                        CalendarPlanSummaryRow(plan: plan, showsEyecatch: true)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .overlay {
+            GeometryReader { proxy in
+                Rectangle()
+                    .fill(Color(.separator).opacity(0.55))
+                    .frame(width: 1, height: max(proxy.size.height - 10, 0))
+                    .offset(x: 47, y: 10)
+
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 7, height: 7)
+                    .offset(x: 44, y: 11)
+            }
+            .allowsHitTesting(false)
+        }
+        .padding(.bottom, 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(FavorecoDateText.fullDate(date))の予定")
     }
 }
 
@@ -280,17 +435,13 @@ struct CalendarAgendaSection: View {
     let selectedDayVisits: [Visit]
     let selectedDayPlans: [Plan]
     let selectedDayExternalEvents: [ExternalCalendarEvent]
-    let upcomingPlans: [Plan]
-    let upcomingVisits: [Visit]
-    let upcomingExternalEvents: [ExternalCalendarEvent]
     let showsExternalCalendarEvents: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            ticketScheduleSection
-            nextActionSection
             selectedDaySection
-            upcomingSection
+            nextActionSection
+            ticketScheduleSection
         }
     }
 
@@ -420,50 +571,6 @@ struct CalendarAgendaSection: View {
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private var upcomingSection: some View {
-        if hasUpcomingItems {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("直近の予定")
-                    .font(FavorecoTypography.sectionTitle)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(upcomingPlans) { plan in
-                        planLink(plan)
-                    }
-
-                    if !upcomingVisits.isEmpty {
-                        Text("記録")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, upcomingPlans.isEmpty ? 0 : 4)
-
-                        ForEach(upcomingVisits) { visit in
-                            visitLink(visit)
-                        }
-                    }
-
-                    if showsExternalCalendarEvents && !upcomingExternalEvents.isEmpty {
-                        Text("外部カレンダー")
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, upcomingVisits.isEmpty && upcomingPlans.isEmpty ? 0 : 4)
-
-                        ForEach(upcomingExternalEvents) { event in
-                            ExternalCalendarEventRow(event: event)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var hasUpcomingItems: Bool {
-        !upcomingPlans.isEmpty
-            || !upcomingVisits.isEmpty
-            || (showsExternalCalendarEvents && !upcomingExternalEvents.isEmpty)
     }
 
     private func planLink(_ plan: Plan) -> some View {

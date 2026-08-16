@@ -89,7 +89,7 @@ struct FavoSpendingBreakdown {
             let year = calendar.component(.year, from: visit.visitedAt)
             let yearValue = yearValues[year]
             yearValues[year] = Value(
-                title: "\(year)年",
+                title: FavorecoDateText.year(year),
                 iconSymbol: "calendar",
                 colorHex: "#8F5E73",
                 amount: (yearValue?.amount ?? Decimal(0)) + visit.amount,
@@ -165,6 +165,7 @@ struct FavoStorySnapshot: Identifiable {
     let placeName: String
     let categoryIcon: String
     let categoryColorHex: String
+    let thumbnailReference: ThumbnailReference?
 }
 
 struct FavoCollectionSummary: Identifiable {
@@ -175,6 +176,7 @@ struct FavoCollectionSummary: Identifiable {
     let iconSymbol: String
     let colorHex: String
     let visitIDs: [UUID]
+    let thumbnailReferences: [ThumbnailReference]
 }
 
 struct FavoPinnedTargetSnapshot: Identifiable {
@@ -417,7 +419,9 @@ struct FavoSnapshot {
                         iconSymbol: "mappin.and.ellipse",
                         colorHex: targetProfile?.colorHex ?? "#2F7FB8",
                         categoryTemplateKey: "",
-                        thumbnailReference: targetProfile.map { .profileIcon($0.id) },
+                        thumbnailReference: targetProfile.map {
+                            .profileIcon($0.id, fallback: .place(place.id))
+                        } ?? .place(place.id),
                         visitIDs: relatedVisits.map(\.id),
                         upcomingPlanIDs: relatedPlans.map(\.id),
                         photoCount: Self.photoCount(
@@ -431,10 +435,26 @@ struct FavoSnapshot {
             }
             .prefix(4)
 
+        let visitsByIDForStories = Dictionary(uniqueKeysWithValues: visibleVisits.map { ($0.id, $0) })
+        let staleFavoriteCutoff = Calendar.current.date(byAdding: .day, value: -90, to: now) ?? now
+        let staleFavoriteLatestVisitIDs = Set<UUID>(
+            (Array(pinnedTargets).map(\.visitIDs) + favorites.map(\.visitIDs)).compactMap { visitIDs in
+                guard let latestRelatedVisit = visitIDs.compactMap({ visitsByIDForStories[$0] }).first else {
+                    return nil
+                }
+                return latestRelatedVisit.visitedAt <= staleFavoriteCutoff ? latestRelatedVisit.id : nil
+            }
+        )
+
         return FavoSnapshot(
             favorites: favorites,
             pinnedTargets: Array(pinnedTargets),
-            stories: Self.stories(for: visibleVisits, now: now),
+            stories: Self.stories(
+                for: visibleVisits,
+                photoCountByVisitID: photoCountByVisitID,
+                staleFavoriteLatestVisitIDs: staleFavoriteLatestVisitIDs,
+                now: now
+            ),
             collections: Self.collections(
                 for: visibleVisits,
                 photoCountByVisitID: photoCountByVisitID,
@@ -451,7 +471,12 @@ struct FavoSnapshot {
         return trimmed.isEmpty ? fallback : trimmed
     }
 
-    private static func stories(for visits: [Visit], now: Date) -> [FavoStorySnapshot] {
+    private static func stories(
+        for visits: [Visit],
+        photoCountByVisitID: [UUID: Int],
+        staleFavoriteLatestVisitIDs: Set<UUID>,
+        now: Date
+    ) -> [FavoStorySnapshot] {
         guard let latestVisit = visits.first else { return [] }
 
         var stories: [FavoStorySnapshot] = []
@@ -469,7 +494,9 @@ struct FavoSnapshot {
                     visitedAt: visit.visitedAt,
                     placeName: Self.placeIdentity(for: visit)?.name ?? "",
                     categoryIcon: visit.event?.category?.iconSymbol ?? "sparkles",
-                    categoryColorHex: visit.event?.category?.colorHex ?? "#147C88"
+                    categoryColorHex: visit.event?.category?.colorHex ?? "#147C88",
+                    thumbnailReference: Self.visualPhotoReferences(for: [visit], limit: 1).first
+                        ?? visit.event.map { .event($0.id) }
                 )
             )
         }
@@ -490,6 +517,36 @@ struct FavoSnapshot {
                 && calendar.component(.day, from: visit.visitedAt) == targetDay
         }) {
             append(label: "ON THIS DAY", title: "過去の今日", visit: onThisDayVisit)
+        }
+
+        let previousYear = targetYear - 1
+        if let lastYearVisit = visits.first(where: { visit in
+            !usedVisitIDs.contains(visit.id)
+                && calendar.component(.year, from: visit.visitedAt) == previousYear
+                && calendar.component(.month, from: visit.visitedAt) == targetMonth
+        }) {
+            append(label: "LAST YEAR", title: "1年前の今月", visit: lastYearVisit)
+        }
+
+        if let photoRichVisit = (
+            visits
+                .filter { !usedVisitIDs.contains($0.id) && (photoCountByVisitID[$0.id] ?? 0) >= 2 }
+                .sorted(by: { lhs, rhs in
+                    let lhsCount = photoCountByVisitID[lhs.id] ?? 0
+                    let rhsCount = photoCountByVisitID[rhs.id] ?? 0
+                    if lhsCount != rhsCount { return lhsCount > rhsCount }
+                    if lhs.visitedAt != rhs.visitedAt { return lhs.visitedAt > rhs.visitedAt }
+                    return lhs.id.uuidString < rhs.id.uuidString
+                })
+                .first
+        ) {
+            append(label: "PHOTO MEMORY", title: "写真の多い思い出", visit: photoRichVisit)
+        }
+
+        if let staleFavoriteVisit = visits.first(where: { visit in
+            !usedVisitIDs.contains(visit.id) && staleFavoriteLatestVisitIDs.contains(visit.id)
+        }) {
+            append(label: "FAVO AGAIN", title: "久しぶりの推し", visit: staleFavoriteVisit)
         }
 
         return stories
@@ -516,7 +573,8 @@ struct FavoSnapshot {
                     detail: "\(photoVisits.count)件の思い出から",
                     iconSymbol: "photo.on.rectangle.angled",
                     colorHex: "#8A5FA8",
-                    visitIDs: photoVisits.map(\.id)
+                    visitIDs: photoVisits.map(\.id),
+                    thumbnailReferences: Self.visualPhotoReferences(for: photoVisits, limit: 4)
                 )
             )
         }
@@ -533,7 +591,8 @@ struct FavoSnapshot {
                     detail: "\(favoritePlace.count)回訪れています",
                     iconSymbol: "mappin.and.ellipse",
                     colorHex: "#2F7FB8",
-                    visitIDs: placeVisits.map(\.id)
+                    visitIDs: placeVisits.map(\.id),
+                    thumbnailReferences: Self.visualPhotoReferences(for: placeVisits, limit: 4)
                 )
             )
         }
@@ -549,10 +608,11 @@ struct FavoSnapshot {
                     id: "current-year",
                     title: "今年の思い出",
                     value: "\(currentYearVisits.count)件",
-                    detail: "\(currentYear)年",
+                    detail: FavorecoDateText.year(currentYear),
                     iconSymbol: "calendar",
                     colorHex: "#B66A45",
-                    visitIDs: currentYearVisits.map(\.id)
+                    visitIDs: currentYearVisits.map(\.id),
+                    thumbnailReferences: Self.visualPhotoReferences(for: currentYearVisits, limit: 4)
                 )
             )
         }
@@ -568,11 +628,41 @@ struct FavoSnapshot {
                 detail: "\(visits.count)件の思い出",
                 iconSymbol: "square.grid.2x2",
                 colorHex: "#147C88",
-                visitIDs: visits.map(\.id)
+                visitIDs: visits.map(\.id),
+                thumbnailReferences: Self.visualPhotoReferences(for: visits, limit: 4)
             )
         )
 
         return summaries
+    }
+
+    private static func visualPhotoReferences(
+        for visits: [Visit],
+        limit: Int
+    ) -> [ThumbnailReference] {
+        guard limit > 0 else { return [] }
+
+        var seenPhotoIDs = Set<UUID>()
+        return visits
+            .flatMap { visit -> [PhotoBlob] in
+                let photos = (visit.photos ?? []).filter {
+                    $0.mediaKind == "photo" && $0.hasStoredData
+                }
+                return photos.sorted { lhs, rhs in
+                    let lhsIsCover = !visit.eyecatchPath.isEmpty && lhs.relativePath == visit.eyecatchPath
+                    let rhsIsCover = !visit.eyecatchPath.isEmpty && rhs.relativePath == visit.eyecatchPath
+                    if lhsIsCover != rhsIsCover { return lhsIsCover }
+
+                    let lhsIsMemory = ExperiencePhotoPurpose.resolved(from: lhs.purpose).isGalleryPhoto
+                    let rhsIsMemory = ExperiencePhotoPurpose.resolved(from: rhs.purpose).isGalleryPhoto
+                    if lhsIsMemory != rhsIsMemory { return lhsIsMemory }
+                    if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+            }
+            .filter { seenPhotoIDs.insert($0.id).inserted }
+            .prefix(limit)
+            .map { .photo($0.id) }
     }
 
     private static func uniqueVisits(_ visits: [Visit]) -> [Visit] {

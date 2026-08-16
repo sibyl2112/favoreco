@@ -51,6 +51,7 @@ enum FavorecoTypography {
     private static let jpSansName = "Noto Sans JP"
     private static let jpSerifName = "Noto Serif JP"
     private static let latinDisplayName = "Cormorant Garamond"
+    private static let numericMonoName = "Roboto Mono"
 
     static func brandColor(for colorScheme: ColorScheme) -> Color {
         colorScheme == .dark
@@ -86,6 +87,11 @@ enum FavorecoTypography {
 
     static func latinDisplay(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo textStyle: Font.TextStyle = .body) -> Font {
         .custom(latinDisplayName, size: size, relativeTo: textStyle)
+            .weight(adjusted(weight))
+    }
+
+    static func numericMono(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo textStyle: Font.TextStyle = .body) -> Font {
+        .custom(numericMonoName, size: size, relativeTo: textStyle)
             .weight(adjusted(weight))
     }
 

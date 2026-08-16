@@ -28,7 +28,6 @@ struct FavoView: View {
                     myFavoSection(snapshot: snapshot)
                     storiesSection(snapshot.stories)
                     collectionsSection(snapshot.collections)
-                    exploreSection(snapshot: snapshot)
                     allRecordsButton
                 }
                 .padding(.horizontal, 16)
@@ -56,7 +55,7 @@ struct FavoView: View {
     private func myFavoSection(snapshot: FavoSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                FavoSectionTitle(title: "MY FAVO", subtitle: "自分で選んだ好き")
+                FavoSectionTitle(title: "MY FAVO", subtitle: "私の推し")
                 NavigationLink {
                     FavoPinManagementView()
                 } label: {
@@ -66,15 +65,32 @@ struct FavoView: View {
             }
 
             if !snapshot.pinnedTargets.isEmpty {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(snapshot.pinnedTargets) { target in
-                        NavigationLink {
-                            FavoPinnedTargetDestination(snapshot: target)
-                        } label: {
-                            FavoPinnedTargetCard(target: target)
-                        }
-                        .buttonStyle(.plain)
+                if let primaryTarget = snapshot.pinnedTargets.first {
+                    NavigationLink {
+                        FavoPinnedTargetDestination(snapshot: primaryTarget)
+                    } label: {
+                        FavoPinnedTargetHeroCard(target: primaryTarget)
                     }
+                    .buttonStyle(.plain)
+                }
+
+                let otherTargets = Array(snapshot.pinnedTargets.dropFirst())
+                if !otherTargets.isEmpty {
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: 12) {
+                            ForEach(otherTargets) { target in
+                                NavigationLink {
+                                    FavoPinnedTargetDestination(snapshot: target)
+                                } label: {
+                                    FavoPinnedTargetCard(target: target)
+                                        .frame(width: 164)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 1)
+                    }
+                    .scrollIndicators(.hidden)
                 }
             } else if let primaryFavorite = snapshot.primaryFavorite {
                 featuredFavoriteCard(primaryFavorite)
@@ -117,7 +133,7 @@ struct FavoView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     FavorecoIconLabel("自分で選んだFAVOはまだありません", systemImage: "heart", iconSize: 17)
                         .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
-                    Text("推しを登録しなくても、下のSTORIESとコレクションから思い出を振り返れます。")
+                    Text("推しを登録しなくても、下のSTORIESと思い出のアルバムから振り返れます。")
                         .font(FavorecoTypography.body)
                         .foregroundStyle(.secondary)
                     NavigationLink {
@@ -139,53 +155,58 @@ struct FavoView: View {
         NavigationLink {
             FavoPersonDestination(snapshot: favorite, pinID: nil)
         } label: {
-            HStack(spacing: 16) {
+            ZStack(alignment: .bottomLeading) {
                 ThumbnailImage(
-                    reference: favorite.thumbnailReference,
-                    displaySize: CGSize(width: 82, height: 82),
+                    reference: .profileHero(favorite.profileID, fallback: favorite.thumbnailReference),
+                    displaySize: CGSize(width: 720, height: 420),
                     contentMode: .fill
                 ) {
-                    FavorecoIcon(systemName: "person.fill", size: 28)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(hex: favorite.colorHex).opacity(0.12))
+                    LinearGradient(
+                        colors: [
+                            Color(hex: favorite.colorHex).opacity(0.5),
+                            Color(hex: favorite.colorHex).opacity(0.16)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .overlay {
+                        FavorecoIcon(systemName: "person.fill", size: 42)
+                            .foregroundStyle(.white.opacity(0.78))
+                    }
                 }
-                .frame(width: 82, height: 82)
-                .clipShape(Circle())
+                .frame(maxWidth: .infinity)
+                .frame(height: 210)
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.76)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(favorite.isPrimary ? "PRIMARY" : "FAVO")
                         .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption2))
                         .tracking(1.4)
-                        .foregroundStyle(Color(hex: favorite.colorHex))
+                        .foregroundStyle(.white.opacity(0.82))
                     Text(favorite.displayName)
-                        .font(FavorecoTypography.jpSerif(22, weight: .bold, relativeTo: .title2))
-                        .foregroundStyle(.primary)
+                        .font(FavorecoTypography.jpSerif(25, weight: .bold, relativeTo: .title2))
+                        .foregroundStyle(.white)
                         .lineLimit(2)
                     if let days = favorite.supportDayCount {
                         Text("推して \(days)日")
                             .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .subheadline))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.82))
                     } else {
                         Text("\(favorite.visitIDs.count)件の思い出")
                             .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .subheadline))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.82))
                     }
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.tertiary)
+                .padding(18)
             }
-            .padding(18)
-            .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: favorite.colorHex).opacity(0.18), Color(.secondarySystemGroupedBackground)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 210)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(Color(hex: favorite.colorHex).opacity(0.25), lineWidth: 0.75)
@@ -225,9 +246,9 @@ struct FavoView: View {
 
     private func collectionsSection(_ collections: [FavoCollectionSummary]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            FavoSectionTitle(title: "コレクション", subtitle: "記録から自動でまとまる")
+            FavoSectionTitle(title: "思い出のアルバム", subtitle: "写真と記録から自動でまとまる")
             if collections.isEmpty {
-                Text("写真や場所を含む記録が増えると、自分だけのコレクションが育ちます。")
+                Text("写真や場所を含む記録が増えると、自分だけの思い出アルバムが育ちます。")
                     .font(FavorecoTypography.body)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -248,35 +269,19 @@ struct FavoView: View {
         }
     }
 
-    private func exploreSection(snapshot: FavoSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            FavoSectionTitle(title: "探す", subtitle: "好きから記録へ")
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                NavigationLink { PersonMasterManagementView() } label: {
-                    FavoEntranceCard(title: "人物・団体", count: snapshot.activePeopleCount, icon: "person.2")
-                }
-                NavigationLink { PlaceMasterManagementView() } label: {
-                    FavoEntranceCard(title: "場所", count: snapshot.activePlaceCount, icon: "mappin.and.ellipse")
-                }
-                NavigationLink { RecordsView(embedsInNavigationStack: false, screenTitle: "タグ・同行者") } label: {
-                    FavoEntranceCard(title: "タグ・同行者", count: nil, icon: "tag")
-                }
-                NavigationLink { RecordsView(embedsInNavigationStack: false, screenTitle: "作品・体験") } label: {
-                    FavoEntranceCard(title: "作品・体験", count: snapshot.visibleVisitCount, icon: "sparkles.rectangle.stack")
-                }
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     private var allRecordsButton: some View {
         NavigationLink {
-            RecordsView(embedsInNavigationStack: false, screenTitle: "すべての記録")
+            CrossGenreSearchView()
         } label: {
             HStack {
                 FavorecoIcon(systemName: "magnifyingglass", size: 17)
-                Text("すべての記録を検索")
-                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("人物・作品・場所から探す")
+                        .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                    Text("タグや同行者もまとめて検索できます")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
@@ -1239,49 +1244,127 @@ private struct FavoStoryCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(story.label)
-                .font(FavorecoTypography.jpSans(9, weight: .bold, relativeTo: .caption2))
-                .tracking(1.2)
-                .foregroundStyle(Color(hex: colorHex))
-            Text(story.title)
-                .font(FavorecoTypography.jpSerif(16, weight: .bold, relativeTo: .headline))
-                .foregroundStyle(.primary)
-            Text(story.visitTitle)
-                .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
-            HStack(spacing: 5) {
-                FavorecoIcon(systemName: story.categoryIcon, size: 13)
-                Text(FavorecoDateText.compactDate(story.visitedAt))
-            }
-            .font(FavorecoTypography.caption)
-            .foregroundStyle(.secondary)
-            if !story.placeName.isEmpty {
-                Text(story.placeName)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-        .padding(15)
-        .frame(width: 244)
-        .frame(minHeight: 158, alignment: .topLeading)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: colorHex).opacity(0.14), Color(.secondarySystemGroupedBackground)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        ZStack(alignment: .bottomLeading) {
+            ThumbnailImage(
+                reference: story.thumbnailReference,
+                displaySize: CGSize(width: 520, height: 380),
+                contentMode: .fill
+            ) {
+                LinearGradient(
+                    colors: [
+                        Color(hex: colorHex).opacity(0.55),
+                        Color(hex: colorHex).opacity(0.18)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
+                .overlay {
+                    FavorecoIcon(systemName: story.categoryIcon, size: 38)
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            }
+            .frame(width: 260, height: 190)
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.82)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(story.label)
+                    .font(FavorecoTypography.jpSans(9, weight: .bold, relativeTo: .caption2))
+                    .tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.78))
+                Text(story.title)
+                    .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
+                    .foregroundStyle(.white)
+                Text(story.visitTitle)
+                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .subheadline))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(FavorecoDateText.compactDate(story.visitedAt))
+                    if !story.placeName.isEmpty {
+                        Text(story.placeName)
+                            .lineLimit(1)
+                    }
+                }
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.white.opacity(0.78))
+            }
+            .padding(15)
         }
+        .frame(width: 260, height: 190)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color(hex: colorHex).opacity(0.2), lineWidth: 0.75)
         }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct FavoPinnedTargetHeroCard: View {
+    let target: FavoPinnedTargetSnapshot
+
+    private var heroReference: ThumbnailReference? {
+        guard let profileID = target.profileID else { return target.thumbnailReference }
+        return .profileHero(profileID, fallback: target.thumbnailReference)
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            CategoryEyecatchArtwork(
+                reference: heroReference,
+                templateKey: target.categoryTemplateKey,
+                backgroundColor: Color(hex: target.colorHex).opacity(0.3)
+            ) { size in
+                LinearGradient(
+                    colors: [
+                        Color(hex: target.colorHex).opacity(0.58),
+                        Color(hex: target.colorHex).opacity(0.16)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(width: size.width, height: size.height)
+                .overlay {
+                    FavorecoIcon(systemName: target.iconSymbol, size: 44)
+                        .foregroundStyle(.white.opacity(0.76))
+                }
+            }
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.82)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(target.kind.displayName.uppercased())
+                    .font(FavorecoTypography.jpSans(9, weight: .bold, relativeTo: .caption2))
+                    .tracking(1.1)
+                    .foregroundStyle(.white.opacity(0.78))
+                Text(target.title)
+                    .font(FavorecoTypography.jpSerif(26, weight: .bold, relativeTo: .title2))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                Text(target.subtitle)
+                    .font(FavorecoTypography.jpSans(12, weight: .medium, relativeTo: .caption))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .lineLimit(1)
+            }
+            .padding(18)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 220)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color(hex: target.colorHex).opacity(0.26), lineWidth: 0.75)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -1289,56 +1372,45 @@ private struct FavoPinnedTargetCard: View {
     let target: FavoPinnedTargetSnapshot
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                CategoryEyecatchArtwork(
-                    reference: target.thumbnailReference,
-                    templateKey: target.categoryTemplateKey,
-                    backgroundColor: Color(hex: target.colorHex).opacity(0.12)
-                ) { size in
+        ZStack(alignment: .bottomLeading) {
+            CategoryEyecatchArtwork(
+                reference: target.thumbnailReference,
+                templateKey: target.categoryTemplateKey,
+                backgroundColor: Color(hex: target.colorHex).opacity(0.24)
+            ) { size in
+                LinearGradient(
+                    colors: [Color(hex: target.colorHex).opacity(0.48), Color(hex: target.colorHex).opacity(0.14)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(width: size.width, height: size.height)
+                .overlay {
                     FavorecoIcon(systemName: target.iconSymbol, size: 19)
-                        .foregroundStyle(Color(hex: target.colorHex))
-                        .frame(width: size.width, height: size.height)
+                        .foregroundStyle(.white.opacity(0.72))
                 }
-                .frame(width: 38, height: 38)
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: target.categoryTemplateKey == "theater" ? 0 : 19,
-                        style: .continuous
-                    )
-                )
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.tertiary)
             }
-            Text(target.kind.displayName)
-                .font(FavorecoTypography.jpSans(10, weight: .semibold, relativeTo: .caption2))
-                .foregroundStyle(.secondary)
-            Text(target.title)
-                .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, minHeight: 42, alignment: .topLeading)
-            Text(target.subtitle)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+
+            LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .center, endPoint: .bottom)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(target.kind.displayName)
+                    .font(FavorecoTypography.jpSans(9, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(.white.opacity(0.76))
+                Text(target.title)
+                    .font(FavorecoTypography.jpSerif(17, weight: .bold, relativeTo: .headline))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                Text(target.subtitle)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.white.opacity(0.76))
+                    .lineLimit(1)
+            }
+            .padding(13)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 158, alignment: .topLeading)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: target.colorHex).opacity(0.12), Color(.secondarySystemGroupedBackground)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-        }
+        .frame(height: 190)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color(hex: target.colorHex).opacity(0.18), lineWidth: 0.75)
         }
         .accessibilityElement(children: .combine)
@@ -1461,34 +1533,101 @@ private struct FavoCollectionCard: View {
     let collection: FavoCollectionSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                FavorecoIcon(systemName: collection.iconSymbol, size: 18)
-                    .foregroundStyle(Color(hex: collection.colorHex))
-                    .frame(width: 36, height: 36)
-                    .background(Color(hex: collection.colorHex).opacity(0.1), in: Circle())
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.tertiary)
+        ZStack(alignment: .bottomLeading) {
+            FavoMemoryMosaic(
+                references: collection.thumbnailReferences,
+                colorHex: collection.colorHex,
+                iconSymbol: collection.iconSymbol
+            )
+
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.84)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(collection.title)
+                    .font(FavorecoTypography.jpSans(10, weight: .semibold, relativeTo: .caption2))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineLimit(1)
+                Text(collection.value)
+                    .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .title3))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.76)
+                Text(collection.detail)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.white.opacity(0.76))
+                    .lineLimit(1)
             }
-            Text(collection.title)
-                .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
-                .foregroundStyle(.secondary)
-            Text(collection.value)
-                .font(FavorecoTypography.jpSerif(18, weight: .bold, relativeTo: .title3))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.78)
-            Text(collection.detail)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+            .padding(12)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 154, alignment: .topLeading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+        .frame(maxWidth: .infinity)
+        .frame(height: 184)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color(hex: collection.colorHex).opacity(0.2), lineWidth: 0.75)
+        }
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct FavoMemoryMosaic: View {
+    let references: [ThumbnailReference]
+    let colorHex: String
+    let iconSymbol: String
+
+    var body: some View {
+        GeometryReader { geometry in
+            let visibleReferences = Array(references.prefix(4))
+            if visibleReferences.isEmpty {
+                LinearGradient(
+                    colors: [
+                        Color(hex: colorHex).opacity(0.58),
+                        Color(hex: colorHex).opacity(0.16)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .overlay {
+                    FavorecoIcon(systemName: iconSymbol, size: 36)
+                        .foregroundStyle(.white.opacity(0.74))
+                }
+            } else if visibleReferences.count == 1 {
+                mosaicPhoto(visibleReferences[0], size: geometry.size)
+            } else {
+                HStack(spacing: 2) {
+                    mosaicPhoto(
+                        visibleReferences[0],
+                        size: CGSize(width: geometry.size.width * 0.62, height: geometry.size.height)
+                    )
+                    .frame(width: geometry.size.width * 0.62)
+
+                    VStack(spacing: 2) {
+                        ForEach(Array(visibleReferences.dropFirst().enumerated()), id: \.offset) { _, reference in
+                            mosaicPhoto(
+                                reference,
+                                size: CGSize(
+                                    width: geometry.size.width * 0.38,
+                                    height: geometry.size.height / CGFloat(visibleReferences.count - 1)
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .clipped()
+    }
+
+    private func mosaicPhoto(_ reference: ThumbnailReference, size: CGSize) -> some View {
+        ThumbnailImage(reference: reference, displaySize: size, contentMode: .fill) {
+            Color(hex: colorHex).opacity(0.18)
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
     }
 }
 

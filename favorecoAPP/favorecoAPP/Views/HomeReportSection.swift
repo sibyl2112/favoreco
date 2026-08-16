@@ -36,11 +36,12 @@ private struct HomeReportSnapshot {
             }
         }
         let periodLabel: String
+        let dateComponents = calendar.dateComponents([.year, .month], from: now)
         switch period {
         case .month:
-            periodLabel = now.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).year().month(.wide))
+            periodLabel = "\(FavorecoDateText.year(dateComponents.year ?? 0))\(dateComponents.month ?? 0)月"
         case .year:
-            periodLabel = now.formatted(.dateTime.locale(Locale(identifier: "ja_JP")).year())
+            periodLabel = FavorecoDateText.year(dateComponents.year ?? 0)
         }
         let counts = Dictionary(grouping: periodVisits, by: \.categoryName).mapValues(\.count)
         let topGenre = counts.max { lhs, rhs in

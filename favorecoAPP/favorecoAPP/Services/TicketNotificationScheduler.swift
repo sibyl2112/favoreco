@@ -316,8 +316,8 @@ enum TicketNotificationScheduler {
                 attemptID: attempt.id,
                 typeKey: "paymentDeadline",
                 date: attempt.paymentDeadlineAt,
-                title: "入金締切",
-                body: "\(planTitle(plan)) の入金締切が近づいています。",
+                title: "支払締切",
+                body: "\(planTitle(plan)) の支払締切が近づいています。",
                 timing: deadlineTiming(forKey: AppStorageKeys.notificationPaymentDeadlineTiming)
             ))
         }

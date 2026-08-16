@@ -8,9 +8,14 @@
 import Foundation
 
 enum FavorecoDateText {
+    /// 西暦は金額等の数値書式を使わず、常に桁区切りなしで表示する。
+    static func year(_ value: Int) -> String {
+        "\(value)年"
+    }
+
     static func fullDate(_ date: Date, includesWeekday: Bool = true) -> String {
         let values = components(for: date)
-        let base = "\(values.year)年\(values.month)月\(values.day)日"
+        let base = "\(year(values.year))\(values.month)月\(values.day)日"
         return includesWeekday ? "\(base)(\(values.weekday))" : base
     }
 

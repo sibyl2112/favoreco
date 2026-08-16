@@ -45,6 +45,49 @@ final class CreateEntryContextRouterTests: XCTestCase {
         )
     }
 
+    func testFrontmostDetailContextOverridesAndThenRestoresBaseContext() async {
+        let router = CreateEntryContextRouter()
+        let baseCategoryID = UUID()
+        let detailCategoryID = UUID()
+        let detailToken = UUID()
+
+        router.activate(categoryID: baseCategoryID)
+        router.activateDetail(categoryID: detailCategoryID, token: detailToken)
+
+        XCTAssertEqual(
+            router.categoryIDForCreateMenu(isHomeTabActive: true),
+            detailCategoryID
+        )
+
+        router.deactivateDetail(token: detailToken)
+
+        XCTAssertEqual(
+            router.categoryIDForCreateMenu(isHomeTabActive: true),
+            baseCategoryID
+        )
+    }
+
+    func testRemovingCoveredDetailKeepsFrontmostDetailContext() async {
+        let router = CreateEntryContextRouter()
+        let firstCategoryID = UUID()
+        let frontmostCategoryID = UUID()
+        let firstToken = UUID()
+        let frontmostToken = UUID()
+
+        router.activateDetail(categoryID: firstCategoryID, token: firstToken)
+        router.activateDetail(categoryID: frontmostCategoryID, token: frontmostToken)
+        router.deactivateDetail(token: firstToken)
+
+        XCTAssertEqual(
+            router.categoryIDForCreateMenu(isHomeTabActive: true),
+            frontmostCategoryID
+        )
+
+        router.deactivateDetail(token: frontmostToken)
+
+        XCTAssertNil(router.categoryIDForCreateMenu(isHomeTabActive: true))
+    }
+
     func testCategoryNavigationActivatesDestinationContext() {
         let theaterCategoryID = UUID()
 

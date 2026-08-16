@@ -25,6 +25,7 @@ struct CalendarTimelineEntry: Identifiable {
 
     let id: String
     let title: String
+    let location: String
     let startDate: Date
     let endDate: Date
     let colorHex: String
@@ -49,6 +50,7 @@ struct CalendarTimelineSnapshot {
                 CalendarTimelineEntry(
                     id: "plan-\(plan.id.uuidString)",
                     title: title(plan.title, fallback: "予定"),
+                    location: plan.venueNameSnapshot,
                     startDate: plan.startsAt,
                     endDate: validEndDate(plan.endsAt, after: plan.startsAt),
                     colorHex: plan.category?.colorHex ?? plan.event?.category?.colorHex ?? "#147C88",
@@ -63,6 +65,7 @@ struct CalendarTimelineSnapshot {
                 CalendarTimelineEntry(
                     id: "visit-\(visit.id.uuidString)",
                     title: title(visit.event?.title ?? "", fallback: "記録"),
+                    location: visit.venueNameSnapshot,
                     startDate: visit.visitedAt,
                     endDate: validEndDate(visit.endedAt, after: visit.visitedAt),
                     colorHex: visit.event?.category?.colorHex ?? "#147C88",
@@ -82,6 +85,7 @@ struct CalendarTimelineSnapshot {
                     return CalendarTimelineEntry(
                         id: "ticket-action-\(attempt.id.uuidString)-\(action.title)-\(action.date.timeIntervalSinceReferenceDate)",
                         title: action.title,
+                        location: plan.venueNameSnapshot,
                         startDate: action.date,
                         endDate: validEndDate(
                             calendar.date(byAdding: .minute, value: 45, to: action.date) ?? action.date,
@@ -106,6 +110,7 @@ struct CalendarTimelineSnapshot {
                     return CalendarTimelineEntry(
                         id: "preparation-\(plan.id.uuidString)-\(task.id.uuidString)",
                         title: task.trimmedTitle,
+                        location: plan.venueNameSnapshot,
                         startDate: dueAt,
                         endDate: validEndDate(
                             calendar.date(byAdding: .minute, value: 45, to: dueAt) ?? dueAt,
@@ -123,6 +128,7 @@ struct CalendarTimelineSnapshot {
                 CalendarTimelineEntry(
                     id: "external-\(event.id)",
                     title: title(event.title, fallback: "外部予定"),
+                    location: event.calendarTitle,
                     startDate: event.startDate,
                     endDate: validEndDate(event.endDate, after: event.startDate),
                     colorHex: "#7A7F87",
@@ -176,28 +182,35 @@ struct CalendarWeekTimelineView: View {
     let onSelectDate: (Date) -> Void
 
     private let hourHeight: CGFloat = 60
-    private let timeLabelWidth: CGFloat = 42
+    private let timeLabelWidth: CGFloat = 46
 
     var body: some View {
-        VStack(spacing: 0) {
-            weekHeader
-            allDayRow
+        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+            Section {
+                HStack(alignment: .top, spacing: 0) {
+                    CalendarTimelineHourLabels(hourHeight: hourHeight)
+                        .frame(width: timeLabelWidth)
 
-            HStack(alignment: .top, spacing: 0) {
-                CalendarTimelineHourLabels(hourHeight: hourHeight)
-                    .frame(width: timeLabelWidth)
-
-                ForEach(weekDays, id: \.self) { day in
-                    CalendarTimelineDayColumn(
-                        day: day,
-                        entries: timedEntries(on: day),
-                        calendar: calendar,
-                        hourHeight: hourHeight,
-                        isSelected: calendar.isDate(day, inSameDayAs: selectedDate)
-                    ) {
-                        onSelectDate(day)
+                    ForEach(weekDays, id: \.self) { day in
+                        CalendarTimelineDayColumn(
+                            day: day,
+                            entries: timedEntries(on: day),
+                            calendar: calendar,
+                            hourHeight: hourHeight,
+                            isSelected: calendar.isDate(day, inSameDayAs: selectedDate),
+                            blockStyle: .compact
+                        ) {
+                            onSelectDate(day)
+                        }
                     }
                 }
+            } header: {
+                VStack(spacing: 0) {
+                    weekHeader
+                    allDayRow
+                }
+                .background(Color(.systemBackground))
+                .zIndex(1)
             }
         }
         .background(Color(.systemBackground))
@@ -218,10 +231,10 @@ struct CalendarWeekTimelineView: View {
                 } label: {
                     VStack(spacing: 2) {
                         Text(FavorecoDateText.weekdayName(day).replacingOccurrences(of: "曜", with: ""))
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                         Text(String(calendar.component(.day, from: day)))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(calendar.isDate(day, inSameDayAs: selectedDate) ? Color.white : Color.primary)
                             .frame(width: 24, height: 24)
                             .background {
@@ -243,10 +256,11 @@ struct CalendarWeekTimelineView: View {
     private var allDayRow: some View {
         HStack(alignment: .top, spacing: 0) {
             Text("終日")
-                .font(.system(size: 8.5, weight: .medium))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
-                .frame(width: timeLabelWidth, height: 42, alignment: .top)
                 .padding(.top, 5)
+                .padding(.trailing, 4)
+                .frame(width: timeLabelWidth, height: 42, alignment: .topTrailing)
 
             ForEach(weekDays, id: \.self) { day in
                 let entries = allDayEntries(on: day)
@@ -331,6 +345,7 @@ struct CalendarDayTimelineView: View {
                             calendar: calendar,
                             hourHeight: hourHeight,
                             isSelected: true,
+                            blockStyle: .detailed,
                             action: {}
                         )
                     }
@@ -363,7 +378,7 @@ private struct CalendarTimelineHourLabels: View {
         VStack(spacing: 0) {
             ForEach(0..<24, id: \.self) { hour in
                 Text(String(format: "%d:00", hour))
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: hourHeight, maxHeight: hourHeight, alignment: .topTrailing)
                     .offset(y: -7)
@@ -374,7 +389,7 @@ private struct CalendarTimelineHourLabels: View {
         .padding(.trailing, 4)
         .overlay(alignment: .bottomTrailing) {
             Text("24:00")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .offset(y: 7)
         }
@@ -387,6 +402,7 @@ private struct CalendarTimelineDayColumn: View {
     let calendar: Calendar
     let hourHeight: CGFloat
     let isSelected: Bool
+    let blockStyle: CalendarTimelineEventBlockStyle
     let action: () -> Void
 
     var body: some View {
@@ -403,7 +419,7 @@ private struct CalendarTimelineDayColumn: View {
                 }
 
                 ForEach(entries) { entry in
-                    CalendarTimelineEventBlock(entry: entry)
+                    CalendarTimelineEventBlock(entry: entry, style: blockStyle)
                         .padding(.horizontal, 2)
                         .offset(y: yOffset(for: entry))
                         .frame(height: eventHeight(for: entry), alignment: .top)
@@ -444,19 +460,51 @@ private struct CalendarTimelineDayColumn: View {
     }
 }
 
+private enum CalendarTimelineEventBlockStyle {
+    case compact
+    case detailed
+}
+
 private struct CalendarTimelineEventBlock: View {
     let entry: CalendarTimelineEntry
+    let style: CalendarTimelineEventBlockStyle
     @Environment(\.favorecoThemePalette) private var themePalette
 
     var body: some View {
         let tint = themePalette.categoryColor(hex: entry.colorHex)
-        Text(label)
-            .font(.system(size: 8.5, weight: .semibold))
+        switch style {
+        case .compact:
+            compactBlock(tint: tint)
+        case .detailed:
+            detailedBlock(tint: tint)
+        }
+    }
+
+    private func compactBlock(tint: Color) -> some View {
+        GeometryReader { proxy in
+            let height = proxy.size.height
+
+            Group {
+                if height >= 28 {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(FavorecoDateText.time(entry.startDate))
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .lineLimit(1)
+
+                        Text(detailedTitle)
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .lineLimit(3)
+                    }
+                } else {
+                    Text(detailedTitle)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .lineLimit(1)
+                }
+            }
             .foregroundStyle(entry.kind == .external ? Color.secondary : Color.white)
-            .lineLimit(2)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .fill(entry.kind == .external ? Color(.secondarySystemBackground) : tint.opacity(0.92))
@@ -467,16 +515,73 @@ private struct CalendarTimelineEventBlock: View {
                         }
                     }
             }
-            .accessibilityLabel("\(FavorecoDateText.time(entry.startDate))、\(entry.title)")
+            .clipped()
+        }
+        .accessibilityLabel(accessibilityText)
     }
 
-    private var label: String {
+    private func detailedBlock(tint: Color) -> some View {
+        GeometryReader { proxy in
+            let height = proxy.size.height
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(tint.opacity(entry.kind == .external ? 0.06 : 0.11))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(tint.opacity(0.22), lineWidth: 0.75)
+                    }
+
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(tint)
+                    .frame(width: 3)
+                    .padding(.vertical, 5)
+                    .padding(.leading, 4)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(detailedTitle)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(height >= 92 ? 2 : 1)
+
+                    if height >= 44 {
+                        Text(timeRange)
+                            .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    if height >= 60 && !entry.location.isEmpty {
+                        FavorecoIconLabel(entry.location, systemImage: "mappin.and.ellipse", iconSize: 10)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.leading, 12)
+                .padding(.trailing, 8)
+                .padding(.vertical, height < 44 ? 3 : 5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var detailedTitle: String {
         switch entry.kind {
         case .visit: return "✓ \(entry.title)"
-        case .external: return entry.title
-        case .plan, .ticketAction: return "\(FavorecoDateText.time(entry.startDate)) \(entry.title)"
         case .preparationTask: return "□ \(entry.title)"
+        case .plan, .ticketAction, .external: return entry.title
         }
+    }
+
+    private var timeRange: String {
+        "\(FavorecoDateText.time(entry.startDate))〜\(FavorecoDateText.time(entry.endDate))"
+    }
+
+    private var accessibilityText: String {
+        let locationText = entry.location.isEmpty ? "" : "、\(entry.location)"
+        return "\(timeRange)、\(entry.title)\(locationText)"
     }
 }
 
@@ -508,7 +613,7 @@ private struct CalendarVerticalAllDayColumn: View {
     var body: some View {
         VStack(spacing: 0) {
             Text("終日")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 36)
                 .background(Color(.secondarySystemBackground))

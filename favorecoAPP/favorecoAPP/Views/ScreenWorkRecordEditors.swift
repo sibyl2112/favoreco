@@ -73,7 +73,7 @@ struct ScreenWorkMinimumEditor: View {
             ExplicitFormControlRow(title: "鑑賞年") {
                 Picker("鑑賞年", selection: yearSelection) {
                     ForEach(years, id: \.self) { year in
-                        Text(verbatim: "\(year)年").tag(year)
+                        Text(verbatim: FavorecoDateText.year(year)).tag(year)
                     }
                 }
                 .labelsHidden()

@@ -198,6 +198,7 @@ enum RecordDeletionService {
         in context: ModelContext
     ) throws -> ExperienceDataDeletionResult {
         let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        let bookShelves = try context.fetch(FetchDescriptor<BookShelf>())
         let visits = try context.fetch(FetchDescriptor<Visit>())
         let plans = try context.fetch(FetchDescriptor<Plan>())
         let attempts = try context.fetch(FetchDescriptor<TicketAttempt>())
@@ -215,6 +216,7 @@ enum RecordDeletionService {
 
         // inverse がないリンクを先に外し、ExperienceEvent 配下は cascade に任せる。
         for link in links { context.delete(link) }
+        for shelf in bookShelves { context.delete(shelf) }
         for event in events { context.delete(event) }
         for plan in plans where plan.event == nil { context.delete(plan) }
         for visit in visits where visit.event == nil { context.delete(visit) }
@@ -240,7 +242,8 @@ enum RecordDeletionService {
         URLCache.shared.removeAllCachedResponses()
         ThumbnailLoader.purge()
 
-        let otherCount = links.count
+        let otherCount = bookShelves.count
+            + links.count
             + inboxItems.count
             + photos.count
             + favoriteProfiles.count
@@ -264,6 +267,7 @@ enum RecordDeletionService {
     static func deleteAllData(in context: ModelContext) throws -> AllDataDeletionResult {
         let categories = try context.fetch(FetchDescriptor<RecordCategory>())
         let events = try context.fetch(FetchDescriptor<ExperienceEvent>())
+        let bookShelves = try context.fetch(FetchDescriptor<BookShelf>())
         let visits = try context.fetch(FetchDescriptor<Visit>())
         let inboxItems = try context.fetch(FetchDescriptor<InboxItem>())
         let photos = try context.fetch(FetchDescriptor<PhotoBlob>())
@@ -286,7 +290,7 @@ enum RecordDeletionService {
         let attemptNotificationIDs = attempts.map(\.id)
         let accountNotificationIDs = accounts.map(\.id)
 
-        let coreModelCount = categories.count + events.count + visits.count + inboxItems.count + photos.count
+        let coreModelCount = categories.count + events.count + bookShelves.count + visits.count + inboxItems.count + photos.count
         let masterModelCount = socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count
         let planningModelCount = links.count + places.count + plans.count + accounts.count + attempts.count
         let collectionModelCount = collectibleItems.count + collectibleTransactions.count
@@ -294,6 +298,7 @@ enum RecordDeletionService {
 
         // 親を先に削除し、親を持たない孤立モデルだけを個別削除する。
         for link in links { context.delete(link) }
+        for shelf in bookShelves { context.delete(shelf) }
         for event in events { context.delete(event) }
         for plan in plans where plan.event == nil { context.delete(plan) }
         for visit in visits where visit.event == nil { context.delete(visit) }

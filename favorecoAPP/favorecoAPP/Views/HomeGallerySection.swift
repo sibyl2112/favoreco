@@ -485,6 +485,7 @@ private struct HomeGalleryFilterBar: View {
     @Binding var selectedYears: Set<Int>
 
     @Environment(\.favorecoThemePalette) private var themePalette
+    @State private var isShowingCategoryPicker = false
 
     private var categories: [HomeGalleryCategoryOption] {
         var seen = Set<UUID>()
@@ -501,25 +502,18 @@ private struct HomeGalleryFilterBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Menu {
-                Button {
-                    selectedCategoryIDs.removeAll()
-                } label: {
-                    Label("すべて", systemImage: selectedCategoryIDs.isEmpty ? "checkmark.square.fill" : "square")
-                }
-                Divider()
-                ForEach(categories) { category in
-                    Button {
-                        toggle(category.id, in: &selectedCategoryIDs)
-                    } label: {
-                        Label(
-                            category.name,
-                            systemImage: selectedCategoryIDs.contains(category.id) ? "checkmark.square.fill" : "square"
-                        )
-                    }
-                }
+            Button {
+                isShowingCategoryPicker = true
             } label: {
                 HomeGalleryFilterLabel(title: "ジャンル", value: categorySummary)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $isShowingCategoryPicker, arrowEdge: .top) {
+                HomeGalleryCategoryPicker(
+                    categories: categories,
+                    selectedCategoryIDs: $selectedCategoryIDs
+                )
+                .presentationCompactAdaptation(.popover)
             }
 
             Menu {
@@ -533,10 +527,10 @@ private struct HomeGalleryFilterBar: View {
                     Button {
                         toggle(year, in: &selectedYears)
                     } label: {
-                        Label(
-                            "\(year)年",
-                            systemImage: selectedYears.contains(year) ? "checkmark.square.fill" : "square"
-                        )
+                        HStack {
+                            Image(systemName: selectedYears.contains(year) ? "checkmark.square.fill" : "square")
+                            Text(verbatim: FavorecoDateText.year(year))
+                        }
                     }
                 }
             } label: {
@@ -554,7 +548,80 @@ private struct HomeGalleryFilterBar: View {
 
     private var yearSummary: String {
         guard !selectedYears.isEmpty else { return "すべて" }
-        return selectedYears.count == 1 ? "\(selectedYears.first ?? 0)年" : "\(selectedYears.count)件"
+        return selectedYears.count == 1
+            ? FavorecoDateText.year(selectedYears.first ?? 0)
+            : "\(selectedYears.count)件"
+    }
+}
+
+private struct HomeGalleryCategoryPicker: View {
+    let categories: [HomeGalleryCategoryOption]
+    @Binding var selectedCategoryIDs: Set<UUID>
+
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                categoryButton(
+                    title: "すべて",
+                    isSelected: selectedCategoryIDs.isEmpty
+                ) {
+                    selectedCategoryIDs.removeAll()
+                }
+
+                Divider()
+                    .padding(.horizontal, 12)
+
+                ForEach(categories) { category in
+                    categoryButton(
+                        title: category.name,
+                        isSelected: selectedCategoryIDs.contains(category.id)
+                    ) {
+                        toggle(category.id, in: &selectedCategoryIDs)
+                    }
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .frame(width: 280, height: min(CGFloat(categories.count + 1) * 48 + 12, 420))
+        .tint(themePalette.globalTint)
+        .accessibilityLabel("ギャラリーのジャンルを選択")
+    }
+
+    private func categoryButton(
+        title: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(isSelected ? themePalette.globalTint : Color.secondary)
+                    .frame(width: 22)
+
+                Text(title)
+                    .font(FavorecoTypography.jpSans(16, weight: .medium, relativeTo: .body))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            .padding(.horizontal, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(isSelected ? "選択中" : "未選択")
+    }
+
+    private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
+        if set.contains(value) {
+            set.remove(value)
+        } else {
+            set.insert(value)
+        }
     }
 }
 

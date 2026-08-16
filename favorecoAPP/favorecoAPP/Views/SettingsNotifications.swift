@@ -70,7 +70,7 @@ struct NotificationSettingsView: View {
                 Toggle("申込・発売開始", isOn: $applicationStartEnabled)
                 Toggle("申込締切", isOn: $applicationDeadlineEnabled)
                 Toggle("当落発表", isOn: $lotteryResultEnabled)
-                Toggle("入金締切", isOn: $paymentDeadlineEnabled)
+                Toggle("支払締切", isOn: $paymentDeadlineEnabled)
                 Toggle("チケット受取開始", isOn: $ticketIssueEnabled)
                 Toggle("公演前日/当日", isOn: $performanceReminderEnabled)
                 Toggle("公演準備の期限", isOn: $preparationDeadlineEnabled)
@@ -86,7 +86,7 @@ struct NotificationSettingsView: View {
                         pointTimingPicker("当落発表", selection: $lotteryResultTiming)
                     }
                     if paymentDeadlineEnabled {
-                        deadlineTimingPicker("入金締切", selection: $paymentDeadlineTiming)
+                        deadlineTimingPicker("支払締切", selection: $paymentDeadlineTiming)
                     }
                     if ticketIssueEnabled {
                         pointTimingPicker("チケット受取開始", selection: $ticketIssueTiming)
@@ -349,9 +349,9 @@ private enum TicketNotificationPreset: String, CaseIterable, Identifiable {
     var summary: String {
         switch self {
         case .minimal:
-            "申込締切・入金締切・公演前日/当日"
+            "申込締切・支払締切・公演前日/当日"
         case .recommended:
-            "締切・当落・入金・チケット受取・公演・公演準備"
+            "締切・当落・支払・チケット受取・公演・公演準備"
         case .thorough:
             "申込開始を含む予定・チケット通知をすべて使用"
         }

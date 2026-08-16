@@ -142,9 +142,9 @@ struct PublicPlaceCatalogView: View {
                 syncStatusSection
                 catalogSection
             }
+            .contentMargins(.top, 4, for: .scrollContent)
             .navigationTitle(scope.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "名称・よみ・住所・別名を検索")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }
@@ -204,12 +204,36 @@ struct PublicPlaceCatalogView: View {
 
     private var catalogSection: some View {
         Section {
+            catalogSearchField
             catalogRows
         } header: {
             Text("公開場所カタログ")
         } footer: {
             catalogFooter
         }
+    }
+
+    private var catalogSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("名称・よみ・住所・別名を検索", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("検索文字を消去")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityHint("表示中の公開場所カタログ全体を検索します")
     }
 
     @ViewBuilder

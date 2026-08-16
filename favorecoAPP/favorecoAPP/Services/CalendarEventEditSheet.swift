@@ -16,6 +16,121 @@ struct CalendarEventDraft: Identifiable {
     var notes: String
     var startDate: Date
     var endDate: Date
+    var preferredCalendarIdentifier: String?
+
+    init(
+        title: String,
+        location: String,
+        notes: String,
+        startDate: Date,
+        endDate: Date,
+        preferredCalendarIdentifier: String? = nil
+    ) {
+        self.title = title
+        self.location = location
+        self.notes = notes
+        self.startDate = startDate
+        self.endDate = endDate
+        self.preferredCalendarIdentifier = preferredCalendarIdentifier
+    }
+}
+
+enum ExternalCalendarDestinationError: LocalizedError {
+    case accessDenied
+    case appleCalendarNotConfigured
+    case googleCalendarNotConfigured
+
+    var errorDescription: String? {
+        switch self {
+        case .accessDenied:
+            "カレンダーへのアクセスを許可してください。"
+        case .appleCalendarNotConfigured:
+            "iPhoneの設定でAppleカレンダーを利用できるようにしてください。"
+        case .googleCalendarNotConfigured:
+            "iPhoneの設定でGoogleアカウントのカレンダーを追加してください。"
+        }
+    }
+}
+
+@MainActor
+enum ExternalCalendarDestinationResolver {
+    static func appleCalendarIdentifier() async throws -> String {
+        try await calendarIdentifier(
+            matching: isAppleCalendar,
+            missingError: .appleCalendarNotConfigured
+        )
+    }
+
+    static func googleCalendarIdentifier() async throws -> String {
+        try await calendarIdentifier(
+            matching: isGoogleCalendar,
+            missingError: .googleCalendarNotConfigured
+        )
+    }
+
+    private static func calendarIdentifier(
+        matching providerMatches: (EKCalendar) -> Bool,
+        missingError: ExternalCalendarDestinationError
+    ) async throws -> String {
+        let store = EKEventStore()
+        let status = EKEventStore.authorizationStatus(for: .event)
+        let hasAccess: Bool
+
+        switch status {
+        case .fullAccess:
+            hasAccess = true
+        case .notDetermined:
+            hasAccess = try await store.requestFullAccessToEvents()
+        default:
+            hasAccess = false
+        }
+
+        guard hasAccess else {
+            throw ExternalCalendarDestinationError.accessDenied
+        }
+
+        let writableCalendars = store.calendars(for: .event)
+            .filter { $0.allowsContentModifications && providerMatches($0) }
+
+        if let defaultCalendar = store.defaultCalendarForNewEvents,
+           writableCalendars.contains(where: {
+               $0.calendarIdentifier == defaultCalendar.calendarIdentifier
+           }) {
+            return defaultCalendar.calendarIdentifier
+        }
+
+        guard let calendar = writableCalendars.sorted(by: {
+            $0.title.localizedStandardCompare($1.title) == .orderedAscending
+        }).first else {
+            throw missingError
+        }
+        return calendar.calendarIdentifier
+    }
+
+    private static func isAppleCalendar(_ calendar: EKCalendar) -> Bool {
+        if calendar.source.sourceType == .local {
+            return true
+        }
+        let providerText = providerText(for: calendar)
+        return providerText.contains("icloud")
+            || providerText.contains("apple")
+            || providerText.contains("mobileme")
+    }
+
+    private static func isGoogleCalendar(_ calendar: EKCalendar) -> Bool {
+        let text = providerText(for: calendar)
+        return text.contains("google") || text.contains("gmail")
+    }
+
+    private static func providerText(for calendar: EKCalendar) -> String {
+        [
+            calendar.source.title,
+            calendar.source.sourceIdentifier,
+            calendar.title,
+        ]
+        .joined(separator: " ")
+        .lowercased()
+    }
 }
 
 struct CalendarEventEditSheet: UIViewControllerRepresentable {
@@ -34,7 +149,9 @@ struct CalendarEventEditSheet: UIViewControllerRepresentable {
         event.notes = draft.notes
         event.startDate = draft.startDate
         event.endDate = draft.endDate
-        event.calendar = store.defaultCalendarForNewEvents
+        event.calendar = draft.preferredCalendarIdentifier
+            .flatMap { store.calendar(withIdentifier: $0) }
+            ?? store.defaultCalendarForNewEvents
 
         let controller = EKEventEditViewController()
         controller.eventStore = store

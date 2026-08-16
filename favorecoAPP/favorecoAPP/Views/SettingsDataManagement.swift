@@ -301,6 +301,7 @@ struct FullDataDeletionView: View {
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
     @Query private var categories: [RecordCategory]
     @Query private var events: [ExperienceEvent]
+    @Query private var bookShelves: [BookShelf]
     @Query private var visits: [Visit]
     @Query private var inboxItems: [InboxItem]
     @Query private var photos: [PhotoBlob]
@@ -319,7 +320,7 @@ struct FullDataDeletionView: View {
     private let requiredText = "削除する"
 
     private var totalModelCount: Int {
-        categories.count + events.count + visits.count + inboxItems.count + photos.count
+        categories.count + events.count + bookShelves.count + visits.count + inboxItems.count + photos.count
             + socialAccounts.count + people.count + personLinks.count + places.count
             + plans.count + ticketAccounts.count + ticketAttempts.count
     }
@@ -529,6 +530,7 @@ struct CSVExportView: View {
 struct JSONExportView: View {
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
+    @Query(sort: \BookShelf.sortOrder) private var bookShelves: [BookShelf]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @Query(sort: \InboxItem.updatedAt, order: .reverse) private var inboxItems: [InboxItem]
     @Query(sort: \PhotoBlob.createdAt, order: .reverse) private var photos: [PhotoBlob]
@@ -554,7 +556,7 @@ struct JSONExportView: View {
     }
 
     private var totalRecordCount: Int {
-        categories.count + events.count + visits.count + inboxItems.count + socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
+        categories.count + events.count + bookShelves.count + visits.count + inboxItems.count + socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
     }
 
     var body: some View {
@@ -573,6 +575,7 @@ struct JSONExportView: View {
             FavorecoSettingsSection("対象データ") {
                 LabeledContent("ジャンル", value: "\(categories.count)")
                 LabeledContent("対象", value: "\(events.count)")
+                LabeledContent("本棚", value: "\(bookShelves.count)")
                 LabeledContent("訪問/鑑賞記録", value: "\(visits.count)")
                 LabeledContent("人物・団体", value: "\(people.count)")
                 LabeledContent("同行者", value: "\(companions.count)")
@@ -598,6 +601,7 @@ struct JSONExportView: View {
                         let text = try JSONBackupExportService.makeBackupJSON(
                             categories: categories,
                             events: events,
+                            bookShelves: bookShelves,
                             visits: visits,
                             inboxItems: inboxItems,
                             photos: photos,

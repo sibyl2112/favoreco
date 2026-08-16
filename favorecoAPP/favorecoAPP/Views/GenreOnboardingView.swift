@@ -5,6 +5,7 @@ import UIKit
 struct GenreOnboardingView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
+    @AppStorage(AppStorageKeys.showsGenreOnboarding) private var showsGenreOnboarding = false
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @StateObject private var publicPlaceStore = PublicPlaceCatalogStore.shared
     @StateObject private var recurringEventStore = PublicRecurringEventCatalogStore.shared
@@ -49,12 +50,12 @@ struct GenreOnboardingView: View {
         .background(Color(.systemGroupedBackground))
         .onAppear {
             if selectedTemplateKeys.isEmpty {
-                selectedTemplateKeys = Set(builtInCategories.map(\.templateKey))
+                applyCurrentGenreSelection()
             }
         }
         .onChange(of: builtInCategories.map(\.templateKey)) { _, keys in
             if selectedTemplateKeys.isEmpty {
-                selectedTemplateKeys = Set(keys)
+                applyCurrentGenreSelection(fallbackKeys: keys)
             }
         }
         .onDisappear {
@@ -404,10 +405,21 @@ struct GenreOnboardingView: View {
         do {
             try saveGenreSelection()
             hasCompletedGenreOnboarding = true
+            showsGenreOnboarding = false
         } catch {
             saveErrorMessage = "初期設定を保存できませんでした。もう一度お試しください。"
             step = .genres
         }
+    }
+
+    private func applyCurrentGenreSelection(fallbackKeys: [String] = []) {
+        let activeKeys = builtInCategories
+            .filter { !$0.isArchived }
+            .map(\.templateKey)
+        let availableFallback = fallbackKeys.isEmpty
+            ? builtInCategories.map(\.templateKey)
+            : fallbackKeys
+        selectedTemplateKeys = Set(activeKeys.isEmpty ? availableFallback : activeKeys)
     }
 
     private enum OnboardingStep: Int, CaseIterable, Identifiable {

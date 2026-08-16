@@ -1065,6 +1065,7 @@ private struct GenreThemeColorPreset: Identifiable {
         GenreThemeColorPreset(id: "teal", name: "ティール", hex: "#147C88"),
         GenreThemeColorPreset(id: "charcoal", name: "チャコール", hex: "#3B3D4A"),
         GenreThemeColorPreset(id: "amber", name: "アンバー", hex: "#B8792F"),
+        GenreThemeColorPreset(id: "terracotta", name: "テラコッタ", hex: "#C45E3A"),
         GenreThemeColorPreset(id: "green", name: "グリーン", hex: "#2E7D60"),
         GenreThemeColorPreset(id: "rose", name: "ローズ", hex: "#A24C55"),
         GenreThemeColorPreset(id: "blue", name: "ブルー", hex: "#536C95"),

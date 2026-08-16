@@ -27,7 +27,7 @@ struct TicketFlowDefinition: Identifiable, Hashable {
         TicketFlowDefinition(
             key: "lotteryPlanned",
             name: "抽選に申し込む",
-            description: "締切・当落・入金など、次に必要な日程を登録",
+            description: "締切・当落・支払など、次に必要な日程を登録",
             defaultStatusKey: "beforeApply",
             defaultEntryRouteKey: "lottery"
         ),
@@ -91,7 +91,7 @@ nonisolated struct TicketStatusDefinition: Identifiable, Hashable {
         TicketStatusDefinition(key: "waitingResult", name: "当落待ち", attentionLevel: "medium"),
         TicketStatusDefinition(key: "won", name: "当選", attentionLevel: "medium"),
         TicketStatusDefinition(key: "lost", name: "落選", attentionLevel: "none"),
-        TicketStatusDefinition(key: "waitingPayment", name: "入金待ち", attentionLevel: "high"),
+        TicketStatusDefinition(key: "waitingPayment", name: "支払待ち", attentionLevel: "high"),
         TicketStatusDefinition(key: "waitingIssue", name: "取得処理中", attentionLevel: "medium"),
         TicketStatusDefinition(key: "issued", name: "受取済み", attentionLevel: "low"),
         TicketStatusDefinition(key: "attended", name: "参加済み", attentionLevel: "none"),
@@ -613,8 +613,8 @@ enum TicketProgressPresentation {
             return usesLotteryFlow(attempt) ? "抽選申込" : "発売待ち"
         case "onSaleSoon": return "発売待ち"
         case "waitingResult": return "当落待ち"
-        case "won": return "支払い待ち"
-        case "waitingPayment": return "支払い待ち"
+        case "won": return "支払待ち"
+        case "waitingPayment": return "支払待ち"
         case "waitingIssue": return "受取待ち"
         case "issued": return "受取済み"
         case "lost": return "落選"
@@ -848,11 +848,11 @@ struct TicketStatusTransitionDefinition: Identifiable, Hashable {
             ]
         case "won":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "waitingIssue", title: "支払い済みにする", systemImage: "checkmark.circle.fill"),
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingIssue", title: "支払済みにする", systemImage: "checkmark.circle.fill"),
             ]
         case "waitingPayment":
             return [
-                TicketStatusTransitionDefinition(targetStatusKey: "waitingIssue", title: "支払い済みにする", systemImage: "checkmark.circle.fill"),
+                TicketStatusTransitionDefinition(targetStatusKey: "waitingIssue", title: "支払済みにする", systemImage: "checkmark.circle.fill"),
             ]
         case "waitingIssue":
             return [

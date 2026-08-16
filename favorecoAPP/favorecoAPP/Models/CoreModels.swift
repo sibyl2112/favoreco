@@ -736,6 +736,32 @@ enum PlaceOperationalStatus: String, CaseIterable, Identifiable {
 }
 
 @Model
+final class BookShelf {
+    var id: UUID = UUID()
+    var name: String = ""
+    var sortOrder: Int = 0
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    @Relationship(inverse: \ExperienceEvent.bookShelves)
+    var books: [ExperienceEvent]? = []
+
+    init(
+        id: UUID = UUID(),
+        name: String = "",
+        sortOrder: Int = 0,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.sortOrder = sortOrder
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+@Model
 final class ExperienceEvent {
     var id: UUID = UUID()
     var title: String = ""
@@ -779,6 +805,8 @@ final class ExperienceEvent {
 
     @Relationship(deleteRule: .cascade, inverse: \CollectibleItem.series)
     var collectibleItems: [CollectibleItem]? = []
+
+    var bookShelves: [BookShelf]? = []
 
     init(
         id: UUID = UUID(),

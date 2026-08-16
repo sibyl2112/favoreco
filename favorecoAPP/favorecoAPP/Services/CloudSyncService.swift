@@ -5,6 +5,7 @@ import SwiftData
 enum FavorecoModelContainerBootstrap {
     static let schema = Schema([
         RecordCategory.self,
+        BookShelf.self,
         ExperienceEvent.self,
         Visit.self,
         InboxItem.self,

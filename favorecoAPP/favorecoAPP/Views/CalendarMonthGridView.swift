@@ -115,21 +115,25 @@ struct CalendarMonthGridView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
 
     var body: some View {
-        VStack(spacing: 0) {
-            weekdayHeader
-
-            LazyVGrid(columns: columns, spacing: 0) {
-                ForEach(days) { day in
-                    CalendarMonthDayCell(
-                        day: day,
-                        entries: entriesByDay[calendar.startOfDay(for: day.date)] ?? [],
-                        isSelected: calendar.isDate(day.date, inSameDayAs: selectedDate),
-                        isToday: calendar.isDateInToday(day.date),
-                        calendar: calendar
-                    ) {
-                        onSelect(day)
+        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+            Section {
+                LazyVGrid(columns: columns, spacing: 0) {
+                    ForEach(days) { day in
+                        CalendarMonthDayCell(
+                            day: day,
+                            entries: entriesByDay[calendar.startOfDay(for: day.date)] ?? [],
+                            isSelected: calendar.isDate(day.date, inSameDayAs: selectedDate),
+                            isToday: calendar.isDateInToday(day.date),
+                            calendar: calendar
+                        ) {
+                            onSelect(day)
+                        }
                     }
                 }
+            } header: {
+                weekdayHeader
+                    .background(Color(.systemBackground))
+                    .zIndex(1)
             }
         }
         .background(Color(.systemBackground))
@@ -145,7 +149,7 @@ struct CalendarMonthGridView: View {
         HStack(spacing: 0) {
             ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { index, symbol in
                 Text(symbol)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(weekdayColor(at: index))
                     .frame(maxWidth: .infinity)
                     .frame(height: 32)
@@ -192,7 +196,7 @@ private struct CalendarMonthDayCell: View {
 
                     if entries.count > visibleEntryLimit {
                         Text("ほか\(entries.count - visibleEntryLimit)件")
-                            .font(.system(size: 8.5, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,12 +212,12 @@ private struct CalendarMonthDayCell: View {
             .background(isSelected ? Color.accentColor.opacity(0.055) : Color(.systemBackground))
             .overlay(alignment: .trailing) {
                 Rectangle()
-                    .fill(Color(.separator).opacity(0.42))
+                    .fill(Color(.separator).opacity(0.55))
                     .frame(width: 0.5)
             }
             .overlay(alignment: .bottom) {
                 Rectangle()
-                    .fill(Color(.separator).opacity(0.42))
+                    .fill(Color(.separator).opacity(0.55))
                     .frame(height: 0.5)
             }
             .contentShape(Rectangle())
@@ -241,29 +245,39 @@ private struct CalendarMonthDayCell: View {
     private func entryLabel(_ entry: CalendarMonthEntry) -> some View {
         let tint = themePalette.categoryColor(hex: entry.colorHex)
 
-        Text(entryTitle(entry))
-            .font(.system(size: 8.5, weight: .semibold))
-            .foregroundStyle(entry.kind == .external ? Color.secondary : Color.white)
-            .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .frame(maxWidth: .infinity, minHeight: 15, alignment: .leading)
-            .padding(.horizontal, 3)
-            .background {
-                if entry.kind == .external {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(Color(.secondarySystemBackground))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                .stroke(
-                                    Color.secondary.opacity(0.6),
-                                    style: StrokeStyle(lineWidth: 0.75, dash: [2, 1.5])
-                                )
-                        }
-                } else {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(tint.opacity(entry.kind == .visit ? 0.78 : 0.95))
-                }
+        GeometryReader { proxy in
+            Text(entryTitle(entry))
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(entry.kind == .external ? Color.secondary : Color.white)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(
+                    width: max(proxy.size.width - 6, 0),
+                    height: proxy.size.height,
+                    alignment: .leading
+                )
+                .clipped()
+                .offset(x: 3)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 18)
+        .background {
+            if entry.kind == .external {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .stroke(
+                                Color.secondary.opacity(0.6),
+                                style: StrokeStyle(lineWidth: 0.75, dash: [2, 1.5])
+                            )
+                    }
+            } else {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(tint.opacity(entry.kind == .visit ? 0.78 : 0.95))
             }
+        }
+        .clipped()
     }
 
     private func entryTitle(_ entry: CalendarMonthEntry) -> String {

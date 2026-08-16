@@ -93,7 +93,7 @@ struct ExperienceDetailSnapshot {
         case "planned": return "予定"
         case "applied": return "申込中"
         case "won": return "当選"
-        case "paid": return "入金済み"
+        case "paid": return "支払済み"
         case "ticketed": return "発券済み"
         case "attended": return "参加済み"
         case "canceled": return "中止・キャンセル"

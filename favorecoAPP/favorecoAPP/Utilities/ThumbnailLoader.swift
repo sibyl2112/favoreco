@@ -20,6 +20,7 @@ struct ThumbnailReference: Hashable, Sendable {
         case event
         case inbox
         case person
+        case place
         case profileIcon
         case profileHero
         case collectibleItem
@@ -41,6 +42,7 @@ struct ThumbnailReference: Hashable, Sendable {
     static func event(_ id: UUID) -> Self { Self(source: .event, id: id) }
     static func inbox(_ id: UUID) -> Self { Self(source: .inbox, id: id) }
     static func person(_ id: UUID) -> Self { Self(source: .person, id: id) }
+    static func place(_ id: UUID) -> Self { Self(source: .place, id: id) }
     static func profileIcon(_ id: UUID, fallback: ThumbnailReference? = nil) -> Self {
         Self(
             source: .profileIcon,
@@ -241,6 +243,10 @@ enum ThumbnailLoader {
             guard let person = try? modelContext.fetch(descriptor).first else { return (nil, nil) }
             if let data = person.imageData { return (data, nil) }
             return (nil, PersonImageStore.image(at: person.imagePath))
+        case .place:
+            var descriptor = FetchDescriptor<PlaceMaster>(predicate: #Predicate { $0.id == id })
+            descriptor.fetchLimit = 1
+            return ((try? modelContext.fetch(descriptor).first?.imageData) ?? nil, nil)
         case .profileIcon:
             var descriptor = FetchDescriptor<FavoriteProfile>(predicate: #Predicate { $0.id == id })
             descriptor.fetchLimit = 1

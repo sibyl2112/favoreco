@@ -167,9 +167,10 @@ enum SampleDataSeeder {
                     eyecatchAspectRatioKey: aspectRatioKey,
                     goshuinBookSizeKey: category.templateKey == "goshuin" ? GoshuinBookSize.standard.key : "",
                     advancedEntries: sampleAdvancedEntries(for: category, index: sampleIndex),
-                    bookSeriesName: category.templateKey == "book" ? definition.seriesName : "",
-                    bookVolumeNumber: category.templateKey == "book" ? "\(sampleIndex + 1)" : "",
-                    bookAuthorName: category.templateKey == "book" ? definition.organizer : ""
+                    bookSeriesName: "",
+                    bookVolumeNumber: "",
+                    bookAuthorName: "",
+                    bookPublisherName: ""
                 )
                 let place = resolvePlace(
                     placeSeed,
@@ -668,8 +669,9 @@ enum SampleDataSeeder {
             organizer = ""
         case "book":
             titles = ["夜明けの標本室", "雨粒の図書館", "北へ帰る鳥", "月光庭園", "静かな航海日誌", "星を数える部屋", "風の脚注", "冬の栞", "透明な物語", "遠雷のエッセイ", "海辺の短編集", "森を読む", "夜行列車の随筆", "青い装丁の詩集", "小さな博物誌", "灯台守の手紙"]
-            seriesName = "灯台文庫"
-            organizer = "架空書房"
+            // 書誌情報はISBN検索またはユーザー入力だけを正とし、サンプル生成では捏造しない。
+            seriesName = ""
+            organizer = ""
         case "random_goods":
             let definition = collectibleSampleDefinition(index: index)
             titles = [definition.title]
@@ -1132,7 +1134,7 @@ enum SampleDataSeeder {
                 issueStartAt: planStart.addingTimeInterval(-5 * 24 * 60 * 60),
                 price: Decimal(9_800),
                 purchaseURL: "\(sampleURLPrefix)live/ticket",
-                memo: "入金待ち表示を確認するサンプルです。通知は予約しません。",
+                memo: "支払待ち表示を確認するサンプルです。通知は予約しません。",
                 createdAt: now,
                 updatedAt: now,
                 plan: plan
