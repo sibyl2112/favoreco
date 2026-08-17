@@ -153,7 +153,7 @@ struct CategoryEmbeddedDetailCardModifier: ViewModifier {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(
                             borderColor.opacity(0.72),
-                            lineWidth: 0.8
+                            lineWidth: CategoryDetailChrome.borderLineWidth
                         )
                         .allowsHitTesting(false)
                 }
@@ -270,6 +270,7 @@ struct ExperienceDetailView: View {
     @State private var isTravelRecordExpanded = false
     @State private var isExpenseExpanded = false
     @State private var isCastExpanded = false
+    @State private var isBookPrimaryInformationExpanded = true
     @State private var isBookInformationExpanded = false
     @State private var isBookReadingExpanded = false
     @State private var isBookPhotosExpanded = true
@@ -301,6 +302,7 @@ struct ExperienceDetailView: View {
     @State private var backSwipeExclusionFrames: [CGRect] = []
     @State private var personMasterEditTarget: PersonMasterEditTarget?
     @State private var photoViewerRequest: ExperiencePhotoViewerRequest?
+    @State private var eyecatchPreviewRequest: DetailEyecatchPreviewRequest?
     @State private var isShowingActionMenu = false
     @State private var isShowingRepeatEntry = false
     @State private var isMuseumHistoryExpanded = true
@@ -350,7 +352,7 @@ struct ExperienceDetailView: View {
                         backgroundPhoto: backgroundPhoto
                     )
                 } content: {
-                    primaryNarrative {
+                    primaryNarrative(tint: accentColor) {
                         primaryOfficialURLSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                         venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                         primaryPeopleSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
@@ -385,7 +387,7 @@ struct ExperienceDetailView: View {
                     )
                 } content: {
                         if isBook {
-                            AnyView(primaryNarrative {
+                            AnyView(primaryNarrative(tint: accentColor) {
                                 primaryOfficialURLSection(
                                     snapshot: snapshot,
                                     accentColor: accentColor,
@@ -408,7 +410,7 @@ struct ExperienceDetailView: View {
                             AnyView(ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: false))
                             AnyView(advancedSection(snapshot: snapshot))
                         } else {
-                            AnyView(primaryNarrative {
+                            AnyView(primaryNarrative(tint: accentColor) {
                                 primaryOfficialURLSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
                                 venueMapSection(snapshot: snapshot, accentColor: accentColor, isTheater: false)
                                 if ["theme_park", "nature_living"].contains(templateKey) {
@@ -479,6 +481,9 @@ struct ExperienceDetailView: View {
         }
         .sheet(isPresented: $isShowingEdit) {
             EditExperienceView(visit: visit)
+        }
+        .fullScreenCover(item: $eyecatchPreviewRequest) { request in
+            DetailEyecatchPreview(request: request)
         }
         .onReceive(
             NotificationCenter.default.publisher(
@@ -674,6 +679,7 @@ struct ExperienceDetailView: View {
         return ZStack(alignment: .bottomLeading) {
             recordHeroBackground(
                 photo: backgroundPhoto,
+                eventEyecatchData: snapshot.event?.eyecatchData,
                 genreColor: genreColor,
                 categoryKey: snapshot.category?.templateKey,
                 presetKey: snapshot.unitFields.heroBackgroundPresetKey
@@ -763,7 +769,18 @@ struct ExperienceDetailView: View {
                         aspectRatio: snapshot.eyecatchAspectRatio,
                         fallbackSymbol: snapshot.category?.iconSymbol ?? "sparkles.rectangle.stack",
                         tint: accentColor,
-                        usesGoldFrame: snapshot.category?.templateKey == "theater"
+                        usesGoldFrame: snapshot.category?.templateKey == "theater",
+                        onTap: {
+                            if let photo = eyecatchPhoto {
+                                eyecatchPreviewRequest = DetailEyecatchPreviewRequest(
+                                    reference: .photo(photo.id)
+                                )
+                            } else if let event = snapshot.event {
+                                eyecatchPreviewRequest = DetailEyecatchPreviewRequest(
+                                    reference: .event(event.id)
+                                )
+                            }
+                        }
                     )
                     .frame(width: snapshot.category?.templateKey == "theater" ? 140 : 112)
 
@@ -876,6 +893,7 @@ struct ExperienceDetailView: View {
 
     private func recordHeroBackground(
         photo: PhotoBlob?,
+        eventEyecatchData: Data?,
         genreColor: Color,
         categoryKey: String?,
         presetKey: String
@@ -893,6 +911,12 @@ struct ExperienceDetailView: View {
                 Group {
                     if let photo {
                         RepresentativePhotoImage(photo: photo, maxPixelSize: 1600, contentMode: .fill)
+                    } else if presetKey == HeroBackgroundPreset.eventEyecatchKey,
+                              let eventEyecatchData,
+                              let eventEyecatchImage = UIImage(data: eventEyecatchData) {
+                        Image(uiImage: eventEyecatchImage)
+                            .resizable()
+                            .scaledToFill()
                     } else if let defaultImage {
                         Image(uiImage: defaultImage)
                             .resizable()
@@ -1197,11 +1221,28 @@ struct ExperienceDetailView: View {
     }
 
     private func primaryNarrative<Content: View>(
+        tint: Color,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             content()
         }
+        .background(
+            LinearGradient(
+                colors: [Color.black.opacity(0.22), tint.opacity(0.055)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    tint.opacity(0.42),
+                    lineWidth: CategoryDetailChrome.borderLineWidth
+                )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .environment(\.experienceNarrativeSectionMode, true)
     }
 
@@ -1221,31 +1262,38 @@ struct ExperienceDetailView: View {
 
         if hasInformation {
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle("書籍の基本情報")
-                if let seriesName = event?.bookSeriesName, !seriesName.isEmpty {
-                    DetailInfoRow(icon: "books.vertical", title: "シリーズ", value: seriesName)
-                }
-                if let volume = event?.bookVolumeLabel, !volume.isEmpty {
-                    DetailInfoRow(icon: "number", title: "巻数", value: volume)
-                }
-                if let publishedDate = event?.bookPublishedDate, !publishedDate.isEmpty {
-                    DetailInfoRow(icon: "calendar.badge.clock", title: "発行日", value: publishedDate)
-                }
-                if let pageCount = event?.bookPageCount, pageCount > 0 {
-                    DetailInfoRow(icon: "doc.text", title: "ページ数", value: "\(pageCount)ページ")
-                }
-                if !snapshot.unitFields.bookMediumKey.isEmpty {
+                bookSectionHeader(
+                    title: "書籍の基本情報",
+                    icon: "book.closed",
+                    isExpanded: $isBookPrimaryInformationExpanded,
+                    accentColor: accentColor
+                )
+                if isBookPrimaryInformationExpanded {
+                    if let seriesName = event?.bookSeriesName, !seriesName.isEmpty {
+                        DetailInfoRow(icon: "books.vertical", title: "シリーズ", value: seriesName)
+                    }
+                    if let volume = event?.bookVolumeLabel, !volume.isEmpty {
+                        DetailInfoRow(icon: "number", title: "巻数", value: volume)
+                    }
+                    if let publishedDate = event?.bookPublishedDate, !publishedDate.isEmpty {
+                        DetailInfoRow(icon: "calendar.badge.clock", title: "発行日", value: publishedDate)
+                    }
+                    if let pageCount = event?.bookPageCount, pageCount > 0 {
+                        DetailInfoRow(icon: "doc.text", title: "ページ数", value: "\(pageCount)ページ")
+                    }
+                    if !snapshot.unitFields.bookMediumKey.isEmpty {
+                        DetailInfoRow(
+                            icon: "book.closed",
+                            title: "媒体",
+                            value: BookReadingMedium.resolved(snapshot.unitFields.bookMediumKey).displayName
+                        )
+                    }
                     DetailInfoRow(
-                        icon: "book.closed",
-                        title: "媒体",
-                        value: BookReadingMedium.resolved(snapshot.unitFields.bookMediumKey).displayName
+                        icon: "calendar",
+                        title: "読書期間",
+                        value: bookReadingPeriodText(snapshot: snapshot)
                     )
                 }
-                DetailInfoRow(
-                    icon: "calendar",
-                    title: "読書期間",
-                    value: bookReadingPeriodText(snapshot: snapshot)
-                )
             }
             .modifier(ExperienceOrTheaterSectionCard(isTheater: false, tint: accentColor))
         }
@@ -1359,7 +1407,14 @@ struct ExperienceDetailView: View {
                 if let pageCount = event?.bookPageCount, pageCount > 0 {
                     DetailInfoRow(icon: "doc.text", title: "ページ数", value: "\(pageCount)ページ")
                 }
-                DetailInfoRow(icon: "rectangle.portrait", title: "種類", value: format.name)
+                if let contentTypeKey = event?.bookContentTypeKey, !contentTypeKey.isEmpty {
+                    DetailInfoRow(
+                        icon: "books.vertical",
+                        title: "本の種類",
+                        value: BookContentType.displayName(for: contentTypeKey)
+                    )
+                }
+                DetailInfoRow(icon: "rectangle.portrait", title: "本の判型", value: format.name)
                 if let officialURL = event?.officialURL,
                    !officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button {
@@ -1466,7 +1521,8 @@ struct ExperienceDetailView: View {
     }
 
     private func bookMemoSection(accentColor: Color) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let memoRuns = VisitUnitFields(rawValue: visit.unitFieldsRaw).memoStyleRuns
+        return VStack(alignment: .leading, spacing: 14) {
             bookSectionHeader(
                 title: "読書メモ",
                 icon: "note.text",
@@ -1474,8 +1530,15 @@ struct ExperienceDetailView: View {
                 accentColor: accentColor
             )
             if isBookMemoExpanded {
-                Text(visit.note.isEmpty ? "メモはまだありません" : visit.note)
-                    .font(FavorecoTypography.body)
+                Text(
+                    visit.note.isEmpty
+                        ? AttributedString("メモはまだありません")
+                        : RichMemoText.makeAttributedString(
+                            text: visit.note,
+                            runs: memoRuns,
+                            linkColor: accentColor
+                        )
+                )
                     .foregroundStyle(visit.note.isEmpty ? .secondary : .primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -3521,8 +3584,12 @@ struct ExperienceDetailView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         let isLong = visit.note.count > 180
-                        Text(visit.note)
-                            .font(FavorecoTypography.body)
+                        let memoRuns = VisitUnitFields(rawValue: visit.unitFieldsRaw).memoStyleRuns
+                        Text(RichMemoText.makeAttributedString(
+                            text: visit.note,
+                            runs: memoRuns,
+                            linkColor: accentColor
+                        ))
                             .foregroundStyle(.primary)
                             .lineLimit(isLong && !isReviewExpanded ? 5 : nil)
                             .fixedSize(horizontal: false, vertical: true)
@@ -3917,59 +3984,97 @@ struct RecordDetailEyecatch: View {
     let fallbackSymbol: String
     let tint: Color
     let usesGoldFrame: Bool
+    let onTap: (() -> Void)?
+
+    init(
+        event: ExperienceEvent?,
+        photo: PhotoBlob?,
+        aspectRatio: Double,
+        fallbackSymbol: String,
+        tint: Color,
+        usesGoldFrame: Bool,
+        onTap: (() -> Void)? = nil
+    ) {
+        self.event = event
+        self.photo = photo
+        self.aspectRatio = aspectRatio
+        self.fallbackSymbol = fallbackSymbol
+        self.tint = tint
+        self.usesGoldFrame = usesGoldFrame
+        self.onTap = onTap
+    }
+
+    var body: some View {
+        Group {
+            if usesGoldFrame {
+                TheaterPosterArtwork(
+                    reference: event.map { .event($0.id) },
+                    backgroundColor: Color(.secondarySystemBackground)
+                ) { _ in
+                    if let photo {
+                        RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fit)
+                    } else {
+                        ZStack {
+                            tint.opacity(0.18)
+                            FavorecoIcon(systemName: fallbackSymbol, size: 34)
+                                .foregroundStyle(tint)
+                        }
+                    }
+                }
+                .theaterPosterFrame(tint: tint)
+            } else {
+                Group {
+                    if let photo {
+                        RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fill)
+                    } else if let event {
+                        GeometryReader { geometry in
+                            ThumbnailImage(
+                                reference: .event(event.id),
+                                displaySize: geometry.size,
+                                contentMode: .fill
+                            ) {
+                                ZStack {
+                                    tint.opacity(0.18)
+                                    FavorecoIcon(systemName: fallbackSymbol, size: 34)
+                                        .foregroundStyle(tint)
+                                }
+                            }
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                        }
+                    } else {
+                        ZStack {
+                            tint.opacity(0.18)
+                            FavorecoIcon(systemName: fallbackSymbol, size: 34)
+                                .foregroundStyle(tint)
+                        }
+                    }
+                }
+                .aspectRatio(CGFloat(max(aspectRatio, 0.35)), contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .background(Color(.secondarySystemBackground))
+                .modifier(
+                    RecordDetailEyecatchFrameModifier(tint: tint)
+                )
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
+        .modifier(RecordDetailEyecatchAccessibilityModifier(isButton: onTap != nil))
+    }
+}
+
+private struct RecordDetailEyecatchAccessibilityModifier: ViewModifier {
+    let isButton: Bool
 
     @ViewBuilder
-    var body: some View {
-        if usesGoldFrame {
-            TheaterPosterArtwork(
-                reference: event.map { .event($0.id) },
-                backgroundColor: Color(.secondarySystemBackground)
-            ) { _ in
-                if let photo {
-                    RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fit)
-                } else {
-                    ZStack {
-                        tint.opacity(0.18)
-                        FavorecoIcon(systemName: fallbackSymbol, size: 34)
-                            .foregroundStyle(tint)
-                    }
-                }
-            }
-            .theaterPosterFrame(tint: tint)
+    func body(content: Content) -> some View {
+        if isButton {
+            content
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("拡大表示します")
         } else {
-            Group {
-                if let photo {
-                    RepresentativePhotoImage(photo: photo, maxPixelSize: 720, contentMode: .fill)
-                } else if let event {
-                    GeometryReader { geometry in
-                        ThumbnailImage(
-                            reference: .event(event.id),
-                            displaySize: geometry.size,
-                            contentMode: .fill
-                        ) {
-                            ZStack {
-                                tint.opacity(0.18)
-                                FavorecoIcon(systemName: fallbackSymbol, size: 34)
-                                    .foregroundStyle(tint)
-                            }
-                        }
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                    }
-                } else {
-                    ZStack {
-                        tint.opacity(0.18)
-                        FavorecoIcon(systemName: fallbackSymbol, size: 34)
-                            .foregroundStyle(tint)
-                    }
-                }
-            }
-            .aspectRatio(CGFloat(max(aspectRatio, 0.35)), contentMode: .fit)
-            .frame(maxWidth: .infinity)
-            .clipped()
-            .background(Color(.secondarySystemBackground))
-            .modifier(
-                RecordDetailEyecatchFrameModifier(tint: tint)
-            )
+            content
         }
     }
 }
@@ -3982,7 +4087,10 @@ private struct RecordDetailEyecatchFrameModifier: ViewModifier {
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(tint.opacity(0.42), lineWidth: 0.8)
+                    .stroke(
+                        tint.opacity(0.42),
+                        lineWidth: CategoryDetailChrome.borderLineWidth
+                    )
             }
     }
 }

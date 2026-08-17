@@ -51,6 +51,7 @@ struct QuickRegistrationView: View {
         initialBookVolumeNumber: String = "",
         initialBookAuthorName: String = "",
         initialBookStateKey: String = "interested",
+        initialBookContentTypeKey: String = "",
         initialBookAspectRatioKey: String = EyecatchAspectRatio.hardcoverBook.key
     ) {
         self.initialTemplateKey = initialTemplateKey
@@ -63,6 +64,7 @@ struct QuickRegistrationView: View {
         initialDraft.bookVolumeNumber = initialBookVolumeNumber
         initialDraft.bookAuthorName = initialBookAuthorName
         initialDraft.bookStateKey = initialBookStateKey
+        initialDraft.bookContentTypeKey = initialBookContentTypeKey
         initialDraft.eyecatchAspectRatioKey = initialBookAspectRatioKey.isEmpty
             ? EyecatchAspectRatio.hardcoverBook.key
             : initialBookAspectRatioKey
@@ -170,7 +172,7 @@ struct QuickRegistrationView: View {
                     }
 
                     ExplicitFormTextField(
-                        title: targetFieldLabel,
+                        title: "\(targetFieldLabel)（必須）",
                         prompt: isBookRegistration ? "書名を入力" : "\(targetName)名を入力",
                         text: $draft.title,
                         axis: .vertical,
@@ -271,7 +273,18 @@ struct QuickRegistrationView: View {
                         }
 
                         ExplicitFormControlRow(title: "本の種類") {
-                            Picker("本の種類", selection: $draft.eyecatchAspectRatioKey) {
+                            Picker("本の種類", selection: $draft.bookContentTypeKey) {
+                                Text("未設定").tag("")
+                                ForEach(BookContentType.allCases) { type in
+                                    Text(type.displayName).tag(type.rawValue)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                        }
+
+                        ExplicitFormControlRow(title: "本の判型") {
+                            Picker("本の判型", selection: $draft.eyecatchAspectRatioKey) {
                                 ForEach(EyecatchAspectRatio.selectableBookFormats) { format in
                                     Text(format.name).tag(format.key)
                                 }
@@ -710,6 +723,7 @@ struct QuickRegistrationView: View {
                 bookPublishedDate: draft.trimmedBookPublishedDate,
                 bookPriceText: draft.trimmedBookPriceText,
                 bookPageCount: draft.bookPageCount,
+                bookContentTypeKey: draft.bookContentTypeKey,
                 bookInformationSourceName: draft.trimmedBookInformationSourceName,
                 bookInformationSourceURL: draft.trimmedBookInformationSourceURL
             ).encodedRawValue
@@ -1406,6 +1420,7 @@ private struct QuickRegistrationDraft {
     var bookInformationSourceName: String = ""
     var bookInformationSourceURL: String = ""
     var bookStateKey: String = "interested"
+    var bookContentTypeKey: String = ""
     var body: String = ""
     var sourceURL: String = ""
     var targetTemplateKey: String = ""

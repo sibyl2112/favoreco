@@ -750,7 +750,10 @@ extension View {
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(accentColor.opacity(0.62), lineWidth: 0.8)
+                    .stroke(
+                        accentColor.opacity(0.62),
+                        lineWidth: CategoryDetailChrome.borderLineWidth
+                    )
             }
             .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
     }

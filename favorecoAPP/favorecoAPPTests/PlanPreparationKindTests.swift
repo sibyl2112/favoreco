@@ -36,4 +36,22 @@ final class PlanPreparationKindTests: XCTestCase {
     func testTicketTaskIsNotDuplicatedInPreparationSuggestions() {
         XCTAssertFalse(PlanPreparationSuggestion.titles.contains("チケット・座席を確認"))
     }
+
+    func testPlanTagsRoundTripWithoutLosingPreparationTasks() {
+        let task = PlanPreparationTask(title: "ホテルを予約", kindKey: PlanPreparationKind.hotel.rawValue)
+        let fields = PlanPreparationFields(tasks: [task], tagNames: ["遠征", "初日"])
+
+        let restored = PlanPreparationFields(rawValue: fields.encodedRawValue)
+
+        XCTAssertEqual(restored.tagNames, ["遠征", "初日"])
+        XCTAssertEqual(restored.tasks.map(\.title), ["ホテルを予約"])
+    }
+
+    func testOldPlanPreparationJSONDefaultsToNoTags() {
+        let restored = PlanPreparationFields(
+            rawValue: #"{"checklistModeKey":"automatic","tasks":[]}"#
+        )
+
+        XCTAssertEqual(restored.tagNames, [])
+    }
 }

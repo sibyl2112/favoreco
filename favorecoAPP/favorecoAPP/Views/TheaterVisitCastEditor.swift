@@ -10,14 +10,22 @@ struct TheaterFocusPeopleEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("お目当て・注目した人")
-                    .font(
-                        FavorecoTypography.jpSans(
-                            ExplicitFormMetrics.labelFontSize,
-                            weight: .semibold,
-                            relativeTo: .body
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("お目当て・注目した人")
+                        .font(
+                            FavorecoTypography.jpSans(
+                                ExplicitFormMetrics.labelFontSize,
+                                weight: .semibold,
+                                relativeTo: .body
+                            )
                         )
-                    )
+                    Text("この観劇回だけ")
+                        .font(FavorecoTypography.jpSans(9.5, weight: .semibold, relativeTo: .caption2))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 7)
+                        .frame(minHeight: 21)
+                        .background(Color.accentColor.opacity(0.10), in: Capsule())
+                }
                 Text("この回で印象に残った人だけ選びます。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)

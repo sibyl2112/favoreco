@@ -166,11 +166,12 @@ struct CollectibleCategorySeriesGrid: View {
     let events: [ExperienceEvent]
     let tint: Color
     let onAdd: () -> Void
+    let onOpenSeries: (UUID) -> Void
     @State private var selectedKind: CollectibleKind?
 
     private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.flexible(minimum: 0), spacing: 12, alignment: .top),
+        GridItem(.flexible(minimum: 0), spacing: 12, alignment: .top)
     ]
 
     private var activeEvents: [ExperienceEvent] {
@@ -190,11 +191,13 @@ struct CollectibleCategorySeriesGrid: View {
         events: [ExperienceEvent],
         tint: Color,
         onAdd: @escaping () -> Void,
+        onOpenSeries: @escaping (UUID) -> Void,
         selectedKind: CollectibleKind? = nil
     ) {
         self.events = events
         self.tint = tint
         self.onAdd = onAdd
+        self.onOpenSeries = onOpenSeries
         _selectedKind = State(initialValue: selectedKind)
     }
 
@@ -242,10 +245,11 @@ struct CollectibleCategorySeriesGrid: View {
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(filteredEvents) { event in
-                            NavigationLink {
-                                EventDetailView(event: event)
+                            Button {
+                                onOpenSeries(event.id)
                             } label: {
                                 CollectibleSeriesCard(event: event, tint: tint)
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
                             }
                             .buttonStyle(.plain)
                         }
@@ -270,6 +274,7 @@ private struct CollectibleKindFilterBar: View {
             }
         }
         .scrollIndicators(.hidden)
+        .background { GenreSwipeExclusionZone() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("グッズ種別")
     }
@@ -301,22 +306,28 @@ private struct CollectibleSeriesCard: View {
     var body: some View {
         let summary = CollectibleSeriesSummary.make(series: event)
         VStack(alignment: .leading, spacing: 9) {
-            ThumbnailImage(
-                reference: .event(event.id),
-                displaySize: CGSize(width: 160, height: 160),
-                contentMode: .fill
-            ) {
-                CategoryDefaultArtworkImage(
-                    templateKey: event.category?.templateKey ?? "random_goods",
-                    displaySize: CGSize(width: 160, height: 160)
-                )
+            GeometryReader { proxy in
+                let side = max(proxy.size.width, 1)
+                ThumbnailImage(
+                    reference: .event(event.id),
+                    displaySize: CGSize(width: side, height: side),
+                    contentMode: .fill
+                ) {
+                    CategoryDefaultArtworkImage(
+                        templateKey: event.category?.templateKey ?? "random_goods",
+                        displaySize: CGSize(width: side, height: side)
+                    )
+                }
+                .frame(width: side, height: side)
+                .clipped()
             }
-            .frame(maxWidth: .infinity)
             .aspectRatio(1, contentMode: .fit)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            Text(event.title).font(.subheadline.bold()).lineLimit(2)
+            Text(event.title)
+                .font(.subheadline.bold())
+                .lineLimit(2, reservesSpace: true)
             Text(CollectibleKind.resolved(from: event.subTypeKey).displayName)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -332,6 +343,7 @@ private struct CollectibleSeriesCard: View {
         }
         .padding(10)
         .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

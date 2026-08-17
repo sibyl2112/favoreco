@@ -39,6 +39,20 @@ enum TheaterUnifiedFormEntry: String, CaseIterable, Identifiable {
         }
     }
 
+    func scope(isLive: Bool) -> String {
+        let performanceName = isLive ? "ライブ" : "公演"
+        let planName = isLive ? "参戦予定" : "観劇予定"
+        let visitName = isLive ? "この参戦回だけ" : "この観劇回だけ"
+        return switch self {
+        case .performanceRegistration, .performanceEditing:
+            "この\(performanceName)のすべての予定・記録"
+        case .planCreation, .planEditing:
+            "この\(planName)だけ"
+        case .visitCreation, .visitEditing:
+            visitName
+        }
+    }
+
     var initiallyExpandedSections: Set<TheaterUnifiedFormSection> {
         switch self {
         case .performanceRegistration:
@@ -129,43 +143,17 @@ enum TheaterUnifiedFormSection: String, CaseIterable, Identifiable {
 }
 
 struct TheaterUnifiedFormIntroduction: View {
-    @Environment(\.favorecoThemePalette) private var themePalette
     let entry: TheaterUnifiedFormEntry
     var isLive = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "info.circle.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(themePalette.globalTint)
-                .padding(.top, 1)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("この記録で入力する項目")
-                    .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
-                    .foregroundStyle(themePalette.globalTint)
-
-                Text(liveAdjustedGuidance)
-                    .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(themePalette.globalTint.opacity(0.08))
+        EditScopeNotice(
+            scope: entry.scope(isLive: isLive),
+            detail: liveAdjustedGuidance
         )
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(themePalette.globalTint.opacity(0.30), lineWidth: 0.8)
-        }
         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 6, trailing: 16))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
-        .accessibilityElement(children: .combine)
     }
 
     private var liveAdjustedGuidance: String {
@@ -192,6 +180,7 @@ struct TheaterUnifiedSectionLabel: View {
     @Environment(\.colorScheme) private var colorScheme
     let section: TheaterUnifiedFormSection
     var isLive = false
+    var summaryOverride: String? = nil
 
     var body: some View {
         HStack(spacing: 10) {
@@ -220,6 +209,7 @@ struct TheaterUnifiedSectionLabel: View {
     }
 
     private var sectionSummary: String {
+        if let summaryOverride { return summaryOverride }
         guard isLive else { return section.summary }
         return switch section {
         case .performanceBasic: "公演名・アーティスト・種別・公式URL"

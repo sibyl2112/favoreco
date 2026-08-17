@@ -8,6 +8,7 @@ struct ScreenWorkMinimumEditor: View {
     @Binding var endedAt: Date
     @Binding var overallRating: Double
     let ratingText: String
+    var showsRating: Bool = true
 
     private var type: ScreenWorkType {
         ScreenWorkType.resolved(from: typeKey)
@@ -51,13 +52,15 @@ struct ScreenWorkMinimumEditor: View {
                 screenWorkYearAndSeason
             }
 
-            divider
-            ExperienceRatingUnitEditor(
-                overallRating: $overallRating,
-                ratingText: ratingText,
-                title: "評価"
-            )
-            .padding(.vertical, 8)
+            if showsRating {
+                divider
+                ExperienceRatingUnitEditor(
+                    overallRating: $overallRating,
+                    ratingText: ratingText,
+                    title: "評価"
+                )
+                .padding(.vertical, 8)
+            }
         }
     }
 

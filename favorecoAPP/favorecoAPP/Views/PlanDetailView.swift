@@ -359,7 +359,7 @@ struct PlanDetailView: View {
     private var planMenuActions: [FavorecoDetailAction] {
         var actions = [
             FavorecoDetailAction(
-                title: "予定を編集",
+                title: planEditActionTitle,
                 systemImage: "pencil",
                 action: { isShowingEditPlan = true }
             ),
@@ -405,6 +405,13 @@ struct PlanDetailView: View {
             )
         ])
         return actions
+    }
+
+    private var planEditActionTitle: String {
+        switch (plan.event?.category ?? plan.category)?.templateKey {
+        case "theater", "live": "日時・会場を編集"
+        default: "予定を編集"
+        }
     }
 
     private var theaterAccentColor: Color {
@@ -992,7 +999,8 @@ struct PlanDetailView: View {
     }
 
     private var theaterPlanMemoSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let planTags = PlanPreparationFields(rawValue: plan.unitFieldsRaw).tagNames
+        return VStack(alignment: .leading, spacing: 12) {
             TheaterDetailDisclosureHeader(
                 .planMemo,
                 tint: theaterAccentColor,
@@ -1007,6 +1015,12 @@ struct PlanDetailView: View {
             }
 
             if isTheaterPlanMemoExpanded {
+                if !planTags.isEmpty {
+                    Text(planTags.map { "#\($0)" }.joined(separator: "  "))
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(theaterAccentColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if !plan.memo.isEmpty {
                     Text(plan.memo)
                         .font(FavorecoTypography.body)
@@ -1021,7 +1035,8 @@ struct PlanDetailView: View {
                             .foregroundStyle(theaterAccentColor)
                     }
                 }
-                if plan.memo.isEmpty,
+                if planTags.isEmpty,
+                   plan.memo.isEmpty,
                    plan.officialURL.isEmpty || plan.officialURL == plan.event?.officialURL {
                     Text("予定メモはまだありません")
                         .font(FavorecoTypography.body)
@@ -1146,72 +1161,79 @@ struct PlanDetailView: View {
         let photos = planPhotos
 
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                if isTheaterPlan {
-                    TheaterDetailDisclosureHeader(
-                        .photos,
-                        countText: "\(photos.count)枚",
-                        tint: theaterAccentColor,
-                        isExpanded: $isPlanPhotosExpanded
-                    )
-                } else {
-                    PlanDetailDisclosureHeader(
-                        title: "写真",
-                        systemImage: "photo.on.rectangle",
-                        countText: "\(photos.count)枚",
-                        tint: categoryColor,
-                        isExpanded: $isPlanPhotosExpanded
-                    )
-                }
-
-                Spacer(minLength: 4)
-
-                Button {
-                    isShowingPlanPhotoSourceChoice = true
-                } label: {
-                    FavorecoIconLabel("写真を追加", systemImage: "plus", iconSize: 13)
-                        .font(FavorecoTypography.captionStrong)
-                        .foregroundStyle(isTheaterPlan ? theaterAccentColor : categoryColor)
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.borderless)
+            if isTheaterPlan {
+                TheaterDetailDisclosureHeader(
+                    .photos,
+                    countText: "\(photos.count)枚",
+                    tint: theaterAccentColor,
+                    isExpanded: $isPlanPhotosExpanded
+                )
+            } else {
+                PlanDetailDisclosureHeader(
+                    title: "写真",
+                    systemImage: "photo.on.rectangle",
+                    countText: "\(photos.count)枚",
+                    tint: categoryColor,
+                    isExpanded: $isPlanPhotosExpanded
+                )
             }
 
             if isPlanPhotosExpanded {
-                if photos.isEmpty {
-                    Text("予定に関する写真を、記録入力を開かずに追加できます。")
-                        .font(FavorecoTypography.body)
-                        .foregroundStyle(.secondary)
-                } else {
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
-                        spacing: 8
-                    ) {
-                        ForEach(photos) { photo in
-                            Button {
-                                planPhotoViewerRequest = PlanPhotoViewerRequest(
-                                    photoIDs: photos.map(\.id),
-                                    initialPhotoID: photo.id
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
+                    spacing: 8
+                ) {
+                    ForEach(photos) { photo in
+                        Button {
+                            planPhotoViewerRequest = PlanPhotoViewerRequest(
+                                photoIDs: photos.map(\.id),
+                                initialPhotoID: photo.id
+                            )
+                        } label: {
+                            GeometryReader { proxy in
+                                RepresentativePhotoImage(
+                                    photo: photo,
+                                    maxPixelSize: 360,
+                                    contentMode: .fill
                                 )
-                            } label: {
-                                GeometryReader { proxy in
-                                    RepresentativePhotoImage(
-                                        photo: photo,
-                                        maxPixelSize: 360,
-                                        contentMode: .fill
-                                    )
-                                    .frame(width: proxy.size.width, height: proxy.size.width)
-                                    .clipped()
-                                    .background(Color(.secondarySystemFill))
-                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                                }
-                                .aspectRatio(1, contentMode: .fit)
+                                .frame(width: proxy.size.width, height: proxy.size.width)
+                                .clipped()
+                                .background(Color(.secondarySystemFill))
+                                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("予定の写真")
-                            .accessibilityHint("開いて左右に送れます")
+                            .aspectRatio(1, contentMode: .fit)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("予定の写真")
+                        .accessibilityHint("開いて左右に送れます")
                     }
+
+                    Button {
+                        isShowingPlanPhotoSourceChoice = true
+                    } label: {
+                        GeometryReader { proxy in
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(Color(.secondarySystemFill).opacity(0.28))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                        .stroke(
+                                            (isTheaterPlan ? theaterAccentColor : categoryColor).opacity(0.55),
+                                            lineWidth: 0.9
+                                        )
+                                }
+                                .overlay {
+                                    FavorecoIcon(
+                                        systemName: "plus",
+                                        size: min(proxy.size.width * 0.30, 22)
+                                    )
+                                    .foregroundStyle(isTheaterPlan ? theaterAccentColor : categoryColor)
+                                }
+                                .frame(width: proxy.size.width, height: proxy.size.width)
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("写真を追加")
                 }
             }
         }
@@ -1554,7 +1576,7 @@ struct PlanDetailView: View {
                             Button {
                                 editingAttempt = attempt
                             } label: {
-                                Label("チケットを編集", systemImage: "pencil")
+                                Label("申込・期限を編集", systemImage: "pencil")
                             }
 
                             let transitions = TicketStatusTransitionDefinition.transitions(for: attempt)
@@ -1632,11 +1654,21 @@ struct PlanDetailView: View {
 
     @ViewBuilder
     private var memoSection: some View {
-        if !plan.memo.isEmpty {
+        let planTags = PlanPreparationFields(rawValue: plan.unitFieldsRaw).tagNames
+        if !plan.memo.isEmpty || !planTags.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 planSectionTitle("メモ")
-                Text(plan.memo)
-                    .font(FavorecoTypography.body)
+                if !planTags.isEmpty {
+                    Text(planTags.map { "#\($0)" }.joined(separator: "  "))
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(categoryColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(RichMemoText.makeAttributedString(
+                    text: plan.memo,
+                    runs: [],
+                    linkColor: .accentColor
+                ))
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -2037,7 +2069,7 @@ private struct PlanInfoRow: View {
                 .frame(width: 22)
             Text(title)
                 .font(FavorecoTypography.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
                 .frame(width: 42, alignment: .leading)
             Text(value)
                 .font(FavorecoTypography.bodyStrong)
@@ -2151,6 +2183,9 @@ struct ExperienceExpenseSummaryCard: View {
                     }
                     if summary.goodsAmount > 0 {
                         expenseRow(icon: "bag", title: "グッズ", amount: summary.goodsAmount)
+                    }
+                    if summary.foodAmount > 0 {
+                        expenseRow(icon: "fork.knife", title: "フード", amount: summary.foodAmount)
                     }
                     if summary.travelAmount > 0 {
                         expenseRow(icon: "suitcase.rolling", title: "遠征", amount: summary.travelAmount)

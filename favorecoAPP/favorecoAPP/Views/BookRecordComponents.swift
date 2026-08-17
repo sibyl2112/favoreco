@@ -146,6 +146,7 @@ struct BookInformationEditor: View {
     @Binding var priceText: String
     @Binding var pageCountText: String
     @Binding var officialURL: String
+    @Binding var contentTypeKey: String
     @Binding var aspectRatioKey: String
     let isEditable: Bool
 
@@ -249,8 +250,19 @@ struct BookInformationEditor: View {
                 )
                     .keyboardType(.numberPad)
                 fieldDivider
-                ExplicitFormControlRow(title: "表紙の比率", isOptional: true) {
-                    Picker("表紙の比率", selection: $aspectRatioKey) {
+                ExplicitFormControlRow(title: "本の種類", isOptional: true) {
+                    Picker("本の種類", selection: $contentTypeKey) {
+                        Text("未設定").tag("")
+                        ForEach(BookContentType.allCases) { type in
+                            Text(type.displayName).tag(type.rawValue)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
+                fieldDivider
+                ExplicitFormControlRow(title: "本の判型", isOptional: true) {
+                    Picker("本の判型", selection: $aspectRatioKey) {
                         ForEach(formats) { format in
                             Text(format.name).tag(format.key)
                         }
@@ -278,8 +290,11 @@ struct BookInformationEditor: View {
                 if !isbn.isEmpty { LabeledContent("ISBN", value: isbn) }
                 if !priceText.isEmpty { LabeledContent("価格", value: "¥\(priceText)") }
                 if !pageCountText.isEmpty { LabeledContent("ページ数", value: "\(pageCountText)ページ") }
+                if !contentTypeKey.isEmpty {
+                    LabeledContent("本の種類", value: BookContentType.displayName(for: contentTypeKey))
+                }
                 LabeledContent(
-                    "表紙の比率",
+                    "本の判型",
                     value: EyecatchAspectRatio.option(forKey: aspectRatioKey)?.name ?? "未設定"
                 )
                 if !officialURL.isEmpty {
@@ -296,6 +311,40 @@ struct BookInformationEditor: View {
 
     private var fieldDivider: some View {
         Divider().overlay(ExplicitFormMetrics.rowSeparatorColor)
+    }
+}
+
+enum BookContentType: String, CaseIterable, Identifiable {
+    case novel
+    case manga
+    case essay
+    case practical
+    case business
+    case technical
+    case children
+    case magazine
+    case art
+    case other
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .novel: "小説"
+        case .manga: "漫画"
+        case .essay: "エッセイ"
+        case .practical: "実用書"
+        case .business: "ビジネス書"
+        case .technical: "技術書"
+        case .children: "児童書・絵本"
+        case .magazine: "雑誌"
+        case .art: "写真集・画集"
+        case .other: "その他"
+        }
+    }
+
+    static func displayName(for key: String) -> String {
+        BookContentType(rawValue: key)?.displayName ?? "未設定"
     }
 }
 

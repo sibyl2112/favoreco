@@ -67,13 +67,37 @@ struct PublicRecurringEventCatalogView: View {
 
                 Section("公開定期イベントカタログ") {
                     if filteredEntries.isEmpty {
-                        FavorecoContentUnavailableView(
-                            store.entries.isEmpty ? "カタログを取得できていません" : "条件に一致するイベントがありません",
-                            systemImage: "calendar.badge.clock",
-                            description: store.entries.isEmpty
-                                ? "通信状態を確認して再取得してください。取得済みデータはオフラインでも使えます。"
-                                : "名称・地域・ジャンルを変えて検索してください。"
-                        )
+                        if store.entries.isEmpty {
+                            Button {
+                                Task { await store.refresh() }
+                            } label: {
+                                VStack(spacing: 10) {
+                                    FavorecoIcon(systemName: "calendar.badge.clock", size: 40)
+                                    Text("カタログを取得できていません")
+                                        .font(FavorecoTypography.bodyStrong)
+                                        .multilineTextAlignment(.center)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text("タップしてクラウドの公開カタログを再取得します。取得済みデータはオフラインでも使えます。")
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.center)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    FavorecoIconLabel("再取得", systemImage: "arrow.clockwise", iconSize: 12)
+                                        .font(FavorecoTypography.captionStrong)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(store.state == .syncing)
+                        } else {
+                            FavorecoContentUnavailableView(
+                                "条件に一致するイベントがありません",
+                                systemImage: "calendar.badge.clock",
+                                description: "名称・地域・ジャンルを変えて検索してください。"
+                            )
+                        }
                     } else {
                         ForEach(filteredEntries) { entry in
                             recurringEventRow(entry)
@@ -151,7 +175,7 @@ struct PublicRecurringEventCatalogView: View {
                 .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
 
                 if entry.editions.count > 1 {
-                    Text("開催回 (entry.editions.count)件")
+                    Text("開催回 \(entry.editions.count)件")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }

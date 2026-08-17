@@ -32,7 +32,7 @@ struct CategoryVisitRecordPosterTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: category.templateKey == "live" ? 4 : 7) {
             GeometryReader { geometry in
                 ZStack(alignment: .bottomTrailing) {
                     ThumbnailImage(
@@ -138,7 +138,9 @@ struct CategoryVisitRecordBannerCard: View {
                     .lineLimit(2, reservesSpace: true)
 
                 FavorecoIconLabel(
-                    FavorecoDateText.compactDate(item.visit.visitedAt),
+                    category.templateKey == "live"
+                        ? "\(FavorecoDateText.compactDateWithHalfWidthWeekday(item.visit.visitedAt)) \(FavorecoDateText.time(item.visit.visitedAt))"
+                        : FavorecoDateText.compactDate(item.visit.visitedAt),
                     systemImage: "calendar",
                     iconSize: 14
                 )
@@ -186,6 +188,6 @@ struct CategoryVisitRecordBannerCard: View {
                 .stroke(tint.opacity(CategoryLibraryChrome.cardBorderOpacity), lineWidth: CategoryLibraryChrome.borderLineWidth)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityHint("鑑賞記録の詳細を開きます")
+        .accessibilityHint(category.templateKey == "live" ? "ライブ記録の詳細を開きます" : "鑑賞記録の詳細を開きます")
     }
 }

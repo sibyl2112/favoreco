@@ -1413,6 +1413,13 @@ private struct CreateEntryMenuDefinition {
                         systemImage: "calendar.badge.plus"
                     ),
                     CreateEntryMenuItem(
+                        action: .record,
+                        title: "来園の記録をつける",
+                        detail: "登録済み施設へ今回の記録を追加",
+                        systemImage: "square.and.pencil",
+                        requiresExistingRecord: true
+                    ),
+                    CreateEntryMenuItem(
                         action: .placeCatalog,
                         title: "施設を登録",
                         detail: "全国カタログから場所マスターへ追加",
@@ -1432,6 +1439,13 @@ private struct CreateEntryMenuDefinition {
                         systemImage: "calendar.badge.plus"
                     ),
                     CreateEntryMenuItem(
+                        action: .record,
+                        title: "訪問の記録をつける",
+                        detail: "登録済みスポットへ今回の記録を追加",
+                        systemImage: "square.and.pencil",
+                        requiresExistingRecord: true
+                    ),
+                    CreateEntryMenuItem(
                         action: .placeCatalog,
                         title: "スポットを登録",
                         detail: "全国カタログから場所マスターへ追加",
@@ -1449,6 +1463,13 @@ private struct CreateEntryMenuDefinition {
                         title: "行く予定を立てる",
                         detail: "施設を選ぶか、新しく登録して予定を追加",
                         systemImage: "calendar.badge.plus"
+                    ),
+                    CreateEntryMenuItem(
+                        action: .record,
+                        title: "訪問の記録をつける",
+                        detail: "登録済み施設へ今回の記録を追加",
+                        systemImage: "square.and.pencil",
+                        requiresExistingRecord: true
                     ),
                     CreateEntryMenuItem(
                         action: .placeCatalog,

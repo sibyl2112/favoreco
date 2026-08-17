@@ -142,6 +142,7 @@ struct EventDetailView: View {
     @State private var actionErrorMessage: String?
     @State private var backSwipeExclusionFrames: [CGRect] = []
     @State private var eyecatchRefreshVersion = 0
+    @State private var eyecatchPreviewRequest: DetailEyecatchPreviewRequest?
     @State private var createContextToken = UUID()
 
     private var category: RecordCategory? {
@@ -298,6 +299,9 @@ struct EventDetailView: View {
         }
         .sheet(isPresented: $isShowingBookShelfAssignment) {
             BookShelfAssignmentView(event: event)
+        }
+        .fullScreenCover(item: $eyecatchPreviewRequest) { request in
+            DetailEyecatchPreview(request: request)
         }
         .onAppear {
             guard let categoryID = category?.id else { return }
@@ -619,6 +623,12 @@ struct EventDetailView: View {
         .frame(width: 148, height: 209)
         .theaterPosterFrame(tint: theaterGold)
         .id(event.updatedAt)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            eyecatchPreviewRequest = DetailEyecatchPreviewRequest(reference: .event(event.id))
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("アイキャッチを拡大表示します")
     }
 
     private var theaterPlanButton: some View {
@@ -666,44 +676,43 @@ struct EventDetailView: View {
         let officialURL = EventDetailPresentation.theaterOfficialURL(event: event)
         let ticketURL = EventDetailPresentation.theaterTicketURL(event: event)
 
-        HStack(spacing: 8) {
+        HStack(spacing: 4) {
             theaterPublicLinkButton(
                 title: "公式サイト",
                 systemImage: "link",
                 url: officialURL
             )
+            .frame(maxWidth: .infinity)
             theaterPublicLinkButton(
                 title: "チケット",
                 systemImage: "ticket",
                 url: ticketURL
             )
+            .frame(maxWidth: .infinity)
 
-            HStack(spacing: 6) {
-                ForEach(TheaterSocialPlatform.allCases) { platform in
-                    let url = EventDetailPresentation.theaterSocialURL(
+            ForEach(TheaterSocialPlatform.allCases) { platform in
+                let url = EventDetailPresentation.theaterSocialURL(
+                    platform: platform,
+                    fields: fields
+                )
+                Button {
+                    if let url { openURL(url) }
+                } label: {
+                    TheaterSocialPlatformIcon(
                         platform: platform,
-                        fields: fields
+                        isActive: url != nil,
+                        size: 30
                     )
-                    Button {
-                        if let url { openURL(url) }
-                    } label: {
-                        TheaterSocialPlatformIcon(
-                            platform: platform,
-                            isActive: url != nil,
-                            size: 30
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(url == nil)
-                    .accessibilityLabel(platform.displayName)
-                    .accessibilityValue(url == nil ? "未登録" : "登録済み")
                 }
+                .buttonStyle(.plain)
+                .disabled(url == nil)
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel(platform.displayName)
+                .accessibilityValue(url == nil ? "未登録" : "登録済み")
             }
-            .accessibilityElement(children: .contain)
-
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
     }
 
     private func theaterPublicLinkButton(
@@ -798,6 +807,14 @@ struct EventDetailView: View {
                     .clipped()
                     .background(accentColor.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        eyecatchPreviewRequest = DetailEyecatchPreviewRequest(
+                            reference: .photo(representativePhoto.id)
+                        )
+                    }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("アイキャッチを拡大表示します")
             } else if let data = event.eyecatchData, let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
@@ -808,6 +825,14 @@ struct EventDetailView: View {
                     .clipped()
                     .background(accentColor.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        eyecatchPreviewRequest = DetailEyecatchPreviewRequest(
+                            reference: .event(event.id)
+                        )
+                    }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("アイキャッチを拡大表示します")
             }
 
             HStack(alignment: .top, spacing: category?.templateKey == "book" ? 0 : 14) {
@@ -941,9 +966,16 @@ struct EventDetailView: View {
             if event.bookPageCount > 0 {
                 EventBookInfoRow(icon: "doc.text", title: "ページ数", value: "\(event.bookPageCount)ページ")
             }
+            if !event.bookContentTypeKey.isEmpty {
+                EventBookInfoRow(
+                    icon: "books.vertical",
+                    title: "本の種類",
+                    value: BookContentType.displayName(for: event.bookContentTypeKey)
+                )
+            }
             EventBookInfoRow(
                 icon: "rectangle.portrait",
-                title: "種類",
+                title: "本の判型",
                 value: EyecatchAspectRatio.resolved(for: event).name
             )
             if let url = URL(string: event.officialURL), !event.officialURL.isEmpty {
@@ -1567,6 +1599,7 @@ struct EditEventView: View {
                             priceText: $draft.bookPriceText,
                             pageCountText: $draft.bookPageCountText,
                             officialURL: $draft.officialURL,
+                            contentTypeKey: $draft.bookContentTypeKey,
                             aspectRatioKey: $draft.eyecatchAspectRatioKey,
                             isEditable: true
                         )
@@ -1904,6 +1937,7 @@ struct EditEventView: View {
         event.eyecatchData = eyecatchData
         if event.category?.templateKey == "book" {
             unitFields.eyecatchAspectRatioKey = draft.eyecatchAspectRatioKey
+            unitFields.bookContentTypeKey = draft.bookContentTypeKey
             unitFields.bookSeriesName = draft.trimmedBookSeriesName
             unitFields.bookVolumeNumber = draft.trimmedBookVolumeNumber
             unitFields.bookAuthorName = draft.trimmedBookAuthorName
@@ -1981,6 +2015,7 @@ private struct EventDraft {
     var bookPublishedDate: String
     var bookPriceText: String
     var bookPageCountText: String
+    var bookContentTypeKey: String
     var subTypeKey: String
     var screenWorkSeasonNumber: Int
     var performanceTypeCustomName: String
@@ -2017,6 +2052,7 @@ private struct EventDraft {
         bookPublishedDate = fields.bookPublishedDate
         bookPriceText = fields.bookPriceText
         bookPageCountText = fields.bookPageCount > 0 ? String(fields.bookPageCount) : ""
+        bookContentTypeKey = fields.bookContentTypeKey
         if event.category?.templateKey == "movie" {
             subTypeKey = ScreenWorkType.resolved(from: subTypeKey).rawValue
         }

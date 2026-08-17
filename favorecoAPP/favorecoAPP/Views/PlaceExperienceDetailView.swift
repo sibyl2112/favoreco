@@ -96,7 +96,10 @@ struct PlaceMasterFacilityRow: View {
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(tint.opacity(0.22), lineWidth: 0.8)
+                .stroke(
+                    tint.opacity(0.22),
+                    lineWidth: CategoryDetailChrome.borderLineWidth
+                )
         }
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
@@ -226,7 +229,10 @@ struct PlaceMasterFacilityGridCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(tint.opacity(0.30), lineWidth: 0.8)
+                .stroke(
+                    tint.opacity(0.30),
+                    lineWidth: CategoryDetailChrome.borderLineWidth
+                )
         }
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onTapGesture(perform: onOpen)

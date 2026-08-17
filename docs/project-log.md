@@ -4,6 +4,369 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-08-17: 施設系の追加入口と場所候補反映を統一
+
+### 原因
+- ミュージアムだけが`対象登録 / 記録 / 施設登録`の3入口で、テーマパーク・自然・その他施設は記録入口が追加メニューに無かった。
+- 全国場所カタログ候補をDraftへ反映した後にキーボードを閉じていたため、編集中の古い施設名が終了時に再確定され、選択済み住所・施設URLを消す場合があった。
+- `施設公式サイト`の直後に`公式URL`が並び、後者が予定固有の案内ページであることが伝わらなかった。
+
+### 変更概要・意図
+- テーマパークへ`来園の記録をつける`、自然・生き物とその他施設へ`訪問の記録をつける`を追加し、施設系を3入口に統一した。
+- 登録済み場所・全国場所カタログ・公演会場候補は、入力確定後に名称・住所・座標・施設公式サイトを反映する順序へ変更した。
+- 施設系の`公式URL`を`この予定の案内ページ（任意）`へ改称し、予約・期間イベント等の予定固有URLとして区別した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/MainTabView.swift`: 施設系ジャンルの記録入口を追加。
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 場所候補の確定順とURL名称を修正し、巨大なフォームを表示単位へ分割。
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 既存のメモSectionで欠けていたView返却を補い、全体ビルドを復旧。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 現行仕様と確認項目を更新。
+
+### 影響する画面・機能
+- テーマパーク、自然・生き物、その他施設系の下部追加メニューと記録対象選択。
+- 同ジャンルの予定追加・編集にある登録済み／全国場所カタログ候補、住所、Map、施設公式サイト、予定案内ページ。
+
+### 確認結果（実機 / ビルド）
+- `MainTabView.swift`、`AddTicketPlanView.swift`、`PlanDetailView.swift`のSwift構文解析と`git diff --check`に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存のMainActor警告のみで、今回の新規エラーはない。
+
+### 既知のリスク・残課題
+- 実機で3入口、記録対象0／1／多数、キーボード表示中の候補選択、住所・座標・施設URLあり／なしを確認する。
+
+## 2026-08-17: 予定入力と公開カタログの情報階層を改善
+
+### 原因
+- 予定対象の一般説明が上部を占有する一方、画像から入力できる入口はチケット欄付近にあり、入力開始時に見つけにくかった。
+- 登録方法の切替がDraftのジャンルまで消去して起動時ジャンルへ戻し、簡易予定ジャンルではジャンル行自体を隠していた。
+- 会場検索が入力欄と別行、予定タグがチケット申込だけに属し、対象アイキャッチも予定作成中に設定できなかった。
+- 公開カタログの0件表示と最終更新が大きな白カードになり、長文の省略と補助情報の過剰な強調が起きていた。
+
+### 変更概要・意図
+- 予定フォーム先頭へ`写真・カメラから情報入力`を移し、対象説明を撤去。画像候補は確認後に反映する。
+- 現在ジャンルを切替後も保持し、全ジャンルでジャンル行を表示。必須項目は共通の赤い`必須`カプセル、項目名は2行まで許容した。
+- 対象共通アイキャッチ、会場欄右のApple Maps検索、登録済み／公開候補、Mapプレビュー、Plan単位の`#`タグを追加した。タグは既存`Plan.unitFieldsRaw`へ保存し、準備・遠征ToDoと共存させる。観劇・LIVEは同ジャンル・同名の既存Eventを親公演として再利用し、存在しない時だけ予定保存と同時に親公演を作成する。
+- 定期イベント0件カードを全文表示・全体タップ再取得へ変更し、`野外音楽フェス`へ改称。施設カタログの注意文を小型化し、最終更新を絞り込みカード外へ移した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 上部取込、アイキャッチ、切替、ジャンル、会場、Map、タグ、保存を実装。
+- `favorecoAPP/favorecoAPP/Utilities/TheaterPerformanceType.swift`, `PlanPreparationFields.swift`, `TheaterUnifiedFormContext.swift`: 必須表示、タグ入力・保存、マイクロコピーを共通化。
+- `favorecoAPP/favorecoAPP/Views/PublicRecurringEventCatalogView.swift`, `PublicPlaceCatalogView.swift`, `SettingsFormComponents.swift`: 再取得と補助表示を整理。
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`, `AddInboxItemView.swift`: 予定タグ表示とクイック登録必須表示を接続。
+- `favorecoAPP/favorecoAPPTests/PlanPreparationKindTests.swift`: 予定タグと準備ToDoの共存・旧JSON互換を追加。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 現行仕様と実機確認項目を更新。
+
+### 影響する画面・機能
+- Home／ジャンルトップから開く全ジャンルの予定追加・編集、対象共通アイキャッチ、会場検索、予定詳細のタグ。
+- 公開定期イベントカタログ、全国／施設／ミュージアム／テーマパーク／自然の公開場所カタログ。
+- TicketAttemptタグの保存先は変更せず、Planタグと分離した。
+
+### 確認結果（実機 / ビルド）
+- 対象Swift 9ファイルの構文解析に成功。
+- 全体ビルドは初回に対象画面群のコンパイルまで進行した。最終完走はCoreSimulator停止とSwiftDataマクロサーバーのmalformed responseで環境中断し、今回コードに限定された確定エラーは検出されていない。
+
+### 既知のリスク・残課題
+- 実機で7ジャンル、新規／気になる／登録済み、画像取込、写真／カメラ、アイキャッチ共有、会場候補0／1／多数、Map、タグ再編集を確認する。
+- 小幅端末、Dynamic Type、長い項目名、カタログ0件／取得済み／通信失敗、ライト／ダークを確認する。
+- 公開定期イベント39件はCloudKit再認証後のDevelopment投入が別途必要。
+
+## 2026-08-17: 予定日時とチケット工程の編集先を明確化
+
+### 原因
+- 日時・会場と各チケット工程は既に編集できたが、観劇予定フォーム内の見出しが`鑑賞記録`、詳細操作が`予定を編集 / チケットを編集`だったため、どちらを開けば目的の情報へ届くかを推測する必要があった。
+- 登録フォームの巨大なView式がコンパイラの型推論上限へ近づき、全体ビルドで簡単なPicker行からタイムアウトしていた。
+
+### 変更概要・意図
+- 観劇予定の日時・会場Sectionを`予定日時・会場`、LIVEを`参戦日時・会場`へ変更した。
+- 予定詳細の操作を`日時・会場を編集`、個別申込の操作を`申込・期限を編集`へ変更し、同じ既存編集シートを開くまま役割だけを明示した。
+- Pickerの選択値型を明示し、動的な項目名を事前計算して巨大View式の型推論負荷を下げた。データモデル、保存、画面遷移、通知は変更していない。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 予定日時Sectionの名称と型推論負荷を調整。
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 予定編集と個別申込編集の操作名を明確化。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 現行仕様、完了状態、確認項目を更新。
+
+### 影響する画面・機能
+- 観劇／LIVEの予定追加・編集、予定詳細、個別チケット申込のコンテキストメニュー。
+- 他ジャンルの操作名、Plan／TicketAttemptの保存内容、通知予約には影響しない。
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftの構文解析と`git diff --check`に成功。
+- 初回全体ビルドで検出した`AddTicketPlanView`の型推論タイムアウトを解消し、再ビルドで`AddTicketPlanView`と`PlanDetailView`のコンパイルを通過した。
+- 最終の署名なしgeneric iPhoneOS向けDebug全体ビルドは、CoreSimulatorサービス切断後にSwiftDataマクロサーバーがmalformed responseを返したため環境中断。今回変更した2画面のコードエラーは出ていない。
+
+### 既知のリスク・残課題
+- 実機／Simulatorで観劇／LIVEの操作名、同じ既存編集シートが開くこと、保存後の予定・Progress・通知への反映を確認する。
+- 小幅端末、Dynamic Type、申込0／1／複数件で操作名の収まりを確認する。
+
+## 2026-08-17: 観劇／LIVE記録を最小入力から即時保存
+
+### 原因
+- 実際の保存条件は新規対象でタイトルのみ、登録済み対象では追加入力なしだが、長いフォームと任意項目の量から、すべて入力しないと保存できないように見えた。
+- 上部の保存ボタンはスクロール位置に依存しないが、保存可能な日付と後から追記できることを説明していなかった。
+
+### 変更概要・意図
+- 観劇／LIVEの新規記録と登録済み対象からの回追加だけに、現在の記録日、後から追記可能な項目、保存ボタンをまとめた下部常設バーを追加した。
+- 新規対象と同時作成する時はタイトルが空なら無効とし、登録済み対象からの回追加は日付のみですぐ保存できる。
+- 既存のDraft・保存処理・上部保存・保存後動作は維持し、保存中フラグで上下どちらから連打しても二重作成しないようにした。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 観劇／LIVEの記録追加へ常設保存バーと二重保存防止を追加。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 現行仕様、完了状態、実機確認項目を更新。
+
+### 影響する画面・機能
+- 観劇／LIVEの新規記録、登録済み公演／ライブからの回追加。
+- 記録編集、他ジャンル、予定・チケット登録の表示と保存条件は変更しない。
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftの構文解析と`git diff --check`に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存のMainActor警告のみ。
+- `simctl`はCoreSimulatorService／`simdiskimaged`切断により端末一覧を取得できず、実画面の操作確認は未実施。
+
+### 既知のリスク・残課題
+- キーボード表示中、小幅端末、Dynamic Type、長い日付、ライト／ダークで常設バーの収まりを確認する。
+- 新規タイトル空／入力済み、登録済み対象、日付変更、連打、保存後に詳細を開く／閉じるの各経路を実機で確認する。
+
+## 2026-08-17: 編集の反映先を明示しFAVO人物画像を軽量化
+
+### 原因
+- 正式名、FAVO呼称、公演キャスト、その回の注目人物がどこへ反映されるかを、利用者がデータ構造から推測する必要があった。
+- FAVO人物一覧は写真Dataを行表示で直接参照し、`UIImage(data:)`を同期実行するため、人物と写真が増えるほどデコード負荷が増える経路があった。
+
+### 変更概要・意図
+- 共通`EditScopeNotice`を追加し、`すべての作品・予定・記録 / MY FAVOだけ / この公演・ライブのすべての予定・記録 / この予定だけ / この観劇・参戦回だけ`を生活語で明示した。
+- 長い観劇フォームでも所属を見失わないよう、`お目当て・注目した人`の横に`この観劇回だけ`を再掲した。
+- FAVO人物一覧の写真は`ThumbnailReference`のUUIDだけを行へ渡し、既存`ThumbnailLoader`で表示行だけを非同期ダウンサンプルしてキャッシュするよう変更した。
+- 入力項目、保存処理、既存モデルの構造は変更していない。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/EditScopeNotice.swift`: 反映先の共通表示。
+- `favorecoAPP/favorecoAPP/Utilities/TheaterUnifiedFormContext.swift`: 公演／ライブ、予定、参加回の反映範囲を入口別に表示。
+- `favorecoAPP/favorecoAPP/Views/MasterManagementView.swift`, `FavoProfileEditorView.swift`: 共通情報とFAVO私有情報の境界を明示。
+- `favorecoAPP/favorecoAPP/Views/TheaterVisitCastEditor.swift`: 注目人物が観劇回限定であることを再掲。
+- `favorecoAPP/favorecoAPP/Views/FavoPeopleManagementView.swift`: アバターを非同期サムネイル表示へ変更。
+- `favorecoAPP/favorecoAPPTests/TheaterUnifiedFormScopeTests.swift`: 公演／ライブ、予定、参加回の反映範囲を固定する回帰テスト。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/17-場所カタログと推し横断設計.md`, `docs/00-開発状況と残課題.md`: 現行仕様と確認項目を更新。
+
+### 影響する画面・機能
+- FAVOの人物・団体一覧、FAVOプロフィール編集、人物・団体編集。
+- 観劇／LIVEの公演情報登録・編集、予定追加・編集、記録追加・編集、観劇回の注目人物。
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftの構文解析と`git diff --check`に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存のMainActor警告のみ。
+- 追加テストのSwift構文解析に成功。`build-for-testing`はCoreSimulatorService切断によりAsset Catalog処理が`No available simulator runtimes`となり環境中断し、テスト実行は未実施。
+- `simctl`はCoreSimulatorService切断で端末一覧を取得できず、Computer UseはMacロックのためSimulator操作を開始できなかった。
+
+### 既知のリスク・残課題
+- Simulator／実機で小幅端末、Dynamic Type、ライト／ダーク、長い反映先表記の折り返しを確認する。
+- FAVO人物0／1／多数件、写真あり／なし、スクロール、画像変更後の再表示を確認する。
+
+## 2026-08-17: FAVOから人物・団体を直接管理
+
+### 原因
+- 推しは写真や呼称を変更する頻度が比較的高いのに、完全な人物・団体管理が設定の深い階層にあった。
+- FAVOの情緒的な写真表現から従来の標準`List`へ進むと、同じ人物を編集するのに画面の言語が急にシステマチックになっていた。
+
+### 変更概要・意図
+- `MY FAVO`見出しへ`人物・団体`の常設導線を追加した。
+- FAVOから開く専用一覧は、写真、個人用呼称、公式名、推し区分、活動分野、関連件数を一連の面で表示し、白い大判カードの反復を避けた。
+- `すべて / FAVO / 人物 / 団体`の絞り込みと、名称・よみ・別名・活動分野の検索を追加した。
+- 新しい保存モデルは作らず、設定と同じ`PersonMaster`、`FavoriteProfile`、追加・編集画面を再利用した。設定側の導線は残し、表示上の内部用語`マスター`だけを外した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/FavoView.swift`: MY FAVOからの直接導線を追加。
+- `favorecoAPP/favorecoAPP/Views/FavoPeopleManagementView.swift`: FAVO専用の人物・団体一覧を新設。
+- `favorecoAPP/favorecoAPP/Views/MasterManagementView.swift`: 既存の追加画面を共用可能にし、利用者向け画面名を整理。
+- `favoreco/CLAUDE.md`: 現行導線とデータ共用規則を追記。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を追記。
+
+### 影響する画面・機能
+- FAVOトップの`MY FAVO`見出しと、新しい人物・団体一覧。
+- 人物・団体の新規追加、編集、FAVO設定、作品・記録との既存紐付け。
+- 設定から開く従来の人物・団体管理。
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析と`git diff --check`に成功。
+- 署名なしgeneric iOS Simulator向けDebug全体ビルドに成功。既存のMainActor警告のみ。
+- 実機画面の確認は未実施。
+
+### 既知のリスク・残課題
+- 0／1／多数件、写真あり／なし、長い名前・活動分野、個人用呼称、検索・絞り込み、追加／編集後の反映、小幅端末、Dynamic Typeを実機で確認する。
+- 入力項目の所属を`全ての記録 / MY FAVOだけ / この公演 / この日だけ`の生活語で示す整理は別作業とし、今回の導線追加では入力フォームの仕様を変えない。
+
+## 2026-08-17: 予定写真の追加導線と公演SNS列を整理
+
+### 原因
+- 保存済み予定の写真欄は、見出し右のテキストボタンと空状態説明で追加を案内しており、写真そのものと操作が離れていた。
+- 公演情報Heroのリンク列は、公式／チケットの後ろへSNSだけを小さい固定間隔で連結していたため左へ偏り、Instagramも汎用カメラ記号でサービスを識別しづらかった。
+
+### 変更概要・意図
+- 写真欄の`写真を追加`テキストと説明文を撤去し、0枚時を含めて4列グリッド末尾へ正方形`＋`タイルを常設した。既存写真と同じ寸法・角Rで、押すと従来の写真ライブラリ／カメラ選択を開く。
+- 公演情報Heroの`公式サイト / チケット / X / Instagram / Threads`を5つの均等幅へ分配し、列全体を中央配置した。
+- Instagramは汎用カメラ記号をやめ、SwiftUIで描くブランド形状へ変更した。XとThreadsを含むURL未登録時の非活性位置は維持した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 写真追加を正方形タイルへ統合。
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 公式・SNS列を均等配置。
+- `favorecoAPP/favorecoAPP/Utilities/TheaterPerformanceType.swift`: Instagram／Threadsのブランド表示部品を調整。
+- `favoreco/CLAUDE.md`: 写真追加とリンク列の現行仕様を追記。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新。
+
+### 影響する画面・機能
+- 全ジャンルの保存済み予定詳細にある写真カード。
+- 観劇の公演情報詳細Heroにある公式サイト、チケット、SNS列。
+- 写真データ、URL保存形式、写真追加元選択、記録化時の写真引継ぎは変更しない。
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存のMainActor警告だけで、今回変更による新規警告はない。
+- Simulatorサービス切断中のため、実画面の目視確認は未実施。
+
+### 既知のリスク・残課題
+- 実機で写真0／1／4／多数、追加元選択、ライト／ダーク、SNS登録あり／なし、長い公式サイト表記、小幅端末を確認する。
+
+## 2026-08-17: 詳細カード枠・アイキャッチ拡大・御朱印帳表示を統一
+
+### 原因
+- 対象／公演情報は1.8〜1.9pt、参加記録は0.8ptなど、同じ情報階層の外周線に画面別の値が残っていた。
+- 対象と参加回のHeroアイキャッチは詳細上で全体を確認できず、Home横断ギャラリーの書影はVisit側の既定比率とfillにより拡大トリミングされていた。
+- 御朱印帳セクションに状態管理の入口がなく、見出しも`使用中の御朱印帳`へ固定され、御朱印の日付に年がなかった。
+
+### 変更概要・意図
+- 0.8ptと1.8〜1.9ptの中間値1.35ptを`CategoryDetailChrome.borderLineWidth`へ集約し、全ジャンルの主要対象・参加・施設詳細カードへ適用した。
+- 対象／公演情報と参加記録のHeroアイキャッチをタップすると、比率を保った全画面プレビューを表示する。背景または右上の閉じる操作で戻れる。
+- Home横断ギャラリーの書籍は、書籍本体の判型比率を使うaspect fitへ変更した。
+- 御朱印帳見出しを状態に依存しない`御朱印帳`へ変更。編集画面からサイズ単位の登録、使用中／閉じる、並び替えを行い、使用中ラベルを一覧へ表示する。御朱印の日付は年を含めた。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TheaterPosterFrame.swift`, `TheaterEventDetailComponents.swift`, `ExperienceDetailView.swift`, `PlaceExperienceDetailView.swift`: 共通1.35pt外周線。
+- `favorecoAPP/favorecoAPP/Views/DetailEyecatchPreview.swift`, `EventDetailView.swift`, `ExperienceDetailView.swift`: 対象／参加アイキャッチの全画面拡大。
+- `favorecoAPP/favorecoAPP/Models/HomeSnapshot.swift`: Home書影の判型解決とfit表示。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`, `CategoryTopGoshuinSections.swift`: 御朱印帳管理入口、使用状態、並び順、年表示。
+- `favoreco/CLAUDE.md`, `docs/00-開発状況と残課題.md`: 現行仕様と実機確認項目。
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`と変更Swiftの構文解析に成功。
+- generic iOS Simulator向けDebug全体ビルドに成功。
+
+### 既知のリスク・残課題
+- 実機で全ジャンルの外周線、画像あり／なしの対象・参加Hero、縦長／横長画像の拡大、背景タップ、Home書影、御朱印帳の登録・使用中／閉じる・並び替え・年表示を確認する。
+- 現行モデルには独立した御朱印帳マスターがないため、今回の管理単位は帳面サイズ。同じサイズの複数冊を別々に管理するには保存モデル追加が必要。
+
+## 2026-08-17: 本の内容分類と判型を分離
+
+### 原因
+- 登録画面の`本の種類`が表紙比率用の`eyecatchAspectRatioKey`へ接続され、Reading Insightsも同じ値を集計していた。初期値がハードカバーのため、内容に関係なく登録本がすべてハードカバーとして表示されていた。
+
+### 変更概要・意図
+- 小説／漫画／エッセイ／実用書／ビジネス書／技術書／児童書・絵本／雑誌／写真集・画集／その他を表す`bookContentTypeKey`を追加した。
+- 従来のコミック／新書／ハードカバー／文庫／雑誌／写真集・画集は`本の判型`へ改名し、書影比率の役割を維持する。
+- 新規登録、読書記録追加、記録編集、本情報編集、次巻追加で内容分類を保存・継承する。Reading Insightsは専用内容分類だけを集計し、既存の未分類本を判型から推測しない。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`: 後方互換のある内容分類キーを追加。
+- `favorecoAPP/favorecoAPP/Views/BookRecordComponents.swift`: 内容分類候補と、本の種類／本の判型の独立入力を追加。
+- `favorecoAPP/favorecoAPP/Views/AddInboxItemView.swift`, `AddExperienceView.swift`, `EventDetailView.swift`: 全登録・編集経路の保存と表示を接続。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: Reading Insightsの集計元を内容分類へ変更し、次巻追加へ分類を継承。
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`, `ExperiencePhotoUnitEditor.swift`: 詳細表示と判型の語彙を統一。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/spec-A3-ユニット別フィールド.md`, `docs/spec-A4-テンプレ別プリセット.md`, `docs/00-開発状況と残課題.md`: 現行仕様、保存先、画面上の役割分離、実機確認項目を更新。
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftの構文解析と`git diff --check`に成功。
+- 署名なしgeneric iOS Simulator向けDebug全体ビルドに成功。既存のMainActor警告だけで、今回変更による新規警告はない。
+
+### 既知のリスク・残課題
+- 実機で新規本／既存本、分類未設定／各分類、次巻追加、保存後の本詳細・読書記録詳細、Reading Insightsの件数更新を確認する。
+- 既存本は誤分類を避けて未設定のままなので、リングへ含めるには各本の編集から内容分類を選ぶ必要がある。
+
+## 2026-08-17: 書籍状態リボンの色と文字を強調
+
+### 変更概要・意図
+- 書影左肩の状態リボンが小さく、`読了`のくすんだ緑も他状態と同程度に見えて完了状態を見分けにくかった。
+- `読了`を赤`#C43D4B`へ変更し、縦書き文字を3列表紙で9pt Boldから10pt Heavy、横長の小型表示で8pt Boldから9pt Heavyへ変更した。
+
+### 影響範囲・確認
+- `CategoryTopView.swift`の共通`BookCoverStatusRibbon`だけを変更するため、書籍トップの3列表紙／横長表示と全状態へ反映する。状態判定、遷移、件数、保存値は変更しない。
+- `CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`へ現行色と書体を反映した。
+- 対象Swiftの構文解析、差分検査、署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。AppIntents未使用の既存警告だけで変更箇所由来の新規警告はない。実機で暗い／明るい書影、4状態、3列／横長、Dynamic Typeを確認する。
+
+## 2026-08-17: 読了本の遷移・書籍情報開閉・詳細枠線を修正
+
+### 原因と変更意図
+- 書籍トップの単巻タップはカード自身の状態ではなく選択中フィルターを見ていたため、`すべて`内の読了本が親の本詳細へ進んでいた。カード自身から導出した最新状態を遷移の正本にする。
+- 読書記録詳細の`書籍の基本情報`だけ静的見出しで、同じ画面の写真・読書メモ・書誌情報と違って閉じられなかった。
+- 記録詳細、予定詳細、公演情報、施設一覧の情報枠は0.8〜0.9ptで、ジャンル色の暗い背景では外周が細く見えていた。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 単巻自身の読書状態から本詳細／最新読書記録詳細を選ぶよう修正。
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: `書籍の基本情報`専用の開閉状態と見出しを追加し、主要情報外周を0.9ptから1.9ptへ変更。
+- `favorecoAPP/favorecoAPP/Views/TheaterPosterFrame.swift`、`TheaterEventDetailComponents.swift`、`PlaceExperienceDetailView.swift`: 予定／記録、公演、施設の共通枠線を従来値から1pt太く変更。
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`: 遷移、開閉、枠線の現行仕様と実機確認項目を更新。
+
+### 影響範囲・確認
+- 書籍トップの単巻遷移、書籍読書記録詳細、全ジャンルの参加記録／予定情報カード、観劇公演情報、ミュージアム／テーマパーク／自然・生き物の施設一覧へ反映する。シリーズ巻一覧、保存モデル、読書状態判定、記録データは変更しない。
+- 対象Swiftの構文解析、`git diff --check`、署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存のMainActor警告とAppIntents未使用警告のみで、変更箇所由来の新規警告はない。
+- 実機で`すべて`内の読書中／読了と気になる／積読、再読複数、基本情報の開閉、ライト／ダークと各ジャンル色で枠線を確認する。
+
+## 2026-08-17: Goodsシリーズ一覧の重なりとタップ停止を修正
+
+### 原因と変更意図
+- 2列カードの内側幅より大きい固定160ptをサムネイル読込・既定画像へ渡し、画像内容がセル外へ描画され得た。シリーズ名の1／2行でもカード内の高さが変わっていた。
+- 種別フィルターで内容が入れ替わる`LazyVGrid`の各カードが、SwiftDataの`ExperienceEvent`実体を保持した`EventDetailView`を個別の`NavigationLink`内へ生成していた。絞り込み再評価と詳細生成が同じセル階層で重なる、過去のComing Up等と同型の停止経路だった。
+- フィルターの横ScrollViewは親のジャンル横スワイプから自動判定で除外していたが、種別選択の操作境界として明示されていなかった。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CollectibleSeriesViews.swift`: 画像を実測セル幅の正方形へ拘束し、カードクリップと2行タイトル高を追加。カードをUUID通知だけのButtonへ変更し、フィルター帯をジャンルスワイプ除外領域にした。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: GoodsカードのUUIDを既存の親単一シリーズ遷移へ接続。
+- `favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`: 現行仕様、原因、実機確認項目を更新。
+
+### 影響範囲
+- Goodsジャンルトップの種別フィルター、2列シリーズ一覧、シリーズ詳細への遷移。
+- シリーズ、ラインナップ、所持数、取引履歴、画像データ、バックアップ形式は変更しない。
+
+### 確認結果
+- 対象Swiftの構文解析と`git diff --check`に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView` MainActor警告2件のみ。
+- Simulator向けDebug全体ビルドをiOS 26.5 Simulatorへインストールし、短名と2行名の2カードで画像・本文・進捗が各セル内に収まることを目視確認。`ガチャ`選択とシリーズ詳細タップも停止せず成功。
+
+### 残課題
+- 実機で各種別／0件、実画像、1／16／多数シリーズ、連続した詳細遷移と復帰、フィルター横スクロールを確認する。
+
+## 2026-08-16: 詳細メモ内のURLをタップ可能に変更
+
+### 原因と変更意図
+- 参加記録のメモは装飾付き`Text`として表示していたが、URLへリンク属性を付けておらず、画面上では通常文字のまま開けなかった。
+- メモの文章性を保ちながら、公式・購入・申込等のURLを本文の位置から直接開けるようにする。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/RichMemoText.swift`: `NSDataDetector`で`http / https`を検出し、既存装飾へリンク、リンク色、下線を重ねる共通処理を追加。
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 通常の感想と書籍の読書メモへ共通リンク付きAttributedStringを適用。
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 保存済み予定のメモへ同じリンク表示を適用。
+
+### 影響範囲・確認
+- メモ本文の表示とURLタップだけに影響する。`Visit.note`／`Plan.memo`、装飾範囲、検索、CSV、バックアップの保存形式は変更しない。
+- 変更Swiftの構文解析、差分検査、署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`BookMetadataLookupService.swift`のMainActor警告のみ。実機でURL単独／文中／複数、末尾句読点、長文省略中、無効文字列を確認する。
+
+## 2026-08-16: 記録メモ装飾・トップ背景・写真情報編集を統合
+
+### 変更概要・意図
+- メモを15pt・最低約8行・左右同余白へ調整し、8行を超える本文では入力欄自体が下へ伸びるようにした。太字／下線／箇条書き／文字色を追加し、本文は`Visit.note`のプレーンテキストを維持、装飾範囲を`VisitUnitFields.memoStyleRuns`へ保存して詳細でも再現する。
+- 非観劇・非書籍の記録編集ではトップ背景を写真ユニットから対象アイキャッチSectionへ移し、既定プリセット／アイキャッチ共用／ライブラリ画像を選べるようにした。
+- 写真情報シートへ確認付き削除を常設し、説明を10.5ptへ縮小、フード金額をグッズ等と同じ費用集計へ追加した。長文メモの可読性と表現力を上げ、代表画像とHero背景の編集場所をまとめ、写真タップ後に支出記録と削除まで完結させる意図。
+- 観劇フォームは回別アイキャッチを`鑑賞記録`へ移して58×82ptへ小型化し、追加の`思い出・資料写真`は`思い出`内へ分離した。写真ユニット内の二重折り畳みを廃止し、ライブラリ／カメラ追加と写真一覧を常時表示する。一括追加時の分類は明示的に`思い出`とした。
+- 大項目の初期展開指定が状態生成で無視されていたため、指定どおり開くよう修正した。手動で閉じた場合も`タップして開く`のラベルとシェブロンを表示し、隠れた入力があることを明確にした。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/RichMemoText.swift`, `Utilities/VisitUnitFields.swift`: リッチメモ編集、装飾保存、詳細再現。
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`, `Views/ExperienceDetailView.swift`, `Views/ExperienceMemoUnitEditor.swift`: 自動伸長メモ、トップ背景3経路、観劇ブロックの初期展開と写真配置。
+- `favorecoAPP/favorecoAPP/Models/PendingExperiencePhoto.swift`, `Models/TheaterEventExpenseSnapshot.swift`, `Utilities/PlanPreparationFields.swift`, `Views/ExperiencePhotoUnitEditor.swift`, `Views/PlanDetailView.swift`, `Views/TheaterEventExpenseComponents.swift`: 写真削除、フード金額、費用集計。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 現行仕様、状態、実機確認項目を更新。
+
+### 影響範囲・確認
+- 全ジャンルの記録メモ入力と詳細表示、非観劇・非書籍の記録編集にある対象画像／Hero背景、全ジャンル共通の写真情報と費用集計、観劇記録の新規追加／既存公演への回追加／編集へ影響する。既存のメモ本文、写真Data、検索、CSV、CloudKitモデルは変更しない。
+- 対象Swiftの構文解析、`git diff --check`、iOS 26.5 SDK／iOS 18.0 deployment targetの署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView` MainActor警告2件と`BookMetadataLookupService`警告のみ。
+- 実機で日本語の部分選択・複数段落・空選択からの装飾、8行以下／8行超の伸長、左右余白、保存後再表示、背景3経路、観劇3入口の初期展開・アイキャッチ・追加写真、ミュージアム／パーク／自然／LIVEを含む写真分類、写真削除時のカバー解除、チケット／フード／グッズ金額の保存・集計、Dynamic Type、ライト／ダークを確認する。
+
 ## 2026-08-16: 体験後詳細の主要情報を連続ナラティブへ統合
 
 ### 原因と変更意図
@@ -30332,3 +30695,322 @@ Homeの見出しに4件とあるのにカードは3件しか表示されず、�
 - 影響範囲: 各ジャンルの予定詳細、ジャンルトップ、Homeから開く保存済み予定の編集。新規予定登録、チケット申込、保存モデルは変更しない。
 - 確認結果: 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView`のMainActor警告2件のみ。
 - 残課題: 予定段階の思い出ブロックは`Plan.memo`を保存する。評価、当日写真、同行者は体験後の`Visit`に保存する。実機でミュージアム予定、日付未定、終了後未記録の初期展開、手動開閉、日時・会場・URL・メモの保存を確認する。
+
+## 2026-08-17: 統計タブのVisit件数表現を「記録」へ統一
+
+### 変更概要・意図
+- 統計タブの年間・累計・月別は、固有の本・作品・公演・施設数ではなくVisit件数を集計している。再読・再鑑賞・再訪でも増える値を`体験`やジャンル固有対象数と誤認させないため、表示語彙を`記録・件`へ統一した。
+- `2026年の記録 / 累計記録 / 月ごとの記録 / n月の記録をすべて見る`へ変更し、月グラフの値名、月一覧タイトル、代表記録、VoiceOverも同じ語彙に揃えた。英字見出しは`Monthly Records`とした。
+- 統計タブのジャンルメニューは横断統計の絞り込みなので、個別ジャンル選択時も`記録・件`を維持する。`冊 / 作品 / 公演 / 館`等はEvent・Visit・Placeを区別できる各ジャンルトップの固有統計へ限定する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/StatsView.swift`: 年間・累計・月別・月一覧・アクセシビリティ文言を`記録`へ統一。
+- `favoreco/CLAUDE.md`: 統計タブとジャンル固有統計の用語境界を現行仕様へ追加。
+- `docs/spec-A5-集計カレンダー地図.md`: 横断統計の名称と単位原則を更新。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新。
+- `docs/project-log.md`: 変更意図、影響範囲、検証結果を記録。
+
+### 影響する画面・機能
+- 統計タブの全ジャンル／個別ジャンル表示にある年間サマリー、月別グラフ、月ドリルダウン、月別記録一覧、VoiceOver。
+- 各ジャンルトップの固有統計、集計値、年・ジャンル選択、グラフ構造、月詳細遷移、保存モデル、他タブは変更しない。
+
+### 確認結果（実機 / ビルド）
+- `StatsView.swift`のSwift構文解析と対象差分検査に成功。
+- iOS 26.5 SDK、iOS 18.0 deployment target、署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView`と`BookMetadataLookupService`のMainActor警告だけで、今回変更による新規警告はない。
+
+### 既知のリスク・残課題
+- 実機で全ジャンル／各ジャンル、0件／1件／多数、月選択、月一覧、VoiceOver、ライト／ダーク、Dynamic Typeを確認する。
+
+## 2026-08-17: ジャンルトップの対象・予定・記録の遷移境界を修正
+
+### 原因
+- LIVEの`Live History`がVisit一覧ではなく共通のExperienceEventライブラリを使っていた。共通カードの日付解決は次のPlanをVisitより優先し、タップは常にEventDetailViewを開くため、未来予定が履歴へ表示され、開いた公演詳細では参加履歴0件になる矛盾が起きていた。
+- LIVEの予定と気になる対象は混在Heroへまとめられ、履歴との境界が見出しから分かりにくかった。
+- 御朱印は気になる件数を統計表示していたが、未参拝の興味あり対象を開く一覧がなかった。
+
+### 変更概要・意図
+- 全標準ジャンルと自作ジャンルのジャンルトップを、ExperienceEvent=対象情報、Plan=同じ1回の参加前、Visit=同じ1回の参加後、PlaceMaster=施設情報として監査した。
+- LIVEを混在`Coming Up / Interests`Heroの対象から外し、`Interests`、`Coming Up`、`Live History`を独立表示した。
+- `Coming Up`は日時確定済みの未来Planだけを予定詳細へ、`Live History`はVisitだけを記録詳細へ接続する。PlanにVisitが紐づいた後は既存PlanDetailViewがExperienceDetailViewへ切り替えるため、予定と記録を同じ1回のライフサイクルとして維持する。
+- LIVE記録カードは`参加済み`、参加日時、会場を表示し、横長固定のまま表示切替を置かない。
+- 御朱印へ`Interests / 気になる寺社`を追加し、未参拝の興味ありExperienceEventを対象詳細から確認できるようにした。
+- `Interests`の空状態から追加する場合は、観劇・LIVEは公演登録、その他のジャンルは対象だけを`interested`で保存するクイック登録へ接続した。記録登録を開いてVisitを作る旧共通導線は使わない。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: LIVEの3段分離、Visit限定履歴、御朱印の気になる入口を実装。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopMovieSections.swift`: 共通Visit横長カードをLIVE記録表示へ対応。
+- `favorecoAPP/favorecoAPPTests/CategoryPlanningHeroPolicyTests.swift`: LIVEが混在Heroを使わない構造へ期待値を更新。
+- `favoreco/CLAUDE.md`, `docs/00-開発状況と残課題.md`, `docs/project-log.md`: 現行仕様、状態、原因と検証結果を記録。
+
+### 影響する画面・機能
+- LIVEジャンルトップの`Interests / Ticket Progress / Coming Up / Live History`と各詳細遷移。
+- 御朱印ジャンルトップの気になる寺社入口。
+- 観劇、ミュージアム、映像作品、酒、テーマパーク、自然・生き物、その他施設、書籍、Goods、自作ジャンルは既存の固有段構造を維持し、表示元モデルと遷移先の監査のみ行った。
+- 保存モデル、CloudKit、バックアップ、通知、統計集計値は変更しない。
+
+### 確認結果（実機 / ビルド）
+- 対象SwiftとテストのSwift構文解析、`git diff --check`に成功。
+- iOS Simulator向け署名なしDebug全体ビルドに成功。既存のAddTicketPlanView MainActor警告2件のみ。
+- iPhone 16 Pro（iOS 18.6）Simulatorで`CategoryPlanningHeroPolicyTests` 2件成功・失敗0件。
+
+### 既知のリスク・残課題
+- 実機でLIVEの未来Plan／興味ありEvent／Visitが各0・1・複数件、同じ公演への複数Visit、日時・会場の長文、ライト固定時の専用ダーク配色を確認する。
+- 御朱印の気になる寺社0・1・多数件、全標準ジャンルと自作ジャンルで各カードが対象／同じ1回／施設の正しい詳細へ進むことを確認する。
+
+## 2026-08-17: LIVEトップの情報順と記録詳細の外枠を修正
+
+### 原因・変更意図
+- LIVEを混在Heroから外した後に代替のチケット管理を先頭へ置いておらず、ミニ統計が先頭へ出ていた。進捗抽出も参加日未定だけに限定していたため、日付確定済みの支払待ちサンプルが表示されなかった。
+- Visit専用のLive Historyへ分けた際、親Eventのライブ情報一覧も同じ分岐で非表示になっていた。
+- 記録詳細の主要情報を罫線で接続した変更で、個別カードだけでなく一覧全体の外枠までなくなっていた。
+
+### 変更概要
+- LIVEトップを`Ticket Management → Interests → Coming Up → Live History → Live Information → ミニ統計`へ変更した。進行中申込は日付確定済みでもTicket Management、申込なし／受取済みの未来PlanはComing Upへ置く。
+- Live Historyカードから重複する`参加済み`を削除し、親ExperienceEventを開く`Live Information / ライブ情報`を履歴直下へ追加した。
+- 予定詳細の左ラベルを値と同じ文字色へ変更し、ウェイトは維持した。
+- 全ジャンルの記録詳細で、主要情報の内部罫線を維持したまま一覧全体へ12pt角丸・ジャンル色0.9ptの長い外枠を戻した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: LIVEの順序、チケット配置、ライブ情報一覧を修正。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopMovieSections.swift`: Live Historyの状態チップを削除。
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 予定・チケット情報の左ラベル色を改善。
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 連続ナラティブ全体へ角丸外枠を追加。
+- `favorecoAPP/favorecoAPPTests/CategoryPlanningHeroPolicyTests.swift`: LIVEチケットのTicket Management／Coming Up配置条件を追加検証。
+
+### 影響範囲・確認
+- LIVEジャンルトップ、全ジャンルの予定詳細ラベルと記録詳細主要情報。保存モデル、通知、バックアップ、集計値は変更しない。
+- 対象Swiftの構文解析、`git diff --check`、署名なしSimulator向けDebug全体ビルドに成功。既存の`AddTicketPlanView` MainActor警告2件のみ。
+- 追加したLIVE配置ポリシーのテストは構文解析済み。CoreSimulatorService切断のためテスト実行は未完了。
+- 実機でLIVEの進行中チケット／申込なし／受取済み、各一覧0／1／多数、長い会場名、詳細のライト／ダーク、全ジャンルの主要情報0／1／多数を確認する。
+
+## 2026-08-17: 統計数値書体と月別棒のタップ選択を修正
+
+### 原因
+- 年・主値・累計・グラフ値はRoboto Monoだったが、最多月とカード内の西暦・比較値は日本語を含む1つの`Text`へ本文フォントを適用しており、数字だけ書体が異なっていた。
+- 月選択にSwift Charts標準の`.chartXSelection`を使っていたため、利用者が期待する即時タップではなく長押し／ドラッグ操作になっていた。同じ月をもう一度選んでもBinding側が同値を無視し、解除できなかった。
+
+### 変更概要・意図
+- `2026年の記録 / 2025年の0件と比較 / 5月が最多・13件`を数字と日本語へ分け、数字はRoboto Mono、単位・説明はNoto Sans JPへ統一した。主値のサイズ・ウェイトによる階層差は維持する。
+- `.chartXSelection`を撤去し、Chartのplot領域上で棒をタップした月を解決する`SpatialTapGesture`へ変更した。同じ棒の再タップは選択解除、別の棒は選択移動とする。
+- 細い棒にも44ptのタップ領域を確保し、隣接領域が重なる場合は中心が最も近い月を選ぶ。0件月や棒外タップでは状態を変えない。選択外34%表示、選択線、内訳、触覚、snappyアニメーション、ScrollViewの縦操作は維持する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/StatsView.swift`: 文中数字のRoboto Mono化と月別棒のタップ／再タップ選択を実装。
+- `favoreco/CLAUDE.md`: 数字書体と月選択操作の現行仕様を更新。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新。
+- `docs/project-log.md`: 原因、変更意図、検証結果を記録。
+
+### 影響する画面・機能
+- 統計タブの年間サマリー、最多月表示、月別積み上げ棒、月ドリルダウン。
+- 集計値、保存モデル、年・ジャンル切替、棒幅・配色、凡例、月一覧と記録詳細への遷移、他タブは変更しない。
+
+### 確認結果（実機 / ビルド）
+- `StatsView.swift`のSwift構文解析と対象差分検査に成功。
+- iOS 26.5 SDK、iOS 18.0 deployment target、署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView`と`BookMetadataLookupService`のMainActor警告だけで、今回変更による新規警告はない。
+
+### 既知のリスク・残課題
+- 実機で1〜12月、低い棒、隣接する棒、同じ棒の選択／解除、別棒への移動、棒外タップ、縦スクロールを確認する。
+- ライト／ダーク、小幅端末、Dynamic Type、VoiceOverで文中数字とタップ操作を確認する。
+
+## 2026-08-17: 思い出レポートの意味表示と期間内全件一覧を修正
+
+### 原因
+- 支出の伏せ字が黒丸だけで金額だと判別しにくく、年間入口は利用環境で解決できない`calendar.badge.star`を指定してアイコンが空欄になっていた。
+- カードプレビューは最多ジャンル、頻出場所、最新記録をラベルなしの値だけで並べ、`書籍 / BIGCAT / 灯台のワルツ`等が何を意味するか説明できていなかった。
+- 2列指標の数値に1行制約と縮小下限がなく、幅や文字サイズによってラベルへ重なった。旧`カード候補`は選定ロジックを持たず、単に新しい順の3件へ制限していた。
+
+### 変更概要・意図
+- 伏せた支出を`¥••••••`へ変更し、年間Favorecoの入口とプレビューを有効なカレンダーアイコンへ統一した。
+- プレビューへ`最多ジャンル / よく出てきた場所 / 最新の記録`を明示。指標値はRoboto Monoの1行表示、縮小下限、締めた字間で2列内の重なりを防ぐ。
+- ジャンル傾向の横棒を、上位5ジャンルと残りを集約した`その他`のドーナツグラフ＋件数凡例へ変更した。
+- `カード候補`と最新3件制限を撤去し、選択期間の全Visitを新しい順に、ジャンルトップと共通の2列記録カードで表示して各記録詳細へ接続した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/StatsView.swift`: 支出、アイコン、意味ラベル、数値収まり、ドーナツ、期間内全件2列表示を実装。
+- `favoreco/CLAUDE.md`: 思い出レポートの現行表示規則を更新。
+- `docs/spec-A5-集計カレンダー地図.md`: 月刊・年間レポートの集計と一覧規則を追加。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新。
+- `docs/project-log.md`: 原因、変更意図、影響、確認結果を記録。
+
+### 影響する画面・機能
+- 統計タブの月刊Favoreco、年間Favoreco、Proロック時の年間入口、共有テキストと共有画像の最新記録ラベル。
+- Visit、写真、ジャンル、場所、評価、金額の保存値と集計規則、統計トップ、各ジャンルトップは変更しない。
+
+### 確認結果（実機 / ビルド）
+- `StatsView.swift`のSwift構文解析と`git diff --check`に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView`と`BookMetadataLookupService`のMainActor警告だけで、今回変更による新規警告はない。
+
+### 既知のリスク・残課題
+- 実機で0／1／多数件、6ジャンル以上、長いジャンル名、場所なし、画像なし、小幅端末、Dynamic Type、VoiceOver、ライト／ダークを確認する。
+- 記録件数が多い月・年は全件描画になるため、実機でスクロール負荷と詳細遷移からの復帰位置を確認する。
+
+## 2026-08-17: LIVEのライブ情報カードを親Event専用表示へ修正
+
+### 原因
+- `Live Information`へ親ExperienceEventの一覧は渡していたが、共通カードを公演情報モードへ切り替える条件が観劇の`Productions`だけだった。
+- そのためLIVEでは共通カードが紐づくPlanとTicketAttemptを再参照し、ライブ情報内へ`受取済み / 取得処理中`、開催日時、会場を表示していた。表示元モデルとカードの意味が一致していなかった。
+
+### 変更概要・意図
+- 観劇の`Productions / 公演情報`とLIVEの`Live Information / ライブ情報`を、同じ親ExperienceEvent専用カードポリシーへ統一した。
+- LIVEのカードは`ライブ情報`ラベル、タイトル、シリーズ／ツアー、種別、親Eventに保存した出演者または主催だけを表示する。Plan・Visit・TicketAttempt由来の状態、日時、会場は表示しない。
+- カードのタップ先は従来どおり親Eventのライブ情報詳細とし、Ticket Management、Coming Up、Live Historyの責務を分離した。
+- 観劇とLIVEだけが対象情報カードを使うこと、計画・履歴Sectionでは使わないことを回帰テストへ追加した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 親Eventカード判定とLIVE用表示内容を修正。
+- `favorecoAPP/favorecoAPPTests/CategoryPlanningHeroPolicyTests.swift`: LIVE／観劇の対象情報カード境界を追加検証。
+- `favoreco/CLAUDE.md`: Live Informationの表示元・非表示項目を仕様化。
+- `docs/15-画面情報設計.md`: 公演情報とライブ情報の同一役割を画面設計へ追記。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新。
+
+### 影響する画面・機能
+- LIVEジャンルトップの`Live Information`横長カードとVoiceOver要約。
+- LIVEのTicket Management、Interests、Coming Up、Live History、親Event詳細、保存モデル、通知、統計値は変更しない。
+- 観劇のProductionsは従来の親Event専用表示を維持する。
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftとテストの構文解析、`git diff --check`に成功。
+- iOS 26.5 SDK、iOS 18.0 deployment target、署名なしgeneric iPhoneOS向けDebug全体ビルドと`build-for-testing`に成功。
+- 既存の`AddTicketPlanView` MainActor警告2件だけで、今回変更による新規警告はない。
+
+### 既知のリスク・残課題
+- 実機でLIVEの親Eventが0／1／多数、シリーズ・出演者・主催の有無、長いタイトルを確認する。
+- チケット状態・未来Plan・Visitが紐づいていてもLive Informationへ状態・日時・会場が表示されず、タップでライブ情報詳細へ進むことを確認する。
+
+## 2026-08-17: レポート重複指標と月全件一覧の情報量を整理
+
+### 原因
+- 月刊・年間Favorecoはカードプレビュー内で記録・写真・ジャンルを表示した後、旧来の`記録 / 写真 / ジャンル / 平均評価`4カードをそのまま再掲していた。数値の収まりではなく重複ブロック自体が不要だった。
+- 統計トップの月全件一覧が汎用`VisitSummaryRow`を使い、評価、参加状態、人物、メモ、金額、OCR、詳細バッジまで自動表示していた。月内の記録を探す一覧の責務を超えていた。
+
+### 変更概要・意図
+- 思い出レポートのプレビュー直下から重複4指標グリッドを撤去した。平均評価は共有要約と生成カードへ残し、画面内の重複を正当化するための単独カードにはしない。
+- 月全件一覧を専用の簡潔な行へ変更し、アイキャッチ、タイトル、日付、ジャンル名、保存されている場合だけ場所を表示する。評価、参加状態、人物、メモ、金額、OCR、詳細バッジは表示しない。
+- 行全体から既存の記録詳細へ進む動作、代表記録のMY FAVO表示、画像→対象アイキャッチのフォールバックは維持する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/StatsView.swift`: 重複指標を撤去し、代表行を月一覧でも使える簡潔な記録行へ一般化。
+- `favoreco/CLAUDE.md`: レポートの非重複原則と月一覧の表示項目を更新。
+- `docs/spec-A5-集計カレンダー地図.md`: 月全件一覧の情報境界を追記。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新。
+- `docs/project-log.md`: 原因、変更意図、影響、確認結果を記録。
+
+### 影響する画面・機能
+- 月刊・年間Favorecoのカードプレビュー直下。
+- 統計トップの月選択内訳、`n月の記録をすべて見る`から開く月一覧、記録詳細への遷移。
+- 記録詳細、他画面の`VisitSummaryRow`、保存値、集計値、共有内容は変更しない。
+
+### 確認結果（実機 / ビルド）
+- `StatsView.swift`のSwift構文解析と`git diff --check`に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存の`AddTicketPlanView`と`BookMetadataLookupService`のMainActor警告だけで、今回変更による新規警告はない。
+
+### 既知のリスク・残課題
+- 実機で場所あり／なし、画像あり／なし、長いタイトル／ジャンル／場所、0／1／多数件、Dynamic Type、VoiceOver、詳細遷移と戻り位置を確認する。
+
+## 2026-08-17: LIVE Ticket Managementを観劇と同じPlanカードへ統一
+
+### 原因
+- LIVEトップの表示対象は正しくPlanへ分離していたが、描画だけが全ジャンル向けの簡易`CategoryTicketProgressCard`へ接続されたままだった。
+- 簡易カードはタイトル、日時・会場チップ、工程だけを描くため、観劇のTicket Managementにあるアイキャッチと公演基本情報を持つ大判カード構造がLIVEへ反映されていなかった。
+
+### 変更概要・意図
+- 観劇専用だった大判Ticket Managementカードを観劇／LIVE共通のPlanカードへ一般化した。
+- LIVEも上段へアイキャッチ、ライブ名、開催日、開演時刻、会場を表示し、その下へ区切り線、`Ticket Progress`、申込枠・購入先、工程、`チケット追加 / 詳細`を続ける。
+- 1 Planを1カードとし、複数TicketAttemptは同じカード内へまとめる。LIVEではティール配色と保存済みアイキャッチ比率を使い、情報階層と操作は観劇に揃える。
+- 観劇／LIVEだけが大判Planカードを使う境界を回帰テストへ追加した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: LIVEのTicket Managementを共通大判Planカードへ接続し、LIVE配色・画像比率・会場フォールバックを追加。
+- `favorecoAPP/favorecoAPPTests/CategoryPlanningHeroPolicyTests.swift`: 観劇／LIVEと他ジャンルのカード境界を検証。
+- `favoreco/CLAUDE.md`: LIVE Ticket Managementの表示順・表示項目・Plan単位を仕様化。
+- `docs/15-画面情報設計.md`: 観劇との共通構造と簡易カードへ戻さない設計判断を追記。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新。
+
+### 影響する画面・機能
+- LIVEジャンルトップの`Ticket Management`と、そこから開く予定詳細、予定編集、チケット追加、進捗管理。
+- 観劇のTicket Managementは共通部品化後も既存のワイン／ゴールド／ローズ外観とB判ポスター比率を維持する。
+- Interests、Coming Up、Live History、Live Information、保存モデル、通知、統計値は変更しない。
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftとテストの構文解析、`git diff --check`、署名なしgeneric iOS Simulator向けDebug全体ビルド、generic iPhoneOS向け`build-for-testing`に成功した。
+- CoreSimulatorServiceが切断状態のため、この環境ではアプリ起動後のスクリーンショット確認を完了できていない。
+
+### 既知のリスク・残課題
+- 実機でLIVEの日時確定／未定、会場あり／なし、アイキャッチあり／なし、TicketAttempt 1／複数件、長いタイトル、小幅端末を確認する。
+- LIVEカードから予定詳細、予定編集、チケット追加、進捗管理へ正しく遷移し、観劇カードの外観が変わっていないことを確認する。
+
+## 2026-08-17: ジャンルトップをティッカー・Memory・独立Sectionへ再構成
+
+### 原因
+- ジャンルトップの0pxスクロールアンカーが外側VStackの1行として扱われ、実高は0でも次の内容との間へ24ptの余白が入っていた。書籍ティッカー上部の空きが意図より大きく見える原因だった。
+- 映像作品、ミュージアム、テーマパーク、自然・生き物は、予定と気になる対象を1つの横Heroへ混在させたため、目的別に探しづらく、縦長アイキャッチではHeroが画面を占有しやすかった。
+- 観劇とLIVEはチケット対応が最優先であり、同じHero変更を適用するとTicket Managementの優先度を下げる。
+
+### 変更概要・意図
+- 書籍、観劇、LIVE、映像作品、ミュージアム、テーマパーク、自然・生き物の上端へ、書籍と同じ枠なし3分割ティッカーを配置した。数値はジャンル色のセリフ、ラベルと単位は控えめな本文色とする。
+- 0pxアンカーを内容VStack自身へ移し、スクロール上端を2ptへ詰めた。
+- 映像作品、ミュージアム、テーマパーク、自然・生き物は、過去Visitから日単位で安定選択する1件を156pt固定高のMemory Heroへ表示する。縦長画像は94×132ptへ収め、カード全体からVisit詳細へ進む。
+- 4ジャンルは`Coming Up → Interests → 記録 → 施設情報`へ分離した。観劇とLIVEは既存の大判Ticket Managementを維持し、その上へティッカーだけを追加した。
+- 対象ジャンルトップ下部の大きい3列ミニ統計を撤去した。トップはティッカーの早見だけとし、詳細統計は統計タブのジャンル選択へ集約する。
+- 旧`Coming Up / Interests`統合Hero、候補抽出、Carousel部品は削除せず、`CategoryPlanningHeroPolicy.isIntegratedHeroEnabled`で再採用できる形を残した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: ティッカーポリシー、Memory Hero、Section順、上端間隔、旧Heroの有効化境界を実装。
+- `favorecoAPP/favorecoAPPTests/CategoryPlanningHeroPolicyTests.swift`: 旧統合Heroを保持しつつ現行はMemory構成を使う境界を検証。
+- `favoreco/CLAUDE.md`: 現行ジャンルトップ構成と旧Heroの扱いを仕様化。
+- `docs/15-画面情報設計.md`: 上段と本文の表示順、固定寸法、統計の責務を更新。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新。
+
+### 影響する画面・機能
+- 書籍、観劇、LIVE、映像作品、ミュージアム、テーマパーク、自然・生き物のジャンルトップ上段。
+- 4ジャンルの予定、気になる、Visit記録、施設情報の表示順と、Memoryから開くVisit詳細。
+- Plan、Visit、ExperienceEvent、PlaceMaster、画像、統計値の保存方式は変更しない。観劇／LIVEのTicket Managementカードと操作も変更しない。
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`に成功。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドとテストビルドに成功。既存のMainActor警告だけで、今回変更による新規警告はない。
+- Simulatorサービス切断中のため、実画面の目視確認は未実施。
+
+### 既知のリスク・残課題
+- 実機で7ジャンルの上部間隔、ティッカー3値の小幅端末／Dynamic Typeでの収まり、ライト／ダークを確認する。
+- Memoryの0／1／多数件、写真／対象画像／既定画像、縦横比、日次固定、詳細遷移を確認する。
+- 4ジャンルの予定・気になる順、施設の有無、観劇／LIVEのTicket Management外観と全操作が維持されることを確認する。
+## 2026-08-17: 全ジャンルの予定・記録編集を1枚の3段階シートへ統一
+
+### 原因
+- 保存済み予定の編集は初回登録用の平坦フォームへ分岐し、体験記録編集の段階式フォームと見え方が異なっていた。
+- 段階式フォーム内にも外側と同じタイトル・説明・`閉じる`表示が残り、情報階層が二重に見えていた。
+- 評価が写真より後ろにあり、対象アイキャッチとトップ背景の操作も大きいプレビューと縦並びボタンで画面を占有していた。
+
+### 変更概要・意図
+- 観劇、LIVE、映像作品、ミュージアム、テーマパーク、自然・生き物、書籍、御朱印、酒、Goodsの記録入力を、ジャンル別の主記録／思い出・感想／備考記録を持つ1枚のシートへ統一した。
+- 保存済みPlanの予定編集も同じ3段階の外観へ変更した。日付未定・開催前は主記録＋思い出、終了後は思い出＋備考を初期展開し、すべての段階をいつでも手動で開ける。
+- 単一ユニットで重複していた内側タイトル・説明・開閉文字を撤去し、段階名、要約、入力状態、シェブロンを中央揃えにした。入力済み要約は閉じた状態でも残す。
+- ミュージアム、テーマパーク、自然・生き物、映像作品の評価を思い出内の写真より前へ移動した。
+- 対象アイキャッチを左の小型プレビュー、右の写真ライブラリ／カメラ／削除へ整理し、トップ背景候補を4列へ変更した。
+- 巨大化した`EditExperienceView.body`はForm本文を小さなViewBuilder境界へ分割し、Swiftコンパイラの型推論時間超過を解消した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 全ジャンルの段階式構成、初期展開、共通見出し、評価順、アイキャッチ／背景UIを実装。
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 保存済み予定編集を同じ3段階の1枚シートへ変更し、ライフサイクル別初期展開を実装。
+- `favorecoAPP/favorecoAPP/Views/RecordLifecycleSheetComponents.swift`: 予定／記録共通の3段階Section、入力状態、状態別初期展開を実装。
+- `favorecoAPP/favorecoAPP/Views/ExperienceBasicUnitEditor.swift`: 会場・施設入力を明示ラベル、短い例示、共通区切り線と既存候補表示へ統一。
+- `favorecoAPP/favorecoAPP/Views/ScreenWorkRecordEditors.swift`: 映像作品の評価を独立した思い出段階へ移せるよう分離。
+- `favorecoAPP/favorecoAPPTests/RecordLifecycleSheetTests.swift`: 3段階の初期展開とPlanからVisitへの公演・施設情報継承を検証。
+- `favoreco/CLAUDE.md`: 3段階フォームと画像操作の現行仕様を更新。
+- `docs/00-開発状況と残課題.md`: 実装状態と実機確認項目を更新。
+
+### 影響する画面・機能
+- 全ジャンルの新規記録、既存対象への回追加、予定からの記録、保存済み記録編集。
+- 全ジャンルの保存済み予定編集。
+- 非観劇・非書籍の対象アイキャッチとトップ背景編集。
+- PlanとVisitの保存責務は維持し、予定編集だけで体験済みVisitを作らない。
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析と`git diff --check`に成功。
+- 巨大な記録編集本文を小さなViewBuilder境界へ分割し、署名なしgeneric iPhoneOS向け全体ビルドに成功した。
+- 予定／記録共通の初期展開規則と、PlanからVisit下書きへの日時・施設・住所・座標・公式URL・親参照継承を単体テストとして追加し、iPhone 16 Pro・iOS 18.6 Simulatorで対象2件が成功・失敗0件。iOS Simulator向け`build-for-testing`にも成功した。
+
+### 既知のリスク・残課題
+- 実機で全10ジャンル、日付未定／開催前／終了後／記録済み、入力0／一部／完了、3段階の手動開閉と保存後再表示を確認する。
+- 小幅端末、Dynamic Type、長い段階名・要約、画像なし／あり、カメラ利用不可、背景4件以上を確認する。

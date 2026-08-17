@@ -16,17 +16,20 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
 
     var checklistModeKey: String = ChecklistMode.automatic.rawValue
     var tasks: [PlanPreparationTask] = []
+    var tagNames: [String] = []
     var admissionPreparationConfirmedAt: Date?
     var admissionPreparationSnoozedUntil: Date?
 
     init(
         checklistModeKey: String = ChecklistMode.automatic.rawValue,
         tasks: [PlanPreparationTask] = [],
+        tagNames: [String] = [],
         admissionPreparationConfirmedAt: Date? = nil,
         admissionPreparationSnoozedUntil: Date? = nil
     ) {
         self.checklistModeKey = checklistModeKey
         self.tasks = tasks
+        self.tagNames = tagNames
         self.admissionPreparationConfirmedAt = admissionPreparationConfirmedAt
         self.admissionPreparationSnoozedUntil = admissionPreparationSnoozedUntil
     }
@@ -34,6 +37,7 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case checklistModeKey
         case tasks
+        case tagNames
         case admissionPreparationConfirmedAt
         case admissionPreparationSnoozedUntil
     }
@@ -43,6 +47,7 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
         checklistModeKey = try container.decodeIfPresent(String.self, forKey: .checklistModeKey)
             ?? ChecklistMode.automatic.rawValue
         tasks = try container.decodeIfPresent([PlanPreparationTask].self, forKey: .tasks) ?? []
+        tagNames = try container.decodeIfPresent([String].self, forKey: .tagNames) ?? []
         admissionPreparationConfirmedAt = try container.decodeIfPresent(
             Date.self,
             forKey: .admissionPreparationConfirmedAt
@@ -94,11 +99,13 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
         let normalized = PlanPreparationFields(
             checklistModeKey: checklistModeKey,
             tasks: normalizedTasks,
+            tagNames: tagNames,
             admissionPreparationConfirmedAt: admissionPreparationConfirmedAt,
             admissionPreparationSnoozedUntil: admissionPreparationSnoozedUntil
         )
         guard normalized.checklistMode != .automatic
                 || !normalized.tasks.isEmpty
+                || !normalized.tagNames.isEmpty
                 || normalized.admissionPreparationConfirmedAt != nil
                 || normalized.admissionPreparationSnoozedUntil != nil,
               let data = try? JSONEncoder().encode(normalized),
@@ -302,6 +309,7 @@ struct ExperienceExpenseSummary {
     let ticketPhotoAmount: Decimal
     let ticketAmount: Decimal
     let goodsAmount: Decimal
+    let foodAmount: Decimal
     let travelAmount: Decimal
     let legacyAmount: Decimal
     let legacyEntries: [VisitExpenseEntry]
@@ -309,7 +317,7 @@ struct ExperienceExpenseSummary {
     let usesLegacyFallback: Bool
 
     var structuredAmount: Decimal {
-        ticketAmount + goodsAmount + travelAmount
+        ticketAmount + goodsAmount + foodAmount + travelAmount
     }
 
     var total: Decimal {
@@ -319,10 +327,11 @@ struct ExperienceExpenseSummary {
     static func make(visit: Visit?, plan: Plan?) -> ExperienceExpenseSummary {
         let ticketPhotoAmount = ExperienceExpenseCalculator.photoAmount(for: visit, purpose: .ticket)
         let goodsAmount = ExperienceExpenseCalculator.photoAmount(for: visit, purpose: .goods)
+        let foodAmount = ExperienceExpenseCalculator.photoAmount(for: visit, purpose: .food)
         let ticketAttemptAmount = ExperienceExpenseCalculator.securedTicketAmount(for: plan)
         let travelAmount = ExperienceExpenseCalculator.travelAmount(for: plan)
         let ticketAmount = ticketAttemptAmount > 0 ? ticketAttemptAmount : ticketPhotoAmount
-        let structuredAmount = ticketAmount + goodsAmount + travelAmount
+        let structuredAmount = ticketAmount + goodsAmount + foodAmount + travelAmount
         let legacyAmount = max(visit?.amount ?? Decimal(0), Decimal(0))
         let legacyEntries = VisitUnitFields(rawValue: visit?.unitFieldsRaw ?? "")
             .expenseEntries
@@ -333,6 +342,7 @@ struct ExperienceExpenseSummary {
             ticketPhotoAmount: ticketPhotoAmount,
             ticketAmount: ticketAmount,
             goodsAmount: goodsAmount,
+            foodAmount: foodAmount,
             travelAmount: travelAmount,
             legacyAmount: legacyAmount,
             legacyEntries: legacyEntries,

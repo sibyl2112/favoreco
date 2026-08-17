@@ -534,6 +534,7 @@ struct ExplicitFormTextField: View {
 struct ExplicitFormControlRow<Control: View>: View {
     let title: String
     var isOptional = false
+    var isRequired = false
     var density: ExplicitFormControlRowDensity = .standard
     @ViewBuilder let control: () -> Control
 
@@ -542,7 +543,7 @@ struct ExplicitFormControlRow<Control: View>: View {
             ExplicitFormFieldTitle(
                 title: title,
                 isOptional: isOptional,
-                isRequired: false
+                isRequired: isRequired
             )
 
             HStack(spacing: 0) {
@@ -572,6 +573,7 @@ struct ExplicitFormControlRow<Control: View>: View {
 struct ExplicitFormFullWidthControlRow<Control: View>: View {
     let title: String
     var isOptional = false
+    var isRequired = false
     @ViewBuilder let control: () -> Control
 
     var body: some View {
@@ -579,7 +581,7 @@ struct ExplicitFormFullWidthControlRow<Control: View>: View {
             ExplicitFormFieldTitle(
                 title: title,
                 isOptional: isOptional,
-                isRequired: false
+                isRequired: isRequired
             )
 
             control()
@@ -617,8 +619,8 @@ struct ExplicitFormFieldTitle: View {
                     )
                 )
                 .foregroundStyle(Color.primary.opacity(0.78))
-                .lineLimit(1)
-                .minimumScaleFactor(0.76)
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
                 .allowsTightening(true)
 
             if isOptional {
@@ -627,8 +629,11 @@ struct ExplicitFormFieldTitle: View {
                     .foregroundStyle(Color.secondary.opacity(0.72))
             } else if isRequired {
                 Text("必須")
-                    .font(FavorecoTypography.jpSans(10, weight: .semibold, relativeTo: .caption2))
-                    .foregroundStyle(Color.accentColor)
+                    .font(FavorecoTypography.jpSans(9.5, weight: .bold, relativeTo: .caption2))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.red.opacity(0.88), in: Capsule())
             }
 
             if !note.isEmpty {
@@ -640,7 +645,7 @@ struct ExplicitFormFieldTitle: View {
                     .allowsTightening(true)
             }
         }
-        .frame(height: 21, alignment: .bottom)
+        .frame(minHeight: 21, alignment: .bottom)
     }
 }
 
@@ -683,31 +688,45 @@ struct TicketTagInputField: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            TextField(
-                "タグ",
-                text: $pendingTag,
-                prompt: Text(canAddAnotherTag ? "タグを入力" : "最大12件まで")
-                    .foregroundStyle(Color.secondary.opacity(0.7))
-            )
-            .font(
-                FavorecoTypography.jpSans(
-                    ExplicitFormMetrics.inputFontSize,
-                    weight: .regular,
-                    relativeTo: .body
+            HStack(spacing: 8) {
+                TextField(
+                    "タグ",
+                    text: $pendingTag,
+                    prompt: Text(canAddAnotherTag ? "タグを入力" : "最大12件まで")
+                        .foregroundStyle(Color.secondary.opacity(0.7))
                 )
-            )
-            .focused($isInputFocused)
-            .submitLabel(.return)
-            .disabled(!canAddAnotherTag)
-            .onSubmit(commitPendingTag)
-            .onChange(of: pendingTag) { _, newValue in
-                if newValue.contains("\n") || newValue.contains("\r") {
-                    commitPastedTagLines(newValue)
-                } else {
-                    synchronizeBinding()
+                .font(
+                    FavorecoTypography.jpSans(
+                        ExplicitFormMetrics.inputFontSize,
+                        weight: .regular,
+                        relativeTo: .body
+                    )
+                )
+                .focused($isInputFocused)
+                .submitLabel(.return)
+                .disabled(!canAddAnotherTag)
+                .onSubmit(commitPendingTag)
+                .onChange(of: pendingTag) { _, newValue in
+                    if newValue.contains("\n") || newValue.contains("\r") {
+                        commitPastedTagLines(newValue)
+                    } else {
+                        synchronizeBinding()
+                    }
+                }
+                .frame(minHeight: 27, alignment: .leading)
+
+                if canAddAnotherTag && !pendingTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button(action: commitPendingTag) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 26, height: 26)
+                            .background(Color.accentColor, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("タグを追加")
                 }
             }
-            .frame(minHeight: 27, alignment: .leading)
         }
         .padding(.top, ExplicitFormMetrics.rowTopPadding)
         .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
@@ -731,7 +750,7 @@ struct TicketTagInputField: View {
 
     private func tagCapsule(_ tag: String) -> some View {
         HStack(spacing: 3) {
-            Text(tag)
+            Text("#\(tag)")
                 .font(FavorecoTypography.jpSans(13, weight: .medium, relativeTo: .subheadline))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -943,13 +962,42 @@ struct TheaterSocialPlatformIcon: View {
         switch platform {
         case .x:
             Text("X")
-                .font(.system(size: size * 0.42, weight: .medium, design: .rounded))
+                .font(.system(size: size * 0.45, weight: .medium, design: .default))
         case .instagram:
-            FavorecoIcon(systemName: "camera", size: size * 0.42)
+            InstagramBrandMark(size: size * 0.48)
         case .threads:
-            Text("@")
-                .font(.system(size: size * 0.50, weight: .bold, design: .rounded))
+            ThreadsBrandMark(size: size * 0.52)
         }
+    }
+}
+
+private struct InstagramBrandMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .stroke(lineWidth: max(1.4, size * 0.10))
+            Circle()
+                .stroke(lineWidth: max(1.3, size * 0.09))
+                .frame(width: size * 0.43, height: size * 0.43)
+            Circle()
+                .frame(width: size * 0.12, height: size * 0.12)
+                .offset(x: size * 0.27, y: -size * 0.27)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+private struct ThreadsBrandMark: View {
+    let size: CGFloat
+
+    var body: some View {
+        Text("@")
+            .font(.system(size: size, weight: .semibold, design: .rounded))
+            .scaleEffect(x: 0.90, y: 1)
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }
 

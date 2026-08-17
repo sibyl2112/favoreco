@@ -194,11 +194,11 @@ struct StatsView: View {
         }.first
     }
 
-    private var busiestMonthSummary: String {
+    private var busiestMonth: StatsMonthlyTotal? {
         guard let busiest = monthlyStackedTotals.max(by: { $0.count < $1.count }), busiest.count > 0 else {
-            return "記録なし"
+            return nil
         }
-        return "\(busiest.month)月が最多・\(busiest.count)件"
+        return busiest
     }
 
     private var thisYearVisits: [Visit] {
@@ -517,14 +517,12 @@ struct StatsView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 LayeredCategorySectionTitle(
-                    englishTitle: "Monthly Experiences",
-                    japaneseTitle: "月ごとの体験",
+                    englishTitle: "Monthly Records",
+                    japaneseTitle: "月ごとの記録",
                     foregroundColor: statisticsAccent
                 )
                 Spacer()
-                Text(busiestMonthSummary)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
+                busiestMonthLabel
             }
 
             VStack(alignment: .leading, spacing: 14) {
@@ -541,7 +539,7 @@ struct StatsView: View {
                             if stat.count > 0 {
                                 BarMark(
                                     x: .value("月", stat.monthKey),
-                                    y: .value("体験数", stat.count),
+                                    y: .value("記録数", stat.count),
                                     width: .fixed(20)
                                 )
                                 .foregroundStyle(stat.color)
@@ -559,7 +557,7 @@ struct StatsView: View {
                             if total.count > 0 {
                                 PointMark(
                                     x: .value("月", total.monthKey),
-                                    y: .value("体験数", total.count)
+                                    y: .value("記録数", total.count)
                                 )
                                 .foregroundStyle(Color.clear)
                                 .opacity(
@@ -606,10 +604,26 @@ struct StatsView: View {
                                 .font(StatsTypography.number(11, weight: .medium, relativeTo: .caption2))
                         }
                     }
-                    .chartXSelection(value: statisticsMonthSelection)
+                    .chartOverlay { proxy in
+                        GeometryReader { geometry in
+                            Rectangle()
+                                .fill(Color.clear)
+                                .contentShape(Rectangle())
+                                .simultaneousGesture(
+                                    SpatialTapGesture()
+                                        .onEnded { value in
+                                            selectStatisticsMonth(
+                                                at: value.location,
+                                                proxy: proxy,
+                                                geometry: geometry
+                                            )
+                                        }
+                                )
+                        }
+                    }
                     .frame(height: 230)
                     .accessibilityLabel(
-                        Text(verbatim: "\(FavorecoDateText.year(selectedStatisticsYear))の月別・ジャンル別体験数")
+                        Text(verbatim: "\(FavorecoDateText.year(selectedStatisticsYear))の月別・ジャンル別記録数")
                     )
                     .animation(.snappy(duration: 0.28), value: selectedStatisticsYear)
                     .animation(.snappy(duration: 0.28), value: selectedStatisticsCategoryID)
@@ -643,20 +657,75 @@ struct StatsView: View {
         }
     }
 
-    private var statisticsMonthSelection: Binding<String?> {
-        Binding(
-            get: { selectedStatisticsMonth.map(String.init) },
-            set: { rawValue in
-                let nextMonth = rawValue.flatMap(Int.init)
-                guard nextMonth != selectedStatisticsMonth else { return }
-                withAnimation(.snappy(duration: 0.24)) {
-                    selectedStatisticsMonth = nextMonth
-                }
-                if nextMonth != nil {
-                    UISelectionFeedbackGenerator().selectionChanged()
-                }
+    @ViewBuilder
+    private var busiestMonthLabel: some View {
+        if let busiestMonth {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("\(busiestMonth.month)")
+                    .font(StatsTypography.number(12, weight: .medium, relativeTo: .caption))
+                    .monospacedDigit()
+                Text("月が最多・")
+                    .font(FavorecoTypography.caption)
+                Text("\(busiestMonth.count)")
+                    .font(StatsTypography.number(12, weight: .medium, relativeTo: .caption))
+                    .monospacedDigit()
+                Text("件")
+                    .font(FavorecoTypography.caption)
             }
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(busiestMonth.month)月が最多、\(busiestMonth.count)件")
+        } else {
+            Text("記録なし")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func selectStatisticsMonth(
+        at location: CGPoint,
+        proxy: ChartProxy,
+        geometry: GeometryProxy
+    ) {
+        guard let plotFrameAnchor = proxy.plotFrame else { return }
+        let plotFrame = geometry[plotFrameAnchor]
+        let plotLocation = CGPoint(
+            x: location.x - plotFrame.minX,
+            y: location.y - plotFrame.minY
         )
+        guard CGRect(origin: .zero, size: plotFrame.size).contains(plotLocation) else { return }
+
+        let tappedMonth = monthlyStackedTotals
+            .filter { $0.count > 0 }
+            .compactMap { total -> (month: Int, distance: CGFloat)? in
+                guard
+                    let centerX = proxy.position(forX: total.monthKey),
+                    let zeroY = proxy.position(forY: 0),
+                    let topY = proxy.position(forY: total.count)
+                else { return nil }
+
+                let renderedHeight = abs(zeroY - topY)
+                let hitHeight = max(44, renderedHeight)
+                let centerY = (zeroY + topY) / 2
+                let hitArea = CGRect(
+                    x: centerX - 22,
+                    y: centerY - hitHeight / 2,
+                    width: 44,
+                    height: hitHeight
+                )
+                guard hitArea.contains(plotLocation) else { return nil }
+                return (total.month, abs(plotLocation.x - centerX))
+            }
+            .min { $0.distance < $1.distance }?
+            .month
+
+        guard let tappedMonth else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(.snappy(duration: 0.24)) {
+            selectedStatisticsMonth = selectedStatisticsMonth == tappedMonth ? nil : tappedMonth
+        }
     }
 
     @ViewBuilder
@@ -694,9 +763,10 @@ struct StatsView: View {
                     NavigationLink {
                         ExperienceDetailView(visit: representativeVisit)
                     } label: {
-                        StatsMonthRepresentativeRow(
+                        StatsMonthRecordRow(
                             visit: representativeVisit,
-                            isFavoRelated: isRelatedToFavo(representativeVisit)
+                            showsFavoBadge: isRelatedToFavo(representativeVisit),
+                            isRepresentative: true
                         )
                     }
                     .buttonStyle(.plain)
@@ -710,7 +780,7 @@ struct StatsView: View {
                     )
                 } label: {
                     HStack(spacing: 6) {
-                        Text("\(month)月の体験をすべて見る")
+                        Text("\(month)月の記録をすべて見る")
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
@@ -726,7 +796,7 @@ struct StatsView: View {
         .padding(12)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(month)月の体験、\(selectedMonthVisits.count)件")
+        .accessibilityLabel("\(month)月の記録、\(selectedMonthVisits.count)件")
     }
 
     private func representativePriority(for visit: Visit) -> Int {
@@ -1106,7 +1176,7 @@ struct StatsView: View {
                             title: "年間Favoreco",
                             badge: "手動作成",
                             detail: "年間ベスト、今年の10枚、よく通った場所、ジャンル横断の変化を見返します。",
-                            systemImage: "calendar.badge.star"
+                            systemImage: "calendar"
                         )
                     }
                     .buttonStyle(.plain)
@@ -1114,7 +1184,7 @@ struct StatsView: View {
                     StatsLockedFeatureCard(
                         title: "年間Favoreco",
                         message: "1年分の記録を集計し、年間の思い出カードを手動で作成・共有できます。",
-                        systemImage: "calendar.badge.star",
+                        systemImage: "calendar",
                         requirement: "Pro以上"
                     )
                 }
@@ -1266,7 +1336,7 @@ private enum StatsReportKind {
     func emptyMessage(for periodLabel: String) -> String {
         switch self {
         case .monthly:
-            return "\(periodLabel)に記録が入ると、思い出カード候補がここに表示されます。"
+            return "\(periodLabel)に記録が入ると、この期間の記録がここに表示されます。"
         case .yearly:
             return "\(periodLabel)に記録が入ると、年間まとめやベスト候補がここに表示されます。"
         }
@@ -1349,6 +1419,28 @@ private struct StatsReportDraftView: View {
         categoryStats.first?.category.name ?? "未記録"
     }
 
+    private var reportCategorySegments: [StatsReportCategorySegment] {
+        let visibleStats = Array(categoryStats.prefix(5))
+        var segments = visibleStats.map { stat in
+            StatsReportCategorySegment(
+                name: stat.category.name,
+                count: stat.count,
+                color: themePalette.categoryColor(hex: stat.category.colorHex)
+            )
+        }
+        let otherCount = categoryStats.dropFirst(5).reduce(0) { $0 + $1.count }
+        if otherCount > 0 {
+            segments.append(
+                StatsReportCategorySegment(
+                    name: "その他",
+                    count: otherCount,
+                    color: .secondary
+                )
+            )
+        }
+        return segments
+    }
+
     private var bookReadingYearSummary: BookReadingYearSummary {
         let entries = allVisits.compactMap { visit -> BookReadingEntry? in
             guard visit.event?.category?.templateKey == "book" else { return nil }
@@ -1378,7 +1470,7 @@ private struct StatsReportDraftView: View {
         ]
 
         if let firstVisit = sortedVisits.first {
-            lines.append("カード候補: \(firstVisit.event?.title ?? "無題")")
+            lines.append("最新の記録: \(firstVisit.event?.title ?? "無題")")
         }
 
         if kind == .yearly, bookReadingYearSummary.bookCount > 0 {
@@ -1405,7 +1497,6 @@ private struct StatsReportDraftView: View {
                     .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 } else {
                     reportCardPreview
-                    reportMetrics
                     if kind == .yearly {
                         bookReadingYearSection
                     }
@@ -1495,7 +1586,7 @@ private struct StatsReportDraftView: View {
                     }
                     Spacer()
                     FavorecoIcon(
-                        systemName: kind == .monthly ? "sparkles" : "calendar.badge.star",
+                        systemName: kind == .monthly ? "sparkles" : "calendar",
                         size: 22
                     )
                         .foregroundStyle(Color.accentColor)
@@ -1509,19 +1600,25 @@ private struct StatsReportDraftView: View {
                     StatsReportMiniMetric(title: "ジャンル", value: "\(categoryStats.count)")
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    FavorecoIconLabel(topCategoryName, systemImage: "square.grid.2x2", iconSize: 13)
-                    FavorecoIconLabel(topVenueName, systemImage: "mappin.and.ellipse", iconSize: 13)
+                VStack(alignment: .leading, spacing: 10) {
+                    StatsReportSummaryLine(
+                        label: "最多ジャンル",
+                        value: topCategoryName,
+                        systemImage: "square.grid.2x2"
+                    )
+                    StatsReportSummaryLine(
+                        label: "よく出てきた場所",
+                        value: topVenueName,
+                        systemImage: "mappin.and.ellipse"
+                    )
                     if let firstVisit = sortedVisits.first {
-                        FavorecoIconLabel(
-                            firstVisit.event?.title ?? "無題",
-                            systemImage: "sparkles",
-                            iconSize: 13
+                        StatsReportSummaryLine(
+                            label: "最新の記録",
+                            value: firstVisit.event?.title ?? "無題",
+                            systemImage: "sparkles"
                         )
                     }
                 }
-                .font(FavorecoTypography.captionStrong)
-                .foregroundStyle(.secondary)
             }
             .padding(18)
             .background(
@@ -1536,15 +1633,6 @@ private struct StatsReportDraftView: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
             }
-        }
-    }
-
-    private var reportMetrics: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            StatsMetricCard(title: "記録", value: "\(visits.count)", icon: "rectangle.stack")
-            StatsMetricCard(title: "写真", value: "\(photoCount)", icon: "photo.on.rectangle")
-            StatsMetricCard(title: "ジャンル", value: "\(categoryStats.count)", icon: "square.grid.2x2")
-            StatsMetricCard(title: "平均評価", value: averageRating == 0 ? "-" : String(format: "%.1f", averageRating), icon: "star.fill")
         }
     }
 
@@ -1638,11 +1726,10 @@ private struct StatsReportDraftView: View {
                 Text("ジャンル傾向")
                     .font(FavorecoTypography.sectionTitle)
 
-                VStack(spacing: 10) {
-                    ForEach(categoryStats.prefix(5)) { stat in
-                        CategoryStatRow(stat: stat, maxCount: categoryStats.first?.count ?? 1)
-                    }
-                }
+                StatsReportCategoryDonut(
+                    segments: reportCategorySegments,
+                    totalCount: visits.count
+                )
             }
         }
     }
@@ -1651,19 +1738,16 @@ private struct StatsReportDraftView: View {
     private var recentRecords: some View {
         if !sortedVisits.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("カード候補")
-                    .font(FavorecoTypography.sectionTitle)
-
-                VStack(spacing: 10) {
-                    ForEach(Array(sortedVisits.prefix(3))) { visit in
-                        NavigationLink {
-                            ExperienceDetailView(visit: visit)
-                        } label: {
-                            VisitSummaryRow(visit: visit)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(periodLabel)の記録")
+                        .font(FavorecoTypography.sectionTitle)
+                    Spacer()
+                    Text("全\(sortedVisits.count)件")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(.secondary)
                 }
+
+                VisitRecordCompactGrid(visits: sortedVisits)
             }
         }
     }
@@ -1828,7 +1912,7 @@ private struct StatsReportShareCard: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("HIGHLIGHT")
+                Text("LATEST RECORD")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(accent)
                 Text(snapshot.highlight)
@@ -1911,10 +1995,114 @@ private struct StatsReportMiniMetric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
-                .font(FavorecoTypography.jpSerif(24, weight: .bold, relativeTo: .title2))
+                .font(StatsTypography.number(24, weight: .bold, relativeTo: .title2))
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .monospacedDigit()
             Text(title)
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct StatsReportSummaryLine: View {
+    let label: String
+    let value: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            FavorecoIcon(systemName: systemImage, size: 13)
+                .frame(width: 16)
+                .foregroundStyle(.secondary)
+            Text(label)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label)、\(value)")
+    }
+}
+
+private struct StatsReportCategorySegment: Identifiable {
+    let name: String
+    let count: Int
+    let color: Color
+
+    var id: String { name }
+}
+
+private struct StatsReportCategoryDonut: View {
+    let segments: [StatsReportCategorySegment]
+    let totalCount: Int
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 20) {
+                donut
+                legend
+            }
+            VStack(alignment: .leading, spacing: 16) {
+                donut
+                    .frame(maxWidth: .infinity)
+                legend
+            }
+        }
+        .padding(16)
+        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var donut: some View {
+        Chart(segments) { segment in
+            SectorMark(
+                angle: .value("記録数", segment.count),
+                innerRadius: .ratio(0.60),
+                angularInset: 2
+            )
+            .cornerRadius(4)
+            .foregroundStyle(segment.color)
+        }
+        .chartLegend(.hidden)
+        .frame(width: 150, height: 150)
+        .overlay {
+            VStack(spacing: 0) {
+                Text("\(totalCount)")
+                    .font(StatsTypography.number(27, weight: .bold, relativeTo: .title2))
+                    .monospacedDigit()
+                Text("記録")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityLabel("ジャンル別の記録割合、合計\(totalCount)件")
+    }
+
+    private var legend: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(segments) { segment in
+                HStack(spacing: 7) {
+                    Circle()
+                        .fill(segment.color)
+                        .frame(width: 9, height: 9)
+                    Text(segment.name)
+                        .font(FavorecoTypography.caption)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text("\(segment.count)")
+                        .font(StatsTypography.number(13, weight: .semibold, relativeTo: .caption))
+                        .monospacedDigit()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(segment.name)、\(segment.count)件")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1981,9 +2169,10 @@ private enum StatsTypography {
     }
 }
 
-private struct StatsMonthRepresentativeRow: View {
+private struct StatsMonthRecordRow: View {
     let visit: Visit
-    let isFavoRelated: Bool
+    let showsFavoBadge: Bool
+    let isRepresentative: Bool
 
     @Environment(\.favorecoThemePalette) private var themePalette
 
@@ -2004,7 +2193,7 @@ private struct StatsMonthRepresentativeRow: View {
             artwork
 
             VStack(alignment: .leading, spacing: 4) {
-                if isFavoRelated {
+                if showsFavoBadge {
                     Text("MY FAVO")
                         .font(StatsTypography.supporting(9, weight: .semibold, relativeTo: .caption2))
                         .tracking(0.7)
@@ -2048,7 +2237,7 @@ private struct StatsMonthRepresentativeRow: View {
                 .stroke(tint.opacity(0.18), lineWidth: 0.75)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("代表体験、\(title)、\(FavorecoDateText.compactDate(visit.visitedAt))")
+        .accessibilityLabel("\(isRepresentative ? "代表記録" : "記録")、\(title)、\(FavorecoDateText.compactDate(visit.visitedAt))")
         .accessibilityHint("記録詳細を開きます")
     }
 
@@ -2089,7 +2278,11 @@ private struct StatsMonthExperienceListView: View {
                     NavigationLink {
                         ExperienceDetailView(visit: visit)
                     } label: {
-                        VisitSummaryRow(visit: visit)
+                        StatsMonthRecordRow(
+                            visit: visit,
+                            showsFavoBadge: false,
+                            isRepresentative: false
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -2097,7 +2290,7 @@ private struct StatsMonthExperienceListView: View {
             .padding(20)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle(Text(verbatim: "\(FavorecoDateText.year(year))\(month)月の体験"))
+        .navigationTitle(Text(verbatim: "\(FavorecoDateText.year(year))\(month)月の記録"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
     }
@@ -2161,9 +2354,14 @@ private struct StatsOverviewSummaryCard: View {
 
     private var yearMetricCard: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(verbatim: "\(FavorecoDateText.year(year))の体験")
-                .font(FavorecoTypography.captionStrong)
-                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(verbatim: String(year))
+                    .font(StatsTypography.number(13, weight: .semibold, relativeTo: .caption))
+                    .monospacedDigit()
+                Text("年の記録")
+                    .font(FavorecoTypography.captionStrong)
+            }
+            .foregroundStyle(.secondary)
 
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text("\(yearCount)")
@@ -2185,12 +2383,12 @@ private struct StatsOverviewSummaryCard: View {
         .overlay { metricCardBorder(opacity: 0.18, cornerRadius: 20) }
         .shadow(color: tint.opacity(0.07), radius: 12, x: 0, y: 6)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(verbatim: "\(FavorecoDateText.year(year))の体験、\(yearCount)件"))
+        .accessibilityLabel(Text(verbatim: "\(FavorecoDateText.year(year))の記録、\(yearCount)件"))
     }
 
     private var cumulativeMetricCard: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("累計体験")
+            Text("累計記録")
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(.secondary)
 
@@ -2216,7 +2414,7 @@ private struct StatsOverviewSummaryCard: View {
         .overlay { metricCardBorder(opacity: 0.14, cornerRadius: 17) }
         .shadow(color: tint.opacity(0.045), radius: 8, x: 0, y: 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("累計体験、\(cumulativeCount)件、全期間")
+        .accessibilityLabel("累計記録、\(cumulativeCount)件、全期間")
     }
 
     private var differenceMetricCard: some View {
@@ -2243,11 +2441,21 @@ private struct StatsOverviewSummaryCard: View {
                 .contentTransition(.numericText())
             }
 
-            Text(verbatim: "\(FavorecoDateText.year(year - 1))の\(previousYearCount)件と比較")
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.68)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(verbatim: String(year - 1))
+                    .font(StatsTypography.number(12, weight: .regular, relativeTo: .caption))
+                    .monospacedDigit()
+                Text("年の")
+                    .font(FavorecoTypography.caption)
+                Text("\(previousYearCount)")
+                    .font(StatsTypography.number(12, weight: .regular, relativeTo: .caption))
+                    .monospacedDigit()
+                Text("件と比較")
+                    .font(FavorecoTypography.caption)
+            }
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.68)
         }
         .padding(dynamicTypeSize.isAccessibilitySize ? 18 : 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -2354,9 +2562,15 @@ private struct StatsMetricCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
                     .font(StatsTypography.number(30, weight: .bold, relativeTo: .largeTitle))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+                    .allowsTightening(true)
+                    .monospacedDigit()
                 Text(title)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
@@ -2445,7 +2659,7 @@ private struct StatsPrivateAmountCard: View {
     let onToggle: () -> Void
 
     private var displayValue: String {
-        isRevealed ? value : "••••••"
+        isRevealed ? value : "¥••••••"
     }
 
     var body: some View {

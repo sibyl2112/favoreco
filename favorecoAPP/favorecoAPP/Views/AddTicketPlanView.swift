@@ -85,6 +85,13 @@ struct AddTicketPlanView: View {
     @State private var eventForAdditionalTicketSchedule: ExperienceEvent?
     @State private var isShowingAfterTicketSaveActions = false
     @State private var selectedTicketOCRItems: [PhotosPickerItem] = []
+    @State private var isShowingInformationImageSource = false
+    @State private var isShowingInformationImagePicker = false
+    @State private var isShowingInformationCamera = false
+    @State private var isShowingCameraUnavailableAlert = false
+    @State private var selectedEventEyecatchItem: PhotosPickerItem?
+    @State private var eventEyecatchData: Data?
+    @State private var isShowingEventEyecatchCamera = false
     @State private var isReadingTicketImage = false
     @State private var ticketOCRStatus = ""
     @State private var ticketImportCandidates: [PendingTicketOCRImport] = []
@@ -122,6 +129,7 @@ struct AddTicketPlanView: View {
             }
         }
         _draft = State(initialValue: initialDraft)
+        _eventEyecatchData = State(initialValue: plan?.event?.eyecatchData)
         _targetSelectionMode = State(initialValue: entryMode == .ticketSchedule ? .existingEvent : .new)
     }
 
@@ -132,6 +140,7 @@ struct AddTicketPlanView: View {
         self.entryMode = .plan
         self.initialCategoryID = category.id
         _draft = State(initialValue: TicketPlanDraft(inboxItem: inboxItem, categoryID: category.id))
+        _eventEyecatchData = State(initialValue: nil)
     }
 
     init(
@@ -152,6 +161,7 @@ struct AddTicketPlanView: View {
                 continuingApplication: continuingApplication
             )
         )
+        _eventEyecatchData = State(initialValue: event.eyecatchData)
         _targetSelectionMode = State(initialValue: entryMode == .ticketSchedule ? .existingEvent : .new)
     }
 
@@ -257,6 +267,14 @@ struct AddTicketPlanView: View {
         editingPlan != nil && entryMode == .plan
     }
 
+    private var showsTicketRegistrationSections: Bool {
+        !editsPlanOnly && (isUnifiedRegistration || entryMode == .ticketSchedule)
+    }
+
+    private var showsTicketApplicationDetails: Bool {
+        !isUnifiedRegistration || unifiedPurpose == .application
+    }
+
     private var isUnifiedRegistration: Bool {
         entryMode == .unified
     }
@@ -294,6 +312,10 @@ struct AddTicketPlanView: View {
         }
     }
 
+    private var destinationTargetFieldTitle: String {
+        destinationTargetName + "名"
+    }
+
     private var simplePlanTitleFieldTitle: String {
         switch selectedCategory?.templateKey {
         case "movie": "作品名"
@@ -308,6 +330,14 @@ struct AddTicketPlanView: View {
         case "museum": "展示・イベント名を入力"
         default: "例：植物園へ行く"
         }
+    }
+
+    private var planBasicTitleFieldTitle: String {
+        "\(isSimplePlan ? simplePlanTitleFieldTitle : "公演・イベント名")（必須）"
+    }
+
+    private var planBasicTitleFieldPrompt: String {
+        isSimplePlan ? simplePlanTitlePrompt : "公演・イベント名を入力"
     }
 
     private var simpleScheduleSectionTitle: String {
@@ -348,7 +378,7 @@ struct AddTicketPlanView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            AnyView(AnyView(Form {
                 if editsPlanOnly {
                     planLifecycleEditSections
                 } else if isUnifiedRegistration {
@@ -365,744 +395,30 @@ struct AddTicketPlanView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                } else if entryMode == .plan, selectedCategory?.templateKey == "theater" {
-                    Section {
-                        TheaterUnifiedFormIntroduction(entry: unifiedFormEntry)
-                    }
                 }
 
                 if !editsPlanOnly {
-                if allowsTargetSelection {
-                    Section {
-                        if targetSelectionModes.count > 1 {
-                            Picker("登録方法", selection: $targetSelectionMode) {
-                                ForEach(targetSelectionModes) { mode in
-                                    Text(targetSelectionTitle(mode)).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
+                informationImageImportSection
+                targetSelectionSection
 
-                        if targetSelectionMode == .existingEvent {
-                            if registeredTargetEvents.isEmpty {
-                                FavorecoContentUnavailableView(
-                                    "登録済みの対象がありません",
-                                    systemImage: "rectangle.stack.badge.plus",
-                                    description: "新しい施設・スポットと予定を同時に登録できます。"
-                                )
-                            } else {
-                                Button {
-                                    pendingSelectedEventID = nil
-                                    isShowingRegisteredEventPicker = true
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        FavorecoIcon(
-                                            systemName: selectedRegisteredEvent?.category?.iconSymbol ?? "magnifyingglass",
-                                            size: 18
-                                        )
-                                            .frame(width: 28)
-
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(selectedRegisteredEvent?.title ?? "登録済みから検索")
-                                                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
-                                                .foregroundStyle(.primary)
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.72)
-                                                .allowsTightening(true)
-
-                                            if let selectedRegisteredEvent {
-                                                Text(selectedRegisteredEvent.category?.name ?? "未分類")
-                                                    .font(FavorecoTypography.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-
-                                if selectedRegisteredEvent != nil && usesTicketRegistration {
-                                    if plansForSelectedEvent.isEmpty {
-                                        FavorecoIconLabel(
-                                            "予定も同時に作成します",
-                                            systemImage: "calendar.badge.plus",
-                                            iconSize: 13
-                                        )
-                                            .font(FavorecoTypography.caption)
-                                            .foregroundStyle(.secondary)
-                                    } else {
-                                        Menu {
-                                            Button {
-                                                selectedPlanID = nil
-                                            } label: {
-                                                if selectedPlanID == nil {
-                                                    Label("新しい予定を作る", systemImage: "checkmark")
-                                                } else {
-                                                    Text("新しい予定を作る")
-                                                }
-                                            }
-                                            ForEach(plansForSelectedEvent) { plan in
-                                                Button {
-                                                    selectedPlanID = plan.id
-                                                } label: {
-                                                    if selectedPlanID == plan.id {
-                                                        Label(planSelectionDescription(plan), systemImage: "checkmark")
-                                                    } else {
-                                                        Text(planSelectionDescription(plan))
-                                                    }
-                                                }
-                                            }
-                                        } label: {
-                                            HStack(spacing: 8) {
-                                                Text("追加先予定")
-                                                    .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(1)
-
-                                                Divider()
-                                                    .frame(height: 20)
-
-                                                Text(selectedPlanSelectionText)
-                                                    .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
-                                                    .foregroundStyle(themePalette.globalTint)
-                                                    .lineLimit(1)
-                                                    .minimumScaleFactor(0.72)
-                                                    .allowsTightening(true)
-
-                                                Spacer(minLength: 0)
-
-                                                Image(systemName: "chevron.up.chevron.down")
-                                                    .font(.caption2.weight(.semibold))
-                                                    .foregroundStyle(themePalette.globalTint)
-                                            }
-                                            .contentShape(Rectangle())
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        } else if targetSelectionMode == .interested {
-                            if interestedEvents.isEmpty {
-                                FavorecoContentUnavailableView(
-                                    "気になる対象がありません",
-                                    systemImage: "heart",
-                                    description: "先にクイック登録するか、新しく対象を登録してください。"
-                                )
-                            } else {
-                                Button {
-                                    pendingSelectedEventID = nil
-                                    isShowingInterestedEventPicker = true
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        FavorecoIcon(
-                                            systemName: selectedInterestedEvent?.category?.iconSymbol ?? "magnifyingglass",
-                                            size: 18
-                                        )
-                                            .frame(width: 28)
-
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(selectedInterestedEvent?.title ?? "作品・対象を検索")
-                                                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
-                                                .foregroundStyle(.primary)
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.72)
-                                                .allowsTightening(true)
-
-                                            if let selectedInterestedEvent {
-                                                Text(selectedInterestedEvent.category?.name ?? "未分類")
-                                                    .font(FavorecoTypography.caption)
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                        }
-
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        } else {
-                            Text(usesTicketRegistration
-                                 ? "新しいイベント、予定、チケット情報をまとめて登録します。"
-                                 : isInterestedOnly
-                                     ? "新しい公演を「気になる」に保存します。"
-                                     : "作品・施設などの対象と予定を同時に登録します。")
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(.secondary)
-
-                            if let templateKey = selectedCategory?.templateKey,
-                               ["museum", "theater", "live"].contains(templateKey) {
-                                Button {
-                                    isShowingRecurringEventCatalog = true
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        FavorecoIcon(systemName: "calendar.badge.clock", size: 17)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("定期イベントカタログから選ぶ")
-                                                .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
-                                            Text("芸術祭・舞台芸術祭・野外音楽祭")
-                                                .font(FavorecoTypography.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-
-                                if let edition = selectedRecurringEventEdition {
-                                    Button("会期初日を予定日に反映") {
-                                        applyRecurringEditionDate(edition)
-                                    }
-                                    .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
-                                    .disabled(edition.startDate == nil)
-                                }
-                            }
-                        }
-                    } header: {
-                        FavorecoRegistrationSectionHeader(
-                            isUnifiedRegistration ? "対象" : isSimplePlan ? destinationTargetName : "予定の対象"
-                        )
-                    }
+                if !usesTicketRegistration {
+                    eventEyecatchSection
                 }
 
-                if usesTicketRegistration, let selectedExistingPlan {
-                    Section {
-                        VStack(spacing: 0) {
-                            compactPlanSummaryRow(
-                                title: "ジャンル",
-                                value: selectedExistingPlan.category?.name ?? "未設定"
-                            )
-                            Divider()
-                            compactPlanSummaryRow(
-                                title: "タイトル",
-                                value: displayedPlanTitle(selectedExistingPlan)
-                            )
-                            Divider()
-                            compactPlanSummaryRow(
-                                title: "日時",
-                                value: selectedExistingPlan.hasConfirmedSchedule
-                                    ? FavorecoDateText.compactDateTime(selectedExistingPlan.startsAt)
-                                    : "参加日未定"
-                            )
-                            if !selectedExistingPlan.venueNameSnapshot.isEmpty {
-                                Divider()
-                                compactPlanSummaryRow(
-                                    title: "会場",
-                                    value: selectedExistingPlan.venueNameSnapshot
-                                )
-                            }
-                        }
-                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-                    } header: {
-                        FavorecoRegistrationSectionHeader("予定の基本情報")
-                    }
-                } else {
-                    Section {
-                        if let event = resolvedTargetEvent, !isSimplePlan {
-                            linkedTheaterReferenceRow(
-                                title: "ジャンル",
-                                value: event.category?.name ?? "未設定"
-                            )
-                        } else if !isSimplePlan {
-                            ExplicitFormControlRow(title: "ジャンル") {
-                                Picker("ジャンル", selection: $draft.categoryID) {
-                                    Text("未設定").tag(Optional<UUID>.none)
-                                    ForEach(visibleCategories) { category in
-                                        Text(category.name).tag(Optional(category.id))
-                                    }
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                            }
-                        }
+                inheritedEventIntroductionSection
+                selectedPlanOrBasicInformationSection
 
-                        if let event = resolvedTargetEvent, isSimplePlan {
-                            linkedTheaterReferenceRow(title: "\(destinationTargetName)名", value: event.title)
-                        } else if let event = resolvedTargetEvent,
-                                  event.category?.templateKey == "theater" {
-                            let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
-                            linkedTheaterReferenceRow(title: "公演名", value: event.title)
-                            if !event.seriesName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                linkedTheaterReferenceRow(title: "シリーズ", value: event.seriesName)
-                            }
-                            let performanceTypeName = TheaterPerformanceType.displayName(
-                                for: event.subTypeKey,
-                                customName: fields.eventPerformanceTypeCustomName
-                            )
-                            if !performanceTypeName.isEmpty {
-                                linkedTheaterReferenceRow(title: "公演種別", value: performanceTypeName)
-                            }
-                        } else {
-                            ExplicitFormTextField(
-                                title: isSimplePlan ? simplePlanTitleFieldTitle : "公演・イベント名",
-                                prompt: isSimplePlan ? simplePlanTitlePrompt : "公演・イベント名を入力",
-                                text: $draft.title,
-                                axis: .horizontal,
-                                minimumLines: 1,
-                                maximumLines: 1,
-                                labelStyle: .horizontal,
-                                inputFontSize: ExplicitFormMetrics.inputFontSize,
-                                labelLineLimit: 2,
-                                focusesFromWholeRow: true
-                            )
-                        }
-                        if isSimpleDestinationPlan {
-                            ExplicitFormTextField(
-                                title: simpleDestinationVenueFieldTitle,
-                                prompt: "\(simpleDestinationVenueFieldTitle)を入力して候補から選択",
-                                text: venueNameBinding,
-                                axis: .vertical,
-                                minimumLines: 1,
-                                maximumLines: 2,
-                                labelStyle: .horizontal
-                            )
-                            placeSuggestionList
-                            ExplicitFormTextField(
-                                title: "住所",
-                                prompt: "任意（地図・カレンダーでは住所を優先）",
-                                text: venueAddressBinding,
-                                axis: .vertical,
-                                minimumLines: 1,
-                                maximumLines: 2,
-                                labelStyle: .horizontal
-                            )
-                                .textContentType(.fullStreetAddress)
-                            Button {
-                                isShowingPlaceSearch = true
-                            } label: {
-                                FavorecoIconLabel("地図から場所を入力", systemImage: "map")
-                                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.78)
-                                    .allowsTightening(true)
-                            }
-                            PlaceMapPreview(
-                                venueName: draft.venueName,
-                                address: draft.venueAddress,
-                                latitude: draft.latitude,
-                                longitude: draft.longitude
-                            )
-                            ExplicitFormTextField(
-                                title: "施設公式サイト（任意）",
-                                prompt: "https://",
-                                text: venueOfficialURLBinding,
-                                axis: .vertical,
-                                minimumLines: 1,
-                                maximumLines: 2,
-                                labelStyle: .horizontal
-                            )
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                            PlaceOfficialWebsiteLink(
-                                urlString: venueOfficialURLString,
-                                title: "施設サイトを開く"
-                            )
-                        }
-                        if !isSimplePlan {
-                            ExplicitFormTextField(
-                                title: "サブタイトル",
-                                prompt: "任意",
-                                text: $draft.subtitle,
-                                axis: .vertical,
-                                minimumLines: 1,
-                                maximumLines: 2,
-                                labelStyle: .horizontal
-                            )
-                        }
-                        ExplicitFormTextField(
-                            title: "公式URL",
-                            prompt: isSimplePlan ? "この予定の案内ページ（任意）" : "公演・この予定の案内ページ（任意）",
-                            text: $draft.officialURL,
-                            axis: .vertical,
-                            minimumLines: 1,
-                            maximumLines: 2,
-                            labelStyle: .horizontal
-                        )
-                            .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
+                planScheduleAndVenueSections
 
-                        if resolvedTargetEvent?.category?.templateKey == "theater" {
-                            Text("気になる公演の情報を引き継いでいます。ここでは観劇する日時と会場を追加します。")
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } header: {
-                        if isSimplePlan {
-                            FavorecoRegistrationSectionHeader("\(destinationTargetName)情報")
-                        } else if usesPlanRegistration {
-                            TheaterUnifiedSectionLabel(section: .performanceBasic)
-                        } else {
-                            FavorecoRegistrationSectionHeader("公演の基本情報")
-                        }
-                    }
-                }
-
-                if selectedExistingPlan == nil && !isInterestedOnly {
-                    Section {
-                        if usesTicketRegistration {
-                            Text("日程は決まっていますか？")
-                                .font(FavorecoTypography.bodyStrong)
-                            Picker("日程", selection: $draft.hasConfirmedSchedule) {
-                                Text("未定").tag(false)
-                                Text("決まっている").tag(true)
-                            }
-                            .pickerStyle(.segmented)
-                            if !draft.hasConfirmedSchedule {
-                                Text("未定の予定はComing Up・カレンダーに表示されません")
-                                    .font(FavorecoTypography.jpSans(10, weight: .regular, relativeTo: .caption2))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2, reservesSpace: true)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .padding(.vertical, 2)
-                            }
-                        }
-                        if draft.hasConfirmedSchedule {
-                            if usesOpeningTime {
-                                TheaterScheduleDateRow(
-                                    selection: scheduleDateBinding,
-                                    isSet: $draft.hasConfirmedSchedule,
-                                    onClear: clearExperienceSchedule
-                                )
-                                OptionalTenMinuteTimeRow(
-                                    title: "開場",
-                                    selection: openingTimeBinding,
-                                    isSet: $draft.hasOpeningTime,
-                                    defaultValue: defaultOpeningTime
-                                )
-                                TenMinuteTimeRow(title: "開演", selection: startTimeBinding)
-                                TenMinuteTimeRow(title: "終了", selection: endTimeBinding)
-                            } else {
-                                ExperienceDateTimeRangeEditor(
-                                    startsAt: startTimeBinding,
-                                    endsAt: endTimeBinding,
-                                    dateLabel: simpleScheduleDateLabel,
-                                    startTimeLabel: "開始時刻",
-                                    endTimeLabel: "終了時刻"
-                                )
-                            }
-                        } else if usesOpeningTime && usesPlanRegistration {
-                            TheaterScheduleDateRow(
-                                selection: scheduleDateBinding,
-                                isSet: $draft.hasConfirmedSchedule,
-                                onClear: clearExperienceSchedule
-                            )
-                        }
-                    } header: {
-                        if isSimplePlan {
-                            FavorecoRegistrationSectionHeader(simpleScheduleSectionTitle)
-                        } else if usesPlanRegistration {
-                            TheaterUnifiedSectionLabel(section: .participation)
-                        } else {
-                            FavorecoRegistrationSectionHeader(usesOpeningTime ? "観劇予定日" : "予定日時")
-                        }
-                    }
-
-                    if !isSimpleDestinationPlan && (usesPlanRegistration || draft.hasConfirmedSchedule) {
-                        Section {
-                            if !isSimpleDestinationPlan {
-                                inheritedTheaterVenueChoices
-                                ExplicitFormTextField(
-                                    title: planVenueFieldTitle,
-                                    prompt: planVenueFieldPrompt,
-                                    text: venueNameBinding,
-                                    axis: .vertical,
-                                    minimumLines: 1,
-                                    maximumLines: 2,
-                                    labelStyle: .horizontal
-                                )
-                            }
-                            placeSuggestionList
-                            ExplicitFormTextField(
-                                title: "住所",
-                                prompt: "任意（地図・カレンダーでは住所を優先）",
-                                text: venueAddressBinding,
-                                axis: .vertical,
-                                minimumLines: 1,
-                                maximumLines: 2,
-                                labelStyle: .horizontal
-                            )
-                                .textContentType(.fullStreetAddress)
-                            Button {
-                                isShowingPlaceSearch = true
-                            } label: {
-                                FavorecoIconLabel(
-                                    isSimplePlan ? "地図から場所を入力" : "Apple Mapsで会場・住所を入力",
-                                    systemImage: "map"
-                                )
-                                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.78)
-                                    .allowsTightening(true)
-                            }
-                            PlaceMapPreview(
-                                venueName: draft.venueName,
-                                address: draft.venueAddress,
-                                latitude: draft.latitude,
-                                longitude: draft.longitude
-                            )
-                            ExplicitFormTextField(
-                                title: planVenueOfficialSiteFieldTitle,
-                                prompt: "https://",
-                                text: venueOfficialURLBinding,
-                                axis: .vertical,
-                                minimumLines: 1,
-                                maximumLines: 2,
-                                labelStyle: .horizontal
-                            )
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                            PlaceOfficialWebsiteLink(
-                                urlString: venueOfficialURLString,
-                                title: planVenueOfficialSiteLinkTitle
-                            )
-                        } header: {
-                            FavorecoRegistrationSectionHeader(
-                                isSimpleViewingPlan
-                                    ? (selectedCategory?.templateKey == "movie" ? "鑑賞場所" : "会場")
-                                    : isSimpleDestinationPlan ? "場所" : "会場"
-                            )
-                        }
-                    }
-
-                }
-
-                if !editsPlanOnly, isUnifiedRegistration || entryMode == .ticketSchedule {
-                    Section {
-                        if usesOCRImportAssist {
-                            PhotosPicker(
-                                selection: $selectedTicketOCRItems,
-                                maxSelectionCount: 2,
-                                matching: .images
-                            ) {
-                                HStack(spacing: 8) {
-                                    FavorecoIcon(
-                                        systemName: "text.viewfinder",
-                                        size: 17
-                                    )
-                                    .foregroundStyle(themePalette.globalTint)
-
-                                    Text(
-                                        isReadingTicketImage
-                                            ? "画像を読み取り中"
-                                            : isUnifiedRegistration
-                                                ? "画像から情報を読み取る"
-                                                : "画像からチケット情報を読み取る"
-                                    )
-                                    .font(FavorecoTypography.jpSans(
-                                        13,
-                                        weight: .semibold,
-                                        relativeTo: .body
-                                    ))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.78)
-                                    .allowsTightening(true)
-
-                                    Spacer(minLength: 4)
-
-                                    if isReadingTicketImage {
-                                        ProgressView()
-                                            .controlSize(.small)
-                                    } else {
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(isReadingTicketImage)
-                            .onChange(of: selectedTicketOCRItems) { _, items in
-                                guard !items.isEmpty else { return }
-                                Task { await readTicketImages(from: items) }
-                            }
-                        } else {
-                            FavorecoIconLabel(
-                                "画像OCRは設定でOFFになっています",
-                                systemImage: "text.viewfinder"
-                            )
-                            .font(FavorecoTypography.captionStrong)
-                            .foregroundStyle(.secondary)
-                        }
-
-                        if !ticketOCRStatus.isEmpty {
-                            Text(ticketOCRStatus)
-                                .font(FavorecoTypography.jpSans(
-                                    10.5,
-                                    weight: .regular,
-                                    relativeTo: .caption
-                                ))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-                    }
-
-                    if !batchImportedScheduleDrafts.isEmpty {
-                        FavorecoRegistrationSection("一括登録する別日程") {
-                            ForEach(Array(batchImportedScheduleDrafts.enumerated()), id: \.offset) { index, importedDraft in
-                                HStack(spacing: 10) {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(importedDraft.trimmedTitle.isEmpty ? "公演名未設定" : importedDraft.trimmedTitle)
-                                            .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
-                                            .lineLimit(1)
-                                        Text(importedScheduleSummary(importedDraft))
-                                            .font(FavorecoTypography.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                    Spacer(minLength: 8)
-                                    Button {
-                                        batchImportedScheduleDrafts.remove(at: index)
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("一括登録候補から削除")
-                                }
-                            }
-
-                            Text("保存すると、選択した別日程を同じ公演の予定としてまとめて登録します。")
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    FavorecoRegistrationSection("チケット情報") {
-                        if draft.createsTicketAttempt {
-                            if isUnifiedRegistration {
-                                if unifiedPurpose == .application {
-                                    ExplicitFormControlRow(title: "申込方法") {
-                                        Picker("申込方法", selection: $draft.flowKey) {
-                                            ForEach(unifiedApplicationFlowOptions) { flow in
-                                                Text(flow.key == "lotteryPlanned" ? "抽選" : "先着")
-                                                    .tag(flow.key)
-                                            }
-                                        }
-                                        .labelsHidden()
-                                        .pickerStyle(.segmented)
-                                        .frame(maxWidth: .infinity, alignment: .trailing)
-                                    }
-                                    .onChange(of: draft.flowKey) { _, newValue in
-                                        draft.applyFlowDefaults(newValue)
-                                    }
-                                }
-                            } else {
-                                ExplicitFormControlRow(title: "登録内容") {
-                                    Picker("登録内容", selection: $draft.flowKey) {
-                                        ForEach(draft.flowOptions) { flow in
-                                            Text(flow.name).tag(flow.key)
-                                        }
-                                    }
-                                    .labelsHidden()
-                                    .pickerStyle(.menu)
-                                    .frame(maxWidth: .infinity, alignment: .trailing)
-                                }
-                                .onChange(of: draft.flowKey) { _, newValue in
-                                    draft.applyFlowDefaults(newValue)
-                                }
-                            }
-
-                            if !isUnifiedRegistration || unifiedPurpose == .application {
-                                ticketFlowGuide
-                            }
-
-                            if draft.showsEntryRoute || draft.showsAccountFields || draft.showsTicketGuide {
-                                applicationDetailsSection
-                            }
-                        }
-                    }
-
-                    if draft.createsTicketAttempt && draft.showsAnyTicketMilestone {
-                        FavorecoRegistrationSection("チケットスケジュール") {
-                            TicketMilestoneDateGuidance()
-                            if draft.showsSaleStart {
-                                DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
-                            }
-                            if draft.showsApplyDeadline {
-                                DateToggleRow(
-                                    title: "抽選申込締切",
-                                    isOn: $draft.hasApplyDeadline,
-                                    date: $draft.applyDeadlineAt
-                                )
-                            }
-                            if draft.showsResultAnnounce {
-                                DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
-                            }
-                            if draft.showsPaymentDeadline {
-                                DateToggleRow(title: "支払締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
-                            }
-                            if draft.showsIssueStart {
-                                DateToggleRow(
-                                    title: "チケット受取開始",
-                                    isOn: $draft.hasIssueStart,
-                                    date: $draft.issueStartAt
-                                )
-                            }
-                        }
-                    }
-
-                    if draft.createsTicketAttempt && draft.showsTicketDetails {
-                        FavorecoRegistrationSection("金額・座席") {
-                            ExplicitFormTextField(
-                                title: "チケット代（任意）",
-                                prompt: "金額",
-                                text: $draft.priceText,
-                                labelStyle: .horizontal
-                            )
-                                .keyboardType(.numberPad)
-                            ExplicitFormTextField(
-                                title: "手数料（任意）",
-                                prompt: "金額",
-                                text: $draft.feeText,
-                                labelStyle: .horizontal
-                            )
-                                .keyboardType(.numberPad)
-                            ExplicitFormControlRow(title: "枚数") {
-                                Stepper(
-                                    value: $draft.quantity,
-                                    in: 1...20
-                                ) {
-                                    Text("\(draft.quantity)枚")
-                                        .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
-                                }
-                                .fixedSize()
-                            }
-                            ExplicitFormTextField(
-                                title: "座席（任意）",
-                                prompt: "座席・整理番号",
-                                text: $draft.seatText,
-                                axis: .vertical,
-                                minimumLines: 1,
-                                maximumLines: 2,
-                                labelStyle: .horizontal
-                            )
-                        }
-                    }
-
-                    if isUnifiedRegistration && unifiedPurpose == .application {
-                        additionalApplicationsSection
-                    }
+                if showsTicketRegistrationSections {
+                    batchImportedScheduleSection
+                    ticketRegistrationSections
                 }
 
                 FavorecoRegistrationSection("タグ・メモ") {
-                        if draft.createsTicketAttempt {
+                        if usesPlanRegistration {
+                            TicketTagInputField(text: $draft.planTagNamesText)
+                        } else if draft.createsTicketAttempt {
                             TicketTagInputField(text: $draft.tagNamesText)
                         }
                         ExplicitFormTextField(
@@ -1121,76 +437,78 @@ struct AddTicketPlanView: View {
             .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .accessibilityLabel("キャンセル")
+            )
+            .toolbar { registrationToolbar })
+            .photosPicker(
+                isPresented: $isShowingInformationImagePicker,
+                selection: $selectedTicketOCRItems,
+                maxSelectionCount: 2,
+                matching: .images
+            )
+            .confirmationDialog(
+                "写真・カメラから情報入力",
+                isPresented: $isShowingInformationImageSource,
+                titleVisibility: .visible
+            ) {
+                Button("写真ライブラリから選ぶ") {
+                    isShowingInformationImagePicker = true
                 }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        save()
-                    }
-                    .disabled(!draft.canSave)
+                Button("カメラで撮影") {
+                    openInformationCamera()
                 }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("タイトル・日付・会場など、読み取れた候補を確認してから反映します。")
             }
-            .onAppear {
-                configurePlanLifecycleExpansionIfNeeded()
-                if editingPlan == nil {
-                    restoreInitialCategoryIfNeeded()
-                }
-                if isUnifiedRegistration {
-                    applyUnifiedPurpose(unifiedPurpose)
-                }
+            .fullScreenCover(isPresented: $isShowingInformationCamera) {
+                CameraImagePicker(
+                    onCapture: { image in
+                        isShowingInformationCamera = false
+                        Task { await readTicketCameraImage(image) }
+                    },
+                    onCancel: { isShowingInformationCamera = false }
+                )
+                .ignoresSafeArea()
             }
+            .fullScreenCover(isPresented: $isShowingEventEyecatchCamera) {
+                CameraImagePicker(
+                    onCapture: { image in
+                        isShowingEventEyecatchCamera = false
+                        setEventEyecatch(from: image)
+                    },
+                    onCancel: { isShowingEventEyecatchCamera = false }
+                )
+                .ignoresSafeArea()
+            }
+            .onAppear(perform: handleViewAppear)
             .onChange(of: unifiedPurpose) { _, purpose in
                 applyUnifiedPurpose(purpose)
             }
             .onChange(of: targetSelectionMode) { _, newValue in
-                selectedEventID = nil
-                selectedPlanID = nil
-                batchImportedScheduleDrafts.removeAll()
-                additionalApplications.removeAll { $0.isImported }
-                selectedRecurringEventEdition = nil
-                draft.clearTarget()
-                restoreInitialCategoryIfNeeded()
+                handleTargetSelectionModeChange(newValue)
             }
             .onChange(of: selectedEventID) { _, _ in
-                batchImportedScheduleDrafts.removeAll()
-                additionalApplications.removeAll { $0.isImported }
-                let event = targetSelectionMode == .existingEvent ? selectedRegisteredEvent : selectedInterestedEvent
-                guard let event else { return }
-                draft.applyTarget(event)
-                if targetSelectionMode == .existingEvent {
-                    if usesTicketRegistration {
-                        selectedPlanID = plansForSelectedEvent.first?.id
-                        if let selectedExistingPlan {
-                            draft.applyTarget(selectedExistingPlan)
-                        }
-                    } else {
-                        selectedPlanID = nil
-                        normalizeSimpleDestinationVenueName()
-                    }
-                }
+                handleSelectedEventChange()
             }
             .onChange(of: selectedPlanID) { _, _ in
-                batchImportedScheduleDrafts.removeAll()
-                additionalApplications.removeAll { $0.isImported }
-                if let plan = selectedExistingPlan {
-                    draft.applyTarget(plan)
-                } else if targetSelectionMode == .existingEvent, let event = selectedRegisteredEvent {
-                    draft.clearTarget()
-                    draft.applyTarget(event)
-                }
+                handleSelectedPlanChange()
             }
-            .alert("入力内容を確認してください", isPresented: Binding(
-                get: { !validationError.isEmpty },
-                set: { if !$0 { validationError = "" } }
-            )) {
+            .onChange(of: selectedEventEyecatchItem) { _, item in
+                handleSelectedEventEyecatchItemChange(item)
+            }
+            .onChange(of: selectedTicketOCRItems) { _, items in
+                handleSelectedTicketOCRItemsChange(items)
+            }
+            .onChange(of: draft.categoryID) { _, _ in
+                guard !targetSelectionModes.contains(targetSelectionMode) else { return }
+                targetSelectionMode = targetSelectionModes.contains(.existingEvent) ? .existingEvent : .new
+            }
+            .alert("カメラを使用できません", isPresented: $isShowingCameraUnavailableAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("写真ライブラリから画像を選んでください。")
+            }
+            .alert("入力内容を確認してください", isPresented: validationErrorPresentationBinding) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(validationError)
@@ -1264,11 +582,7 @@ struct AddTicketPlanView: View {
                     continuingApplication: savedTicketAttempt
                 )
             }
-            .sheet(item: $planForAdditionalTicketAttempt, onDismiss: {
-                if savedTicketSchedulePlan != nil {
-                    isShowingAfterTicketSaveActions = true
-                }
-            }) { plan in
+            .sheet(item: $planForAdditionalTicketAttempt, onDismiss: handleAdditionalTicketAttemptDismiss) { plan in
                 EditTicketAttemptView(plan: plan)
             }
             .confirmationDialog(
@@ -1309,9 +623,862 @@ struct AddTicketPlanView: View {
     }
 
     @ViewBuilder
-    private var planLifecycleEditSections: some View {
+    private var targetSelectionSection: some View {
+        if allowsTargetSelection {
+            Section {
+                if targetSelectionModes.count > 1 {
+                    Picker("登録方法", selection: $targetSelectionMode) {
+                        ForEach(targetSelectionModes) { mode in
+                            Text(targetSelectionTitle(mode)).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                if targetSelectionMode == .existingEvent {
+                    registeredTargetSelectionContent
+                } else if targetSelectionMode == .interested {
+                    interestedTargetSelectionContent
+                } else {
+                    recurringEventCatalogSelectionRow
+                }
+            } header: {
+                FavorecoRegistrationSectionHeader(targetSelectionSectionTitle)
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var registrationToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .accessibilityLabel("キャンセル")
+        }
+
+        ToolbarItem(placement: .confirmationAction) {
+            Button("保存") {
+                save()
+            }
+            .disabled(!draft.canSave)
+        }
+    }
+
+    private func handleTargetSelectionModeChange(_ newValue: TargetSelectionMode) {
+        _ = newValue
+        let preservedCategoryID = draft.categoryID
+        selectedEventID = nil
+        selectedPlanID = nil
+        batchImportedScheduleDrafts.removeAll()
+        additionalApplications.removeAll { $0.isImported }
+        selectedRecurringEventEdition = nil
+        draft.clearTarget()
+        draft.categoryID = preservedCategoryID ?? initialCategoryID
+        eventEyecatchData = nil
+    }
+
+    private func handleViewAppear() {
+        configurePlanLifecycleExpansionIfNeeded()
+        if editingPlan == nil {
+            restoreInitialCategoryIfNeeded()
+        }
+        if isUnifiedRegistration {
+            applyUnifiedPurpose(unifiedPurpose)
+        }
+    }
+
+    private var validationErrorPresentationBinding: Binding<Bool> {
+        Binding(
+            get: { !validationError.isEmpty },
+            set: { isPresented in
+                if !isPresented { validationError = "" }
+            }
+        )
+    }
+
+    private func handleSelectedEventChange() {
+        batchImportedScheduleDrafts.removeAll()
+        additionalApplications.removeAll { $0.isImported }
+        let event = targetSelectionMode == .existingEvent ? selectedRegisteredEvent : selectedInterestedEvent
+        guard let event else { return }
+        draft.applyTarget(event)
+        eventEyecatchData = event.eyecatchData
+        guard targetSelectionMode == .existingEvent else { return }
+        if usesTicketRegistration {
+            selectedPlanID = plansForSelectedEvent.first?.id
+            if let selectedExistingPlan {
+                draft.applyTarget(selectedExistingPlan)
+            }
+        } else {
+            selectedPlanID = nil
+            normalizeSimpleDestinationVenueName()
+        }
+    }
+
+    private func handleSelectedPlanChange() {
+        batchImportedScheduleDrafts.removeAll()
+        additionalApplications.removeAll { $0.isImported }
+        if let plan = selectedExistingPlan {
+            draft.applyTarget(plan)
+        } else if targetSelectionMode == .existingEvent, let event = selectedRegisteredEvent {
+            draft.clearTarget()
+            draft.applyTarget(event)
+        }
+    }
+
+    private func handleAdditionalTicketAttemptDismiss() {
+        if savedTicketSchedulePlan != nil {
+            isShowingAfterTicketSaveActions = true
+        }
+    }
+
+    private func handleSelectedEventEyecatchItemChange(_ item: PhotosPickerItem?) {
+        guard let item else { return }
+        Task { await loadEventEyecatch(from: item) }
+    }
+
+    private func handleSelectedTicketOCRItemsChange(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        Task { await readTicketImages(from: items) }
+    }
+
+    private var targetSelectionSectionTitle: String {
+        if isUnifiedRegistration { return "対象" }
+        return isSimplePlan ? destinationTargetName : "予定の対象"
+    }
+
+    @ViewBuilder
+    private var registeredTargetSelectionContent: some View {
+        if registeredTargetEvents.isEmpty {
+            FavorecoContentUnavailableView(
+                "登録済みの対象がありません",
+                systemImage: "rectangle.stack.badge.plus",
+                description: "新しい施設・スポットと予定を同時に登録できます。"
+            )
+        } else {
+            Button {
+                pendingSelectedEventID = nil
+                isShowingRegisteredEventPicker = true
+            } label: {
+                targetSelectionButtonLabel(
+                    event: selectedRegisteredEvent,
+                    placeholder: "登録済みから検索"
+                )
+            }
+            .buttonStyle(.plain)
+
+            if selectedRegisteredEvent != nil && usesTicketRegistration {
+                if plansForSelectedEvent.isEmpty {
+                    FavorecoIconLabel(
+                        "予定も同時に作成します",
+                        systemImage: "calendar.badge.plus",
+                        iconSize: 13
+                    )
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                } else {
+                    selectedPlanDestinationMenu
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var interestedTargetSelectionContent: some View {
+        if interestedEvents.isEmpty {
+            FavorecoContentUnavailableView(
+                "気になる対象がありません",
+                systemImage: "heart",
+                description: "先にクイック登録するか、新しく対象を登録してください。"
+            )
+        } else {
+            Button {
+                pendingSelectedEventID = nil
+                isShowingInterestedEventPicker = true
+            } label: {
+                targetSelectionButtonLabel(
+                    event: selectedInterestedEvent,
+                    placeholder: "作品・対象を検索"
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func targetSelectionButtonLabel(
+        event: ExperienceEvent?,
+        placeholder: String
+    ) -> some View {
+        HStack(spacing: 12) {
+            FavorecoIcon(
+                systemName: event?.category?.iconSymbol ?? "magnifyingglass",
+                size: 18
+            )
+            .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(event?.title ?? placeholder)
+                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .allowsTightening(true)
+
+                if let event {
+                    Text(event.category?.name ?? "未分類")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var recurringEventCatalogSelectionRow: some View {
+        if let templateKey = selectedCategory?.templateKey,
+           ["museum", "theater", "live"].contains(templateKey) {
+            Button {
+                isShowingRecurringEventCatalog = true
+            } label: {
+                HStack(spacing: 10) {
+                    FavorecoIcon(systemName: "calendar.badge.clock", size: 17)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("定期イベントカタログから選ぶ")
+                            .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                        Text("芸術祭・舞台芸術祭・野外音楽フェス")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+                            .allowsTightening(true)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if let edition = selectedRecurringEventEdition {
+                Button("会期初日を予定日に反映") {
+                    applyRecurringEditionDate(edition)
+                }
+                .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+                .disabled(edition.startDate == nil)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var inheritedEventIntroductionSection: some View {
+        if targetSelectionMode == .interested,
+           let templateKey = resolvedTargetEvent?.category?.templateKey,
+           templateKey == "theater" || templateKey == "live" {
+            Section {
+                TheaterUnifiedFormIntroduction(
+                    entry: unifiedFormEntry,
+                    isLive: templateKey == "live"
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var selectedPlanOrBasicInformationSection: some View {
+        if usesTicketRegistration, let selectedExistingPlan {
+            Section {
+                VStack(spacing: 0) {
+                    compactPlanSummaryRow(
+                        title: "ジャンル",
+                        value: selectedExistingPlan.category?.name ?? "未設定"
+                    )
+                    Divider()
+                    compactPlanSummaryRow(
+                        title: "タイトル",
+                        value: displayedPlanTitle(selectedExistingPlan)
+                    )
+                    Divider()
+                    compactPlanSummaryRow(
+                        title: "日時",
+                        value: selectedExistingPlan.hasConfirmedSchedule
+                            ? FavorecoDateText.compactDateTime(selectedExistingPlan.startsAt)
+                            : "参加日未定"
+                    )
+                    if !selectedExistingPlan.venueNameSnapshot.isEmpty {
+                        Divider()
+                        compactPlanSummaryRow(
+                            title: "会場",
+                            value: selectedExistingPlan.venueNameSnapshot
+                        )
+                    }
+                }
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            } header: {
+                FavorecoRegistrationSectionHeader("予定の基本情報")
+            }
+        } else {
+            planBasicInformationSection
+        }
+    }
+
+    @ViewBuilder
+    private var planScheduleAndVenueSections: some View {
+        if selectedExistingPlan == nil && !isInterestedOnly {
+            Section {
+                if usesTicketRegistration {
+                    Text("日程は決まっていますか？")
+                        .font(FavorecoTypography.bodyStrong)
+                    Picker("日程", selection: $draft.hasConfirmedSchedule) {
+                        Text("未定").tag(false)
+                        Text("決まっている").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    if !draft.hasConfirmedSchedule {
+                        Text("未定の予定はComing Up・カレンダーに表示されません")
+                            .font(FavorecoTypography.jpSans(10, weight: .regular, relativeTo: .caption2))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2, reservesSpace: true)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.vertical, 2)
+                    }
+                }
+                if draft.hasConfirmedSchedule {
+                    if usesOpeningTime {
+                        TheaterScheduleDateRow(
+                            selection: scheduleDateBinding,
+                            isSet: $draft.hasConfirmedSchedule,
+                            onClear: clearExperienceSchedule
+                        )
+                        OptionalTenMinuteTimeRow(
+                            title: "開場",
+                            selection: openingTimeBinding,
+                            isSet: $draft.hasOpeningTime,
+                            defaultValue: defaultOpeningTime
+                        )
+                        TenMinuteTimeRow(title: "開演", selection: startTimeBinding)
+                        TenMinuteTimeRow(title: "終了", selection: endTimeBinding)
+                    } else {
+                        ExperienceDateTimeRangeEditor(
+                            startsAt: startTimeBinding,
+                            endsAt: endTimeBinding,
+                            dateLabel: simpleScheduleDateLabel,
+                            startTimeLabel: "開始時刻",
+                            endTimeLabel: "終了時刻"
+                        )
+                    }
+                } else if usesOpeningTime && usesPlanRegistration {
+                    TheaterScheduleDateRow(
+                        selection: scheduleDateBinding,
+                        isSet: $draft.hasConfirmedSchedule,
+                        onClear: clearExperienceSchedule
+                    )
+                }
+            } header: {
+                if isSimplePlan {
+                    FavorecoRegistrationSectionHeader(simpleScheduleSectionTitle)
+                } else if usesPlanRegistration {
+                    TheaterUnifiedSectionLabel(section: .participation)
+                } else {
+                    FavorecoRegistrationSectionHeader(usesOpeningTime ? "観劇予定日" : "予定日時")
+                }
+            }
+
+            if !isSimpleDestinationPlan && (usesPlanRegistration || draft.hasConfirmedSchedule) {
+                Section {
+                    inheritedTheaterVenueChoices
+                    PlanVenueSearchField(
+                        title: planVenueFieldTitle,
+                        prompt: planVenueFieldPrompt,
+                        text: venueNameBinding,
+                        tint: themePalette.globalTint,
+                        searchAction: { isShowingPlaceSearch = true }
+                    )
+                    placeSuggestionList
+                    ExplicitFormTextField(
+                        title: "住所（任意）",
+                        prompt: "住所を入力（任意）",
+                        text: venueAddressBinding,
+                        axis: .vertical,
+                        minimumLines: 1,
+                        maximumLines: 2,
+                        labelStyle: .horizontal
+                    )
+                    .textContentType(.fullStreetAddress)
+                    PlaceMapPreview(
+                        venueName: draft.venueName,
+                        address: draft.venueAddress,
+                        latitude: draft.latitude,
+                        longitude: draft.longitude
+                    )
+                    ExplicitFormTextField(
+                        title: planVenueOfficialSiteFieldTitle,
+                        prompt: "https://",
+                        text: venueOfficialURLBinding,
+                        axis: .vertical,
+                        minimumLines: 1,
+                        maximumLines: 2,
+                        labelStyle: .horizontal
+                    )
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    PlaceOfficialWebsiteLink(
+                        urlString: venueOfficialURLString,
+                        title: planVenueOfficialSiteLinkTitle
+                    )
+                } header: {
+                    FavorecoRegistrationSectionHeader(planVenueSectionTitle)
+                }
+            }
+        }
+    }
+
+    private var planVenueSectionTitle: String {
+        if isSimpleViewingPlan {
+            return selectedCategory?.templateKey == "movie" ? "鑑賞場所" : "会場"
+        }
+        return isSimpleDestinationPlan ? "場所" : "会場"
+    }
+
+    private var planBasicInformationSection: some View {
         Section {
-            DisclosureGroup(isExpanded: $isPlanBasicExpanded) {
+            if let event = resolvedTargetEvent {
+                linkedTheaterReferenceRow(
+                    title: "ジャンル",
+                    value: event.category?.name ?? "未設定"
+                )
+            } else {
+                ExplicitFormControlRow(title: "ジャンル", isRequired: true) {
+                    Picker("ジャンル", selection: $draft.categoryID) {
+                        Text("未設定").tag(Optional<UUID>.none)
+                        ForEach(visibleCategories) { category in
+                            Text(category.name).tag(category.id as UUID?)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+
+            if let event = resolvedTargetEvent, isSimplePlan {
+                linkedTheaterReferenceRow(title: destinationTargetFieldTitle, value: event.title)
+            } else if let event = resolvedTargetEvent,
+                      event.category?.templateKey == "theater" {
+                let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+                linkedTheaterReferenceRow(title: "公演名", value: event.title)
+                if !event.seriesName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    linkedTheaterReferenceRow(title: "シリーズ", value: event.seriesName)
+                }
+                let performanceTypeName = TheaterPerformanceType.displayName(
+                    for: event.subTypeKey,
+                    customName: fields.eventPerformanceTypeCustomName
+                )
+                if !performanceTypeName.isEmpty {
+                    linkedTheaterReferenceRow(title: "公演種別", value: performanceTypeName)
+                }
+            } else {
+                ExplicitFormTextField(
+                    title: planBasicTitleFieldTitle,
+                    prompt: planBasicTitleFieldPrompt,
+                    text: $draft.title,
+                    axis: .horizontal,
+                    minimumLines: 1,
+                    maximumLines: 1,
+                    labelStyle: .horizontal,
+                    inputFontSize: ExplicitFormMetrics.inputFontSize,
+                    labelLineLimit: 2,
+                    focusesFromWholeRow: true
+                )
+            }
+            if isSimpleDestinationPlan {
+                PlanVenueSearchField(
+                    title: simpleDestinationVenueFieldTitle,
+                    prompt: simpleDestinationVenueFieldPrompt,
+                    text: venueNameBinding,
+                    tint: themePalette.globalTint,
+                    searchAction: { isShowingPlaceSearch = true }
+                )
+                placeSuggestionList
+                ExplicitFormTextField(
+                    title: "住所",
+                    prompt: "任意（地図・カレンダーでは住所を優先）",
+                    text: venueAddressBinding,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+                .textContentType(.fullStreetAddress)
+                PlaceMapPreview(
+                    venueName: draft.venueName,
+                    address: draft.venueAddress,
+                    latitude: draft.latitude,
+                    longitude: draft.longitude
+                )
+                ExplicitFormTextField(
+                    title: "施設公式サイト（任意）",
+                    prompt: "https://",
+                    text: venueOfficialURLBinding,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                PlaceOfficialWebsiteLink(
+                    urlString: venueOfficialURLString,
+                    title: "施設サイトを開く"
+                )
+            }
+            if !isSimplePlan {
+                ExplicitFormTextField(
+                    title: "サブタイトル",
+                    prompt: "任意",
+                    text: $draft.subtitle,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+            }
+            ExplicitFormTextField(
+                title: isSimplePlan ? "この予定の案内ページ（任意）" : "公式URL",
+                prompt: isSimplePlan ? "予約・イベント情報などのURL" : "公演・この予定の案内ページ（任意）",
+                text: $draft.officialURL,
+                axis: .vertical,
+                minimumLines: 1,
+                maximumLines: 2,
+                labelStyle: .horizontal
+            )
+            .keyboardType(.URL)
+            .textInputAutocapitalization(.never)
+
+            if resolvedTargetEvent?.category?.templateKey == "theater" {
+                Text("気になる公演の情報を引き継いでいます。ここでは観劇する日時と会場を追加します。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            if isSimplePlan {
+                FavorecoRegistrationSectionHeader("\(destinationTargetName)情報")
+            } else if usesPlanRegistration {
+                TheaterUnifiedSectionLabel(
+                    section: .performanceBasic,
+                    isLive: selectedCategory?.templateKey == "live",
+                    summaryOverride: "ジャンル・公演名・サブタイトル・公式URL"
+                )
+            } else {
+                FavorecoRegistrationSectionHeader("公演の基本情報")
+            }
+        }
+    }
+
+    private var selectedPlanDestinationMenu: some View {
+        Menu {
+            Button {
+                selectedPlanID = nil
+            } label: {
+                if selectedPlanID == nil {
+                    Label("新しい予定を作る", systemImage: "checkmark")
+                } else {
+                    Text("新しい予定を作る")
+                }
+            }
+            ForEach(plansForSelectedEvent) { plan in
+                Button {
+                    selectedPlanID = plan.id
+                } label: {
+                    if selectedPlanID == plan.id {
+                        Label(planSelectionDescription(plan), systemImage: "checkmark")
+                    } else {
+                        Text(planSelectionDescription(plan))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text("追加先予定")
+                    .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Divider()
+                    .frame(height: 20)
+
+                Text(selectedPlanSelectionText)
+                    .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                    .foregroundStyle(themePalette.globalTint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .allowsTightening(true)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(themePalette.globalTint)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var batchImportedScheduleSection: some View {
+        if !batchImportedScheduleDrafts.isEmpty {
+            FavorecoRegistrationSection("一括登録する別日程") {
+                ForEach(Array(batchImportedScheduleDrafts.enumerated()), id: \.offset) { index, importedDraft in
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(importedDraft.trimmedTitle.isEmpty ? "公演名未設定" : importedDraft.trimmedTitle)
+                                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                                .lineLimit(1)
+                            Text(importedScheduleSummary(importedDraft))
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 8)
+                        Button {
+                            batchImportedScheduleDrafts.remove(at: index)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("一括登録候補から削除")
+                    }
+                }
+
+                Text("保存すると、選択した別日程を同じ公演の予定としてまとめて登録します。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var ticketRegistrationSections: some View {
+        FavorecoRegistrationSection("チケット情報") {
+            if draft.createsTicketAttempt {
+                if isUnifiedRegistration {
+                    if unifiedPurpose == .application {
+                        ExplicitFormControlRow(title: "申込方法") {
+                            Picker("申込方法", selection: $draft.flowKey) {
+                                ForEach(unifiedApplicationFlowOptions) { flow in
+                                    Text(flow.key == "lotteryPlanned" ? "抽選" : "先着")
+                                        .tag(flow.key)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                        .onChange(of: draft.flowKey) { _, newValue in
+                            draft.applyFlowDefaults(newValue)
+                        }
+                    }
+                } else {
+                    ExplicitFormControlRow(title: "登録内容") {
+                        Picker("登録内容", selection: $draft.flowKey) {
+                            ForEach(draft.flowOptions) { flow in
+                                Text(flow.name).tag(flow.key)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .onChange(of: draft.flowKey) { _, newValue in
+                        draft.applyFlowDefaults(newValue)
+                    }
+                }
+
+                if showsTicketApplicationDetails {
+                    ticketFlowGuide
+                }
+
+                if draft.showsEntryRoute || draft.showsAccountFields || draft.showsTicketGuide {
+                    applicationDetailsSection
+                }
+            }
+        }
+
+        if draft.createsTicketAttempt && draft.showsAnyTicketMilestone {
+            FavorecoRegistrationSection("チケットスケジュール") {
+                TicketMilestoneDateGuidance()
+                if draft.showsSaleStart {
+                    DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
+                }
+                if draft.showsApplyDeadline {
+                    DateToggleRow(title: "抽選申込締切", isOn: $draft.hasApplyDeadline, date: $draft.applyDeadlineAt)
+                }
+                if draft.showsResultAnnounce {
+                    DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
+                }
+                if draft.showsPaymentDeadline {
+                    DateToggleRow(title: "支払締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
+                }
+                if draft.showsIssueStart {
+                    DateToggleRow(title: "チケット受取開始", isOn: $draft.hasIssueStart, date: $draft.issueStartAt)
+                }
+            }
+        }
+
+        if draft.createsTicketAttempt && draft.showsTicketDetails {
+            FavorecoRegistrationSection("金額・座席") {
+                ExplicitFormTextField(
+                    title: "チケット代（任意）",
+                    prompt: "金額",
+                    text: $draft.priceText,
+                    labelStyle: .horizontal
+                )
+                .keyboardType(.numberPad)
+                ExplicitFormTextField(
+                    title: "手数料（任意）",
+                    prompt: "金額",
+                    text: $draft.feeText,
+                    labelStyle: .horizontal
+                )
+                .keyboardType(.numberPad)
+                ExplicitFormControlRow(title: "枚数") {
+                    Stepper(value: $draft.quantity, in: 1...20) {
+                        Text("\(draft.quantity)枚")
+                            .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                    }
+                    .fixedSize()
+                }
+                ExplicitFormTextField(
+                    title: "座席（任意）",
+                    prompt: "座席・整理番号",
+                    text: $draft.seatText,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .horizontal
+                )
+            }
+        }
+
+        if isUnifiedRegistration && unifiedPurpose == .application {
+            additionalApplicationsSection
+        }
+    }
+
+    private var informationImageImportSection: some View {
+        Section {
+            Button {
+                isShowingInformationImageSource = true
+            } label: {
+                HStack(spacing: 10) {
+                    FavorecoIcon(systemName: "camera.viewfinder", size: 19)
+                        .foregroundStyle(themePalette.globalTint)
+                        .frame(width: 26)
+                    Text(isReadingTicketImage ? "画像を読み取り中" : "写真・カメラから情報入力")
+                        .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                    Spacer(minLength: 4)
+                    if isReadingTicketImage {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isReadingTicketImage || !usesOCRImportAssist)
+
+            if !usesOCRImportAssist {
+                Text("画像からの情報入力は設定でOFFになっています。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            } else if !ticketOCRStatus.isEmpty {
+                Text(ticketOCRStatus)
+                    .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var eventEyecatchSection: some View {
+        Section {
+            HStack(alignment: .center, spacing: 14) {
+                Group {
+                    if let eventEyecatchData, let image = UIImage(data: eventEyecatchData) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Color(.secondarySystemFill)
+                            FavorecoIcon(systemName: "photo", size: 24)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(width: 96, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .clipped()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    PhotosPicker(selection: $selectedEventEyecatchItem, matching: .images) {
+                        FavorecoIconLabel("写真を選ぶ", systemImage: "photo.on.rectangle", iconSize: 13)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        openEventEyecatchCamera()
+                    } label: {
+                        FavorecoIconLabel("撮影する", systemImage: "camera", iconSize: 13)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(role: .destructive) {
+                        eventEyecatchData = nil
+                    } label: {
+                        FavorecoIconLabel("削除", systemImage: "trash", iconSize: 13)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(eventEyecatchData == nil)
+                }
+                .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                .foregroundStyle(themePalette.globalTint)
+            }
+            .padding(.vertical, 2)
+        } header: {
+            FavorecoRegistrationSectionHeader("アイキャッチ")
+        }
+    }
+
+    @ViewBuilder
+    private var planLifecycleEditSections: some View {
+        StagedRecordBlock(
+            title: planPrimaryRecordTitle,
+            description: planPrimaryRecordSubtitle,
+            units: [planPrimaryRecordUnit],
+            status: planLifecycleStatus(for:),
+            isExpanded: planLifecycleExpansionBinding(for:)
+        ) { _ in
                 VStack(spacing: 0) {
                     if let event = resolvedTargetEvent {
                         compactPlanSummaryRow(
@@ -1347,19 +1514,17 @@ struct AddTicketPlanView: View {
 
                     Divider()
                     inheritedTheaterVenueChoices
-                    ExplicitFormTextField(
+                    PlanVenueSearchField(
                         title: planVenueFieldTitle,
                         prompt: planVenueFieldPrompt,
                         text: venueNameBinding,
-                        axis: .vertical,
-                        minimumLines: 1,
-                        maximumLines: 2,
-                        labelStyle: .horizontal
+                        tint: themePalette.globalTint,
+                        searchAction: { isShowingPlaceSearch = true }
                     )
                     placeSuggestionList
                     ExplicitFormTextField(
                         title: "住所",
-                        prompt: "任意（地図・カレンダーでは住所を優先）",
+                        prompt: "例：東京都千代田区…",
                         text: venueAddressBinding,
                         axis: .vertical,
                         minimumLines: 1,
@@ -1368,28 +1533,26 @@ struct AddTicketPlanView: View {
                     )
                     .textContentType(.fullStreetAddress)
 
-                    Button {
-                        isShowingPlaceSearch = true
-                    } label: {
-                        FavorecoIconLabel("地図から場所を入力", systemImage: "map")
-                            .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
-                            .lineLimit(1)
-                    }
+                    PlaceMapPreview(
+                        venueName: draft.venueName,
+                        address: draft.venueAddress,
+                        latitude: draft.latitude,
+                        longitude: draft.longitude
+                    )
                 }
-                .padding(.top, 12)
-            } label: {
-                planLifecycleLabel(
-                    title: planPrimaryRecordTitle,
-                    subtitle: planPrimaryRecordSubtitle,
-                    systemImage: planPrimaryRecordIcon,
-                    status: draft.hasConfirmedSchedule ? "入力済み" : "未入力"
-                )
-            }
+                .padding(.top, 4)
         }
 
-        Section {
-            DisclosureGroup(isExpanded: $isPlanMemoriesExpanded) {
+        StagedRecordBlock(
+            title: planMemoryRecordTitle,
+            description: planMemoryRecordSubtitle,
+            units: [planMemoryRecordUnit],
+            status: planLifecycleStatus(for:),
+            isExpanded: planLifecycleExpansionBinding(for:)
+        ) { _ in
                 VStack(alignment: .leading, spacing: 12) {
+                    TicketTagInputField(text: $draft.planTagNamesText)
+
                     ExplicitFormTextField(
                         title: "メモ",
                         prompt: planMemoryPrompt,
@@ -1400,28 +1563,25 @@ struct AddTicketPlanView: View {
                         reservesLineSpace: true
                     )
 
-                    Text("評価・写真・同行者などの体験結果は、参加後も同じ3段階の記録シートから追加できます。")
+                    Text("評価・写真は参加後に追加できます。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.top, 12)
-            } label: {
-                planLifecycleLabel(
-                    title: planMemoryRecordTitle,
-                    subtitle: planMemoryRecordSubtitle,
-                    systemImage: "sparkles",
-                    status: draft.trimmedMemo.isEmpty ? "任意" : "入力済み"
-                )
-            }
+                .padding(.top, 4)
         }
 
-        Section {
-            DisclosureGroup(isExpanded: $isPlanNotesExpanded) {
+        StagedRecordBlock(
+            title: planNotesRecordTitle,
+            description: "公式・参考情報、補足",
+            units: [planNotesRecordUnit],
+            status: planLifecycleStatus(for:),
+            isExpanded: planLifecycleExpansionBinding(for:)
+        ) { _ in
                 VStack(spacing: 0) {
                     ExplicitFormTextField(
-                        title: "公式URL",
-                        prompt: "この予定の案内ページ（任意）",
+                        title: isSimplePlan ? "案内URL（任意）" : "公式URL（任意）",
+                        prompt: "https://",
                         text: $draft.officialURL,
                         axis: .vertical,
                         minimumLines: 1,
@@ -1433,8 +1593,8 @@ struct AddTicketPlanView: View {
 
                     Divider()
                     ExplicitFormTextField(
-                        title: planVenueOfficialSiteFieldTitle,
-                        prompt: "https://",
+                        title: "施設URL（任意）",
+                        prompt: "公式サイトのURL",
                         text: venueOfficialURLBinding,
                         axis: .vertical,
                         minimumLines: 1,
@@ -1442,47 +1602,65 @@ struct AddTicketPlanView: View {
                         labelStyle: .horizontal
                     )
                     .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
+                        .textInputAutocapitalization(.never)
                 }
-                .padding(.top, 12)
-            } label: {
-                planLifecycleLabel(
-                    title: planNotesRecordTitle,
-                    subtitle: "公式・参考情報、補足",
-                    systemImage: "doc.text",
-                    status: draft.trimmedOfficialURL.isEmpty && venueOfficialURLString.isEmpty ? "任意" : "入力済み"
-                )
-            }
+                .padding(.top, 4)
         }
     }
 
-    private func planLifecycleLabel(
-        title: String,
-        subtitle: String,
-        systemImage: String,
-        status: String
-    ) -> some View {
-        HStack(spacing: 12) {
-            FavorecoIcon(systemName: systemImage, size: 17)
-                .foregroundStyle(themePalette.globalTint)
-                .frame(width: 24)
+    private var planPrimaryRecordUnit: RecordUnitDefinition {
+        RecordUnitDefinition(
+            id: "planBasic",
+            name: planPrimaryRecordTitle,
+            description: planPrimaryRecordSubtitle,
+            isRequired: true
+        )
+    }
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(FavorecoTypography.bodyStrong)
-                    .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
+    private var planMemoryRecordUnit: RecordUnitDefinition {
+        RecordUnitDefinition(
+            id: "planMemories",
+            name: planMemoryRecordTitle,
+            description: planMemoryRecordSubtitle,
+            isRequired: false
+        )
+    }
 
-            Spacer(minLength: 8)
-            Text(status)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(status == "入力済み" ? themePalette.globalTint : .secondary)
+    private var planNotesRecordUnit: RecordUnitDefinition {
+        RecordUnitDefinition(
+            id: "planNotes",
+            name: planNotesRecordTitle,
+            description: "公式・参考情報、補足",
+            isRequired: false
+        )
+    }
+
+    private func planLifecycleStatus(for id: String) -> RecordUnitStatus {
+        switch id {
+        case "planBasic":
+            return draft.hasConfirmedSchedule ? .entered : .required
+        case "planMemories":
+            return draft.trimmedMemo.isEmpty && draft.planTagNamesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? .optional
+                : .entered
+        case "planNotes":
+            return draft.trimmedOfficialURL.isEmpty && venueOfficialURLString.isEmpty ? .optional : .entered
+        default:
+            return .optional
         }
-        .contentShape(Rectangle())
+    }
+
+    private func planLifecycleExpansionBinding(for id: String) -> Binding<Bool> {
+        switch id {
+        case "planBasic":
+            return $isPlanBasicExpanded
+        case "planMemories":
+            return $isPlanMemoriesExpanded
+        case "planNotes":
+            return $isPlanNotesExpanded
+        default:
+            return .constant(false)
+        }
     }
 
     private func configurePlanLifecycleExpansionIfNeeded() {
@@ -1490,9 +1668,11 @@ struct AddTicketPlanView: View {
         didConfigurePlanLifecycleExpansion = true
         let referenceEnd = max(draft.endsAt, draft.startsAt)
         let hasEnded = draft.hasConfirmedSchedule && referenceEnd < Date()
-        isPlanBasicExpanded = !hasEnded
-        isPlanMemoriesExpanded = hasEnded
-        isPlanNotesExpanded = hasEnded
+        let stage: RecordFormOpeningStage = hasEnded ? .afterExperience : .plannedTarget
+        let expansion = RecordLifecycleBlockExpansion.resolved(for: stage)
+        isPlanBasicExpanded = expansion.primary
+        isPlanMemoriesExpanded = expansion.memories
+        isPlanNotesExpanded = expansion.notes
     }
 
     private var planTemplateKey: String {
@@ -1501,13 +1681,15 @@ struct AddTicketPlanView: View {
 
     private var planPrimaryRecordTitle: String {
         switch planTemplateKey {
+        case "theater": "鑑賞記録"
         case "live": "参戦記録"
+        case "movie", "museum": "鑑賞記録"
         case "theme_park": "来園記録"
         case "nature_living", "outing_facility": "体験記録"
         case "book": "読書記録"
         case "goshuin": "参拝記録"
         case "sake": "飲酒記録"
-        case "goods": "収集記録"
+        case "random_goods": "収集記録"
         default: "鑑賞記録"
         }
     }
@@ -1522,7 +1704,7 @@ struct AddTicketPlanView: View {
         case "book": "読書日・作品"
         case "goshuin": "参拝日・寺社"
         case "sake": "飲んだ日・銘柄・場所"
-        case "goods": "入手日・対象"
+        case "random_goods": "入手日・対象"
         default: "日時・場所"
         }
     }
@@ -1532,7 +1714,7 @@ struct AddTicketPlanView: View {
         case "book": "books.vertical"
         case "goshuin": "building.columns"
         case "sake": "wineglass"
-        case "goods": "shippingbox"
+        case "random_goods": "shippingbox"
         default: "calendar"
         }
     }
@@ -1541,7 +1723,7 @@ struct AddTicketPlanView: View {
         switch planTemplateKey {
         case "book": "読後感"
         case "sake": "感想"
-        case "goods": "コレクションメモ"
+        case "random_goods": "コレクションメモ"
         default: "思い出の記録"
         }
     }
@@ -1561,13 +1743,13 @@ struct AddTicketPlanView: View {
         case "book": "評価・引用・ページメモ・感想"
         case "goshuin": "写真・同行者・感想"
         case "sake": "評価・写真・感想"
-        case "goods": "画像・入手履歴・メモ"
+        case "random_goods": "画像・入手履歴・メモ"
         default: "評価・写真・同行者・感想"
         }
     }
 
     private var planMemoryPrompt: String {
-        "予定のうちに残しておきたいこと（任意）"
+        "例：見たい展示、同行者"
     }
 
     private var planTargetFieldTitle: String {
@@ -1579,7 +1761,7 @@ struct AddTicketPlanView: View {
         case "book": "書名"
         case "goshuin": "寺社名"
         case "sake": "銘柄"
-        case "goods": "対象名"
+        case "random_goods": "対象名"
         default: "タイトル"
         }
     }
@@ -1659,8 +1841,8 @@ struct AddTicketPlanView: View {
                         .foregroundStyle(.secondary)
                     ForEach(suggestions) { place in
                         Button {
-                            draft.apply(placeMaster: place)
                             finishPlaceSuggestionSelection()
+                            draft.apply(placeMaster: place)
                             resolveSimpleDestinationCoordinateIfNeeded()
                         } label: {
                             HStack(spacing: 10) {
@@ -1691,8 +1873,8 @@ struct AddTicketPlanView: View {
                     ForEach(publicSuggestions) { entry in
                         Button {
                             let selection = PublicPlaceSelectionDraft(entry: entry)
-                            draft.apply(publicPlace: selection)
                             finishPlaceSuggestionSelection()
+                            draft.apply(publicPlace: selection)
                             resolveSimpleDestinationCoordinateIfNeeded()
                         } label: {
                             HStack(spacing: 10) {
@@ -1741,6 +1923,10 @@ struct AddTicketPlanView: View {
         }
     }
 
+    private var simpleDestinationVenueFieldPrompt: String {
+        simpleDestinationVenueFieldTitle + "を入力して候補から選択"
+    }
+
     private var planVenueFieldTitle: String {
         switch selectedCategory?.templateKey {
         case "museum": "美術館・博物館名"
@@ -1751,9 +1937,9 @@ struct AddTicketPlanView: View {
 
     private var planVenueFieldPrompt: String {
         switch selectedCategory?.templateKey {
-        case "museum": "美術館・博物館名を入力して候補から選択"
-        case "movie": "映画館・鑑賞場所を入力"
-        default: "公演情報から選択、または会場名を入力"
+        case "museum": "施設名を入力"
+        case "movie": "映画館・場所を入力"
+        default: "会場名を入力"
         }
     }
 
@@ -1797,8 +1983,8 @@ struct AddTicketPlanView: View {
                         .foregroundStyle(.secondary)
                     ForEach(venues) { venue in
                         Button {
-                            draft.applyRegisteredVenue(venue)
                             finishPlaceSuggestionSelection()
+                            draft.applyRegisteredVenue(venue)
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: draft.trimmedVenueName == venue.trimmedName
@@ -2250,6 +2436,41 @@ struct AddTicketPlanView: View {
         return values.joined(separator: " / ")
     }
 
+    private func openInformationCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            isShowingCameraUnavailableAlert = true
+            return
+        }
+        isShowingInformationCamera = true
+    }
+
+    private func openEventEyecatchCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            isShowingCameraUnavailableAlert = true
+            return
+        }
+        isShowingEventEyecatchCamera = true
+    }
+
+    @MainActor
+    private func loadEventEyecatch(from item: PhotosPickerItem) async {
+        defer { selectedEventEyecatchItem = nil }
+        guard let sourceData = try? await item.loadTransferable(type: Data.self) else { return }
+        eventEyecatchData = await Task.detached(priority: .userInitiated) {
+            QuickCaptureImageService.compressedJPEG(from: sourceData)
+        }.value
+    }
+
+    private func setEventEyecatch(from image: UIImage) {
+        guard let sourceData = image.jpegData(compressionQuality: 0.9) else { return }
+        Task {
+            let compressed = await Task.detached(priority: .userInitiated) {
+                QuickCaptureImageService.compressedJPEG(from: sourceData)
+            }.value
+            await MainActor.run { eventEyecatchData = compressed }
+        }
+    }
+
     @MainActor
     private func readTicketImages(from items: [PhotosPickerItem]) async {
         isReadingTicketImage = true
@@ -2269,6 +2490,24 @@ struct AddTicketPlanView: View {
             ticketOCRStatus = "画像を読み込めませんでした。別の画像をお試しください。"
             return
         }
+
+        await analyzeTicketImageData(sourceData)
+    }
+
+    @MainActor
+    private func readTicketCameraImage(_ image: UIImage) async {
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            ticketOCRStatus = "撮影した画像を読み込めませんでした。"
+            return
+        }
+        isReadingTicketImage = true
+        ticketOCRStatus = "撮影した画像から文字を読み取っています。"
+        defer { isReadingTicketImage = false }
+        await analyzeTicketImageData([data])
+    }
+
+    @MainActor
+    private func analyzeTicketImageData(_ sourceData: [Data]) async {
 
         let analyses = await Task.detached(priority: .userInitiated) {
             sourceData.map {
@@ -2888,6 +3127,7 @@ struct AddTicketPlanView: View {
         if event.stateKey.isEmpty {
             event.stateKey = "interested"
         }
+        event.eyecatchData = eventEyecatchData
         event.updatedAt = now
 
         do {
@@ -2903,6 +3143,7 @@ struct AddTicketPlanView: View {
 
     private func create(now: Date) {
         let event = resolvedTargetEvent ?? createTargetEvent(now: now)
+        event.eyecatchData = eventEyecatchData
         let synchronizedTitle = synchronizedPlanTitle(event: event)
         let plan = Plan(
             title: synchronizedTitle,
@@ -2916,6 +3157,7 @@ struct AddTicketPlanView: View {
             officialURL: draft.trimmedOfficialURL,
             sourceURL: draft.trimmedOfficialURL,
             memo: draft.trimmedMemo,
+            unitFieldsRaw: draft.planUnitFieldsRaw,
             createdAt: now,
             updatedAt: now,
             category: event.category ?? selectedCategory,
@@ -3057,6 +3299,7 @@ struct AddTicketPlanView: View {
             officialURL: sourceDraft.trimmedOfficialURL,
             sourceURL: sourceDraft.trimmedOfficialURL,
             memo: sourceDraft.trimmedMemo,
+            unitFieldsRaw: sourceDraft.planUnitFieldsRaw,
             createdAt: now,
             updatedAt: now,
             category: event.category ?? selectedCategory,
@@ -3173,7 +3416,7 @@ struct AddTicketPlanView: View {
         now: Date,
         initialStateKey: String = "active"
     ) -> ExperienceEvent {
-        let existingEvent: ExperienceEvent? = if selectedCategory?.templateKey == "theater" {
+        let existingEvent: ExperienceEvent? = if ["theater", "live"].contains(selectedCategory?.templateKey ?? "") {
             ExperienceEvent.matchingProduction(
                 title: draft.trimmedTitle,
                 categoryID: selectedCategory?.id,
@@ -3193,6 +3436,7 @@ struct AddTicketPlanView: View {
             modelContext.insert(event)
         }
         event.title = draft.trimmedTitle
+        event.eyecatchData = eventEyecatchData
         if !draft.trimmedOfficialURL.isEmpty {
             event.officialURL = draft.trimmedOfficialURL
         }
@@ -3224,9 +3468,11 @@ struct AddTicketPlanView: View {
         plan.officialURL = draft.trimmedOfficialURL
         plan.sourceURL = draft.trimmedOfficialURL
         plan.memo = draft.trimmedMemo
+        plan.unitFieldsRaw = draft.planUnitFieldsRaw
         plan.updatedAt = now
         plan.category = plan.event?.category ?? selectedCategory
         plan.event?.stateKey = eventStateKeyAfterPlanSave
+        plan.event?.eyecatchData = eventEyecatchData
         plan.event?.updatedAt = now
 
         let attemptForScheduling: TicketAttempt?
@@ -4711,6 +4957,61 @@ private struct AdditionalTicketApplicationDraft: Identifiable {
     }
 }
 
+private struct PlanVenueSearchField: View {
+    let title: String
+    let prompt: String
+    @Binding var text: String
+    let tint: Color
+    let searchAction: () -> Void
+
+    private var hasQuery: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ExplicitFormFieldTitle(
+                title: title.replacingOccurrences(of: "（任意）", with: ""),
+                isOptional: title.contains("任意"),
+                isRequired: false
+            )
+
+            HStack(spacing: 6) {
+                TextField(
+                    title,
+                    text: $text,
+                    prompt: Text(prompt)
+                        .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                        .foregroundStyle(Color.secondary.opacity(0.66)),
+                    axis: .vertical
+                )
+                .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+                .lineLimit(1...2)
+                .frame(minHeight: 29, alignment: .leading)
+
+                Button(action: searchAction) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(hasQuery ? tint : Color.secondary.opacity(0.38))
+                        .frame(width: 34, height: 34)
+                        .background(
+                            hasQuery ? tint.opacity(0.12) : Color.clear,
+                            in: Circle()
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(!hasQuery)
+                .accessibilityLabel("Apple Mapsで\(title)を検索")
+            }
+        }
+        .padding(.top, ExplicitFormMetrics.rowTopPadding)
+        .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
+        .frame(minHeight: ExplicitFormMetrics.rowMinimumHeight, alignment: .topLeading)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+    }
+}
+
 private struct TicketPlanDraft {
     var categoryID: UUID?
     var title = ""
@@ -4752,6 +5053,8 @@ private struct TicketPlanDraft {
     var quantity = 1
     var seatText = ""
     var tagNamesText = ""
+    var planTagNamesText = ""
+    var planUnitFieldsRawSnapshot = ""
     var purchaseURL = ""
     var memo = ""
 
@@ -4844,6 +5147,10 @@ private struct TicketPlanDraft {
         longitude = plan.placeMaster?.longitude ?? 0
         officialURL = plan.officialURL
         memo = plan.memo
+        planUnitFieldsRawSnapshot = plan.unitFieldsRaw
+        planTagNamesText = PlanPreparationFields(rawValue: plan.unitFieldsRaw)
+            .tagNames
+            .joined(separator: "\n")
 
         guard entryMode == .ticketSchedule else {
             createsTicketAttempt = false
@@ -4913,6 +5220,11 @@ private struct TicketPlanDraft {
         TicketAttemptUnitFields(
             tagNames: TicketAttemptUnitFields.normalizedTagNames(from: tagNamesText)
         ).encodedRawValue
+    }
+    var planUnitFieldsRaw: String {
+        var fields = PlanPreparationFields(rawValue: planUnitFieldsRawSnapshot)
+        fields.tagNames = TicketAttemptUnitFields.normalizedTagNames(from: planTagNamesText)
+        return fields.encodedRawValue
     }
     var trimmedPurchaseURL: String { purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedMemo: String { memo.trimmingCharacters(in: .whitespacesAndNewlines) }

@@ -50,6 +50,10 @@ struct FavoProfileEditorView: View {
     @ViewBuilder
     private var masterSection: some View {
         Section {
+            EditScopeNotice(
+                scope: "すべての作品・予定・記録",
+                detail: "正式名や公式URLなど、対象自体の共通情報として反映します。"
+            )
             switch pin.targetKind {
             case .person:
                 TextField("正式名", text: $draft.masterName)
@@ -86,6 +90,10 @@ struct FavoProfileEditorView: View {
 
     private var favoSection: some View {
         Section("FAVOでの表示") {
+            EditScopeNotice(
+                scope: "MY FAVOだけ",
+                detail: "呼び名、カラー、きっかけ、個人メモは元の作品・人物・場所情報を変えません。"
+            )
             TextField("自分が使う呼び名（任意）", text: $draft.nickname)
             ColorPicker(
                 "FAVOカラー",

@@ -156,13 +156,20 @@ struct HomeVisitSnapshot: Identifiable {
         overallRating = visit.overallRating
         unitFieldsRaw = visit.unitFieldsRaw
         eyecatchPath = visit.eyecatchPath
-        eyecatchAspectRatio = EyecatchAspectRatio.option(
-            for: unitFields.eyecatchAspectRatioKey,
-            category: category
-        ).value
-        fillsEyecatchFrame = category?.templateKey == "theater"
-            ? false
-            : EyecatchAspectRatio.usesEyecatchFill(for: category)
+        if category?.templateKey == "book" {
+            // 読書Visit側が比率未設定でも、書籍本体に保存した判型を使う。
+            // Homeギャラリーでは表紙全体を確認できるようfit表示にする。
+            eyecatchAspectRatio = EyecatchAspectRatio.resolved(for: visit.event).value
+            fillsEyecatchFrame = false
+        } else {
+            eyecatchAspectRatio = EyecatchAspectRatio.option(
+                for: unitFields.eyecatchAspectRatioKey,
+                category: category
+            ).value
+            fillsEyecatchFrame = category?.templateKey == "theater"
+                ? false
+                : EyecatchAspectRatio.usesEyecatchFill(for: category)
+        }
         self.peopleSummary = peopleSummary
         thumbnailReference = visit.event.map { .event($0.id) }
         comingUpTimeText = category?.usesOpeningTime == true

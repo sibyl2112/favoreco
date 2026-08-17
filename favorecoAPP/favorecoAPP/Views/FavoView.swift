@@ -57,6 +57,12 @@ struct FavoView: View {
             HStack(alignment: .firstTextBaseline) {
                 FavoSectionTitle(title: "MY FAVO", subtitle: "私の推し")
                 NavigationLink {
+                    FavoPeopleManagementView()
+                } label: {
+                    Text("人物・団体")
+                        .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
+                }
+                NavigationLink {
                     FavoPinManagementView()
                 } label: {
                     Label("編集", systemImage: "slider.horizontal.3")
@@ -508,7 +514,7 @@ private struct FavoPinManagementView: View {
                                 ? person.favoriteProfile?.nickname ?? person.displayName
                                 : person.displayName,
                             subtitle: person.reading.isEmpty
-                                ? (person.eventLinks?.isEmpty == false ? "登録済みキャスト" : "人物・団体マスター")
+                                ? (person.eventLinks?.isEmpty == false ? "登録済みキャスト" : "人物・団体")
                                 : person.reading,
                             icon: "person.fill",
                             colorHex: person.favoriteProfile?.colorHex ?? "#8F5E73",

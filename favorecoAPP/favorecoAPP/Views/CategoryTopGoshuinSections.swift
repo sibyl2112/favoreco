@@ -275,7 +275,7 @@ struct GoshuinStampTile: View {
             Text(visit.event?.title.isEmpty == false ? visit.event?.title ?? "参拝先" : "参拝先")
                 .font(FavorecoTypography.captionStrong)
                 .lineLimit(1)
-            Text(FavorecoDateText.compactDate(visit.visitedAt))
+            Text(FavorecoDateText.fullDate(visit.visitedAt))
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
         }
@@ -312,6 +312,7 @@ struct GoshuinBookSelection: Identifiable {
     let size: GoshuinBookSize
     let visits: [Visit]
     let coverPhoto: PhotoBlob?
+    let isActive: Bool
 
     var id: String { size.key }
 }
@@ -335,8 +336,18 @@ struct GoshuinBookRow: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(selection.size.name)
-                    .font(FavorecoTypography.bodyStrong)
+                HStack(spacing: 7) {
+                    Text(selection.size.name)
+                        .font(FavorecoTypography.bodyStrong)
+                    if selection.isActive {
+                        Text("使用中")
+                            .font(FavorecoTypography.jpSans(10, weight: .bold, relativeTo: .caption))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color(red: 0.66, green: 0.18, blue: 0.31), in: Capsule())
+                    }
+                }
                 Text("\(selection.visits.count)件 ・ \(selection.size.displaySize)")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
@@ -349,6 +360,127 @@ struct GoshuinBookRow: View {
         }
         .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+struct GoshuinBookManagementView: View {
+    @Binding var registeredSizeKeysRaw: String
+    @Binding var closedSizeKeysRaw: String
+    @Binding var sortOrderKeysRaw: String
+    let representedSizeKeys: Set<String>
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var editMode: EditMode = .inactive
+
+    private var registeredKeys: [String] {
+        let saved = decoded(registeredSizeKeysRaw)
+        let all = Set(saved).union(representedSizeKeys)
+        let order = decoded(sortOrderKeysRaw)
+        return order.filter(all.contains) + all.subtracting(order).sorted()
+    }
+
+    private var closedKeys: Set<String> {
+        Set(decoded(closedSizeKeysRaw))
+    }
+
+    private var availableSizes: [GoshuinBookSize] {
+        let registered = Set(registeredKeys)
+        return GoshuinBookSize.all.filter { !registered.contains($0.key) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    if registeredKeys.isEmpty {
+                        ContentUnavailableView(
+                            "御朱印帳はまだありません",
+                            systemImage: "book.closed",
+                            description: Text("追加すると、使用中／閉じた帳面と並び順を管理できます。")
+                        )
+                    } else {
+                        ForEach(registeredKeys, id: \.self) { key in
+                            let size = GoshuinBookSize.option(for: key)
+                            HStack(spacing: 12) {
+                                FavorecoIcon(systemName: "book.closed", size: 18)
+                                    .frame(width: 32, height: 42)
+                                    .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(size.name)
+                                        .font(FavorecoTypography.bodyStrong)
+                                    Text(size.displaySize)
+                                        .font(FavorecoTypography.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button(closedKeys.contains(key) ? "使用を再開" : "閉じる") {
+                                    setClosed(!closedKeys.contains(key), for: key)
+                                }
+                                .font(FavorecoTypography.captionStrong)
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                        .onMove(perform: move)
+                    }
+                } header: {
+                    Text("御朱印帳")
+                } footer: {
+                    Text("閉じた御朱印帳も閲覧と編集はできます。新しい御朱印の追加先には使用中の帳面を使います。")
+                }
+
+                if !availableSizes.isEmpty {
+                    Section {
+                        Menu {
+                            ForEach(availableSizes) { size in
+                                Button(size.name) { register(size) }
+                            }
+                        } label: {
+                            Label("御朱印帳を登録", systemImage: "plus.circle.fill")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("御朱印帳を管理")
+            .navigationBarTitleDisplayMode(.inline)
+            .environment(\.editMode, $editMode)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("閉じる") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(editMode == .active ? "完了" : "並び替え") {
+                        withAnimation { editMode = editMode == .active ? .inactive : .active }
+                    }
+                    .disabled(registeredKeys.count < 2)
+                }
+            }
+        }
+    }
+
+    private func register(_ size: GoshuinBookSize) {
+        let keys = registeredKeys + [size.key]
+        persist(keys, to: $registeredSizeKeysRaw)
+        persist(keys, to: $sortOrderKeysRaw)
+    }
+
+    private func setClosed(_ isClosed: Bool, for key: String) {
+        var values = closedKeys
+        if isClosed { values.insert(key) } else { values.remove(key) }
+        persist(registeredKeys.filter(values.contains), to: $closedSizeKeysRaw)
+    }
+
+    private func move(from source: IndexSet, to destination: Int) {
+        var keys = registeredKeys
+        keys.move(fromOffsets: source, toOffset: destination)
+        persist(keys, to: $sortOrderKeysRaw)
+    }
+
+    private func decoded(_ rawValue: String) -> [String] {
+        rawValue.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+    }
+
+    private func persist(_ keys: [String], to binding: Binding<String>) {
+        binding.wrappedValue = keys.joined(separator: ",")
     }
 }
 

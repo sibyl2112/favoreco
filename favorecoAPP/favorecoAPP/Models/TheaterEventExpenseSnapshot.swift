@@ -3,6 +3,7 @@ import Foundation
 struct TheaterEventExpenseSnapshot {
     let ticketAmount: Decimal
     let goodsAmount: Decimal
+    let foodAmount: Decimal
     let travelAmount: Decimal
     let legacyFallbackAmount: Decimal
     let ignoredLegacyAmount: Decimal
@@ -11,7 +12,7 @@ struct TheaterEventExpenseSnapshot {
     let planCount: Int
 
     var total: Decimal {
-        ticketAmount + goodsAmount + travelAmount + legacyFallbackAmount
+        ticketAmount + goodsAmount + foodAmount + travelAmount + legacyFallbackAmount
     }
 
     static func make(event: ExperienceEvent) -> TheaterEventExpenseSnapshot {
@@ -25,6 +26,7 @@ struct TheaterEventExpenseSnapshot {
 
         var ticketAmount = Decimal(0)
         var goodsAmount = Decimal(0)
+        var foodAmount = Decimal(0)
         var legacyFallbackAmount = Decimal(0)
         var ignoredLegacyAmount = Decimal(0)
         var usesTicketPhotoFallback = false
@@ -37,14 +39,16 @@ struct TheaterEventExpenseSnapshot {
             let ticketPhotoAmount = ExperienceExpenseCalculator.photoAmount(for: visit, purpose: .ticket)
             let resolvedTicketAmount = securedTicketAmount > 0 ? securedTicketAmount : ticketPhotoAmount
             let visitGoodsAmount = ExperienceExpenseCalculator.photoAmount(for: visit, purpose: .goods)
+            let visitFoodAmount = ExperienceExpenseCalculator.photoAmount(for: visit, purpose: .food)
             let linkedTravelAmount = linkedPlans.reduce(Decimal(0)) {
                 $0 + ExperienceExpenseCalculator.travelAmount(for: $1)
             }
             let legacyAmount = max(visit.amount, Decimal(0))
-            let structuredVisitAmount = resolvedTicketAmount + visitGoodsAmount + linkedTravelAmount
+            let structuredVisitAmount = resolvedTicketAmount + visitGoodsAmount + visitFoodAmount + linkedTravelAmount
 
             ticketAmount += resolvedTicketAmount
             goodsAmount += visitGoodsAmount
+            foodAmount += visitFoodAmount
             if securedTicketAmount == 0, ticketPhotoAmount > 0 {
                 usesTicketPhotoFallback = true
             }
@@ -69,6 +73,7 @@ struct TheaterEventExpenseSnapshot {
         return TheaterEventExpenseSnapshot(
             ticketAmount: ticketAmount,
             goodsAmount: goodsAmount,
+            foodAmount: foodAmount,
             travelAmount: travelAmount,
             legacyFallbackAmount: legacyFallbackAmount,
             ignoredLegacyAmount: ignoredLegacyAmount,

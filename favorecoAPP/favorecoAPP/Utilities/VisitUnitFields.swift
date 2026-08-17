@@ -143,6 +143,8 @@ struct VisitUnitFields: Codable {
     var eyecatchAspectRatioKey: String = ""
     var heroBackgroundPath: String = ""
     var heroBackgroundPresetKey: String = ""
+    /// `Visit.note` は検索互換のためプレーンテキストのまま保持し、装飾範囲だけをここへ保存する。
+    var memoStyleRuns: [MemoStyleRun] = []
     var goshuinBookSizeKey: String = ""
     var weatherSymbolName: String = ""
     var weatherHighCelsius: Double?
@@ -166,6 +168,8 @@ struct VisitUnitFields: Codable {
     var bookPublishedDate: String = ""
     var bookPriceText: String = ""
     var bookPageCount: Int = 0
+    /// 小説・漫画など、判型や読書媒体とは独立した本の内容分類。
+    var bookContentTypeKey: String = ""
     /// 紙・電子・音声など、表紙比率とは独立した読書媒体。
     var bookMediumKey: String = ""
     /// ISBN検索で書誌情報を取得したサービス名。ユーザー入力の公式URLとは分離する。
@@ -199,6 +203,7 @@ struct VisitUnitFields: Codable {
         eyecatchAspectRatioKey: String = "",
         heroBackgroundPath: String = "",
         heroBackgroundPresetKey: String = "",
+        memoStyleRuns: [MemoStyleRun] = [],
         goshuinBookSizeKey: String = "",
         weatherSymbolName: String = "",
         weatherHighCelsius: Double? = nil,
@@ -218,6 +223,7 @@ struct VisitUnitFields: Codable {
         bookPublishedDate: String = "",
         bookPriceText: String = "",
         bookPageCount: Int = 0,
+        bookContentTypeKey: String = "",
         bookMediumKey: String = "",
         bookInformationSourceName: String = "",
         bookInformationSourceURL: String = "",
@@ -246,6 +252,7 @@ struct VisitUnitFields: Codable {
         self.eyecatchAspectRatioKey = eyecatchAspectRatioKey
         self.heroBackgroundPath = heroBackgroundPath
         self.heroBackgroundPresetKey = heroBackgroundPresetKey
+        self.memoStyleRuns = memoStyleRuns
         self.goshuinBookSizeKey = goshuinBookSizeKey
         self.weatherSymbolName = weatherSymbolName
         self.weatherHighCelsius = weatherHighCelsius
@@ -265,6 +272,7 @@ struct VisitUnitFields: Codable {
         self.bookPublishedDate = bookPublishedDate
         self.bookPriceText = bookPriceText
         self.bookPageCount = max(bookPageCount, 0)
+        self.bookContentTypeKey = bookContentTypeKey
         self.bookMediumKey = bookMediumKey
         self.bookInformationSourceName = bookInformationSourceName
         self.bookInformationSourceURL = bookInformationSourceURL
@@ -295,6 +303,7 @@ struct VisitUnitFields: Codable {
         case eyecatchAspectRatioKey
         case heroBackgroundPath
         case heroBackgroundPresetKey
+        case memoStyleRuns
         case goshuinBookSizeKey
         case weatherSymbolName
         case weatherHighCelsius
@@ -314,6 +323,7 @@ struct VisitUnitFields: Codable {
         case bookPublishedDate
         case bookPriceText
         case bookPageCount
+        case bookContentTypeKey
         case bookMediumKey
         case bookInformationSourceName
         case bookInformationSourceURL
@@ -347,6 +357,7 @@ struct VisitUnitFields: Codable {
         eyecatchAspectRatioKey = try container.decodeIfPresent(String.self, forKey: .eyecatchAspectRatioKey) ?? ""
         heroBackgroundPath = try container.decodeIfPresent(String.self, forKey: .heroBackgroundPath) ?? ""
         heroBackgroundPresetKey = try container.decodeIfPresent(String.self, forKey: .heroBackgroundPresetKey) ?? ""
+        memoStyleRuns = try container.decodeIfPresent([MemoStyleRun].self, forKey: .memoStyleRuns) ?? []
         goshuinBookSizeKey = try container.decodeIfPresent(String.self, forKey: .goshuinBookSizeKey) ?? ""
         weatherSymbolName = try container.decodeIfPresent(String.self, forKey: .weatherSymbolName) ?? ""
         weatherHighCelsius = try container.decodeIfPresent(Double.self, forKey: .weatherHighCelsius)
@@ -366,6 +377,7 @@ struct VisitUnitFields: Codable {
         bookPublishedDate = try container.decodeIfPresent(String.self, forKey: .bookPublishedDate) ?? ""
         bookPriceText = try container.decodeIfPresent(String.self, forKey: .bookPriceText) ?? ""
         bookPageCount = max(try container.decodeIfPresent(Int.self, forKey: .bookPageCount) ?? 0, 0)
+        bookContentTypeKey = try container.decodeIfPresent(String.self, forKey: .bookContentTypeKey) ?? ""
         bookMediumKey = try container.decodeIfPresent(String.self, forKey: .bookMediumKey) ?? ""
         bookInformationSourceName = try container.decodeIfPresent(String.self, forKey: .bookInformationSourceName) ?? ""
         bookInformationSourceURL = try container.decodeIfPresent(String.self, forKey: .bookInformationSourceURL) ?? ""
@@ -405,6 +417,7 @@ struct VisitUnitFields: Codable {
                 || !eyecatchAspectRatioKey.isEmpty
                 || !heroBackgroundPath.isEmpty
                 || !heroBackgroundPresetKey.isEmpty
+                || !memoStyleRuns.isEmpty
                 || !goshuinBookSizeKey.isEmpty
                 || !weatherSymbolName.isEmpty
                 || weatherHighCelsius != nil
@@ -424,6 +437,7 @@ struct VisitUnitFields: Codable {
                 || !bookPublishedDate.isEmpty
                 || !bookPriceText.isEmpty
                 || bookPageCount > 0
+                || !bookContentTypeKey.isEmpty
                 || !bookMediumKey.isEmpty
                 || !bookInformationSourceName.isEmpty
                 || !bookInformationSourceURL.isEmpty
@@ -449,6 +463,10 @@ struct VisitUnitFields: Codable {
 }
 
 extension ExperienceEvent {
+    var bookContentTypeKey: String {
+        VisitUnitFields(rawValue: unitFieldsRaw).bookContentTypeKey
+    }
+
     var bookSeriesName: String {
         VisitUnitFields(rawValue: unitFieldsRaw).bookSeriesName
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -628,6 +646,8 @@ enum BookSeriesRegistrationDefaults {
 }
 
 struct HeroBackgroundPreset: Identifiable, Equatable {
+    static let eventEyecatchKey = "eventEyecatch"
+
     let key: String
     let title: String
     let resourceName: String

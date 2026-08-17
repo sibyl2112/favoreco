@@ -33,7 +33,7 @@ struct TheaterEventExpenseSection: View {
                     FavorecoIcon(systemName: "yensign.circle", size: 20)
                         .foregroundStyle(.secondary)
                         .frame(width: 28)
-                    Text("チケット、グッズ、遠征費を登録すると、この作品・公演全体の金額がまとまります。")
+                    Text("チケット、グッズ、フード、遠征費を登録すると、この作品・公演全体の金額がまとまります。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -54,6 +54,13 @@ struct TheaterEventExpenseSection: View {
                             title: "グッズ",
                             amount: snapshot.goodsAmount,
                             systemImage: "bag"
+                        )
+                    }
+                    if snapshot.foodAmount > 0 {
+                        expenseTile(
+                            title: "フード",
+                            amount: snapshot.foodAmount,
+                            systemImage: "fork.knife"
                         )
                     }
                     if snapshot.travelAmount > 0 {

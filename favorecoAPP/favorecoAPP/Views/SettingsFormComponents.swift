@@ -64,6 +64,7 @@ struct FavorecoSettingsInfoCallout: View {
 
     let title: String
     let message: String
+    var compact = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -73,11 +74,11 @@ struct FavorecoSettingsInfoCallout: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
+                    .font(FavorecoTypography.jpSans(compact ? 10 : 10.5, weight: .semibold, relativeTo: .caption))
                     .foregroundStyle(themePalette.globalTint)
 
                 Text(message)
-                    .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                    .font(FavorecoTypography.jpSans(compact ? 10.25 : 11, weight: .regular, relativeTo: .caption))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

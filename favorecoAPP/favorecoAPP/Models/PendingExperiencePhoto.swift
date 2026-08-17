@@ -42,7 +42,7 @@ nonisolated enum ExperiencePhotoPurpose: String, CaseIterable, Identifiable, Sen
         }
     }
 
-    var supportsAmount: Bool { self == .ticket || self == .goods }
+    var supportsAmount: Bool { self == .ticket || self == .goods || self == .food }
 
     var isGalleryPhoto: Bool {
         switch self {
@@ -95,9 +95,12 @@ nonisolated struct PhotoMetadataDraft: Sendable {
     }
 
     mutating func normalizeForPurpose() {
-        guard purpose.isGalleryPhoto else { return }
-        ocrText = ""
-        amountText = ""
+        if purpose.isGalleryPhoto {
+            ocrText = ""
+        }
+        if !purpose.supportsAmount {
+            amountText = ""
+        }
     }
 
     private static func formattedAmount(_ amount: Decimal) -> String {
@@ -180,7 +183,8 @@ nonisolated struct PendingPhoto: Identifiable, Sendable {
             data: compressedData,
             originalFilename: filename,
             width: cgImage.width,
-            height: cgImage.height
+            height: cgImage.height,
+            metadata: PhotoMetadataDraft(purpose: .memory)
         )
     }
 }

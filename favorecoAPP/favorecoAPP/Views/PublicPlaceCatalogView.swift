@@ -135,7 +135,8 @@ struct PublicPlaceCatalogView: View {
                 Section {
                     FavorecoSettingsInfoCallout(
                         title: "公開カタログから場所マスターへ追加",
-                        message: "公式サイトと情報元を確認してから追加できます。追加した場所は、設定の「マスターデータ > 場所」と予定・記録の場所候補に表示されます。"
+                        message: "公式サイトと情報元を確認してから追加できます。追加した場所は、設定の「マスターデータ > 場所」と予定・記録の場所候補に表示されます。",
+                        compact: true
                     )
                 }
                 filterSection
@@ -277,18 +278,42 @@ struct PublicPlaceCatalogView: View {
     private var syncStatusSection: some View {
         switch store.state {
         case .idle, .loadingCache:
-            Section { ProgressView("端末キャッシュを読み込み中…") }
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.mini)
+                Text("端末キャッシュを読み込み中")
+            }
+            .font(FavorecoTypography.jpSans(9.5, weight: .regular, relativeTo: .caption2))
+            .foregroundStyle(.secondary)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         case .syncing:
-            Section { ProgressView("公開カタログを更新中…") }
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.mini)
+                Text("公開カタログを更新中")
+            }
+            .font(FavorecoTypography.jpSans(9.5, weight: .regular, relativeTo: .caption2))
+            .foregroundStyle(.secondary)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         case let .ready(lastSyncedAt):
             if let lastSyncedAt {
-                Section { LabeledContent("最終更新", value: FavorecoDateText.compactDateTime(lastSyncedAt)) }
+                Text("最終更新  \(FavorecoDateText.compactDateTime(lastSyncedAt))")
+                    .font(FavorecoTypography.jpSans(9.5, weight: .regular, relativeTo: .caption2))
+                    .foregroundStyle(Color.secondary.opacity(0.72))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .listRowInsets(EdgeInsets(top: -3, leading: 16, bottom: 0, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
         case let .failed(message, hasCache):
-            Section {
+            VStack(alignment: .leading, spacing: 2) {
                 Label(hasCache ? "取得済みデータを表示しています" : "公開カタログを取得できませんでした", systemImage: "exclamationmark.icloud")
-                Text(message).font(FavorecoTypography.caption).foregroundStyle(.secondary)
+                Text(message)
             }
+            .font(FavorecoTypography.jpSans(9.5, weight: .regular, relativeTo: .caption2))
+            .foregroundStyle(.secondary)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
     }
 

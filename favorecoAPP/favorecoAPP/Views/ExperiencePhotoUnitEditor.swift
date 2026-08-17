@@ -7,6 +7,12 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
+enum TheaterPhotoContentMode {
+    case all
+    case eyecatchOnly
+    case libraryOnly
+}
+
 struct PhotoUnitEditor: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.photoCompressionQuality) private var compressionQuality = 0.85
@@ -17,21 +23,22 @@ struct PhotoUnitEditor: View {
     @Binding var pendingPhotos: [PendingPhoto]
     @Binding var selectedItems: [PhotosPickerItem]
     let category: RecordCategory?
+    var theaterContentMode: TheaterPhotoContentMode = .all
     @Binding var aspectRatioKey: String
     @Binding var coverPhotoPath: String
     @Binding var heroBackgroundPath: String
     @Binding var heroBackgroundPresetKey: String
     var showsBookFormatPicker = true
-    var showsHeroBackgroundPicker = true
+    var showsHeroBackgroundPicker = false
     @State private var isShowingCamera = false
     @State private var isShowingCameraUnavailableAlert = false
     @State private var importCompletedCount = 0
     @State private var importTotalCount = 0
     @State private var editingTarget: PhotoEditorTarget?
+    @State private var deletionTarget: PhotoEditorTarget?
     @State private var isShowingAllPhotos = false
     @State private var editingTargetAfterGallery: PhotoEditorTarget?
     @State private var isShowingCoverPicker = false
-    @State private var isTheaterPhotoManagerExpanded = false
     @State private var selectedTheaterEyecatchItem: PhotosPickerItem?
     @State private var isLoadingTheaterEyecatch = false
 
@@ -99,8 +106,12 @@ struct PhotoUnitEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if isTheater {
-                theaterEyecatchPicker
-                theaterPhotoManager
+                if theaterContentMode != .libraryOnly {
+                    theaterEyecatchPicker
+                }
+                if theaterContentMode != .eyecatchOnly {
+                    theaterPhotoManager
+                }
             } else {
                 standardPhotoEditorContent
             }
@@ -147,10 +158,36 @@ struct PhotoUnitEditor: View {
                     .navigationTitle("写真の情報")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
+                        ToolbarItem(placement: .bottomBar) {
+                            Button(role: .destructive) {
+                                deletionTarget = target
+                            } label: {
+                                FavorecoIconLabel("この写真を削除", systemImage: "trash", iconSize: 15)
+                            }
+                        }
                         ToolbarItem(placement: .confirmationAction) {
                             Button("完了") { editingTarget = nil }
                         }
                     }
+            }
+            .confirmationDialog(
+                "この写真を削除しますか？",
+                isPresented: Binding(
+                    get: { deletionTarget != nil },
+                    set: { if !$0 { deletionTarget = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("削除", role: .destructive) {
+                    if let deletionTarget {
+                        deletePhoto(deletionTarget)
+                    }
+                }
+                Button("キャンセル", role: .cancel) {
+                    deletionTarget = nil
+                }
+            } message: {
+                Text("写真、キャプション、読み取り結果、金額をこの記録から削除します。")
             }
             .presentationDetents([.large])
         }
@@ -241,10 +278,7 @@ struct PhotoUnitEditor: View {
     }
 
     private var theaterPhotoManager: some View {
-        DisclosureGroup(isExpanded: $isTheaterPhotoManagerExpanded) {
-            photoLibraryContent
-                .padding(.top, 10)
-        } label: {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 FavorecoIconLabel(
                     "思い出・資料写真",
@@ -259,6 +293,13 @@ struct PhotoUnitEditor: View {
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Text("一括追加した写真は「思い出」で登録します。")
+                .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            photoLibraryContent
         }
     }
 
@@ -272,7 +313,7 @@ struct PhotoUnitEditor: View {
         } else {
             photoGrid
 
-            Text("写真をタップすると、キャプションと分類を設定できます。")
+            Text("写真をタップすると、分類・キャプション・金額・削除を編集できます。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -354,43 +395,42 @@ struct PhotoUnitEditor: View {
     }
 
     private var theaterEyecatchPicker: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
                 coverPhotoPreview
-                    .frame(width: 70, height: 99)
+                    .frame(width: 58, height: 82)
 
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 7) {
                     Text("この回のアイキャッチ")
-                        .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                        .font(FavorecoTypography.jpSans(13.5, weight: .semibold, relativeTo: .body))
                     Text("一覧・カレンダー・詳細の代表画像に表示します。")
                         .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        PhotosPicker(selection: $selectedTheaterEyecatchItem, matching: .images) {
+                            FavorecoIconLabel(
+                                hasActiveCoverPhoto ? "変更" : "選ぶ",
+                                systemImage: "photo",
+                                iconSize: 13
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isLoadingTheaterEyecatch || !canAddPhotos)
+
+                        if hasActiveCoverPhoto {
+                            Button(role: .destructive) {
+                                coverPhotoPath = ""
+                            } label: {
+                                FavorecoIconLabel("解除", systemImage: "xmark.circle", iconSize: 13)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
                 }
 
                 Spacer(minLength: 0)
-            }
-
-            HStack(spacing: 10) {
-                PhotosPicker(selection: $selectedTheaterEyecatchItem, matching: .images) {
-                    FavorecoIconLabel(
-                        hasActiveCoverPhoto ? "アイキャッチを変更" : "アイキャッチを選ぶ",
-                        systemImage: "photo",
-                        iconSize: 14
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .disabled(isLoadingTheaterEyecatch || !canAddPhotos)
-
-                if hasActiveCoverPhoto {
-                    Button(role: .destructive) {
-                        coverPhotoPath = ""
-                    } label: {
-                        FavorecoIconLabel("解除", systemImage: "xmark.circle", iconSize: 14)
-                    }
-                    .buttonStyle(.bordered)
-                }
             }
 
             if isLoadingTheaterEyecatch {
@@ -517,7 +557,7 @@ struct PhotoUnitEditor: View {
 
     private var bookFormatPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Picker("本の種類", selection: $aspectRatioKey) {
+            Picker("本の判型", selection: $aspectRatioKey) {
                 ForEach(bookFormatOptions) { format in
                     Text(format.name).tag(format.key)
                 }
@@ -795,11 +835,6 @@ struct PhotoUnitEditor: View {
             } label: {
                 Label("カバー写真にする", systemImage: "star")
             }
-            Button {
-                heroBackgroundPath = path
-            } label: {
-                Label("トップ背景にする", systemImage: "rectangle.landscape")
-            }
         }
         Button(role: .destructive, action: onDelete) {
             Label("削除", systemImage: "trash")
@@ -816,6 +851,23 @@ struct PhotoUnitEditor: View {
         } else {
             editingTarget = target
         }
+    }
+
+    private func deletePhoto(_ target: PhotoEditorTarget) {
+        switch target.kind {
+        case .existing:
+            guard let photo = activeExistingPhotos.first(where: { $0.id == target.id }) else { return }
+            deletedPhotoIDs.insert(photo.id)
+            selectFallbackCover(excluding: photo.relativePath)
+            clearHeroBackground(excluding: photo.relativePath)
+        case .pending:
+            guard let photo = pendingPhotos.first(where: { $0.id == target.id }) else { return }
+            pendingPhotos.removeAll { $0.id == photo.id }
+            selectFallbackCover(excluding: photo.relativePath)
+            clearHeroBackground(excluding: photo.relativePath)
+        }
+        deletionTarget = nil
+        editingTarget = nil
     }
 
     @ViewBuilder
@@ -1031,7 +1083,7 @@ struct PhotoMetadataEditor: View {
                 }
 
                 Text(purposeDescription)
-                    .font(FavorecoTypography.caption)
+                    .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
                     .foregroundStyle(.secondary)
             }
 
@@ -1044,7 +1096,7 @@ struct PhotoMetadataEditor: View {
                 .lineLimit(2...4)
 
                 Text("生きものの名前なども、写真ごとにここへ残せます。")
-                    .font(FavorecoTypography.caption)
+                    .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
                     .foregroundStyle(.secondary)
             }
 
@@ -1089,19 +1141,20 @@ struct PhotoMetadataEditor: View {
                     }
                 }
 
-                if metadata.purpose.supportsAmount {
-                    Section(metadata.purpose == .ticket ? "チケット金額" : "グッズ金額") {
-                        TextField("0", text: $metadata.amountText)
-                            .keyboardType(.decimalPad)
-                        Text("合計金額は後続Stepで、記録全体の費用と分けて表示します。")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
             } else {
                 Section {
-                    Text("写真一覧に表示され、必要に応じてカバーやトップ背景にも指定できます。OCR本文と金額は表示・集計しません。")
-                        .font(FavorecoTypography.caption)
+                    Text(galleryPhotoHelpText)
+                        .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if metadata.purpose.supportsAmount {
+                Section(amountSectionTitle) {
+                    TextField("0", text: $metadata.amountText)
+                        .keyboardType(.decimalPad)
+                    Text("入力した金額は費用集計に反映します。")
+                        .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -1117,7 +1170,7 @@ struct PhotoMetadataEditor: View {
     private var purposeDescription: String {
         switch metadata.purpose {
         case .memory:
-            return "通常の写真です。カバーやトップ背景にも指定できます。"
+            return "通常の写真です。カバーにも指定できます。"
         case .placeScenery:
             return "施設、会場、館内、エリアや景色の写真です。"
         case .experienceHighlight:
@@ -1131,6 +1184,22 @@ struct PhotoMetadataEditor: View {
         case .benefit:
             return "ノベルティ・特典の画像です。費用には集計しません。"
         }
+    }
+
+    private var amountSectionTitle: String {
+        switch metadata.purpose {
+        case .ticket: "チケット金額"
+        case .goods: "グッズ金額"
+        case .food: "フード金額"
+        default: "金額"
+        }
+    }
+
+    private var galleryPhotoHelpText: String {
+        if metadata.purpose == .food {
+            return "写真一覧に表示されます。フード金額を入力すると費用集計にも反映します。"
+        }
+        return "写真一覧に表示されます。OCR本文と金額は集計しません。"
     }
 
     private var amountSuggestions: [OCRImportSuggestion] {

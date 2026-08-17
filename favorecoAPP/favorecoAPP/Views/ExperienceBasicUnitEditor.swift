@@ -426,7 +426,7 @@ struct ExperienceBasicUnitEditor: View {
                 theaterDivider
                 ExplicitFormTextField(
                     title: "住所（任意）",
-                    prompt: "地図・カレンダーでは住所を優先",
+                    prompt: "例：東京都千代田区…",
                     text: $venueAddress,
                     axis: .vertical,
                     minimumLines: 1,
@@ -441,8 +441,8 @@ struct ExperienceBasicUnitEditor: View {
                 }
                 theaterDivider
                 ExplicitFormTextField(
-                    title: "施設公式サイト（任意）",
-                    prompt: "https://",
+                    title: "施設URL（任意）",
+                    prompt: "公式サイトのURL",
                     text: $venueOfficialURL,
                     axis: .vertical,
                     minimumLines: 1,
@@ -502,7 +502,7 @@ struct ExperienceBasicUnitEditor: View {
 
                 ExplicitFormTextField(
                     title: "映画館（任意）",
-                    prompt: "映画館名を入力",
+                    prompt: "例：TOHOシネマズ…",
                     text: $venueName,
                     labelStyle: .horizontal
                 )
@@ -559,7 +559,7 @@ struct ExperienceBasicUnitEditor: View {
             theaterDivider
             ExplicitFormTextField(
                 title: "会場（任意）",
-                prompt: "会場名を入力",
+                prompt: "例：東京芸術劇場",
                 text: $venueName,
                 labelStyle: .horizontal
             )
@@ -570,7 +570,7 @@ struct ExperienceBasicUnitEditor: View {
                 theaterDivider
                 ExplicitFormTextField(
                     title: "住所（任意）",
-                    prompt: "地図では住所を優先",
+                    prompt: "例：東京都豊島区…",
                     text: $venueAddress,
                     labelStyle: .horizontal
                 )
@@ -823,9 +823,9 @@ struct ExperienceBasicUnitEditor: View {
     private var venueFieldPrompt: String {
         switch categoryTemplateKey {
         case "theme_park", "outing_facility": "施設名を入力"
-        case "nature_living": "動物園・水族館・植物園などを入力"
-        case "museum": "美術館・博物館などを入力"
-        default: supportsStyles ? "映画館・会場名を入力" : "場所・会場名を入力"
+        case "nature_living": "例：上野動物園"
+        case "museum": "例：国立新美術館"
+        default: supportsStyles ? "映画館・会場名" : "場所・会場名"
         }
     }
 

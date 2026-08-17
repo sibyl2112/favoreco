@@ -1,5 +1,11 @@
 import SwiftUI
 
+enum CategoryDetailChrome {
+    /// 公演情報（1.8〜1.9pt）と参加記録外枠（0.8pt）の中間値。
+    /// 全ジャンルの主要な詳細カードで同じ視覚重量を使う。
+    static let borderLineWidth: CGFloat = 1.35
+}
+
 /// 観劇ポスターをB判比率で全体表示する共通部品。
 /// 表示サイズに合わせたサムネイルを使い、画像は切り抜かず`.fit`で収める。
 struct TheaterPosterArtwork<Placeholder: View>: View {
@@ -268,7 +274,10 @@ private struct TheaterDetailSectionCardModifier: ViewModifier {
                     cornerRadius: TheaterDetailSectionStyle.cornerRadius,
                     style: .continuous
                 )
-                    .stroke(tint.opacity(0.42), lineWidth: 0.9)
+                    .stroke(
+                        tint.opacity(0.42),
+                        lineWidth: CategoryDetailChrome.borderLineWidth
+                    )
             }
     }
 }

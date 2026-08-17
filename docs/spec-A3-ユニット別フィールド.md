@@ -110,6 +110,8 @@
 | 映画 | 観たい状態（観たい/観た）・公開日 | Event | watchStatus（積読と同型・A5）／releaseDate（個別・Coming Up/カレンダーへ） | TMDb。観たいは未公開作の公開予定バッジ・私的watchlist |
 | 書籍 | 著者・訳者・出版社・ISBN・発行日・remoteImageURL・coverImageCache/eyecatchPath | Event | 著者/出版社/ISBN等=個別、remoteImageURL=再取得用、保存済み書影=relativePath | openBD/NDL/URL。書影はアイキャッチ用にローカル保存/キャッシュし、写真欄へは自動追加しない |
 | 書籍 | volumeNumber（巻数） | Event | 個別（シリーズ順・A5スタック/巻スクロール） | |
+| 書籍 | 本の種類（内容分類） | Event | `unitFieldsRaw.bookContentTypeKey`。小説 / 漫画 / エッセイ / 実用書 / ビジネス書 / 技術書 / 児童書・絵本 / 雑誌 / 写真集・画集 / その他。判型・媒体とは別保存 | 手入力。未設定可 |
+| 書籍 | 本の判型 | Event | `unitFieldsRaw.eyecatchAspectRatioKey`。コミック / 新書 / ハードカバー / 文庫 / 雑誌 / 写真集・画集。書影比率の表示専用 | 手入力 |
 | 書籍 | 共通興味ステータス（気になる/欲しい） | Event | 個別（interestStatus・横断） | 映画の観たい、観劇/ライブの行きたいと同じレイヤー。ジャンル別ラベルで表示 |
 | 書籍 | 入手状態=未入手/購入済み | **Event** | 個別（acquisitionStatus） | 買ったか忘れる問題を解く中核。購入済み一覧・最近買った本・購入冊数集計の源 |
 | 書籍 | 読書状態=未読/読書中/読了/中断/再読中/再読了 | **Event** | 個別（readingStatus・任意） | 購入済み後だけUI表示。未選択可。読了日・再読履歴はVisit側で保持 |

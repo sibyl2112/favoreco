@@ -57,7 +57,7 @@ struct PersonMasterManagementView: View {
                 }
             }
         }
-        .navigationTitle("人物・団体マスター")
+        .navigationTitle("人物・団体")
         .searchable(text: $searchText, prompt: "名前・よみ・別名・愛称を検索")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -75,7 +75,7 @@ struct PersonMasterManagementView: View {
     }
 }
 
-private struct PersonMasterCreateView: View {
+struct PersonMasterCreateView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
@@ -465,7 +465,7 @@ struct PersonMasterEditDestination: View {
             FavorecoContentUnavailableView(
                 "人物が見つかりません",
                 systemImage: "person.crop.circle.badge.questionmark",
-                description: "人物マスターが削除または統合された可能性があります。"
+                description: "人物・団体の情報が削除または統合された可能性があります。"
             )
         }
     }
@@ -525,6 +525,10 @@ private struct PersonMasterMergeView: View {
     var body: some View {
         Form {
             Section("基本情報") {
+                EditScopeNotice(
+                    scope: "すべての作品・予定・記録",
+                    detail: "正式名、写真、活動分野の変更を、この人物・団体を使う画面へ反映します。"
+                )
                 PersonPhotoEditor(
                     storedData: person.imageData,
                     storedPath: person.imagePath,
@@ -589,6 +593,10 @@ private struct PersonMasterMergeView: View {
             }
 
             Section("FAVO") {
+                EditScopeNotice(
+                    scope: "MY FAVOだけ",
+                    detail: "推し区分、呼び名、推しカラー、きっかけは作品や観劇記録の公式情報を変えません。"
+                )
                 Toggle("この人物・団体を推しにする", isOn: $favoriteDraft.isFavorite)
 
                 if favoriteDraft.isFavorite {
