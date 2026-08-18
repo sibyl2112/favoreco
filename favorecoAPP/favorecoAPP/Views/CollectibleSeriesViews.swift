@@ -3,6 +3,48 @@ import SwiftData
 import PhotosUI
 import UIKit
 
+struct CollectibleCategoryHero: View {
+    let events: [ExperienceEvent]
+    let snapshot: CategoryTopSnapshot
+    let tint: Color
+    let onAdd: () -> Void
+
+    var body: some View {
+        let summaries = events.map { CollectibleSeriesSummary.make(series: $0) }
+        let collected = summaries.reduce(0) { $0 + $1.collectedCount }
+        let target = summaries.reduce(0) { $0 + $1.targetCount }
+        let duplicates = summaries.reduce(0) { $0 + $1.duplicateQuantity }
+
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                FavorecoIcon(systemName: "shippingbox.fill", size: 27)
+                    .foregroundStyle(tint)
+                    .frame(width: 48, height: 48)
+                    .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Goods")
+                        .font(FavorecoTypography.jpSerif(25, weight: .bold, relativeTo: .title2))
+                    Text(
+                        snapshot.events.isEmpty
+                            ? "シリーズを登録して、何種類・何個集まったか残せます。"
+                            : "全 \(snapshot.eventCount) シリーズ・\(collected)/\(target) 種類・ダブり \(duplicates) 個"
+                    )
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Button(action: onAdd) {
+                FavorecoIconLabel("シリーズを追加", systemImage: "plus.circle.fill", iconSize: 17)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(tint)
+        }
+        .padding(20)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
 struct AddCollectibleSeriesView: View {
     private let category: RecordCategory?
     private let editingSeries: ExperienceEvent?

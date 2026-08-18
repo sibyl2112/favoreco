@@ -20,6 +20,126 @@ struct CategoryVisitRecordItem: Identifiable {
     }
 }
 
+enum CategoryVisitRecordItemBuilder {
+    static func make(
+        category: RecordCategory,
+        visits: [Visit],
+        screenWorkFilter: ScreenWorkFilter
+    ) -> [CategoryVisitRecordItem] {
+        visits.compactMap { visit in
+            guard let event = visit.event,
+                  event.category?.id == category.id else { return nil }
+            if category.templateKey == "movie",
+               !screenWorkFilter.includes(event.screenWorkType) {
+                return nil
+            }
+            return CategoryVisitRecordItem(event: event, visit: visit)
+        }
+        .sorted { $0.visit.visitedAt > $1.visit.visitedAt }
+    }
+}
+
+struct CategoryVisitRecordLibrarySection: View {
+    let category: RecordCategory
+    let items: [CategoryVisitRecordItem]
+    let tint: Color
+    let primaryTextColor: Color
+    let secondaryTextColor: Color
+    @Binding var selectedLayout: CategoryLibraryLayoutMode
+    let onOpenVisit: (Visit) -> Void
+
+    var body: some View {
+        let isLive = category.templateKey == "live"
+        let layout: CategoryLibraryLayoutMode = isLive
+            ? .banner
+            : selectedLayout == .gallery ? .gallery : .banner
+        let sectionTitle: (english: String, japanese: String) = switch category.templateKey {
+        case "live": ("Live History", "ライブ記録")
+        case "movie": ("Library", "鑑賞済み")
+        default: ("Museum Log", "鑑賞記録")
+        }
+        let emptyCopy: (title: String, message: String) = switch category.templateKey {
+        case "live": (
+            "ライブ記録はまだありません",
+            "参加した記録を追加すると、1回ごとにここへ並びます。"
+        )
+        default: (
+            "鑑賞記録はまだありません",
+            "鑑賞した記録を追加すると、1回ごとにここへ並びます。"
+        )
+        }
+
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                LayeredCategorySectionTitle(
+                    englishTitle: sectionTitle.english,
+                    japaneseTitle: sectionTitle.japanese,
+                    foregroundColor: primaryTextColor
+                )
+
+                Text("\(items.count)")
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(secondaryTextColor)
+
+                Spacer(minLength: 4)
+
+                if !isLive {
+                    CategoryLibraryLayoutPicker(
+                        selection: $selectedLayout,
+                        tint: tint,
+                        modes: [.gallery, .banner],
+                        onSelect: { _ in }
+                    )
+                }
+            }
+
+            if items.isEmpty {
+                EmptyStateMessage(
+                    icon: category.iconSymbol,
+                    title: emptyCopy.title,
+                    message: emptyCopy.message,
+                    tint: tint
+                )
+            } else if layout == .gallery {
+                LazyVGrid(
+                    columns: Array(
+                        repeating: GridItem(.flexible(), spacing: 10, alignment: .top),
+                        count: 3
+                    ),
+                    alignment: .leading,
+                    spacing: 16
+                ) {
+                    ForEach(items) { item in
+                        Button {
+                            onOpenVisit(item.visit)
+                        } label: {
+                            CategoryVisitRecordPosterTile(item: item, category: category)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(items) { item in
+                        Button {
+                            onOpenVisit(item.visit)
+                        } label: {
+                            CategoryVisitRecordBannerCard(
+                                item: item,
+                                category: category,
+                                tint: tint
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct CategoryVisitRecordPosterTile: View {
     let item: CategoryVisitRecordItem
     let category: RecordCategory

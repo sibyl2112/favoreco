@@ -317,6 +317,103 @@ struct GoshuinBookSelection: Identifiable {
     var id: String { size.key }
 }
 
+@MainActor
+enum GoshuinTopContentBuilder {
+    static func filteredVisits(
+        _ visits: [Visit],
+        filter: GoshuinVisitFilter
+    ) -> [Visit] {
+        visits.filter { filter.matches($0) }
+    }
+
+    static func mapVisits(
+        _ visits: [Visit],
+        filter: GoshuinVisitFilter,
+        selectedPrefecture: String
+    ) -> [Visit] {
+        filteredVisits(visits, filter: filter)
+            .filter { visit in
+                selectedPrefecture.isEmpty
+                    || prefectureText(for: visit).contains(selectedPrefecture)
+            }
+    }
+
+    static func bookSelections(
+        from visits: [Visit],
+        registeredSizeKeysRaw: String,
+        closedSizeKeysRaw: String,
+        sortOrderKeysRaw: String
+    ) -> [GoshuinBookSelection] {
+        let grouped = Dictionary(grouping: visits) { visit in
+            let fields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+            return fields.goshuinBookSizeKey.isEmpty
+                ? GoshuinBookSize.standard.key
+                : fields.goshuinBookSizeKey
+        }
+
+        let representedKeys = Set(grouped.keys)
+        let registeredKeys = Set(decodedKeys(from: registeredSizeKeysRaw))
+        let allKeys = representedKeys.union(registeredKeys)
+        let orderedKeys = orderedKeys(
+            allKeys,
+            grouped: grouped,
+            sortOrderKeysRaw: sortOrderKeysRaw
+        )
+        let closedKeys = Set(decodedKeys(from: closedSizeKeysRaw))
+
+        return orderedKeys.map { key in
+            let visits = (grouped[key] ?? []).sorted { $0.visitedAt > $1.visitedAt }
+            return GoshuinBookSelection(
+                size: GoshuinBookSize.option(for: key),
+                visits: visits,
+                coverPhoto: visits.first.flatMap(firstPhoto),
+                isActive: !closedKeys.contains(key)
+            )
+        }
+    }
+
+    static func availablePrefectures(in visits: [Visit]) -> [String] {
+        CategoryTopJapanPrefecture.allCases
+            .map(\.rawValue)
+            .filter { prefecture in
+                visits.contains { prefectureText(for: $0).contains(prefecture) }
+            }
+    }
+
+    static func firstPhoto(in visit: Visit) -> PhotoBlob? {
+        (visit.photos ?? [])
+            .filter { $0.mediaKind == "photo" && $0.hasStoredData }
+            .min { $0.createdAt < $1.createdAt }
+    }
+
+    private static func decodedKeys(from rawValue: String) -> [String] {
+        rawValue.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+    }
+
+    private static func orderedKeys(
+        _ keys: Set<String>,
+        grouped: [String: [Visit]],
+        sortOrderKeysRaw: String
+    ) -> [String] {
+        let savedOrder = decodedKeys(from: sortOrderKeysRaw)
+        let saved = savedOrder.filter(keys.contains)
+        let remainder = keys.subtracting(saved).sorted { left, right in
+            let leftDate = grouped[left]?.map(\.visitedAt).max() ?? .distantPast
+            let rightDate = grouped[right]?.map(\.visitedAt).max() ?? .distantPast
+            return leftDate > rightDate
+        }
+        return saved + remainder
+    }
+
+    private static func prefectureText(for visit: Visit) -> String {
+        [
+            visit.placeMaster?.address ?? "",
+            visit.venueNameSnapshot,
+            visit.note,
+        ].joined(separator: " ")
+    }
+}
+
 struct GoshuinBookRow: View {
     let selection: GoshuinBookSelection
 

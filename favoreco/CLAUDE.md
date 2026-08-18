@@ -1,7 +1,7 @@
 # favoreco 実装仕様（正本）
 
 > **役割**: このアプリの「現在どうなっているか」の正本。横断ルールは ルート `CLAUDE.md` を参照。
-> **最終更新**: 2026-08-17（観劇／LIVE記録の即時保存導線を追加）
+> **最終更新**: 2026-08-18（ジャンルトップの責務分割・整理を第34段階で完了）
 > 本文中の旧`Home / 記録 / 追加 / カレンダー / 統計`表記は、現行の`Home / FAVO / 追加 / カレンダー / 統計`と読み替える。
 
 > **FAVOの人物・団体管理**: `MY FAVO`見出しから`人物・団体`へ直接進める。FAVO側の一覧は、登録写真またはFAVOアイコン、個人用呼称、公式名、推し区分、活動分野、作品・記録への紐付け件数を表示し、`すべて / FAVO / 人物 / 団体`で絞り込む。追加と編集は設定と同じ`PersonMaster`・`FavoriteProfile`を使い、別データを作らない。設定からの従来導線は維持するが、利用者向け画面名に内部用語の`マスター`は表示しない。
@@ -9,6 +9,10 @@
 
 > **編集項目の反映先**: 保存モデル名ではなく共通`EditScopeNotice`で生活語の反映先を示す。人物・団体の正式名・写真・活動分野は`すべての作品・予定・記録`、呼び名・推しカラー・きっかけは`MY FAVOだけ`、公演／ライブ情報は`この公演／ライブのすべての予定・記録`、参加予定は`この予定だけ`、観劇／参戦記録と注目人物は`この回だけ`とする。既存の保存先と自動反映は変更しない。
 > **予定とチケットの編集語彙**: 観劇予定の共通日時・会場は`予定日時・会場`、LIVEは`参戦日時・会場`と表示し、予定詳細の入口は`日時・会場を編集`とする。個別申込の状態、申込／発売、当落、支払、受取等は`申込・期限を編集`から既存のTicketAttempt編集へ進む。PlanとTicketAttemptの保存境界、既存シート、通知再予約は変更しない。
+> **予定フォームの実装境界**: `AddTicketPlanView`は画面状態、表示構成、保存フローを担当する。5分／10分刻みの日時UIは`TicketScheduleDateControls`、登録済み対象の選択は`TicketPlanTargetPicker`、申込画像の候補解析・確認は`TicketImageImportComponents`、金額・座席OCRは`TicketDetailsOCRComponents`、Draftの初期化・正規化・モデル変換は`TicketPlanDraft`へ分離する。チケット単体編集、遠征ToDo、参加日時シートも日時共用品を参照し、類似部品を再実装しない。
+> **ジャンルトップ章末の実装境界**: 前後ジャンルと設定導線の表示は`CategoryChapterFooter`、表示順上の前後位置は`CategoryChapterNavigationPolicy`を正本とする。親`CategoryTopView`は現在ジャンルと表示対象カテゴリを渡し、ジャンル選択後の先頭スクロールと設定Sheet状態だけを担当する。0件・1件では存在しない前後カードを作らず、現在ジャンルが表示順にない場合は章末自体を構成しない。
+> **ジャンルトップ補助Heroの実装境界**: グッズの集計Heroは`CollectibleCategoryHero`、観劇の非表示公演入口は`ArchivedTheaterEventsEntry`、過去記録から日単位で安定選択するMemory Heroは`CategoryMemoryHeroSection`を表示正本とする。Memory Heroの選択位置は`CategoryMemoryHeroPolicy.stableIndex`で決め、親は解決済みEvent／Visit、テーマ色、追加・詳細・一覧を開くClosureだけを渡す。
+> **ジャンルトップ分割の停止条件**: `CategoryTopView.swift`は8,636行から1,648行まで整理済み。残る状態、保存、現在モデル解決、ジャンル別Section構成は親責務とし、実際の不具合、型推論負荷、性能計測で根拠が出るまでファイル数だけを増やす追加分割は行わない。
 
 > **おでかけ系記録詳細・編集の現行規則**: テーマパーク、自然・生き物、ミュージアムの記録詳細には、ジャンルの文脈に不要な`チケット・座席`を表示しない。同3ジャンルと書籍の記録写真は、`PhotoBlob`の保存寸法を使って元画像の縦横比を保ち、正方形へ一律トリミングしない。詳細下部の`編集 / SHARE`は黒い安全領域内で上へ配置し、本文末尾が固定バーへ隠れない高さを確保する。非観劇・非書籍の記録編集では、対象アイキャッチを通常写真から独立させ、未設定時も追加、設定済みは変更・表示位置調整を行える。段階式フォームの写真と感想・メモの間には独立した空行を置かない。
 
@@ -62,10 +66,33 @@
 > **標準セグメントの文字ウェイト**: アプリ内の`.segmented` PickerはiOS標準`UISegmentedControl`のLiquid Glass背景・選択表現を変更しない。共通UIAppearanceで通常13pt Regular／選択中13pt Semiboldの文字属性だけを設定し、画面ごとの自作カプセルへ置き換えない。公演・チケット登録先頭の4択も等分幅の標準SwiftUI Pickerと従来の横幅・余白を維持し、背景、選択面、Tint、項目幅は変更しない。
 > **チケット通知と工程修正**: TicketAttemptの通知は現在状態以降の未完了工程だけを予約し、`issued / attended / lost / skipped`では申込開始・締切、当落、支払、取得の全予約を解除する。通知ルール更新後の初回起動では全申込を再同期し、過去ルールで残った予約も削除する。日付優先の工程編集で未完了工程を未来へ直した場合は、現在状態を必要な工程まで後退させてProgressと次対応を揃える。ただし`issued / attended`は取得・参加の事実を日付編集だけで取り消さない。過去工程の日付だけを直した場合と、通常のチケット編集で登録内容を変更した場合は状態を自動変更しない。
 > **チケット管理一覧の表示**: 管理ページは入口ジャンルの配色を引き継がず、常にライト基調で表示する。各カード上段はHomeの`Ticket Schedule`と同じ`現在工程・アイキャッチ / 期限・残日数 / 申込枠・購入先・公演名・参加日時`の順とし、その下へ全工程の日付付きProgressと次対応を同居させる。状態・ジャンルフィルターとは独立した小型メニューで`公演ごと / 期限が近い順 / 進捗ごと`を切り替え、公演ごとを初期値とする。期限順は次対応期限が近い申込を先にし、期限がない申込は後ろへ送る。進捗ごとは取得工程の順にSectionを固定する。カードの左右スワイプで次状態／落選・見送り・編集のメニューを開く。
+> **ジャンルトップの実装境界**: `CategoryTopView`はジャンル別トップの状態、現在モデルの解決、遷移の組み立てを担当する。チケット進捗の項目・Section・カード・Timelineは`CategoryTicketProgressComponents.swift`、複数ジャンルで使う装飾Section見出しは`LayeredCategorySectionTitle.swift`、対象一覧の基本行と親／書籍で共有する空状態は`CategoryTopBasicRows.swift`、ジャンル左右移動のSwiftUIコンテナ・UIKit Gesture Recognizer・横スクロール／Map／明示除外の競合判定は`GenreSwipeNavigation.swift`を正本とする。Home・観劇・各ジャンルトップで共用する日付・画像・タイトル・会場の予定行は`FavorecoComingUpRow.swift`、ジャンル別Hero・Memory・Ticker・チケット配置・親Event表示の純粋判定と、登録名・Section英日見出し・施設系判定・一覧ページ件数は`CategoryTopPolicies.swift`を正本とする。Event／Plan／VisitのUUIDから現在モデルを解決する遷移先、共通詳細パネル、その右スワイプ終了と操作除外領域は`CategoryDetailNavigation.swift`、SnapshotのVisit／Event IDを現在モデルへ解決するMainActorキャッシュは`CategoryTopResolutionCache.swift`、3値ティッカー、固定高Memory Hero、全ジャンルの3項目統計・施設同一判定、共通ミニ統計表示は`CategoryTopSummaryComponents.swift`を正本とする。全ジャンルの対象表示と、Visit／Event／Plan／Ticketから表示項目を生成・統合・整列し、気になる／対象情報へジャンル別に分配する規則は`CategoryLibraryItem.swift`、書籍の状態・検索・シリーズ集約・本棚・書影・Reading Insights・シリーズ詳細は`CategoryTopBookLibrary.swift`、全ジャンル共通ライブラリの見出し・件数・レイアウト切替・0件表示、3列／2列／バナー表示、映像フィルター、段階展開、書影、前後ジャンルカード、および施設系ライブラリの`PlaceMaster`抽出・Place ID別Plan／Visit関連付け・2列／バナーカード構成は`CategoryTopLibraryComponents.swift`、Feature Hero、Ticket Management大判カード、Coming Up行、予定編集カード、Carousel、空状態、小統計と、Featureの予定／気になる優先項目・年間評価・リピート等の表示値生成は`CategoryTopFeatureComponents.swift`、Ticket Management／観劇／LIVE／通常Coming Upの予定所属・並び順・表示名は`CategoryTopPlanSelection.swift`を正本とする。利用画面ごとに型や表示ロジックを複製せず、分割時も既存のBinding、判定値、初期化引数、保存先、操作結果を維持する。
 
 > **御祭神の複数値仕様（設計中）**: `天照大神`と`須佐之男命`のような複数祭神を1つの文章へ連結せず、CSVでは`|`区切り、CloudKit Public DatabaseではString List、個人`PlaceMaster`へ取り込む際は構造化JSONとして扱う。管理画面は1柱ずつ追加・削除できるチップ入力とし、検索も各要素単位で行う。公式掲載順を維持し、正規化後の同一神だけを重複除外する。
 
-## 1. コンセプト
+> **施設ライブラリのSection境界**: 施設系の2列／バナーカードは`CategoryFacilityLibraryContent`、ミュージアム専用の見出し・件数・切替・0件表示を含むSection全体は`CategoryFacilityLibrarySection`を正本とする。親はレイアウトBindingと施設詳細遷移Closureを渡し、表示構成を複製しない。
+
+> **施設系記録Sectionの境界**: テーマパーク／自然の`Park Log / Nature Log`は`PlaceExperienceLogSection`を正本とする。親は解決済みVisit／Event、Event選択Closure、Visit遷移Closureを渡し、Sectionは保存状態や遷移先を所有しない。
+
+> **ライブラリ部分Sectionの境界**: `CategoryLibrarySubsection`が英日見出し、件数、空状態、段階表示を担当する。`CategoryTopView`はレイアウトと表示キーを解決し、気になる追加・Event詳細のClosureを渡す薄いアダプターを維持する。
+
+> **Visit記録ライブラリの境界**: LIVE／映像／ミュージアムの記録一覧は`CategoryVisitRecordLibrarySection`、カテゴリ一致・Movieフィルター・訪問日時降順の項目生成は`CategoryVisitRecordItemBuilder`を正本とする。親は解決済みVisitとBinding／遷移Closureを渡し、一覧表示を複製しない。
+
+> **ライブラリ説明文の境界**: Heroの対象0件／対象・体験件数ありの説明文は`CategoryTopLibraryPolicy.summaryMessage`を正本とする。呼び出しのないprivateの旧`最近の記録`一覧は削除し、未使用表示を仕様として残さない。
+
+> **御朱印トップの計算境界**: 記録種別・都道府県による抽出、利用可能な都道府県、御朱印帳サイズ別のVisit集約、保存済み帳面順、使用中／閉じた判定、代表写真選択は`CategoryTopGoshuinSections.swift`のMainActor隔離された`GoshuinTopContentBuilder`を正本とする。SwiftDataのVisit／PhotoBlob関係をMainActor外から同期参照しない。`CategoryTopView`は選択中FilterとAppStorage値を渡し、シート状態、詳細遷移、共有画像生成を保持する。サイズキーがない旧Visitは従来どおり標準帳面へ含める。
+
+> **ジャンルトップ用チケット抽出の境界**: `CategoryTicketProgressItem.topItems`が、選択ジャンルの有効申込を既存Presentation順で抽出し、観劇では参加日未定だけ、LIVEでは`LiveTicketPlacementPolicy`が対応中とする工程だけへ絞る。`CategoryTopView`は全Planと現在カテゴリを渡し、Sectionの表示とテーマを構成する。申込状態の更新、保存、カード操作は従来の専用部品を維持する。
+
+> **ジャンルトップ外観判定の境界**: `CategoryTopPresentationPolicy`が、ヘッダー表示名、訪問Map対応ジャンル、観劇／LIVEの暗色スタイル、ブランドGradient、ヘッダー前景色をテンプレートキーから決める。LIVEは表示名を`LIVE`へ固定し、空の自作ジャンル名は`ジャンル`へ補完する。`CategoryTopView`はPolicyの結果を画面へ適用し、環境テーマから解決するジャンル色は親の`categoryAccent`で維持する。
+
+> **ジャンルトップのライブラリ表示形式境界**: `CategoryTopLibraryPolicy`が保存済み表示形式をジャンルの対応形式へ正規化する。テーマパーク・自然・その他施設系は`compact / banner`、映像作品は`gallery / banner`、LIVEは`banner`固定、その他は保存値を維持する。ミュージアム施設一覧だけは`museum.facilities`へ独立保存し、Sectionの再構築キーも同Policyで生成する。`CategoryTopView`はState／UserDefaultsの読書きとBindingを担当し、Policyは保存処理を行わない。観劇／LIVEのライブラリ文字色は`CategoryTopPresentationPolicy`を正本とする。
+
+> **ジャンルトップ背景の境界**: `CategoryTopBackground`が観劇／LIVE／通常ジャンルの背景GradientとSafe Area外描画を担当し、`CategoryTopPresentationPolicy.backgroundStyle`がテンプレートキーから背景種別を決める。親はテーマPaletteで解決したカテゴリ色と現在のColor Schemeを渡す。観劇はwine系、LIVEはnavy系、通常ジャンルはカテゴリ色をライト10%／ダーク12%でsystem grouped背景へ重ねる現行値を維持する。
+
+> **ジャンルトップ旧表示の保持境界**: 定義以外から参照されない旧汎用Hero、旧観劇Hero／Event一覧、旧3指標パネル、旧Event／Visit行、未使用検索文字列生成は削除する。一方、現行Policyで非表示でも、`Coming Up / Interests`統合Hero、候補抽出、Carousel、補助Metricsは仕様上の復帰用実装として保持する。未参照という理由だけで復帰用境界まで削除しない。
+
+## 1. コンセプ
 
 **観た・行った・体験したを、美しく一生残す。**（詳細: `docs/favoreco-concept.md`＝確定）
 

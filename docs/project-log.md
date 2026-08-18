@@ -4,6 +4,237 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-08-18: 御朱印集計のMainActor境界を明示してSwift警告を解消
+
+### 原因
+- `GoshuinTopContentBuilder.bookSelections`はMainActor非隔離の純粋計算として宣言されていたが、帳面の代表写真を選ぶ際にSwiftDataの`PhotoBlob`を返すMainActor隔離メソッドを同期呼び出していた。
+- 現行Swift 5モードでは警告だが、Swift 6の厳格なActor検査ではエラー化し得る。Builderの全処理はUI表示用のVisit／PhotoBlob関係を読むため、非隔離にする実益もなかった。
+
+### 変更概要・意図
+- `GoshuinTopContentBuilder`全体を`@MainActor`へ統一した。
+- 既存`CategoryTopGoshuinContentBuilderTests`も同じMainActor境界へ揃えた。
+- Filter、都道府県抽出、帳面サイズ集約、保存順、Visit降順、使用中判定、代表写真の選択条件は変更していない。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopGoshuinSections.swift`: 御朱印集計BuilderへMainActor隔離を明示。
+- `favorecoAPP/favorecoAPPTests/CategoryTopGoshuinContentBuilderTests.swift`: 既存回帰テストを同じActor境界へ統一。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 現行境界と検証状態を更新。
+
+### 影響する画面・機能
+- 御朱印トップの記録Filter、都道府県Filter、御朱印帳一覧、代表写真。
+- 御朱印帳設定後の並び順、使用中／閉じた状態、旧記録の標準帳面扱い。
+
+### 確認結果（実機 / ビルド）
+- 対象Swiftの構文解析と`git diff --check`に成功した。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功し、従来の御朱印MainActor警告は解消した。アプリSwiftコードの警告は0件で、AppIntents未使用によるXcodeツール通知だけが残る。
+- テストターゲットの`build-for-testing`に成功した。iOS 18.6 Simulatorで`CategoryTopGoshuinContentBuilderTests` 3件を含む分割境界の対象5群・計31件を実行し、失敗0件で成功した。
+
+### 既知のリスク・残課題
+- 自動テストでは確認できない実機上の御朱印トップの0／1／多数、Filter操作、都道府県、帳面順、使用中／閉じた状態、代表写真なし／ありを確認する。
+
+## 2026-08-18: ジャンルトップを独立境界から34段階分割・整理して完了
+
+### 原因
+- `CategoryTopView.swift`が8,636行あり、ジャンル別トップの状態・抽出・遷移に、複数画面で再利用するチケット進捗一式と共通Section見出しが同居していた。
+- 一度にジャンル別構造まで移すと影響範囲が広いため、親状態を持たず既存の入力だけで描画・操作できる境界から分ける必要があった。
+
+### 変更概要・意図
+- チケット進捗の項目、Section、カード、Timeline、内部Node／Connectorを`CategoryTicketProgressComponents.swift`へ移した。
+- チケット以外の統計・書籍・収集・地図等でも使う`LayeredCategorySectionTitle`は、チケット専用ファイルへ混ぜず独立した共通ファイルへ移した。
+- 第1段階の全体ビルド成功後、ジャンル左右移動のSwiftUIコンテナ、UIKit Gesture Recognizer、横スクロール／Map／明示除外領域との競合判定を`GenreSwipeNavigation.swift`へ移した。
+- 第2段階の全体ビルド成功後、Home・観劇・ジャンルトップで共有する日付・画像・タイトル・会場の予定行を`FavorecoComingUpRow.swift`へ移した。
+- 第3段階の全体ビルド成功後、ジャンル別Hero・Memory・Ticker・チケット配置・親Event表示を決める6つの純粋Policyを`CategoryTopPolicies.swift`へ移した。
+- 第4段階の全体・テストビルド成功後、Event／Plan／VisitのID解決先、共通詳細パネル、右スワイプ終了と操作除外領域を`CategoryDetailNavigation.swift`へ移した。
+- 第5段階の全体ビルド成功後、ジャンル共通の3値ティッカー、固定高Memory Hero、共通ミニ統計とその表示値型を`CategoryTopSummaryComponents.swift`へ移した。書籍専用の年間状態帯とReading Insightsは親へ残した。
+- 第6段階の全体ビルド成功後、全ジャンルの対象表示をVisit／Plan／Ticketへ接続する共通表示アダプター`CategoryLibraryItem`を独立ファイルへ移した。
+- 第7段階の全体ビルド成功後、書籍の状態・検索・シリーズ集約・本棚・書影・Reading Insights・シリーズ詳細を、依存する型と一緒に`CategoryTopBookLibrary.swift`へ移した。
+- 第8段階の全体ビルド成功後、全ジャンル共通ライブラリの3列／2列／バナー表示、映像フィルター、段階展開、書影、前後ジャンルカードを`CategoryTopLibraryComponents.swift`へ移した。
+- 第9段階の全体ビルド成功後、Feature Hero、Ticket Management大判カード、Coming Up行、予定編集カード、Carousel、空状態、小統計を`CategoryTopFeatureComponents.swift`へ移した。
+- 第10段階の全体ビルド成功後、Ticket Management／観劇／LIVE／通常Coming Upの予定所属、並び順、表示名を`CategoryTopPlanSelection.swift`へ移した。更新を伴うチケット取得処理は親へ残した。
+- 第11段階の全体ビルド成功後、SnapshotのVisit／Event IDを現在モデルへ解決するMainActorキャッシュを`CategoryTopResolutionCache.swift`へ移した。
+- 第12段階の全体ビルド成功後、対象一覧の`EventRow`と親／書籍で共有する`EmptyStateMessage`を`CategoryTopBasicRows.swift`へ移した。参照のない`CategoryVisitRow`は削除せず親へ残した。
+- 第13段階の全体ビルド成功後、Visit／Event／Planから対象ライブラリ項目を生成する計算を、既存`CategoryLibraryItem.swift`の`CategoryLibraryItemBuilder`へ移した。大きなView builderは親状態との結合が強いため移していない。
+- 第15段階の全体ビルド成功後、全ジャンルの3項目統計とミュージアム施設同一判定を、既存`CategoryTopSummaryComponents.swift`の`CategoryStatisticsItemBuilder`へ移した。必要な4ジャンルでだけ重い入力を解決する条件は親の薄い入口へ残した。
+- 第16段階の全体ビルド成功後、Feature Heroの予定／気になる優先項目と小統計の生成、リピート・出会った種類の補助計算を、既存`CategoryTopFeatureComponents.swift`の`CategoryFeatureContentBuilder`へ移した。親で現在時刻・Calendar・年と解決済みモデルを固定して渡し、評価タイミングを維持した。
+- 第17段階の全体・テストビルド成功後、ジャンル別の登録名、Feature／Section英日見出し、施設系判定、一覧ページ件数を、既存`CategoryTopPolicies.swift`の`CategoryTopVocabulary`／`CategoryTopLibraryPolicy`へ移した。純粋規則を既存Policyテストへ追加し、代表値・fallback・施設3分類・6／6／4件を固定した。
+- 第18段階の全体・テスト成功後、施設系ライブラリの`PlaceMaster`抽出と施設別Plan／Visit関連付けを、既存`CategoryTopLibraryComponents.swift`の`CategoryFacilityLibraryBuilder`へ移した。公開カタログ対象・関連済み施設・アーカイブ除外・ジャンル所属・施設名順・関連配列順を維持しつつ、施設カードごとの全件走査を各配列1回のPlace ID別集約へ置き換えた。
+- 第19段階の全体・テスト成功後、共通ライブラリのジャンル別表示区分と気になる／対象情報への項目分配を、既存`CategoryLibraryItem.swift`の`CategoryLibraryPartitionBuilder`へ移した。観劇、通常予定系、施設系、書籍、その他の既存条件と入力順を維持し、複数のfilterを項目ごとの1回の判定へまとめた。
+- 第20段階の全体ビルド成功後、共通ライブラリSectionの見出し、件数、レイアウト切替、0件表示を、既存`CategoryTopLibraryComponents.swift`の`CategoryLibrarySectionChrome`へ移した。既存の文字色、余白、文言、レイアウト候補、Bindingをそのまま引数と内部表示へ移し、カード本体と遷移は親へ残した。
+- 第21段階の全体ビルド成功後、共通対象一覧とミュージアム専用Sectionで重複していた施設の2列／バナーカード構成を、既存`CategoryTopLibraryComponents.swift`の`CategoryFacilityLibraryContent`へ集約した。既存カード型、間隔、Place ID別Plan／Visit関連、詳細遷移Closureを保った。
+- 第22段階の全体ビルド成功後、ミュージアム専用施設Sectionの見出し、件数、レイアウト切替、0件表示、施設Contentを、既存`CategoryTopLibraryComponents.swift`の`CategoryFacilityLibrarySection`へ移した。親はBindingと詳細遷移Closureだけを渡す。
+- 第23段階の全体ビルド成功後、テーマパーク／自然の記録Sectionを、既存`CategoryTopLibraryComponents.swift`の`PlaceExperienceLogSection`へ移した。解決済みVisit／Eventと記録追加／詳細遷移Closureだけを渡し、表示順・10件上限・空状態を保った。
+- 第24段階の全体ビルド成功後、共通ライブラリの部分Section表示を、既存`CategoryTopLibraryComponents.swift`の`CategoryLibrarySubsection`へ移した。親はレイアウト・表示キーの解決と、気になる追加／Event遷移Closureを渡す薄いアダプターだけを残した。
+- 第25段階の全体ビルド成功後、LIVE／映像／ミュージアムのVisit記録一覧と項目生成を、既存`CategoryTopMovieSections.swift`の`CategoryVisitRecordLibrarySection`／`CategoryVisitRecordItemBuilder`へ移した。親は解決済みVisit、レイアウトBinding、Visit遷移Closureだけを渡す。
+- 第26段階の全体ビルド成功後、参照のないprivateの`最近の記録`一覧を削除し、Heroのライブラリ説明文生成を既存`CategoryTopLibraryPolicy.summaryMessage`へ移した。説明文の0件／複数件は既存Policyテストへ追加した。
+- 第27段階で、御朱印の記録Filter、都道府県判定、御朱印帳サイズ別集約・保存順・使用中判定、代表写真選択を、既存`CategoryTopGoshuinSections.swift`の`GoshuinTopContentBuilder`へ移した。親は現在のFilterとAppStorage値を渡すだけとし、状態変更・詳細遷移・共有生成は残した。
+- 第28段階で、ジャンルトップ用チケット進捗の最終抽出を既存`CategoryTicketProgressComponents.swift`の`CategoryTicketProgressItem.topItems`へ移した。観劇の参加日未定、LIVEの対応中工程、通常ジャンルの有効申込という既存境界を同じ専用型へ集約した。
+- 第29段階で、ヘッダー表示名、訪問Map対応、観劇／LIVEの暗色スタイル、ブランドGradient、ヘッダー前景色を`CategoryTopPresentationPolicy`へ移した。環境テーマから色を解決する`categoryAccent`は親へ残した。
+- 第30段階で、場所系／映像／LIVE／通常ジャンルのライブラリ表示形式正規化、ミュージアム施設一覧の専用保存キー、Section再構築キーを`CategoryTopLibraryPolicy`へ集約し、観劇／LIVEのライブラリ文字色を`CategoryTopPresentationPolicy`へ移した。State／UserDefaultsの読書きとBindingは親へ残した。
+- 第31段階で、観劇／LIVE／通常ジャンルの背景Gradientを新規`CategoryTopBackground.swift`へ移し、テンプレートキーから背景種別を選ぶ純粋判定を`CategoryTopPresentationPolicy`へ集約した。親はテーマ色とColor Schemeを渡すだけとした。
+- 第32段階で、定義以外から参照されない旧汎用Hero、旧観劇Hero、旧観劇Event一覧、旧3指標パネル、旧Event一覧、未使用検索文字列生成、旧Visit行を削除した。現行の表示構成と、仕様に明記した復帰用統合Hero／候補抽出／Carousel／補助Metricsは保持した。
+- 第33段階で、章末の前後ジャンルカードとジャンル設定導線を既存`CategoryTopLibraryComponents.swift`の`CategoryChapterFooter`へ移した。前後位置を`CategoryChapterNavigationPolicy`へ分け、親にはジャンル選択後の先頭スクロールと設定Sheet状態だけを残した。
+- 第34段階で、グッズ集計Heroを既存`CollectibleSeriesViews.swift`、観劇の非表示公演入口を既存`CategoryTopTheaterSections.swift`、Memory Heroの日次選択と表示を既存`CategoryTopSummaryComponents.swift`へ移した。親には解決済み入力と画面State更新Closureだけを残した。
+- 型名、判定値、初期化引数、Binding、表示順、操作クロージャ、更新コールバック、保存処理、遷移は変更せず、宣言と純粋計算の所属だけを移動または整理した。親から参照する分割型だけfile-privateからmodule内可視へ変更した。親ファイルは8,636行から1,648行となり、6,988行を34段階で分離／整理した。
+- 各段階で依存を再監査し、全体ビルドを完了してから次の1塊へ進めた。親の状態・現在モデル解決・保存と、相互依存が強いSection構成は動かしていない。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/CategoryTopView.swift`: 分割済み表示部品の宣言を除き、親の状態・抽出・遷移を維持。
+- `favorecoAPP/favorecoAPP/Views/CategoryTicketProgressComponents.swift`: チケット進捗の共通表示・操作一式を移設。
+- `favorecoAPP/favorecoAPP/Views/LayeredCategorySectionTitle.swift`: ジャンル横断の装飾Section見出しを移設。
+- `favorecoAPP/favorecoAPP/Views/GenreSwipeNavigation.swift`: ジャンル左右移動とジェスチャー競合制御を移設。
+- `favorecoAPP/favorecoAPP/Views/FavorecoComingUpRow.swift`: Home・観劇・ジャンルトップ共通の予定行を移設。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopPolicies.swift`: ジャンル別構成、登録名、Section英日見出し、施設系判定、一覧ページ件数、章末の前後位置、Memory Heroの日次選択位置を決める純粋Policyを集約。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopBackground.swift`: 観劇／LIVE／通常ジャンルの背景GradientとSafe Area外描画を集約。
+- `favorecoAPP/favorecoAPP/Views/CategoryDetailNavigation.swift`: Event／Plan／VisitのID解決先、共通詳細パネル、終了ジェスチャーの競合制御を移設。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopSummaryComponents.swift`: 3値ティッカー、Memory Heroの日次候補選択と表示、全ジャンルの統計値生成・施設同一判定、共通ミニ統計を集約。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopTheaterSections.swift`: 観劇表示部品に、非表示公演数と一覧入口を集約。
+- `favorecoAPP/favorecoAPP/Views/CollectibleSeriesViews.swift`: グッズのシリーズ編集・一覧に、シリーズ数・収集数・ダブり数のHeroを集約。
+- `favorecoAPP/favorecoAPP/Views/CategoryLibraryItem.swift`: 全ジャンル共通の対象表示、Visit／Event／Plan／Ticket接続、項目生成・重複統合・整列・ジャンル別表示区分を集約。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopBookLibrary.swift`: 書籍状態、検索、シリーズ、本棚、書影、Reading Insights、シリーズ詳細を移設。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopLibraryComponents.swift`: 共通ライブラリの見出し・件数・切替・0件表示、3表示形式、映像フィルター、段階展開、書影、章末の前後ジャンルカードと設定導線、施設系の抽出・関連付け・2列／バナーカード・ミュージアム専用Section・テーマパーク／自然記録Section・部分Section表示を集約。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopMovieSections.swift`: LIVE／映像／ミュージアムのVisit記録項目生成、3列／バナー一覧、個別カードを集約。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopGoshuinSections.swift`: 御朱印専用表示に加え、記録・都道府県Filter、御朱印帳集約・順序・状態、代表写真の純粋計算を集約。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopFeatureComponents.swift`: Feature／Ticket Management／Coming Upの表示・操作部品と、Feature優先項目・小統計の生成を集約。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopPlanSelection.swift`: Ticket Management／Coming Upの予定所属・並び順・表示名を移設。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopResolutionCache.swift`: Snapshot IDから現在モデルを解決するMainActorキャッシュを移設。
+- `favorecoAPP/favorecoAPP/Views/CategoryTopBasicRows.swift`: 対象一覧の基本行と共有空状態を移設。
+- `favorecoAPP/favorecoAPPTests/CategoryPlanningHeroPolicyTests.swift`: 語彙・外観・表示形式・背景種別・章末境界に加え、Memory Heroの0件安全性と同日安定性を追加。
+- `favorecoAPP/favorecoAPPTests/CategoryFacilityLibraryBuilderTests.swift`: 公開施設、予定／記録関連、別ジャンル、アーカイブ、施設名順の境界テスト2件を追加。
+- `favorecoAPP/favorecoAPPTests/CategoryLibraryPartitionBuilderTests.swift`: 観劇、通常予定系、施設系、書籍、その他の項目分配と順序の境界テスト5件を追加。
+- `favorecoAPP/favorecoAPPTests/CategoryTopGoshuinContentBuilderTests.swift`: 神社×都道府県、御朱印帳の保存順・Visit降順・閉じた状態、旧記録の標準帳面扱いを検証する3件を追加。
+- `favorecoAPP/favorecoAPPTests/CategoryTicketProgressItemTests.swift`: 観劇の日時未定、LIVEの対応中／取得済み、通常ジャンルと別ジャンル境界のテスト3件を追加。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 現行の実装境界、検証状態、次段階の停止条件を記録。
+
+### 影響する画面・機能
+- 観劇／LIVE等のジャンルトップにあるTicket Management／Ticket Progress。
+- 同じ進捗部品を使うカレンダー、チケット管理、予定詳細、チケットのクイック操作。
+- 同じ装飾見出しを使う統計、書籍、収集、地図等のジャンル別Section。
+- 全ジャンルトップの左右移動、横スクロール、Map操作、明示除外領域、画面端ジェスチャー。
+- Home、観劇の公演スケジュール、各ジャンルトップのComing Up行。
+- 全7ジャンルのHero、Memory、Ticker、Ticket Management、Coming Up、親Event情報の表示判定。
+- ジャンルトップと書籍・観劇・御朱印等から開くEvent／Plan／Visit詳細、詳細パネルの右スワイプ終了、操作除外領域。
+- 全7ジャンルの3値ティッカー、映像・ミュージアム・テーマパーク・自然等のMemory Hero、共通ミニ統計。
+- 全ジャンルの対象ライブラリ表示、Visit／Plan／Ticketからの表示値解決。
+- 書籍トップの5状態、検索、単巻／シリーズ、本棚、3列／横長表示、Reading Insights、シリーズ詳細。
+- 全ジャンルの対象ライブラリにある3列／2列／バナー表示、さらに表示／閉じる、映像作品分類、前後ジャンル移動。
+- 観劇／LIVEのTicket Management大判カード、取得更新、Coming Up、予定編集、通常ジャンルのFeature Carousel。
+- 観劇／LIVE／通常ジャンルの管理対象・Coming Up所属、日時確定／未定と状態による並び順、映像分類フィルター。
+- 全ジャンルトップのVisit／Event解決、ジャンル切替後と追加・編集後の一覧再構築。
+- 通常対象一覧の対象詳細遷移と回追加、親／書籍ライブラリの空状態表示。
+- 全ジャンルの対象ライブラリ項目生成、施設／観劇公演の重複統合、予定・記録順の整列。
+- 全ジャンルの3項目統計、観劇の気になる、書籍の読了／積読、ミュージアム施設数、御朱印参拝先数。
+- 通常ジャンルのFeature Carouselにある予定／気になるの優先順・重複除外・最大件数と、映像／書籍／テーマパーク／自然等の小統計。
+- 全ジャンルトップの気になる登録Sheet名、追加操作名、Feature／Section英日見出し、施設系一覧、段階表示件数。
+- ミュージアム／テーマパーク／自然・生き物／その他施設系の施設一覧、施設別Plan／Visit件数と詳細遷移。
+- 全ジャンルトップの気になる、Coming Up、記録、対象情報への項目分配と表示順。
+- 全ジャンルトップの対象情報見出し、件数、レイアウト切替、0件表示。
+- 施設系ライブラリの2列／バナーカード、施設別Plan／Visit件数、施設詳細遷移。
+- 御朱印トップの記録Filter、都道府県Filter、御朱印帳一覧・使用中表示・代表写真。
+- 全ジャンルトップのチケット進捗Sectionに入るPlan／TicketAttemptの所属と順序。
+- 全ジャンルトップのヘッダー表示名、訪問Mapの有無、観劇／LIVEの暗色・ブランド装飾、通常ジャンルのシステム配色追従。
+- 全ジャンルトップのライブラリ表示切替と再起動後の保持、ミュージアム施設一覧と記録一覧の独立した表示形式。
+- 全ジャンルトップの背景、ライト／ダーク、ジャンル切替時のGradient更新。
+- 全ジャンルトップ章末の前後ジャンル移動、移動後の先頭復帰、ジャンル設定導線。
+- グッズトップの集計Hero、観劇トップの非表示公演入口、映像・ミュージアム・テーマパーク・自然のMemory Hero。
+
+### 確認結果（実機 / ビルド）
+- `CategoryTopView.swift`と32段階で分割・整理した15 Swiftの読み直し、`git diff --check`に成功した。
+- Xcodeプロジェクトが`PBXFileSystemSynchronizedRootGroup`で、新規Swiftを自動的にターゲットへ含めることを確認した。
+- 第1・第2段階は署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。第3段階は通常サンドボックス内で`FavorecoComingUpRow.swift`のコンパイル後、Xcode内部の`sandbox-exec`権限エラーでモジュール生成が停止したため、同じ署名なしビルドを許可済みXcode範囲で再実行し、全体のコンパイルとリンクに成功した。既存のMainActor警告2件だけで新規警告なし。
+- 第4段階も署名なしgeneric iPhoneOS向けDebug全体ビルドに成功し、Policyを直接参照する既存テストを含むテストターゲットの`build-for-testing`にも成功した。テスト実行は実機／Simulator待ち。新規警告なし。
+- 第5段階も新規`CategoryDetailNavigation.swift`を含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。既存の`AddTicketPlanView` MainActor警告2件だけで新規警告なし。
+- 第6段階も新規`CategoryTopSummaryComponents.swift`を含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。既存警告だけで新規警告なし。
+- 第7段階も新規`CategoryLibraryItem.swift`を含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。既存のMainActor隔離警告だけで新規警告なし。
+- 第8段階も新規`CategoryTopBookLibrary.swift`を含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。分割ファイル固有の新規警告なし。
+- 第9段階も新規`CategoryTopLibraryComponents.swift`と、Home・書籍・観劇・映像作品を含む全利用先の署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。分割ファイル固有の新規警告なし。
+- 第10段階の初回全体ビルドは、親のComing Upでも使う`CategoryFeaturePoster`がfile-privateのままだったことを検出して失敗した。利用箇所を再検索し、この1型だけmodule内可視へ変更した後、署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。既存のMainActor隔離警告以外に分割ファイル固有の新規警告なし。
+- 第11段階も新規`CategoryTopPlanSelection.swift`を含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。分割ファイル固有の新規警告なし。
+- 第12段階も新規`CategoryTopResolutionCache.swift`を含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。MainActor境界を維持し、分割ファイル固有の新規警告なし。
+- 第13段階も新規`CategoryTopBasicRows.swift`と、共有空状態を使う書籍ライブラリを含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。分割ファイル固有の新規警告なし。
+- 第14段階も更新した`CategoryLibraryItem.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。分割した計算固有の新規警告なし。
+- 第15段階も更新した`CategoryTopSummaryComponents.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。統計計算固有の新規警告なし。
+- 第16段階も更新した`CategoryTopFeatureComponents.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドとリンクに成功した。Feature生成計算固有の新規警告なし。
+- 第17段階は更新した`CategoryTopPolicies.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebugの全体・テストビルドに成功した。iOS 26.5 Simulatorで`CategoryPlanningHeroPolicyTests`計10件（既存7件＋追加3件）が成功した。既存の`AddTicketPlanView` MainActor警告2件以外に今回固有の新規警告なし。
+- 第18段階は更新した`CategoryTopLibraryComponents.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。iOS 26.5 Simulatorで`CategoryFacilityLibraryBuilderTests`計2件が成功し、公開施設・予定だけ・記録だけ・別ジャンル・アーカイブ・空入力を固定した。今回固有の新規警告なし。
+- 第19段階は更新した`CategoryLibraryItem.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。iOS 26.5 Simulatorで`CategoryLibraryPartitionBuilderTests`計5件が成功し、観劇の単独気になる／申込工程あり、通常予定系の気になる＋予定あり、施設系の重複抑止、書籍の記録有無、その他の全件・順序を固定した。今回固有の新規警告なし。
+- 第20段階は更新した`CategoryTopLibraryComponents.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。Swift構文解析と差分検査にも成功し、Bindingを含む新しい表示部品固有の警告なし。
+- 第21段階は更新した`CategoryTopLibraryComponents.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。Swift構文解析と差分検査にも成功し、共通化した施設カード構成固有の警告なし。
+- 第22段階は更新した`CategoryTopLibraryComponents.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。Swift構文解析と差分検査にも成功し、Bindingを含む専用Section固有の警告なし。
+- 第23段階は更新した`CategoryTopLibraryComponents.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。Swift構文解析と差分検査にも成功し、記録SectionのClosure境界固有の警告なし。
+- 第24段階は更新した`CategoryTopLibraryComponents.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。Swift構文解析と差分検査にも成功し、アダプターから渡すClosureとView ID固有の警告なし。
+- 第25段階は更新した`CategoryTopMovieSections.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。Swift構文解析と差分検査にも成功し、Builder・Binding・Visit遷移固有の警告なし。
+- 第26段階は更新した`CategoryTopPolicies.swift`と全ジャンルトップを含む署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。Swift構文解析と差分検査に成功し、iOS 26.5 Simulatorで`CategoryPlanningHeroPolicyTests`計10件が成功した。
+- 第27段階は更新した`CategoryTopGoshuinSections.swift`と全ジャンルトップを含むiOS 26.5 Simulator向け全体ビルドに成功し、`CategoryTopGoshuinContentBuilderTests`計3件が成功した。神社と都道府県の複合Filter、御朱印帳の保存順・Visit降順・閉じた状態、サイズ未保存の旧Visitを標準帳面へ含める境界を固定した。generic iPhoneOS向け全体ビルドは2回ともSwiftコンパイルエラーではなく、`simdiskimaged`停止によりAsset CatalogがSimulator runtimeを取得できず中断した。対象Swiftの構文解析と差分検査は成功した。
+- 第28段階は`CategoryTopView.swift`、`CategoryTicketProgressComponents.swift`、新規テストのSwift構文解析と差分検査に成功した。観劇／LIVE／通常ジャンルの境界テスト3件を追加したが、実行はCoreSimulatorService停止により端末解決前に中断した。Asset Catalogを除外したgeneric iPhoneOS向け全体ビルドも、今回の変更箇所ではなくSwiftDataマクロサーバーが全モデルへ`malformed response`を返して環境中断した。
+- 第29段階は`CategoryTopView.swift`、`CategoryTopPolicies.swift`、`CategoryPlanningHeroPolicyTests.swift`のSwift構文解析と差分検査に成功した。表示名、訪問Map、暗色・ヘッダー装飾の境界テスト3件を追加した。CoreSimulatorServiceが引き続き接続不能で端末一覧を解決できないため、テスト実行と全体ビルドは未実施。
+- 第30段階は同3 Swiftの構文解析、依存型を最小Stubで補った`CategoryTopPolicies.swift`単体の型検査、差分検査に成功した。表示形式の正規化、施設保存キー、Section再構築キーの境界テスト2件を追加した。CoreSimulatorServiceが引き続き接続不能のため、テスト実行と全体ビルドは未実施。
+- 第31段階は`CategoryTopView.swift`、`CategoryTopPolicies.swift`、`CategoryTopBackground.swift`、既存Policyテストの構文解析と差分検査に成功した。最小StubとiOS Simulator SDKを使った背景／Policy単体型検査にも成功し、背景種別の境界テスト1件を追加した。CoreSimulatorServiceが引き続き接続不能のため、テスト実行と全体ビルドは未実施。
+- 第32段階は`CategoryTopView.swift`のSwift構文解析、削除した7シンボルの定義・参照再検索、差分検査に成功した。到達不能コードだけの削除でテスト対象となる新しい分岐はなく、CoreSimulatorService停止のため全体ビルド／テストは未実施。
+- 第33段階は`CategoryTopView.swift`、`CategoryTopLibraryComponents.swift`、`CategoryTopPolicies.swift`、既存PolicyテストのSwift構文解析と差分検査に成功した。最小StubとiOS Simulator SDKを使った`CategoryTopPolicies.swift`単体型検査にも成功し、章末の前後位置境界テスト1件を追加した。CoreSimulatorService停止のため全体ビルド／テスト実行は未実施。
+- 第34段階は`CategoryTopView.swift`、`CollectibleSeriesViews.swift`、`CategoryTopTheaterSections.swift`、`CategoryTopSummaryComponents.swift`、`CategoryTopPolicies.swift`、既存PolicyテストのSwift構文解析と差分検査に成功した。最小StubとiOS Simulator SDKを使ったPolicy単体型検査、署名なしgeneric iPhoneOS向けDebug全体ビルド、テストターゲットの`build-for-testing`にも成功した。その後、御朱印MainActor警告を解消し、iOS 18.6 SimulatorでPlanning Hero Policy、御朱印集計、施設ライブラリ、共通ライブラリ分配、チケット進捗の対象5群・計31件を実行して失敗0件。Memory Heroの0件・同日安定性も同テストで確認した。
+
+### 既知のリスク・残課題
+- 実機／Simulatorで観劇／LIVEトップ、カレンダー、チケット管理、予定詳細の0／1／複数申込、状態更新、編集遷移を確認する。
+- ジャンル左右移動について、画面端、縦スクロール、横スクロール、Map、明示除外領域、移動先なしの各ジェスチャー競合を確認する。
+- 予定行について、Home・観劇・各ジャンルトップ、画像あり／なし、時刻・会場あり／なし、ライト／ダークを確認する。
+- 全7ジャンルで従来と同じHero、Memory、Ticker、Ticket Management、Coming Up、親Event情報が表示されることを確認する。
+- Event／Plan／Visit詳細の開閉、詳細パネル上の内部操作、内部操作から始めた横ドラッグがパネル終了へ誤反応しないことを確認する。
+- 3値ティッカーの0／1／3項目、Memory Heroの画像あり／なし・縦横画像、観劇／LIVE／通常色のミニ統計を確認する。
+- 全ジャンルの対象0／1／多数、予定・記録・チケットあり／なしで、対象カードの値と遷移先が従来どおりであることを確認する。
+- 書籍5状態、単巻／シリーズ、0／1／多数、検索、本棚、3列／横長、縦横書影、シリーズ詳細への往復を確認する。
+- 全ジャンルの3列／2列／バナー、0／1／ページサイズ超、さらに表示／閉じる、映像分類切替、前後ジャンルカードを確認する。
+- 観劇／LIVEのTicket Management 0／1／複数、チケット取得更新、予定編集、Coming Up、Feature Carousel 0／1／複数、写真あり／なしを確認する。
+- 観劇／LIVEの管理対象とComing Upについて、取得済み／未解決／発券済み／落選／アーカイブ、日時確定／未定、同日複数、映像分類フィルターを確認する。
+- ジャンル切替、Visit／Event 0／1／多数、追加・編集直後、同一画面内再描画で、キャッシュが古いモデルを返さないことを確認する。
+- 対象0／1／多数、シリーズ名・最新日あり／なし、縦横アイキャッチ、対象詳細遷移、回追加、親／書籍の各空状態、ライト／ダークを確認する。
+- 全ジャンルの対象0／1／多数、未来予定あり／なし、同じ施設名・PlaceMaster、同じ観劇公演、複数チケット、追加・編集直後の表示順を確認する。
+- 全ジャンルの統計0／1／多数、観劇の気になる、書籍の読了／積読、ミュージアムの同一PlaceMaster／表記揺れ会場、御朱印の参拝先件数を確認する。
+- Feature Carouselの0／1／多数、予定と気になるの混在、同一Eventの予定・気になる重複、映像分類、年境界、小統計の0／1／多数を確認する。
+- 全ジャンルの気になる登録Sheet名、追加操作名、Feature／Section英日見出し、施設系一覧、0／1／ページ件数超の段階表示を確認する。
+- ミュージアム／テーマパーク／自然・生き物／その他施設系で、施設0／1／多数、公開候補だけ／予定だけ／記録だけ、アーカイブ、施設名順、施設カードからの遷移を確認する。
+- 全ジャンルで気になる・Coming Up・記録・対象情報の0／1／多数、予定／申込工程の有無、並び順を確認する。
+- 全ジャンルの対象情報見出しと件数、0／1／多数、LIVEの切替非表示、施設系・映像・その他の切替候補、ライト／ダーク、小幅端末、切替後の保持を確認する。
+- 御朱印トップの0／1／多数、全て／神社／寺／限定／特別、都道府県なし／あり、帳面の登録のみ／記録あり／閉じた状態／保存順、代表写真なし／ありを確認する。
+- 観劇の日時未定／確定、LIVEの対応中／取得済み、通常ジャンル、別ジャンル、申込0／1／多数で、チケット進捗の所属と表示順を確認する。
+- 全ジャンルトップ章末の0件／1件／先頭／中間／末尾、前後カード、設定導線、移動後の先頭復帰を確認する。
+- グッズ0／1／多数シリーズ、集計値0／複数、非表示公演0／1／多数、Memory Heroの過去記録0／1／多数と詳細遷移を確認する。
+- 親は停止目安内の1,648行へ到達した。残る状態・保存・現在モデル解決・ジャンル別Section構成は親責務とし、実際の不具合、型推論負荷、性能計測の根拠が出るまで追加分割しない。
+
+## 2026-08-17: 予定・チケット登録の肥大化を責務別に分割
+
+### 原因
+- `AddTicketPlanView.swift`が5,652行あり、画面進行、日時部品、対象選択、2種類のOCR、Draft変換、保存処理が1ファイルへ同居していた。
+- 機能追加後にSwiftコンパイラの型推論タイムアウトが発生しており、小さな修正でも影響範囲とコンパイル負荷が増える状態だった。
+
+### 変更概要・意図
+- 親Viewには画面状態、表示構成、保存フローを残し、日時入力、対象選択、申込画像OCR、金額・座席OCR、Draft変換を別ファイルへ移した。
+- Draft側が画面型を逆参照しないよう、入口種別を`TicketPlanEntryMode`として独立させ、画面側は互換用の型別名を参照する。
+- 既存型を機械的に移動し、親から参照する型だけをmodule内公開へ変更した。入力項目、Binding、初期値、解析ロジック、保存先、通知、遷移は変更していない。
+- 親ファイルは3,769行となり、1,883行、約33%を責務別ファイルへ分離した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`: 日時・選択・OCR・Draft補助を外し、画面と保存フローへ集中。
+- `favorecoAPP/favorecoAPP/Views/TicketScheduleDateControls.swift`: 工程日時、5分／10分刻み時刻入力、ホイール、丸め処理。
+- `favorecoAPP/favorecoAPP/Views/TicketPlanTargetPicker.swift`: 登録済み対象の検索・選択。
+- `favorecoAPP/favorecoAPP/Views/TicketImageImportComponents.swift`: 申込画像の解析結果、重複判定用候補、確認画面、パーサー。
+- `favorecoAPP/favorecoAPP/Views/TicketDetailsOCRComponents.swift`: チケット代、手数料、枚数、座席の画像入力と確認。
+- `favorecoAPP/favorecoAPP/Models/TicketPlanDraft.swift`: 新規・既存Plan／Attemptからの初期化、正規化、保存用変換。
+- `favoreco/CLAUDE.md`, `docs/15-画面情報設計.md`, `docs/00-開発状況と残課題.md`: 実装境界、完了状態、確認項目を更新。
+
+### 影響する画面・機能
+- 全ジャンルの予定・チケット追加／編集、観劇／LIVEの工程日時、登録済み対象選択、画像OCR。
+- 共通日時部品を使うチケット単体編集、遠征ToDo、参加日時設定。
+
+### 確認結果（実機 / ビルド）
+- 対象6 Swiftの構文解析と`git diff --check`に成功。
+- Xcodeプロジェクトが`PBXFileSystemSynchronizedRootGroup`で新規ファイルを自動的にターゲットへ含めることを確認した。
+- 通常ビルドは停止中のCoreSimulatorによりAsset Catalog処理で環境中断。Asset Catalogを除外したコードビルドでもSwiftDataマクロサーバーが全`@Model / @Query`へmalformed responseを返して中断した。今回追加した分割ファイル固有のエラーは0件。
+
+### 既知のリスク・残課題
+- Xcode環境復旧後に署名なしgeneric iPhoneOS向けDebug全体ビルドを完走する。
+- 実機で新規／編集、対象0／1／多数、5分／10分時刻、OCRなし／1枚／2枚、候補なし／重複／複数、保存／キャンセルを確認する。
+- 次段階は`CategoryTopView.swift`のジャンル別表示部品を、チケット進捗・書籍・共通ライブラリ等のまとまりで段階分割する。
+
 ## 2026-08-17: 施設系の追加入口と場所候補反映を統一
 
 ### 原因

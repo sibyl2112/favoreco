@@ -19,6 +19,56 @@ enum TheaterCategoryStyle {
     )
 }
 
+struct ArchivedTheaterEventsEntry: View {
+    let category: RecordCategory
+    let onOpen: () -> Void
+
+    var body: some View {
+        let archivedCount = (category.events ?? []).lazy.filter(\.isArchived).count
+        if archivedCount > 0 {
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    FavorecoIcon(systemName: "archivebox", size: 16)
+                        .foregroundStyle(TheaterCategoryStyle.gold)
+                        .frame(width: 30, height: 30)
+                        .background(TheaterCategoryStyle.gold.opacity(0.10), in: Circle())
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("非表示の公演")
+                            .font(FavorecoTypography.bodyStrong)
+                            .foregroundStyle(TheaterCategoryStyle.ivory)
+                        Text("一覧から公演を再表示できます")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(TheaterCategoryStyle.ivory.opacity(0.62))
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Text("\(archivedCount)件")
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(TheaterCategoryStyle.gold)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(TheaterCategoryStyle.ivory.opacity(0.52))
+                }
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, minHeight: 58)
+                .background(
+                    TheaterCategoryStyle.tileBackground,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(TheaterCategoryStyle.gold.opacity(0.34), lineWidth: 0.7)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("非表示にした公演の一覧を開きます")
+        }
+    }
+}
+
 struct TheaterPosterView: View {
     let event: ExperienceEvent?
     let width: CGFloat
