@@ -40,14 +40,130 @@ final class TheaterRegistrationImportTests: XCTestCase {
         XCTAssertEqual(metadata.imageURLString, "https://example.com/poster.jpg")
     }
 
-    private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+    func testTicketSiteFallbackExtractsLabeledEventInformationFromDescription() {
+        let html = """
+        <html><head>
+        <meta property="og:description" content="開催日：2026年9月29日(火)
+        会場：東京カルチャーカルチャー
+        出演者：
+        MC 堀江聖夏
+        イソメン倶楽部 / ALL IN / KAJA
+        -------------------------------------------------------------
+        イベント公式サイト：https://rrgo.info/
+        主催：RADIO！READY GO！実行委員会
+        企画：株式会社FAIR NEXT INNOVATION
+        制作：Makee（株式会社grabss）
+        協力：TIGET">
+        <script type="application/ld+json">
+        {
+          "@type": "Event",
+          "startDate": "2026年09月29日(火)T15:15:+0900", // invalid JSON comment
+          "location": { "name": "東京カルチャーカルチャー" }
+        }
+        </script>
+        </head></html>
+        """
+
+        let metadata = URLMetadataService.structuredMetadataForTesting(
+            in: html,
+            sourceURL: URL(string: "https://tiget.net/events/514629")!
+        )
+
+        XCTAssertEqual(metadata.date, date(2026, 9, 29, 15, 15))
+        XCTAssertEqual(metadata.venueName, "東京カルチャーカルチャー")
+        XCTAssertEqual(metadata.officialURL?.absoluteString, "https://rrgo.info/")
+        XCTAssertEqual(metadata.purchaseURL?.absoluteString, "https://tiget.net/events/514629")
+        XCTAssertTrue(metadata.contributors.contains {
+            $0.roleKey == "organizer" && $0.name == "RADIO！READY GO！実行委員会"
+        })
+        XCTAssertTrue(metadata.contributors.contains {
+            $0.roleKey == "planning" && $0.name == "株式会社FAIR NEXT INNOVATION"
+        })
+        XCTAssertTrue(metadata.contributors.contains {
+            $0.roleKey == "production" && $0.name == "Makee（株式会社grabss）"
+        })
+        XCTAssertTrue(metadata.creditsText.contains("出演者："))
+        XCTAssertTrue(metadata.creditsText.contains("イソメン倶楽部 / ALL IN / KAJA"))
+    }
+
+    func testOfficialEventPageKeepsSourceAsOfficialURL() {
+        let html = """
+        <html><head>
+        <script type="application/ld+json">
+        {"@type":"Event","organizer":{"name":"月影劇団"},"performer":{"name":"空野ミオ"}}
+        </script>
+        <meta name="description" content="会場：新国立劇場">
+        </head></html>
+        """
+        let sourceURL = URL(string: "https://example-theater.jp/performances/moon")!
+
+        let metadata = URLMetadataService.structuredMetadataForTesting(
+            in: html,
+            sourceURL: sourceURL
+        )
+
+        XCTAssertEqual(metadata.officialURL, sourceURL)
+        XCTAssertNil(metadata.purchaseURL)
+        XCTAssertEqual(metadata.venueName, "新国立劇場")
+        XCTAssertTrue(metadata.contributors.contains {
+            $0.roleKey == "organizer" && $0.name == "月影劇団"
+        })
+        XCTAssertTrue(metadata.creditsText.contains("主催：月影劇団"))
+        XCTAssertTrue(metadata.creditsText.contains("出演：空野ミオ"))
+    }
+
+    func testCollapsedTicketDescriptionStillSeparatesAdjacentLabels() {
+        let html = """
+        <html><head>
+        <meta property="og:description" content="開催日：2026年9月29日(火) 15:15 会場：東京カルチャーカルチャー イベント公式サイト：https://rrgo.info/=====主催：RADIO！READY GO！実行委員会 企画：株式会社FAIR NEXT INNOVATION 制作：Makee（株式会社grabss） 協力：TIGET">
+        </head></html>
+        """
+
+        let metadata = URLMetadataService.structuredMetadataForTesting(
+            in: html,
+            sourceURL: URL(string: "https://tiget.net/events/514629")!
+        )
+
+        XCTAssertEqual(metadata.date, date(2026, 9, 29, 15, 15))
+        XCTAssertEqual(metadata.venueName, "東京カルチャーカルチャー")
+        XCTAssertEqual(metadata.officialURL?.absoluteString, "https://rrgo.info/")
+        XCTAssertTrue(metadata.contributors.contains {
+            $0.roleKey == "organizer" && $0.name == "RADIO！READY GO！実行委員会"
+        })
+        XCTAssertTrue(metadata.contributors.contains {
+            $0.roleKey == "planning" && $0.name == "株式会社FAIR NEXT INNOVATION"
+        })
+        XCTAssertTrue(metadata.contributors.contains {
+            $0.roleKey == "production" && $0.name == "Makee（株式会社grabss）"
+        })
+    }
+
+    func testEventTicketURLRoundTripsWithoutChangingLegacyData() {
+        let fields = VisitUnitFields(eventTicketURL: "https://tiget.net/events/514629")
+        let decoded = VisitUnitFields(rawValue: fields.encodedRawValue)
+        let legacy = VisitUnitFields(rawValue: #"{"eventCreditsText":"主催：月影劇団"}"#)
+
+        XCTAssertEqual(decoded.eventTicketURL, "https://tiget.net/events/514629")
+        XCTAssertEqual(legacy.eventTicketURL, "")
+        XCTAssertEqual(legacy.eventCreditsText, "主催：月影劇団")
+    }
+
+    private func date(
+        _ year: Int,
+        _ month: Int,
+        _ day: Int,
+        _ hour: Int = 0,
+        _ minute: Int = 0
+    ) -> Date {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .current
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
         return calendar.date(
             from: DateComponents(
                 year: year,
                 month: month,
-                day: day
+                day: day,
+                hour: hour,
+                minute: minute
             )
         )!
     }

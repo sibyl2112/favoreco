@@ -128,6 +128,8 @@ struct VisitUnitFields: Codable {
     var visitSubtitle: String = ""
     var venueAddressSnapshot: String = ""
     var eventCreditsText: String = ""
+    /// 公演公式URLとは分離して保持する、公演共通のチケット案内・販売ページ。
+    var eventTicketURL: String = ""
     var eventPerformanceTypeCustomName: String = ""
     var eventPeriodStartsAt: Date?
     var eventPeriodEndsAt: Date?
@@ -190,6 +192,7 @@ struct VisitUnitFields: Codable {
         visitSubtitle: String = "",
         venueAddressSnapshot: String = "",
         eventCreditsText: String = "",
+        eventTicketURL: String = "",
         eventPerformanceTypeCustomName: String = "",
         eventPeriodStartsAt: Date? = nil,
         eventPeriodEndsAt: Date? = nil,
@@ -240,6 +243,7 @@ struct VisitUnitFields: Codable {
         self.visitSubtitle = visitSubtitle
         self.venueAddressSnapshot = venueAddressSnapshot
         self.eventCreditsText = eventCreditsText
+        self.eventTicketURL = eventTicketURL
         self.eventPerformanceTypeCustomName = eventPerformanceTypeCustomName
         self.eventPeriodStartsAt = eventPeriodStartsAt
         self.eventPeriodEndsAt = eventPeriodEndsAt
@@ -292,6 +296,7 @@ struct VisitUnitFields: Codable {
         case visitSubtitle
         case venueAddressSnapshot
         case eventCreditsText
+        case eventTicketURL
         case eventPerformanceTypeCustomName
         case eventPeriodStartsAt
         case eventPeriodEndsAt
@@ -345,6 +350,7 @@ struct VisitUnitFields: Codable {
         visitSubtitle = try container.decodeIfPresent(String.self, forKey: .visitSubtitle) ?? ""
         venueAddressSnapshot = try container.decodeIfPresent(String.self, forKey: .venueAddressSnapshot) ?? ""
         eventCreditsText = try container.decodeIfPresent(String.self, forKey: .eventCreditsText) ?? ""
+        eventTicketURL = try container.decodeIfPresent(String.self, forKey: .eventTicketURL) ?? ""
         eventPerformanceTypeCustomName = try container.decodeIfPresent(String.self, forKey: .eventPerformanceTypeCustomName) ?? ""
         eventPeriodStartsAt = try container.decodeIfPresent(Date.self, forKey: .eventPeriodStartsAt)
         eventPeriodEndsAt = try container.decodeIfPresent(Date.self, forKey: .eventPeriodEndsAt)
@@ -407,6 +413,7 @@ struct VisitUnitFields: Codable {
                 || !visitSubtitle.isEmpty
                 || !venueAddressSnapshot.isEmpty
                 || !eventCreditsText.isEmpty
+                || !eventTicketURL.isEmpty
                 || !eventPerformanceTypeCustomName.isEmpty
                 || eventPeriodStartsAt != nil
                 || eventPeriodEndsAt != nil

@@ -5,6 +5,8 @@ import UIKit
 struct URLMetadataCandidate: Sendable {
     let title: String
     let resolvedURL: URL
+    let officialURL: URL?
+    let purchaseURL: URL?
     let eventDate: Date?
     let eventEndDate: Date?
     let venueName: String
@@ -13,6 +15,7 @@ struct URLMetadataCandidate: Sendable {
     let structuredType: String
     let structuredDateLabel: String
     let contributors: [URLContributorCandidate]
+    let creditsText: String
 }
 
 struct URLContributorCandidate: Identifiable, Sendable {
@@ -33,6 +36,30 @@ enum URLMetadataService {
         )
     }
 
+    nonisolated static func structuredMetadataForTesting(
+        in html: String,
+        sourceURL: URL
+    ) -> (
+        date: Date?,
+        venueName: String,
+        venueAddress: String,
+        officialURL: URL?,
+        purchaseURL: URL?,
+        contributors: [URLContributorCandidate],
+        creditsText: String
+    ) {
+        let data = pageData(in: html, sourceURL: sourceURL)
+        return (
+            data.date,
+            data.venueName,
+            data.venueAddress,
+            data.officialURL,
+            data.purchaseURL,
+            data.contributors,
+            data.creditsText
+        )
+    }
+
     @MainActor
     static func fetch(from rawValue: String, includesStructuredData: Bool = false) async throws -> URLMetadataCandidate {
         guard let url = normalizedURL(from: rawValue) else {
@@ -48,6 +75,8 @@ enum URLMetadataService {
         return URLMetadataCandidate(
             title: title,
             resolvedURL: resolvedURL,
+            officialURL: structuredData?.officialURL ?? (isTicketingURL(resolvedURL) ? nil : resolvedURL),
+            purchaseURL: structuredData?.purchaseURL,
             eventDate: structuredData?.date,
             eventEndDate: structuredData?.endDate,
             venueName: structuredData?.venueName ?? "",
@@ -55,7 +84,8 @@ enum URLMetadataService {
             imageData: basicMetadata.imageData,
             structuredType: structuredData?.typeName ?? "",
             structuredDateLabel: structuredData.map { dateLabel(for: $0.typeName) } ?? "",
-            contributors: structuredData?.contributors ?? []
+            contributors: structuredData?.contributors ?? [],
+            creditsText: structuredData?.creditsText ?? ""
         )
     }
 
@@ -216,25 +246,303 @@ enum URLMetadataService {
             return nil
         }
 
-        for jsonData in jsonLDScriptData(in: html) {
-            guard let object = try? JSONSerialization.jsonObject(with: jsonData),
-                  let candidate = findSupportedObject(in: object) else { continue }
-            let typeName = supportedType(in: candidate) ?? ""
-            return StructuredPageData(
-                typeName: typeName,
-                date: structuredDate(from: candidate, typeName: typeName),
-                endDate: typeName == "Event"
-                    ? parsedISODate(candidate["endDate"] as? String)
-                    : nil,
-                venueName: typeName == "Event" ? venueName(from: candidate) : "",
-                venueAddress: typeName == "Event" ? venueAddress(from: candidate) : "",
-                contributors: contributors(from: candidate, typeName: typeName)
-            )
-        }
-        return nil
+        return pageData(in: html, sourceURL: httpResponse.url ?? url)
     }
 
-    private static func jsonLDScriptData(in html: String) -> [Data] {
+    nonisolated private static func pageData(in html: String, sourceURL: URL) -> StructuredPageData {
+        let structuredObject = jsonLDScriptData(in: html).lazy.compactMap { data -> [String: Any]? in
+            guard let object = try? JSONSerialization.jsonObject(with: data) else { return nil }
+            return findSupportedObject(in: object)
+        }.first
+        let typeName = structuredObject.flatMap(supportedType(in:)) ?? inferredStructuredType(in: html)
+        let description = pageDescription(in: html, structuredObject: structuredObject)
+        let labeledContributors = contributorsFromLabels(in: description)
+        let structuredContributors = structuredObject.map {
+            contributors(from: $0, typeName: typeName)
+        } ?? []
+        let allContributors = mergedContributors(structuredContributors + labeledContributors)
+
+        let date = structuredObject.flatMap { structuredDate(from: $0, typeName: typeName) }
+            ?? firstJSONLDDate(key: "startDate", in: html)
+            ?? labeledDate(in: description)
+        let endDate = structuredObject.flatMap { parsedISODate($0["endDate"] as? String) }
+            ?? firstJSONLDDate(key: "endDate", in: html)
+
+        let structuredVenueName = structuredObject.map(venueName(from:)) ?? ""
+        let fallbackVenueName = labeledValue(
+            labels: ["会場", "開催場所", "場所", "劇場"],
+            in: description
+        )
+        let resolvedVenueName = firstNonempty(structuredVenueName, fallbackVenueName)
+
+        let structuredVenueAddress = structuredObject.map(venueAddress(from:)) ?? ""
+        let fallbackAddress = labeledValue(
+            labels: ["会場住所", "開催地住所", "住所"],
+            in: description
+        )
+        let resolvedAddress = sanitizedAddress(firstNonempty(structuredVenueAddress, fallbackAddress))
+
+        let explicitOfficialURL = labeledURL(
+            labels: ["イベント公式サイト", "公演公式サイト", "公式サイト", "公式URL", "公式ページ"],
+            in: description,
+            relativeTo: sourceURL
+        )
+        let sourceIsTicketing = isTicketingURL(sourceURL)
+        let officialURL = explicitOfficialURL ?? (sourceIsTicketing ? nil : sourceURL)
+        let purchaseURL = sourceIsTicketing ? sourceURL : nil
+
+        return StructuredPageData(
+            typeName: typeName,
+            date: date,
+            endDate: endDate,
+            venueName: sanitizedValue(resolvedVenueName),
+            venueAddress: resolvedAddress,
+            officialURL: officialURL,
+            purchaseURL: purchaseURL,
+            contributors: allContributors,
+            creditsText: creditsText(
+                description: description,
+                contributors: allContributors
+            )
+        )
+    }
+
+    nonisolated private static func pageDescription(
+        in html: String,
+        structuredObject: [String: Any]?
+    ) -> String {
+        let candidates = [
+            structuredObject?["description"] as? String,
+            malformedJSONLDDescription(in: html),
+            htmlMetadataContent(property: "og:description", in: html),
+            htmlMetadataContent(property: "twitter:description", in: html),
+            htmlMetadataContent(property: "description", in: html),
+        ].compactMap { $0 }
+        let value = candidates.max { lhs, rhs in
+            descriptionScore(lhs) < descriptionScore(rhs)
+        } ?? ""
+        return normalizedMultilineText(value)
+    }
+
+    nonisolated private static func descriptionScore(_ value: String) -> Int {
+        min(value.count, 20_000) + value.filter { $0.isNewline }.count * 200
+    }
+
+    nonisolated private static func malformedJSONLDDescription(in html: String) -> String? {
+        firstRegexCapture(
+            pattern: #"\"description\"\s*:\s*\"([\s\S]*?)\"\s*,\s*(?://|\"[A-Za-z@])"#,
+            in: html
+        )
+    }
+
+    nonisolated private static func normalizedMultilineText(_ value: String) -> String {
+        decodedHTMLEntities(value)
+            .replacingOccurrences(of: #"(?i)<br\s*/?>"#, with: "\n", options: .regularExpression)
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: #"[\t　]+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #" *\n *"#, with: "\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated private static func labeledValue(labels: [String], in text: String) -> String {
+        guard !text.isEmpty else { return "" }
+        let alternatives = labels
+            .map(NSRegularExpression.escapedPattern(for:))
+            .joined(separator: "|")
+        let knownLabels = [
+            "開催日時", "開催日", "公演日", "日時", "会場住所", "開催地住所", "住所",
+            "会場", "開催場所", "場所", "劇場", "出演者", "出演", "キャスト",
+            "イベント公式サイト", "公演公式サイト", "公式サイト", "公式URL", "公式ページ",
+            "公演団体", "上演団体", "劇団", "主催", "主催者", "企画", "制作", "製作",
+            "協力", "運営協力", "料金", "チケット", "販売期間", "当落発表",
+        ]
+        let stopAlternatives = knownLabels
+            .map(NSRegularExpression.escapedPattern(for:))
+            .joined(separator: "|")
+        let pattern = #"(?im)(?:^|[\n\t　 ]|[-=]{5,})\s*(?:\#(alternatives))\s*[：:]\s*(.+?)(?=(?:[\n\t　 ]|[-=]{5,})\s*(?:\#(stopAlternatives))\s*[：:]|[-=]{5,}|【|●|◆|◇|■|$)"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(
+                in: text,
+                range: NSRange(text.startIndex..., in: text)
+              ),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: text) else { return "" }
+        return sanitizedValue(String(text[range]))
+    }
+
+    nonisolated private static func labeledURL(
+        labels: [String],
+        in text: String,
+        relativeTo sourceURL: URL
+    ) -> URL? {
+        let value = labeledValue(labels: labels, in: text)
+        guard !value.isEmpty else { return nil }
+        let pattern = #"https?://[^\s<>\"'）)]+"#
+        guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = expression.firstMatch(
+                in: value,
+                range: NSRange(value.startIndex..., in: value)
+              ),
+              let range = Range(match.range, in: value) else { return nil }
+        let rawURL = String(value[range]).trimmingCharacters(in: CharacterSet(charactersIn: "。、,;；"))
+        return URL(string: rawURL, relativeTo: sourceURL)?.absoluteURL
+    }
+
+    nonisolated private static func contributorsFromLabels(in text: String) -> [URLContributorCandidate] {
+        let definitions: [(labels: [String], roleKey: String, roleName: String)] = [
+            (["公演団体", "上演団体", "劇団"], "performing_organization", "公演団体"),
+            (["主催", "主催者"], "organizer", "主催"),
+            (["企画"], "planning", "企画"),
+            (["制作", "製作"], "production", "制作"),
+            (["協力", "運営協力"], "other", "協力"),
+        ]
+        return definitions.compactMap { definition in
+            let value = labeledValue(labels: definition.labels, in: text)
+            guard !value.isEmpty else { return nil }
+            return URLContributorCandidate(
+                name: value,
+                roleKey: definition.roleKey,
+                roleName: definition.roleName
+            )
+        }
+    }
+
+    nonisolated private static func mergedContributors(
+        _ values: [URLContributorCandidate]
+    ) -> [URLContributorCandidate] {
+        var seen = Set<String>()
+        return values.filter { contributor in
+            let key = "\(contributor.roleKey):\(contributor.name.folding(options: [.caseInsensitive, .widthInsensitive], locale: .current))"
+            return seen.insert(key).inserted
+        }
+    }
+
+    nonisolated private static func creditsText(
+        description: String,
+        contributors: [URLContributorCandidate]
+    ) -> String {
+        let performers = labeledBlock(
+            labels: ["出演者", "出演", "キャスト"],
+            stopLabels: ["料金", "チケット", "販売期間", "入場順", "注意事項", "イベント公式サイト", "主催", "企画", "制作", "協力"],
+            in: description
+        )
+        var lines = contributors
+            .filter { $0.roleKey != "cast" || performers.isEmpty }
+            .map { "\($0.roleName)：\($0.name)" }
+        if !performers.isEmpty {
+            lines.append("出演者：\n\(performers)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    nonisolated private static func labeledBlock(
+        labels: [String],
+        stopLabels: [String],
+        in text: String
+    ) -> String {
+        let lines = text.components(separatedBy: .newlines)
+        guard let start = lines.firstIndex(where: { line in
+            labels.contains { label in
+                line.range(
+                    of: #"^\s*\#(NSRegularExpression.escapedPattern(for: label))\s*[：:]"#,
+                    options: [.regularExpression, .caseInsensitive]
+                ) != nil
+            }
+        }) else { return "" }
+
+        let labelPattern = labels
+            .map(NSRegularExpression.escapedPattern(for:))
+            .joined(separator: "|")
+        var result: [String] = []
+        let first = lines[start].replacingOccurrences(
+            of: #"^\s*(?:\#(labelPattern))\s*[：:]\s*"#,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        if !first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            result.append(first)
+        }
+
+        for line in lines.dropFirst(start + 1).prefix(40) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.range(of: #"^[-=ー―]{5,}"#, options: .regularExpression) != nil { break }
+            if stopLabels.contains(where: { label in
+                trimmed.range(
+                    of: #"^[●◆◇■]?\s*\#(NSRegularExpression.escapedPattern(for: label))\s*[：:]"#,
+                    options: [.regularExpression, .caseInsensitive]
+                ) != nil
+            }) { break }
+            if !trimmed.isEmpty { result.append(trimmed) }
+        }
+        return result.joined(separator: "\n").prefix(2_000).description
+    }
+
+    nonisolated private static func labeledDate(in text: String) -> Date? {
+        let value = labeledValue(labels: ["開催日時", "開催日", "公演日", "日時"], in: text)
+        return parsedISODate(value)
+    }
+
+    nonisolated private static func firstJSONLDDate(key: String, in html: String) -> Date? {
+        let escapedKey = NSRegularExpression.escapedPattern(for: key)
+        let pattern = #"\"\#(escapedKey)\"\s*:\s*\"([^\"]+)\""#
+        guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = expression.firstMatch(
+                in: html,
+                range: NSRange(html.startIndex..., in: html)
+              ),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: html) else { return nil }
+        return parsedISODate(String(html[range]))
+    }
+
+    nonisolated private static func inferredStructuredType(in html: String) -> String {
+        guard let type = firstRegexCapture(
+            pattern: #"\"@type\"\s*:\s*\"([^\"]+)\""#,
+            in: html
+        ) else { return "" }
+        return type.lowercased().hasSuffix("event") ? "Event" : type
+    }
+
+    nonisolated private static func firstRegexCapture(pattern: String, in text: String) -> String? {
+        guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = expression.firstMatch(
+                in: text,
+                range: NSRange(text.startIndex..., in: text)
+              ),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: text) else { return nil }
+        return String(text[range])
+    }
+
+    nonisolated private static func firstNonempty(_ values: String...) -> String {
+        values.first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? ""
+    }
+
+    nonisolated private static func sanitizedValue(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated private static func sanitizedAddress(_ value: String) -> String {
+        value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty && $0.caseInsensitiveCompare("NaN") != .orderedSame }
+            .joined(separator: " ")
+    }
+
+    nonisolated private static func isTicketingURL(_ url: URL) -> Bool {
+        let host = (url.host ?? "").lowercased()
+        let ticketHosts = [
+            "tiget.net", "eplus.jp", "pia.jp", "ticket.pia.jp", "l-tike.com",
+            "livepocket.jp", "teket.jp", "zaiko.io", "ticketbook.jp",
+            "passmarket.yahoo.co.jp", "rakuten-ticket.com",
+        ]
+        return ticketHosts.contains { host == $0 || host.hasSuffix(".\($0)") }
+    }
+
+    nonisolated private static func jsonLDScriptData(in html: String) -> [Data] {
         let pattern = #"<script[^>]*type\s*=\s*[\"']application/ld\+json[\"'][^>]*>([\s\S]*?)</script>"#
         guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
         let range = NSRange(html.startIndex..., in: html)
@@ -247,7 +555,7 @@ enum URLMetadataService {
         }
     }
 
-    private static func findSupportedObject(in object: Any) -> [String: Any]? {
+    nonisolated private static func findSupportedObject(in object: Any) -> [String: Any]? {
         if let dictionary = object as? [String: Any] {
             if supportedType(in: dictionary) != nil {
                 return dictionary
@@ -263,7 +571,7 @@ enum URLMetadataService {
         return nil
     }
 
-    private static func supportedType(in dictionary: [String: Any]) -> String? {
+    nonisolated private static func supportedType(in dictionary: [String: Any]) -> String? {
         let rawTypes: [String]
         if let type = dictionary["@type"] as? String {
             rawTypes = [type]
@@ -278,7 +586,7 @@ enum URLMetadataService {
         }
     }
 
-    private static func structuredDate(from object: [String: Any], typeName: String) -> Date? {
+    nonisolated private static func structuredDate(from object: [String: Any], typeName: String) -> Date? {
         let keys = typeName == "Event"
             ? ["startDate"]
             : ["datePublished", "dateCreated", "releaseDate"]
@@ -293,7 +601,7 @@ enum URLMetadataService {
         }
     }
 
-    private static func contributors(from object: [String: Any], typeName: String) -> [URLContributorCandidate] {
+    nonisolated private static func contributors(from object: [String: Any], typeName: String) -> [URLContributorCandidate] {
         let fields: [(key: String, roleKey: String, roleName: String)]
         switch typeName {
         case "Book":
@@ -314,7 +622,7 @@ enum URLMetadataService {
         }
     }
 
-    private static func names(from value: Any?) -> [String] {
+    nonisolated private static func names(from value: Any?) -> [String] {
         if let name = value as? String {
             return normalizedNames([name])
         }
@@ -327,11 +635,11 @@ enum URLMetadataService {
         return []
     }
 
-    private static func normalizedNames(_ names: [String]) -> [String] {
+    nonisolated private static func normalizedNames(_ names: [String]) -> [String] {
         names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
 
-    private static func parsedISODate(_ value: String?) -> Date? {
+    nonisolated private static func parsedISODate(_ value: String?) -> Date? {
         guard let value else { return nil }
         let formatter = ISO8601DateFormatter()
         if let date = formatter.date(from: value) { return date }
@@ -341,10 +649,38 @@ enum URLMetadataService {
         dayFormatter.calendar = Calendar(identifier: .gregorian)
         dayFormatter.locale = Locale(identifier: "en_US_POSIX")
         dayFormatter.dateFormat = "yyyy-MM-dd"
-        return dayFormatter.date(from: value)
+        if let date = dayFormatter.date(from: value) { return date }
+
+        let pattern = #"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日(?:\([^)]*\))?(?:[T\s]*(\d{1,2}):(\d{2}))?"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(
+                in: value,
+                range: NSRange(value.startIndex..., in: value)
+              ),
+              match.numberOfRanges >= 4 else { return nil }
+        func integer(at index: Int) -> Int? {
+            guard index < match.numberOfRanges,
+                  match.range(at: index).location != NSNotFound,
+                  let range = Range(match.range(at: index), in: value) else { return nil }
+            return Int(value[range])
+        }
+        guard let year = integer(at: 1),
+              let month = integer(at: 2),
+              let day = integer(at: 3) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo") ?? .current
+        return calendar.date(
+            from: DateComponents(
+                year: year,
+                month: month,
+                day: day,
+                hour: integer(at: 4) ?? 0,
+                minute: integer(at: 5) ?? 0
+            )
+        )
     }
 
-    private static func venueName(from event: [String: Any]) -> String {
+    nonisolated private static func venueName(from event: [String: Any]) -> String {
         if let location = event["location"] as? [String: Any] {
             return (location["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         }
@@ -354,7 +690,7 @@ enum URLMetadataService {
         return ""
     }
 
-    private static func venueAddress(from event: [String: Any]) -> String {
+    nonisolated private static func venueAddress(from event: [String: Any]) -> String {
         let location: [String: Any]?
         if let value = event["location"] as? [String: Any] {
             location = value
@@ -380,7 +716,10 @@ private struct StructuredPageData {
     let endDate: Date?
     let venueName: String
     let venueAddress: String
+    let officialURL: URL?
+    let purchaseURL: URL?
     let contributors: [URLContributorCandidate]
+    let creditsText: String
 }
 
 enum URLMetadataError: LocalizedError {

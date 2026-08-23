@@ -18,6 +18,7 @@ struct TheaterPerformanceRegistrationView: View {
     @State private var performanceTypeCustomName = ""
     @State private var importURL = ""
     @State private var officialURL = ""
+    @State private var ticketURL = ""
     @State private var xURL = ""
     @State private var instagramURL = ""
     @State private var threadsURL = ""
@@ -227,6 +228,14 @@ struct TheaterPerformanceRegistrationView: View {
                             title: "公式URL",
                             prompt: "https://example.com（任意）",
                             text: $officialURL,
+                            labelStyle: .horizontal
+                        )
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        ExplicitFormTextField(
+                            title: "チケットURL",
+                            prompt: "https://example.com（任意）",
+                            text: $ticketURL,
                             labelStyle: .horizontal
                         )
                         .textInputAutocapitalization(.never)
@@ -693,6 +702,10 @@ struct TheaterPerformanceRegistrationView: View {
         if !trimmedCredits.isEmpty {
             fields.eventCreditsText = trimmedCredits
         }
+        let trimmedTicketURL = ticketURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTicketURL.isEmpty {
+            fields.eventTicketURL = trimmedTicketURL
+        }
         let platformLinks = [xURL, instagramURL, threadsURL]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -955,10 +968,26 @@ struct TheaterPerformanceRegistrationView: View {
                 from: importURL,
                 includesStructuredData: true
             )
-            title = candidate.title
-            officialURL = candidate.resolvedURL.absoluteString
+            if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                title = candidate.title
+            }
+            if officialURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let candidateOfficialURL = candidate.officialURL {
+                officialURL = candidateOfficialURL.absoluteString
+            }
+            if ticketURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let purchaseURL = candidate.purchaseURL {
+                ticketURL = purchaseURL.absoluteString
+            }
+            if creditsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !candidate.creditsText.isEmpty {
+                creditsText = candidate.creditsText
+            }
             importURL = candidate.resolvedURL.absoluteString
-            var appliedFields = ["公演名", "公式URL"]
+            var appliedFields = ["公演名"]
+            if !officialURL.isEmpty { appliedFields.append("公式URL") }
+            if !ticketURL.isEmpty { appliedFields.append("チケットURL") }
+            if !creditsText.isEmpty { appliedFields.append("公演団体・クレジット") }
             if eyecatchData == nil, let sourceImageData = candidate.imageData {
                 let compressed = await Task.detached(priority: .userInitiated) {
                     QuickCaptureImageService.compressedJPEG(from: sourceImageData)

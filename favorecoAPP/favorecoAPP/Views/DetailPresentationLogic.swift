@@ -181,7 +181,11 @@ enum EventDetailPresentation {
     }
 
     static func theaterTicketURL(event: ExperienceEvent) -> URL? {
-        let ticketURLText = (event.plans ?? [])
+        let eventTicketURL = VisitUnitFields(rawValue: event.unitFieldsRaw)
+            .eventTicketURL
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let ticketURLText = (!eventTicketURL.isEmpty ? eventTicketURL : nil)
+            ?? (event.plans ?? [])
             .filter { !$0.isArchived }
             .flatMap { $0.ticketAttempts ?? [] }
             .map(\.purchaseURL)

@@ -1460,6 +1460,9 @@ struct EditEventView: View {
             lifecycleTextField("公式サイト", prompt: "https://", text: $draft.officialURL)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
+            lifecycleTextField("チケットサイト", prompt: "https://", text: $draft.ticketURL)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
             TheaterSocialLinksEditor(
                 xURL: $draft.xURL,
                 instagramURL: $draft.instagramURL,
@@ -2314,6 +2317,7 @@ struct EditEventView: View {
         unitFields.socialLinks = draft.normalizedSocialLinks
         unitFields.eventSubtitle = draft.trimmedEventSubtitle
         unitFields.eventCreditsText = draft.trimmedCreditsText
+        unitFields.eventTicketURL = draft.trimmedTicketURL
         unitFields.eventPerformanceTypeCustomName = isLiveEvent
             ? LivePerformanceType.customNameForStorage(key: draft.subTypeKey, input: draft.performanceTypeCustomName)
             : TheaterPerformanceType.customNameForStorage(key: draft.subTypeKey, input: draft.performanceTypeCustomName)
@@ -2421,6 +2425,7 @@ private struct EventDraft {
     var screenWorkSeasonNumber: Int
     var performanceTypeCustomName: String
     var officialURL: String
+    var ticketURL: String
     var xURL: String
     var instagramURL: String
     var threadsURL: String
@@ -2444,6 +2449,7 @@ private struct EventDraft {
         subTypeKey = event.subTypeKey
         officialURL = event.officialURL
         let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        ticketURL = fields.eventTicketURL
         bookSeriesName = fields.bookSeriesName
         bookVolumeNumber = fields.bookVolumeNumber
         bookAuthorName = fields.bookAuthorName
@@ -2541,6 +2547,10 @@ private struct EventDraft {
 
     var trimmedOfficialURL: String {
         officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedTicketURL: String {
+        ticketURL.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var trimmedEventSubtitle: String {

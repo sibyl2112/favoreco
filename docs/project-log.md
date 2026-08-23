@@ -32598,3 +32598,38 @@ Homeの見出しに4件とあるのにカードは3件しか表示されず、�
 - Dynamic Islandあり／なしの端末で固定操作位置とアクションパネルの重なりを確認する。
 - iPhone 16でURL登録あり／なしの5項目、最大Dynamic Type、公演地Mapの最下部までのスクロールを目視する。
 - CoreSimulatorService復旧後にAsset Catalogを含む通常のiOS Simulator向けDebugビルドを再実行する。
+
+## 2026-08-24: URL取込をサイト差に耐える多層解析へ拡張
+
+### 原因
+- URL取込は正常なJSON-LDの`Event`を前提としており、TIGETの対象ページにあるコメント、非ISO形式日時、生改行を含むJSON-LDを`JSONSerialization`が解析できなかった。
+- JSON-LD失敗時はOGPのタイトルと画像しか使わず、OGP説明内に残る会場、主催、企画、制作、出演者等を入力候補へ反映していなかった。
+- 販売ページ自体のURLを公演公式URLへ代入しており、`公演公式URL`と`チケットサイト`の意味が混在していた。
+
+### 変更概要・意図
+- 有効なJSON-LD、壊れたJSON-LDからの限定復旧、OGP／meta description、日本語ラベルを重ねて解析する方式へ変更した。
+- 改行ありと1行圧縮の両方で、開催日時、会場、住所、イベント公式サイト、公演団体、主催、企画、制作、協力、出演者を既知ラベル境界で分離する。
+- チケット販売ドメインを識別し、販売元URLを対象単位の`チケットサイト`へ保存する。公演公式URL、対象チケットサイト、個別TicketAttempt購入URLは別々に扱う。
+- 自動取込は空欄だけを埋め、主催は専用欄、団体・出演者は保存前に修正できる公演クレジット一括欄へ入れる。
+- `VisitUnitFields.eventTicketURL`を追加し、旧JSONでは空文字として読み戻す後方互換を維持した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Services/URLMetadataService.swift`: 多層解析、ラベル抽出、販売サイト判定、公式／購入URL分離を追加。
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift` / `Models/TicketPlanDraft.swift`: 対象単位のチケットURLを後方互換保存するDraftとJSON項目を追加。
+- `favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift` / `TheaterPerformanceRegistrationView.swift`: 取込候補を空欄へ反映し、公式URLとチケットURLを別入力にした。
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift` / `DetailPresentationLogic.swift`: 対象編集と詳細表示で保存済みチケットURLを使用する。
+- `favorecoAPP/favorecoAPPTests/TheaterRegistrationImportTests.swift`: 壊れたJSON-LD、改行あり説明、1行圧縮説明、公式ページ、旧データ互換を検証。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様、画面設計、確認状態を更新。
+
+### 影響する画面・機能
+- 観劇の気になる／予定／申込／取得済み登録、観劇公演登録、公開公演編集、公開公演詳細のチケットリンク。
+- 既存のタイトル、アイキャッチ、会場、日時取込と個別チケット申込の保存は維持する。
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析に成功した。
+- `TheaterRegistrationImportTests`に対するiPhone 16 Pro Simulatorの対象テストに成功した。
+- Asset Catalogを含むiOS Simulator向けDebug全体ビルドに成功した。既存のMainActor分離警告だけで、今回の変更由来の警告・エラーはない。
+
+### 既知のリスク・残課題
+- 本文の表記が既知ラベルを使わないサイトはタイトル・画像中心の取込へフォールバックする。誤推定で既入力値を上書きしない。
+- 実機でTIGET対象URLを取り込み、各欄の表示、保存、再表示、公式サイト／チケットサイトの遷移先を確認する。

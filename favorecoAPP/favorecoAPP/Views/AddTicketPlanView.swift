@@ -830,6 +830,9 @@ struct AddTicketPlanView: View {
                 theaterFlatTextField("公式サイト", prompt: "https://", text: $draft.officialURL)
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
+                theaterFlatTextField("チケットサイト", prompt: "https://", text: $draft.eventTicketURL)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
                 theaterFlatTextField("公式SNS", prompt: "アカウント名・URLを1行1件", text: $draft.socialLinksText)
             }
         }
@@ -1317,6 +1320,17 @@ struct AddTicketPlanView: View {
                     title: "公式サイト（任意）",
                     prompt: "https://",
                     text: $draft.officialURL,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 2,
+                    labelStyle: .stacked
+                )
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                ExplicitFormTextField(
+                    title: "チケットサイト（任意）",
+                    prompt: "https://",
+                    text: $draft.eventTicketURL,
                     axis: .vertical,
                     minimumLines: 1,
                     maximumLines: 2,
@@ -2909,9 +2923,33 @@ struct AddTicketPlanView: View {
                 draft.title = candidate.title
                 appliedFields.append("公演名")
             }
-            draft.officialURL = candidate.resolvedURL.absoluteString
+            if draft.trimmedOfficialURL.isEmpty, let officialURL = candidate.officialURL {
+                draft.officialURL = officialURL.absoluteString
+                appliedFields.append("公式サイト")
+            }
+            if draft.trimmedEventTicketURL.isEmpty, let purchaseURL = candidate.purchaseURL {
+                draft.eventTicketURL = purchaseURL.absoluteString
+                appliedFields.append("チケットサイト")
+            }
+            if draft.trimmedPurchaseURL.isEmpty,
+               draft.createsTicketAttempt,
+               let purchaseURL = candidate.purchaseURL {
+                draft.purchaseURL = purchaseURL.absoluteString
+                appliedFields.append("申込・購入URL")
+            }
             performanceImportURL = candidate.resolvedURL.absoluteString
-            appliedFields.append("公式URL")
+
+            if draft.trimmedOrganizerName.isEmpty,
+               let organizer = candidate.contributors.first(where: {
+                   ["organizer", "performing_organization"].contains($0.roleKey)
+               }) {
+                draft.organizerName = organizer.name
+                appliedFields.append("公演団体")
+            }
+            if draft.trimmedEventCreditsText.isEmpty, !candidate.creditsText.isEmpty {
+                draft.eventCreditsText = candidate.creditsText
+                appliedFields.append("キャスト・スタッフ")
+            }
 
             if eventEyecatchData == nil, let imageData = candidate.imageData {
                 eventEyecatchData = await Task.detached(priority: .userInitiated) {
@@ -5187,6 +5225,7 @@ struct AddTicketPlanView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         fields.socialLinks = draft.normalizedSocialLinks
         fields.eventCreditsText = draft.trimmedEventCreditsText
+        fields.eventTicketURL = draft.trimmedEventTicketURL
         fields.heroBackgroundPresetKey = eventHeroBackgroundPresetKey
         fields.heroBackgroundPath = eventHeroBackgroundPath
         event.unitFieldsRaw = fields.encodedRawValue

@@ -16,6 +16,7 @@ struct TicketPlanDraft {
     var organizerName = ""
     var socialLinksText = ""
     var eventCreditsText = ""
+    var eventTicketURL = ""
     var attendanceMethodKey = "onsite"
     var startsAt = Date().roundedToNearestTenMinutes()
     var endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: Date().roundedToNearestTenMinutes()) ?? Date()
@@ -106,6 +107,7 @@ struct TicketPlanDraft {
         performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
         socialLinksText = eventFields.socialLinks.joined(separator: "\n")
         eventCreditsText = eventFields.eventCreditsText
+        eventTicketURL = eventFields.eventTicketURL
         officialURL = event.officialURL
         memo = event.memo
         let registeredVenues = VisitUnitFields(rawValue: event.unitFieldsRaw)
@@ -157,6 +159,7 @@ struct TicketPlanDraft {
         performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
         socialLinksText = eventFields.socialLinks.joined(separator: "\n")
         eventCreditsText = eventFields.eventCreditsText
+        eventTicketURL = eventFields.eventTicketURL
         subtitle = plan.subtitle
         hasConfirmedSchedule = plan.hasConfirmedSchedule
         startsAt = plan.startsAt
@@ -228,6 +231,9 @@ struct TicketPlanDraft {
     }
     var trimmedEventCreditsText: String {
         eventCreditsText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    var trimmedEventTicketURL: String {
+        eventTicketURL.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     var trimmedVenueName: String { venueName.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedOfficialURL: String { officialURL.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -485,6 +491,7 @@ struct TicketPlanDraft {
         performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
         socialLinksText = eventFields.socialLinks.joined(separator: "\n")
         eventCreditsText = eventFields.eventCreditsText
+        eventTicketURL = eventFields.eventTicketURL
         officialURL = event.officialURL
         venueName = ""
         venueAddress = ""
@@ -513,6 +520,7 @@ struct TicketPlanDraft {
         performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
         socialLinksText = eventFields.socialLinks.joined(separator: "\n")
         eventCreditsText = eventFields.eventCreditsText
+        eventTicketURL = eventFields.eventTicketURL
         subtitle = plan.subtitle
         startsAt = plan.startsAt
         endsAt = plan.endsAt
@@ -569,6 +577,7 @@ struct TicketPlanDraft {
         organizerName = ""
         socialLinksText = ""
         eventCreditsText = ""
+        eventTicketURL = ""
         attendanceMethodKey = "onsite"
         startsAt = now
         endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: now) ?? now
