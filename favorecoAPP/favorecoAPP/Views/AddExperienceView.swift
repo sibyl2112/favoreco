@@ -560,15 +560,17 @@ struct AddExperienceView: View {
                     maximumLines: 3,
                     labelStyle: .stacked
                 )
-                ExplicitFormTextField(
-                    title: "同行者のSNS（任意）",
-                    prompt: "アカウント名・URLを1行1件",
-                    text: $draft.companionSocialLinksText,
-                    axis: .vertical,
-                    minimumLines: 1,
-                    maximumLines: 3,
-                    labelStyle: .stacked
-                )
+                if category.templateKey != "theater" {
+                    ExplicitFormTextField(
+                        title: "同行者のSNS（任意）",
+                        prompt: "アカウント名・URLを1行1件",
+                        text: $draft.companionSocialLinksText,
+                        axis: .vertical,
+                        minimumLines: 1,
+                        maximumLines: 3,
+                        labelStyle: .stacked
+                    )
+                }
             }
         case "goshuinBook":
             ExperienceGoshuinBookUnitEditor(
@@ -1770,15 +1772,17 @@ struct EditExperienceView: View {
                     maximumLines: 3,
                     labelStyle: .stacked
                 )
-                ExplicitFormTextField(
-                    title: "同行者のSNS（任意）",
-                    prompt: "アカウント名・URLを1行1件",
-                    text: $draft.companionSocialLinksText,
-                    axis: .vertical,
-                    minimumLines: 1,
-                    maximumLines: 3,
-                    labelStyle: .stacked
-                )
+                if !isTheaterVisit {
+                    ExplicitFormTextField(
+                        title: "同行者のSNS（任意）",
+                        prompt: "アカウント名・URLを1行1件",
+                        text: $draft.companionSocialLinksText,
+                        axis: .vertical,
+                        minimumLines: 1,
+                        maximumLines: 3,
+                        labelStyle: .stacked
+                    )
+                }
             }
         case "goshuinBook":
             ExperienceGoshuinBookUnitEditor(
@@ -1806,7 +1810,8 @@ struct EditExperienceView: View {
             ExperienceMoneyUnitEditor(
                 amountText: $draft.amountText,
                 expenseEntries: $draft.expenseEntries,
-                usesExplicitTheaterLayout: isTheaterVisit
+                usesExplicitTheaterLayout: isTheaterVisit,
+                preparationAmount: ExperienceExpenseCalculator.travelAmount(for: preparationPlan)
             )
         case "tasks":
             if let preparationPlan {
@@ -4664,7 +4669,7 @@ private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnit
         RecordUnitDefinition(
             id: "companions",
             name: "同行者",
-            description: "一緒に観た人・SNS",
+            description: "一緒に観た人の名前",
             isRequired: false
         )
     )
@@ -4834,7 +4839,7 @@ private func theaterRecordUnitDefinition(
         return RecordUnitDefinition(
             id: definition.id,
             name: "同行者",
-            description: "一緒に観た人・SNS",
+            description: "一緒に観た人の名前",
             isRequired: false
         )
     case "memo":

@@ -368,6 +368,11 @@ struct ExperienceDetailView: View {
                     experienceHistorySection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                     detailStoryDivider(label: "その他の情報", accentColor: accentColor)
                     nextActionsSection(snapshot: snapshot, plan: activePlan, accentColor: accentColor)
+                    ExperienceExpenseSummaryCard(
+                        summary: ExperienceExpenseSummary.make(visit: visit, plan: activePlan),
+                        tint: accentColor,
+                        title: "合計金額"
+                    )
                     supplementalOfficialInformationSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                     theaterCastAndFocusSection(snapshot: snapshot, accentColor: accentColor)
                     ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
@@ -2562,6 +2567,7 @@ struct ExperienceDetailView: View {
         accentColor: Color
     ) -> some View {
         let outstanding = outstandingActionCount(in: plan)
+        let tasks = plan?.preparationFields.orderedTasks ?? []
 
         return VStack(alignment: .leading, spacing: 12) {
             TheaterDetailDisclosureHeader(
@@ -2572,11 +2578,29 @@ struct ExperienceDetailView: View {
             )
 
             if isNextActionsExpanded {
+                if tasks.isEmpty {
+                    Text("登録済みのToDoはありません。")
+                        .font(FavorecoTypography.body)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                        if index > 0 {
+                            Divider()
+                                .overlay(Color.white.opacity(0.12))
+                        }
+                        preparationActionRow(task, accentColor: accentColor)
+                    }
+                }
+
                 Button {
                     guard let plan = ensureTicketPlan(snapshot: snapshot) else { return }
                     navigatingPlan = plan
                 } label: {
-                    FavorecoIconLabel("遠征ToDo", systemImage: "suitcase.rolling", iconSize: 16)
+                    FavorecoIconLabel(
+                        tasks.isEmpty ? "ToDoを追加" : "ToDoを編集",
+                        systemImage: "suitcase.rolling",
+                        iconSize: 16
+                    )
                         .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -2586,12 +2610,64 @@ struct ExperienceDetailView: View {
                 .buttonStyle(.bordered)
                 .tint(accentColor)
 
-                Text("チケット取得のスケジュール設定と、旅程のコスト管理ができます。")
+                Text("未完了は上、完了した項目は履歴として下に表示します。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .theaterDetailSectionCard(tint: accentColor)
+    }
+
+    private func preparationActionRow(
+        _ task: PlanPreparationTask,
+        accentColor: Color
+    ) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            FavorecoIcon(
+                systemName: task.isCompleted ? "checkmark.circle.fill" : "circle",
+                size: 19
+            )
+            .foregroundStyle(task.isCompleted ? Color.green : accentColor)
+            .frame(width: 24, height: 24)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(task.trimmedTitle.isEmpty ? "準備項目" : task.trimmedTitle)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(task.isCompleted ? Color.secondary : Color.primary)
+                    .strikethrough(task.isCompleted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 8) {
+                    FavorecoIconLabel(task.kind.title, systemImage: task.kind.systemImage, iconSize: 12)
+                    if let dueAt = task.dueAt {
+                        FavorecoIconLabel(
+                            FavorecoDateText.compactDateTime(dueAt),
+                            systemImage: "clock",
+                            iconSize: 12
+                        )
+                    }
+                }
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+
+                if task.amount > 0 {
+                    Text(formattedPhotoAmount(task.amount))
+                        .font(FavorecoTypography.captionStrong)
+                        .foregroundStyle(task.isCompleted ? Color.secondary : accentColor)
+                }
+            }
+
+            Text(task.isCompleted ? "完了" : "未完了")
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(task.isCompleted ? Color.green : accentColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    (task.isCompleted ? Color.green : accentColor).opacity(0.12),
+                    in: Capsule()
+                )
+        }
+        .padding(.vertical, 2)
     }
 
     private func outstandingActionCount(in plan: Plan?) -> Int {

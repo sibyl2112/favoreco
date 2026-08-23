@@ -54,4 +54,52 @@ final class PlanPreparationKindTests: XCTestCase {
 
         XCTAssertEqual(restored.tagNames, [])
     }
+
+    func testExpenseSummaryAddsRecordEntriesAndTravelTasksWithoutDuplicatingVisitAmount() {
+        let tasks = [
+            PlanPreparationTask(
+                title: "宿泊を予約",
+                kindKey: PlanPreparationKind.hotel.rawValue,
+                amount: Decimal(12_000),
+                isCompleted: true
+            ),
+            PlanPreparationTask(
+                title: "レンタカーを予約",
+                kindKey: PlanPreparationKind.rentalCar.rawValue,
+                amount: Decimal(8_000),
+                isCompleted: true
+            ),
+        ]
+        let plan = Plan(unitFieldsRaw: PlanPreparationFields(tasks: tasks).encodedRawValue)
+        let visitFields = VisitUnitFields(
+            expenseEntries: [VisitExpenseEntry(title: "その他", amount: Decimal(12_000))]
+        )
+        let visit = Visit(amount: Decimal(12_000), unitFieldsRaw: visitFields.encodedRawValue)
+
+        let summary = ExperienceExpenseSummary.make(visit: visit, plan: plan)
+
+        XCTAssertEqual(summary.travelAmount, Decimal(20_000))
+        XCTAssertEqual(summary.recordEntryAmount, Decimal(12_000))
+        XCTAssertEqual(summary.total, Decimal(32_000))
+        XCTAssertFalse(summary.usesLegacyFallback)
+    }
+
+    func testPreparationTasksOrderIncompleteBeforeCompletedHistory() {
+        let completed = PlanPreparationTask(
+            title: "宿泊を予約",
+            kindKey: PlanPreparationKind.hotel.rawValue,
+            isCompleted: true,
+            sortOrder: 0
+        )
+        let incomplete = PlanPreparationTask(
+            title: "新幹線を予約",
+            kindKey: PlanPreparationKind.shinkansen.rawValue,
+            isCompleted: false,
+            sortOrder: 1
+        )
+
+        let fields = PlanPreparationFields(tasks: [completed, incomplete])
+
+        XCTAssertEqual(fields.orderedTasks.map(\.title), ["新幹線を予約", "宿泊を予約"])
+    }
 }

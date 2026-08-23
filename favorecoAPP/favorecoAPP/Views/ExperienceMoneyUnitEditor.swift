@@ -9,6 +9,7 @@ struct ExperienceMoneyUnitEditor: View {
     @Binding var amountText: String
     @Binding var expenseEntries: [VisitExpenseEntry]
     var usesExplicitTheaterLayout = false
+    var preparationAmount: Decimal = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -39,6 +40,28 @@ struct ExperienceMoneyUnitEditor: View {
                 }
             }
 
+            if preparationAmount > 0 {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    FavorecoIconLabel(
+                        "ToDo・遠征費",
+                        systemImage: "suitcase.rolling",
+                        iconSize: 15
+                    )
+                    .font(FavorecoTypography.bodyStrong)
+
+                    Spacer()
+
+                    Text(currencyText(preparationAmount))
+                        .font(FavorecoTypography.bodyStrong)
+                }
+
+                Text("ToDoに入力した金額です。ここへ複写せず、合計にだけ反映します。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+
+                Divider()
+            }
+
             Button {
                 expenseEntries.append(VisitExpenseEntry())
             } label: {
@@ -54,11 +77,11 @@ struct ExperienceMoneyUnitEditor: View {
                 Text("合計")
                     .font(FavorecoTypography.bodyStrong)
                 Spacer()
-                Text(currencyText(totalAmount))
+                Text(currencyText(displayedTotalAmount))
                     .font(FavorecoTypography.heroLead)
             }
 
-            Text("チケット代、購入額、交通費などを項目ごとに追加し、合計をこの記録の金額として保存します。")
+            Text("チケット代、購入額などの明細と、ToDoに登録した遠征費を合わせて表示します。")
                 .font(FavorecoTypography.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -73,6 +96,10 @@ struct ExperienceMoneyUnitEditor: View {
 
     private var totalAmount: Decimal {
         expenseEntries.reduce(Decimal(0)) { $0 + $1.normalizedAmount }
+    }
+
+    private var displayedTotalAmount: Decimal {
+        totalAmount + max(preparationAmount, Decimal(0))
     }
 
     private func amountBinding(for entry: Binding<VisitExpenseEntry>) -> Binding<String> {

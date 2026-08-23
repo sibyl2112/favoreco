@@ -42,6 +42,7 @@ struct TheaterPublicLink: Identifiable {
 private struct EventHeroBackgroundPicker: View {
     let categoryKey: String
     @Binding var selection: String
+    var eyecatchData: Data? = nil
     var title = "ページ背景"
 
     private var presets: [HeroBackgroundPreset] {
@@ -49,6 +50,9 @@ private struct EventHeroBackgroundPicker: View {
     }
 
     private var resolvedSelection: String {
+        if selection == HeroBackgroundPreset.eventEyecatchKey {
+            return selection
+        }
         HeroBackgroundPreset.resolved(categoryKey: categoryKey, storedKey: selection)?.key ?? ""
     }
 
@@ -60,6 +64,9 @@ private struct EventHeroBackgroundPicker: View {
                 HStack(spacing: 10) {
                     ForEach(presets) { preset in
                         presetButton(preset)
+                    }
+                    if let eyecatchData, let image = UIImage(data: eyecatchData) {
+                        eyecatchButton(image)
                     }
                 }
             }
@@ -107,6 +114,52 @@ private struct EventHeroBackgroundPicker: View {
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 Text(preset.title)
+                    .font(FavorecoTypography.caption)
+                    .fontWeight(isSelected ? .bold : .regular)
+                    .foregroundStyle(isSelected ? TheaterCategoryStyle.gold : Color.primary)
+                    .lineLimit(2)
+                    .frame(width: 82, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func eyecatchButton(_ image: UIImage) -> some View {
+        let isSelected = selection == HeroBackgroundPreset.eventEyecatchKey
+        return Button {
+            selection = HeroBackgroundPreset.eventEyecatchKey
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 82, height: 100)
+                    .clipped()
+                    .overlay(alignment: .topTrailing) {
+                        if isSelected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.black.opacity(0.82))
+                                .frame(width: 24, height: 24)
+                                .background(TheaterCategoryStyle.lightGold, in: Circle())
+                                .overlay {
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.92), lineWidth: 1.5)
+                                }
+                                .shadow(color: .black.opacity(0.38), radius: 3, y: 1)
+                                .padding(5)
+                        }
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(
+                                isSelected ? TheaterCategoryStyle.lightGold : Color.secondary.opacity(0.3),
+                                lineWidth: isSelected ? 3 : 1
+                            )
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                Text("アイキャッチと同じ")
                     .font(FavorecoTypography.caption)
                     .fontWeight(isSelected ? .bold : .regular)
                     .foregroundStyle(isSelected ? TheaterCategoryStyle.gold : Color.primary)
@@ -258,7 +311,7 @@ struct EventDetailView: View {
             if isTheater {
                 GeometryReader { proxy in
                     theaterNavigationControls
-                        .padding(.top, proxy.safeAreaInsets.top + 8)
+                        .padding(.top, max(proxy.safeAreaInsets.top, resolvedTopSafeAreaInset) + 8)
                 }
                 .ignoresSafeArea()
             }
@@ -447,6 +500,25 @@ struct EventDetailView: View {
         return Color.legibleDetailAccent(hex: hex)
     }
 
+    /// The immersive theater page deliberately ignores the top safe area. Depending on the
+    /// presentation route and first-render timing, both the overlay GeometryReader and key
+    /// window can consequently report zero insets. Resolve every available UIKit value and
+    /// retain a device-class minimum so the controls never enter the status bar / Dynamic
+    /// Island region while those values are unavailable.
+    private var resolvedTopSafeAreaInset: CGFloat {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let windowInset = scenes
+            .flatMap(\.windows)
+            .map(\.safeAreaInsets.top)
+            .max() ?? 0
+        let statusBarHeight = scenes
+            .compactMap { $0.statusBarManager?.statusBarFrame.height }
+            .max() ?? 0
+        let minimumInset: CGFloat = UIDevice.current.userInterfaceIdiom == .phone ? 54 : 24
+
+        return max(max(windowInset, statusBarHeight), minimumInset)
+    }
+
     private var theaterNavigationControls: some View {
         HStack {
             Button { dismiss() } label: {
@@ -606,13 +678,20 @@ struct EventDetailView: View {
         fields: VisitUnitFields
     ) -> some View {
         let removesBackground = fields.heroBackgroundPresetKey == HeroBackgroundPreset.noneKey
+        let usesEventEyecatch = fields.heroBackgroundPresetKey == HeroBackgroundPreset.eventEyecatchKey
         let resourceName = removesBackground
             ? ""
             : HeroBackgroundPreset.resolved(
                 categoryKey: "theater",
                 storedKey: fields.heroBackgroundPresetKey
             )?.resourceName ?? "theater-hero-venue-v2"
-        if !removesBackground,
+        if usesEventEyecatch,
+           let data = event.eyecatchData,
+           let image = UIImage(data: data) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else if !removesBackground,
            let image = bundledHeroBackgroundImage(resourceName: resourceName) {
             Image(uiImage: image)
                 .resizable()
@@ -1534,6 +1613,7 @@ struct EditEventView: View {
             EventHeroBackgroundPicker(
                 categoryKey: "theater",
                 selection: $draft.heroBackgroundPresetKey,
+                eyecatchData: eyecatchData,
                 title: "背景"
             )
         }
@@ -1858,7 +1938,8 @@ struct EditEventView: View {
                     if isPerformanceEvent {
                         EventHeroBackgroundPicker(
                             categoryKey: isLiveEvent ? "live" : "theater",
-                            selection: $draft.heroBackgroundPresetKey
+                            selection: $draft.heroBackgroundPresetKey,
+                            eyecatchData: eyecatchData
                         )
                     }
                 } header: {

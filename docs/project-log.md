@@ -32828,3 +32828,91 @@ Homeの見出しに4件とあるのにカードは3件しか表示されず、�
 ### 既知のリスク・残課題
 - 深い項目取得はTicketDive／カンフェティの専用解析、TIGET等の多層汎用解析、その他はサイト側が公開するJSON-LD／OGPの内容に依存する。販売サイト判定は全項目取得を保証しない。
 - 実機で購入先Picker、設定候補、TicketDive記載画像のOCR、公式／販売URL分離を確認する。
+
+## 2026-08-24: 公開公演詳細の上部操作Safe Areaを再修正
+
+### 原因
+- 公開公演詳細の没入型背景と操作レイヤーは上端Safe Areaを無視しており、操作レイヤー内の`GeometryReader.safeAreaInsets.top`が入口によって0を返していた。
+- 8月23日の修正はこのGeometry値だけを使っていたため、観劇トップの`気になる`から開く経路では戻る／三点ボタンがDynamic Islandと重なった。
+
+### 変更概要・意図
+- Geometry値と前面Key Windowの上端Safe Areaを比較し、大きい方の下8ptへ固定操作を配置するフォールバックを追加した。
+- 全画面背景、Hero本文、メニューパネル位置、下端Tab Bar退避余白は変更せず、入口差だけを吸収する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 公開公演詳細の戻る／三点操作にKey Window Safe Areaフォールバックを追加。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: Safe Area仕様、原因、確認状態を更新。
+
+### 影響する画面・機能
+- 観劇の気になる公演、公演一覧、予定／記録詳細から開く公開公演詳細。
+- 戻る／三点ボタンの縦位置。保存モデル、本文レイアウト、他ジャンル詳細には変更なし。
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析と`git diff --check`に成功した。
+- Asset Catalogを含むiOS Simulator向けDebug全体ビルドに成功した。既存のMainActor分離警告だけで、今回の変更由来の警告・エラーはない。
+
+### 既知のリスク・残課題
+- Dynamic Islandありの実機で、観劇トップの`気になる`から開いた時に両ボタン全体が押せることを確認する。
+- 公演一覧、予定詳細、記録詳細から公開公演詳細へ進む入口でも同じ縦位置になることを確認する。
+
+## 2026-08-24: 公演情報経路を含む上部Safe Areaのゼロ値を再々修正
+
+### 原因
+- Key WindowのSafe Areaを追加した前回修正後も、公演情報を直接開く初回描画ではWindowの確立前に評価され、GeometryとKey Windowの上端Insetがともに0のまま操作位置へ使われる場合があった。
+- `気になる`だけの固有画面ではなく、公開公演詳細を共有する全入口に同じ初回描画タイミングの問題があった。
+
+### 変更概要・意図
+- Geometryに加え、接続中の全WindowのSafe AreaとStatus Bar高さを比較する。
+- UIKit値がまだ取れない初回描画でも、iPhoneは54pt、その他は24ptの最低安全幅を保証し、その下8ptへ戻る／三点操作を配置する。
+- 背景だけは従来どおり画面上端まで延長し、Hero本文や下部構成は動かさない。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 公開公演詳細の上端Inset解決をWindow・Status Bar・端末最低値の併用へ変更。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現在仕様、原因、確認状態を更新。
+
+### 影響する画面・機能
+- 気になる公演、公演一覧、予定／記録詳細から開く公演情報など、`EventDetailView`を使うすべての観劇公開公演詳細。
+- 戻る／三点ボタンの縦位置だけ。保存データ、Hero本文、他ジャンル詳細には変更なし。
+
+### 確認結果（実機 / ビルド）
+- `EventDetailView.swift`のSwift構文解析と`git diff --check`に成功した。
+- iOS Simulator向けDebug全体ビルドに成功した。既存のMainActor分離警告だけで、今回の変更由来のエラーはない。
+- 実機目視は未確認。
+
+### 既知のリスク・残課題
+- Dynamic Islandありの実機で全入口から公演情報を開き、戻る／三点ボタンの円全体が押せることを確認する。
+
+## 2026-08-24: 観劇記録の同行者・ToDo費用・詳細タスク表示を統合
+
+### 原因
+- 観劇フォームの同行者ユニットに、現在不要な旧SNS入力欄が新規・編集の両方で残っていた。
+- 記録編集の金額ユニットは`Visit`の直接入力明細だけを集計し、同じ回へ紐づく`PlanPreparationTask.amount`を参照していなかった。
+- 記録詳細の費用集計は構造化費用が1種類でもあると直接入力明細を旧値扱いで外し、`次にやること`も未完了件数と管理ボタンしか描画していなかった。
+
+### 変更概要・意図
+- 観劇の同行者入力を名前だけにし、既存SNS値は破壊せず互換保持する。
+- 記録編集へToDo遠征費の読み取り専用行を出し、直接入力明細との表示合計を更新する。保存先は分けたまま複写しない。
+- 詳細の合計へチケット、写真、ToDo遠征費、直接入力明細を加え、`Visit.amount`は構造化明細がない旧記録だけのフォールバックに限定する。
+- `次にやること`へ全ToDoを未完了→完了履歴の順で表示し、内容と状態をその場で確認できるようにした。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 観劇同行者SNSを非表示化し、編集金額へPlanの遠征費を渡す。
+- `favorecoAPP/favorecoAPP/Views/ExperienceMoneyUnitEditor.swift`: ToDo遠征費の読取行と合算表示を追加。
+- `favorecoAPP/favorecoAPP/Utilities/PlanPreparationFields.swift`: 記録直接明細を構造化費用合計へ追加。
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 費用カードへ記録直接明細と総合計を表示。
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 観劇記録詳細へ合計金額と実ToDo行を追加。
+- `favorecoAPP/favorecoAPPTests/PlanPreparationKindTests.swift`: 費用合算と未完了優先順の回帰テストを追加。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様と確認状態を更新。
+
+### 影響する画面・機能
+- 観劇の新規記録／記録編集にある同行者、ToDo、集計記録。
+- 観劇記録詳細の`次にやること`と`合計金額`。
+- 予定／記録詳細で共用する費用集計カード。
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析と`git diff --check`に成功した。
+- Asset Catalogを含むiOS Simulator向けDebug全体ビルドに成功した。既存のMainActor分離警告だけで、今回の変更由来の警告・エラーはない。
+- テストターゲットのbuild-for-testingは、Xcodeの`SwiftDataMacros.PersistentModelMacro`がmalformed responseを返す環境エラーで中断した。追加テストファイルの構文解析は成功している。
+
+### 既知のリスク・残課題
+- 実機でToDo金額の編集直後に集計記録と記録詳細が再計算されること、直接明細との合算、ToDo 0件／1件／複数件、完了切替、長い題名を確認する。

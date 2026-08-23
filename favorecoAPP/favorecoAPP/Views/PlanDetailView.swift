@@ -710,6 +710,7 @@ struct PlanDetailView: View {
     private var planHeroBackground: some View {
         GeometryReader { proxy in
             let fields = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "")
+            let usesEventEyecatch = fields.heroBackgroundPresetKey == HeroBackgroundPreset.eventEyecatchKey
             let resourceName = fields.heroBackgroundPresetKey == HeroBackgroundPreset.noneKey
                 ? ""
                 : HeroBackgroundPreset.resolved(
@@ -721,7 +722,15 @@ struct PlanDetailView: View {
 
             ZStack(alignment: .top) {
                 genreColor
-                if let image = theaterHeroBackgroundImage(resourceName: resourceName) {
+                if usesEventEyecatch,
+                   let data = plan.event?.eyecatchData,
+                   let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: imageBandHeight)
+                        .clipped()
+                } else if let image = theaterHeroBackgroundImage(resourceName: resourceName) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
@@ -2202,13 +2211,27 @@ struct ExperienceExpenseSummaryCard: View {
                     if summary.travelAmount > 0 {
                         expenseRow(icon: "suitcase.rolling", title: "遠征", amount: summary.travelAmount)
                     }
+                    ForEach(summary.legacyEntries) { entry in
+                        expenseRow(
+                            icon: "yensign.circle",
+                            title: entry.normalizedTitle.isEmpty ? "その他" : entry.normalizedTitle,
+                            amount: entry.normalizedAmount
+                        )
+                    }
+
+                    if summary.structuredAmount > 0 {
+                        Divider()
+                        expenseRow(icon: "sum", title: "合計", amount: summary.total)
+                    }
                 }
 
                 if summary.usesTicketPhotoFallback {
                     Text("チケット申込に金額がないため、チケット写真の確認済み金額を使っています。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
-                } else if summary.structuredAmount > 0, summary.legacyAmount > 0 {
+                } else if summary.structuredAmount > 0,
+                          summary.legacyEntries.isEmpty,
+                          summary.legacyAmount > 0 {
                     Text("旧入力の合計 \(currencyText(summary.legacyAmount)) は参考値として保持し、二重加算していません。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
