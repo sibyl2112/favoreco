@@ -24,6 +24,7 @@ struct PhotoUnitEditor: View {
     @Binding var selectedItems: [PhotosPickerItem]
     let category: RecordCategory?
     var theaterContentMode: TheaterPhotoContentMode = .all
+    var showsHeading = true
     @Binding var aspectRatioKey: String
     @Binding var coverPhotoPath: String
     @Binding var heroBackgroundPath: String
@@ -31,6 +32,8 @@ struct PhotoUnitEditor: View {
     var showsBookFormatPicker = true
     var showsHeroBackgroundPicker = false
     @State private var isShowingCamera = false
+    @State private var isShowingPhotoSourceChoice = false
+    @State private var isShowingPhotoLibrary = false
     @State private var isShowingCameraUnavailableAlert = false
     @State private var importCompletedCount = 0
     @State private var importTotalCount = 0
@@ -134,6 +137,26 @@ struct PhotoUnitEditor: View {
         .onChange(of: selectedTheaterEyecatchItem) { _, newItem in
             guard let newItem else { return }
             Task { await replaceTheaterEyecatch(from: newItem) }
+        }
+        .photosPicker(
+            isPresented: $isShowingPhotoLibrary,
+            selection: $selectedItems,
+            maxSelectionCount: remainingPhotoSlots,
+            matching: .images
+        )
+        .confirmationDialog(
+            "写真を追加",
+            isPresented: $isShowingPhotoSourceChoice,
+            titleVisibility: .visible
+        ) {
+            if photoAddStartMode == "camera" {
+                Button("カメラで撮影") { openCamera() }
+                Button("写真ライブラリから選ぶ") { isShowingPhotoLibrary = true }
+            } else {
+                Button("写真ライブラリから選ぶ") { isShowingPhotoLibrary = true }
+                Button("カメラで撮影") { openCamera() }
+            }
+            Button("キャンセル", role: .cancel) {}
         }
         .fullScreenCover(isPresented: $isShowingCamera) {
             CameraImagePicker(
@@ -250,13 +273,22 @@ struct PhotoUnitEditor: View {
 
     @ViewBuilder
     private var standardPhotoEditorContent: some View {
-        HStack {
-            Text("写真")
-                .font(FavorecoTypography.bodyStrong)
-            Spacer()
-            Text(photoCountLabel)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
+        if showsHeading {
+            HStack {
+                Text("写真")
+                    .font(FavorecoTypography.bodyStrong)
+                Spacer()
+                Text(photoCountLabel)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            HStack {
+                Spacer()
+                Text(photoCountLabel)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
 
         if category?.templateKey == "book", showsBookFormatPicker {
@@ -280,24 +312,21 @@ struct PhotoUnitEditor: View {
     private var theaterPhotoManager: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                FavorecoIconLabel(
-                    "思い出・資料写真",
-                    systemImage: "photo.on.rectangle.angled",
-                    iconSize: 14
-                )
+                if showsHeading {
+                    FavorecoIconLabel(
+                        "思い出・資料写真",
+                        systemImage: "photo.on.rectangle.angled",
+                        iconSize: 14
+                    )
                     .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
+                }
                 Spacer(minLength: 8)
                 Text(photoCountLabel)
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
-
-            Text("一括追加した写真は「思い出」で登録します。")
-                .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
 
             photoLibraryContent
         }
@@ -658,13 +687,22 @@ struct PhotoUnitEditor: View {
 
     @ViewBuilder
     private var photoAddControls: some View {
-        if photoAddStartMode == "library" {
-            libraryPicker(label: "写真ライブラリから追加", prominent: true)
-            cameraButton(label: "カメラで撮影", prominent: false)
-        } else {
-            cameraButton(label: "カメラで撮影", prominent: true)
-            libraryPicker(label: "写真ライブラリから選ぶ", prominent: false)
+        Button {
+            isShowingPhotoSourceChoice = true
+        } label: {
+            FavorecoIconLabel("写真を追加", systemImage: "plus")
+                .frame(maxWidth: .infinity)
         }
+        .buttonStyle(.borderedProminent)
+        .favorecoProminentActionStyle()
+    }
+
+    private func openCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            isShowingCameraUnavailableAlert = true
+            return
+        }
+        isShowingCamera = true
     }
 
     @ViewBuilder
@@ -1094,10 +1132,6 @@ struct PhotoMetadataEditor: View {
                     axis: .vertical
                 )
                 .lineLimit(2...4)
-
-                Text("生きものの名前なども、写真ごとにここへ残せます。")
-                    .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
-                    .foregroundStyle(.secondary)
             }
 
             if !metadata.purpose.isGalleryPhoto {
@@ -1141,12 +1175,6 @@ struct PhotoMetadataEditor: View {
                     }
                 }
 
-            } else {
-                Section {
-                    Text(galleryPhotoHelpText)
-                        .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
-                        .foregroundStyle(.secondary)
-                }
             }
 
             if metadata.purpose.supportsAmount {
@@ -1193,13 +1221,6 @@ struct PhotoMetadataEditor: View {
         case .food: "フード金額"
         default: "金額"
         }
-    }
-
-    private var galleryPhotoHelpText: String {
-        if metadata.purpose == .food {
-            return "写真一覧に表示されます。フード金額を入力すると費用集計にも反映します。"
-        }
-        return "写真一覧に表示されます。OCR本文と金額は集計しません。"
     }
 
     private var amountSuggestions: [OCRImportSuggestion] {

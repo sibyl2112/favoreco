@@ -117,6 +117,7 @@ struct TheaterScheduleEntryEditor: View {
     @Binding var entry: EventVenueEntry
     let fallbackStart: Date
     let fallbackEnd: Date
+    var usesFlatLayout = false
 
     @State private var venueSuggestions: [PlaceSearchCandidate] = []
     @State private var selectedVenueCandidate: PlaceSearchCandidate?
@@ -170,7 +171,16 @@ struct TheaterScheduleEntryEditor: View {
         )
     }
 
+    @ViewBuilder
     var body: some View {
+        if usesFlatLayout {
+            flatEditor
+        } else {
+            legacyEditor
+        }
+    }
+
+    private var legacyEditor: some View {
         VStack(alignment: .leading, spacing: 0) {
             ExplicitFormTextField(
                 title: "公演地名",
@@ -308,6 +318,142 @@ struct TheaterScheduleEntryEditor: View {
         .task(id: entry.name) {
             await refreshVenueSuggestions()
         }
+    }
+
+    private var flatEditor: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            flatTextField("公演地名", prompt: "例：東京公演", text: performanceLabel)
+            flatTextField("会場", prompt: "例：月明かりホール", text: $entry.name)
+            if !venueSuggestions.isEmpty {
+                flatVenueSuggestions
+            }
+            flatTextField("住所", prompt: "会場名から候補を表示します", text: $entry.address)
+
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 12) {
+                    Text("公演期間")
+                        .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
+                    Spacer(minLength: 8)
+                    Toggle("", isOn: hasPeriod)
+                        .labelsHidden()
+                        .tint(Color(hex: "#8B2F45"))
+                }
+                if hasPeriod.wrappedValue {
+                    HStack(alignment: .top, spacing: 12) {
+                        flatDateField("開始日", selection: startsAt)
+                        flatDateField("終了日", selection: endsAt, range: startsAt.wrappedValue...)
+                    }
+                } else {
+                    Text("未定の場合はオフのまま保存できます。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !entry.trimmedName.isEmpty, !entry.trimmedAddress.isEmpty {
+                PlaceMapPreview(
+                    venueName: entry.trimmedName,
+                    address: entry.trimmedAddress,
+                    latitude: selectedVenueCoordinate?.latitude ?? 0,
+                    longitude: selectedVenueCoordinate?.longitude ?? 0
+                )
+            }
+        }
+        .padding(14)
+        .background(
+            TheaterLifecycleFlatStyle.fieldBackground,
+            in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius)
+                .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+        )
+        .task(id: entry.name) {
+            await refreshVenueSuggestions()
+        }
+    }
+
+    private func flatTextField(
+        _ title: String,
+        prompt: String,
+        text: Binding<String>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
+            TextField(prompt, text: text, axis: .vertical)
+                .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                .lineLimit(1...2)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 54)
+                .background(
+                    TheaterLifecycleFlatStyle.fieldBackground,
+                    in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                        .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                )
+        }
+    }
+
+    private func flatDateField(
+        _ title: String,
+        selection: Binding<Date>,
+        range: PartialRangeFrom<Date>? = nil
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+            Group {
+                if let range {
+                    DatePicker("", selection: selection, in: range, displayedComponents: .date)
+                } else {
+                    DatePicker("", selection: selection, displayedComponents: .date)
+                }
+            }
+            .labelsHidden()
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+            .background(
+                TheaterLifecycleFlatStyle.fieldBackground,
+                in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                    .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+            )
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var flatVenueSuggestions: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(venueSuggestions.prefix(3)) { candidate in
+                Button {
+                    entry.name = candidate.name
+                    entry.address = candidate.address
+                    selectedVenueCandidate = candidate
+                    venueSuggestions = []
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(candidate.name)
+                            .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                            .foregroundStyle(.primary)
+                        if !candidate.address.isEmpty {
+                            Text(candidate.address)
+                                .font(FavorecoTypography.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 9))
     }
 
     @MainActor

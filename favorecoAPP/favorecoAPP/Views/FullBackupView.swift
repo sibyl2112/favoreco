@@ -23,6 +23,7 @@ struct FullBackupView: View {
     @Query(sort: \Plan.startsAt, order: .reverse) private var plans: [Plan]
     @Query(sort: \TicketAccount.serviceName) private var ticketAccounts: [TicketAccount]
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
+    @Query(sort: \MovieBestEntry.updatedAt, order: .reverse) private var movieBestEntries: [MovieBestEntry]
 
     @State private var exportURL: URL?
     @State private var isShowingExporter = false
@@ -36,7 +37,7 @@ struct FullBackupView: View {
 
     private var totalModelCount: Int {
         categories.count + events.count + bookShelves.count + visits.count + inboxItems.count + socialAccounts.count
-            + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
+            + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count + movieBestEntries.count
     }
 
     private var totalPhotoBytes: Int64 {
@@ -46,7 +47,7 @@ struct FullBackupView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsCard {
                 Text("記録、予定、チケット、マスター、写真本体を1つのFavorecoバックアップへ保存します。")
                     .font(FavorecoTypography.body)
                 LabeledContent("保存モデル", value: "\(totalModelCount)件")
@@ -54,7 +55,7 @@ struct FullBackupView: View {
                 LabeledContent("写真容量", value: ByteCountFormatter.string(fromByteCount: totalPhotoBytes, countStyle: .file))
             }
 
-            Section("書き出し") {
+            FavorecoSettingsSection("書き出し") {
                 Button {
                     createBackup()
                 } label: {
@@ -63,7 +64,7 @@ struct FullBackupView: View {
                 .disabled(isWorking || totalModelCount == 0)
             }
 
-            Section("復元") {
+            FavorecoSettingsSection("復元") {
                 Button {
                     isShowingImporter = true
                 } label: {
@@ -82,7 +83,7 @@ struct FullBackupView: View {
             }
 
             if isWorking {
-                Section {
+                FavorecoSettingsCard {
                     HStack {
                         ProgressView()
                         Text("処理中です。画面を閉じずにお待ちください。")
@@ -91,13 +92,14 @@ struct FullBackupView: View {
             }
 
             if !message.isEmpty {
-                Section("結果") {
+                FavorecoSettingsSection("結果") {
                     Text(message)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(message.hasPrefix("失敗") ? .red : .secondary)
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("完全バックアップ")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isShowingExporter) {
@@ -147,6 +149,7 @@ struct FullBackupView: View {
                 plans: plans,
                 ticketAccounts: ticketAccounts,
                 ticketAttempts: ticketAttempts,
+                movieBestEntries: movieBestEntries,
                 includesPhotoBinaryData: false,
                 isFullBackupManifest: true
             )

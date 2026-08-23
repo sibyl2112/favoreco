@@ -28,6 +28,7 @@ enum HomeCategoryContextTransition: Equatable {
 struct HomeView: View {
     let onCategoryReturnToRoot: () -> Void
     let onCategoryNavigate: (UUID) -> Void
+    let onCreatePlan: () -> Void
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.favorecoThemePalette) private var themePalette
@@ -54,10 +55,12 @@ struct HomeView: View {
 
     init(
         onCategoryReturnToRoot: @escaping () -> Void = {},
-        onCategoryNavigate: @escaping (UUID) -> Void = { _ in }
+        onCategoryNavigate: @escaping (UUID) -> Void = { _ in },
+        onCreatePlan: @escaping () -> Void = {}
     ) {
         self.onCategoryReturnToRoot = onCategoryReturnToRoot
         self.onCategoryNavigate = onCategoryNavigate
+        self.onCreatePlan = onCreatePlan
     }
 
     private var categoryLayoutMode: HomeCategoryLayoutMode {
@@ -263,7 +266,8 @@ struct HomeView: View {
                                 recordedVisits: snapshot.pickupRecordedVisits,
                                 onSelectInterest: { pickupDetailTarget = $0 },
                                 onSelectPlan: { pickupDetailTarget = .plan($0) },
-                                onSelectVisit: { pickupDetailTarget = .visit($0) }
+                                onSelectVisit: { pickupDetailTarget = .visit($0) },
+                                onCreatePlan: onCreatePlan
                             )
 
                             Button {
@@ -1139,7 +1143,12 @@ struct HomeUpcomingPlanCard: View {
             alignment: .top
         )
         .padding(isEmbedded ? HomeUpcomingHeroMetrics.embeddedPadding : 12)
-        .background(isEmbedded ? Color.clear : Color(.systemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background {
+            if !isEmbedded {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(.systemBackground))
+            }
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(tint.opacity(isEmbedded ? 0 : 0.18), lineWidth: 1)
@@ -1147,7 +1156,7 @@ struct HomeUpcomingPlanCard: View {
         .accessibilityElement(children: .contain)
         .sheet(isPresented: $isShowingEditPlan) {
             if let currentPlan = currentPlans.first {
-                AddTicketPlanView(plan: currentPlan, entryMode: .plan)
+                TheaterLifecycleEditorSheet(planned: currentPlan)
             } else {
                 FavorecoContentUnavailableView("予定が見つかりません", systemImage: "trash")
             }
@@ -1256,7 +1265,7 @@ struct HomeUpcomingVisitCard: View {
         .accessibilityElement(children: .contain)
         .sheet(isPresented: $isShowingEditVisit) {
             if let currentVisit = currentVisits.first {
-                EditExperienceView(visit: currentVisit)
+                TheaterLifecycleEditorSheet(recorded: currentVisit)
             } else {
                 FavorecoContentUnavailableView("記録が見つかりません", systemImage: "trash")
             }

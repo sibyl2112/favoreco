@@ -284,114 +284,72 @@ struct TicketOverviewView: View {
 
     var body: some View {
         ScrollViewReader { scrollProxy in
-            List {
-            Section {
-                TicketOverviewSearchField(text: $searchText)
+            VStack(spacing: 0) {
+                ticketManagementHeader
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(TicketOverviewFilter.allCases) { filter in
-                            filterButton(filter)
-                        }
-                    }
-                }
+                List {
+                    overviewControls
+                        .listRowInsets(EdgeInsets(top: 18, leading: 20, bottom: 18, trailing: 20))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
 
-                if !genreOptions.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            genreButton(
-                                title: "すべて",
-                                categoryID: nil,
-                                tint: TicketOverviewStyle.accent
-                            )
-                            ForEach(genreOptions) { option in
-                                genreButton(
-                                    title: option.title,
-                                    categoryID: option.id,
-                                    tint: themeColor(for: option)
-                                )
-                            }
-                        }
-                    }
-                }
+                    Rectangle()
+                        .fill(TicketOverviewStyle.text.opacity(0.14))
+                        .frame(height: 1)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 6, trailing: 20))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
 
-                HStack {
-                    Text("表示")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(TicketOverviewStyle.secondaryText)
-                    Spacer()
-                    groupingMenu
-                }
-            }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-            .listRowBackground(TicketOverviewStyle.surface)
-
-            if filteredAttempts.isEmpty {
-                Section {
-                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        VStack(spacing: 12) {
-                            FavorecoContentUnavailableView(
-                                selectedFilter.emptyTitle,
-                                systemImage: selectedFilter.systemImage,
-                                description: selectedFilter.emptyMessage
-                            )
-                            if selectedFilter != .archived {
-                                Button {
-                                    isShowingAddTicketPlan = true
-                                } label: {
-                                    FavorecoIconLabel("申込・発売を登録", systemImage: "plus", iconSize: 17)
+                    if filteredAttempts.isEmpty {
+                        Section {
+                            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                VStack(spacing: 12) {
+                                    FavorecoContentUnavailableView(
+                                        selectedFilter.emptyTitle,
+                                        systemImage: selectedFilter.systemImage,
+                                        description: selectedFilter.emptyMessage
+                                    )
+                                    if selectedFilter != .archived {
+                                        Button {
+                                            isShowingAddTicketPlan = true
+                                        } label: {
+                                            FavorecoIconLabel("申込・発売を登録", systemImage: "plus", iconSize: 17)
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                    }
                                 }
-                                .buttonStyle(.borderedProminent)
+                            } else {
+                                ContentUnavailableView.search(text: searchText)
                             }
+                        } header: {
+                            overviewSectionHeader(title: selectedFilter.title, count: 0)
                         }
                     } else {
-                        ContentUnavailableView.search(text: searchText)
-                    }
-                } header: {
-                    overviewSectionHeader(title: selectedFilter.title, count: 0)
-                }
-            } else {
-                ForEach(displayGroups) { group in
-                    Section {
-                        if !isGroupCollapsed(group) {
-                            ForEach(group.attempts) { attempt in
-                                ticketCardListRow(for: attempt)
+                        ForEach(displayGroups) { group in
+                            Section {
+                                if !isGroupCollapsed(group) {
+                                    ForEach(group.attempts) { attempt in
+                                        ticketCardListRow(for: attempt)
+                                    }
+                                }
+                            } header: {
+                                collapsibleSectionHeader(for: group)
                             }
                         }
-                    } header: {
-                        collapsibleSectionHeader(for: group)
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(TicketOverviewStyle.canvas)
             }
-        }
-            .scrollContentBackground(.hidden)
             .background(TicketOverviewStyle.canvas)
             .tint(TicketOverviewStyle.accent)
             .environment(\.colorScheme, .light)
             .preferredColorScheme(.light)
-            .navigationTitle("チケット管理")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(TicketOverviewStyle.canvas, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             .onChange(of: genreOptions.map(\.id)) { _, categoryIDs in
                 if let selectedCategoryID, !categoryIDs.contains(selectedCategoryID) {
                     self.selectedCategoryID = nil
-                }
-            }
-            .toolbar {
-                if showsCloseButton {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("閉じる") { dismiss() }
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingAddTicketPlan = true
-                    } label: {
-                        FavorecoIcon(systemName: "plus", size: 17)
-                    }
-                    .accessibilityLabel("申込・発売を登録")
                 }
             }
             .sheet(isPresented: $isShowingAddTicketPlan) {
@@ -471,6 +429,101 @@ struct TicketOverviewView: View {
                 revealPendingAttempt(using: scrollProxy)
             }
         }
+    }
+
+    private var ticketManagementHeader: some View {
+        ZStack {
+            Text("チケット管理")
+                .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                .foregroundStyle(TicketOverviewStyle.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.88)
+
+            HStack(spacing: 12) {
+                Button { dismiss() } label: {
+                    Image(systemName: showsCloseButton ? "xmark" : "chevron.left")
+                        .font(.system(size: showsCloseButton ? 23 : 21, weight: .medium))
+                        .foregroundStyle(TicketOverviewStyle.text)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(showsCloseButton ? "閉じる" : "戻る")
+
+                Spacer(minLength: 0)
+
+                Button {
+                    isShowingAddTicketPlan = true
+                } label: {
+                    Label("チケットを追加", systemImage: "plus")
+                        .font(FavorecoTypography.jpSans(11.5, weight: .semibold, relativeTo: .caption))
+                        .foregroundStyle(TicketOverviewStyle.editorAccent)
+                        .padding(.horizontal, 7)
+                        .frame(height: 44)
+                        .background(TicketOverviewStyle.surface)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(TicketOverviewStyle.editorAccent.opacity(0.74), lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: false)
+                .accessibilityLabel("チケットを追加")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(TicketOverviewStyle.surface)
+    }
+
+    private var overviewControls: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            TicketOverviewSearchField(text: $searchText)
+
+            VStack(alignment: .leading, spacing: 9) {
+                controlLabel("対応状況")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(TicketOverviewFilter.allCases) { filter in
+                            filterButton(filter)
+                        }
+                    }
+                }
+            }
+
+            if !genreOptions.isEmpty {
+                VStack(alignment: .leading, spacing: 9) {
+                    controlLabel("ジャンル")
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            genreButton(
+                                title: "すべて",
+                                categoryID: nil,
+                                tint: TicketOverviewStyle.editorAccent
+                            )
+                            ForEach(genreOptions) { option in
+                                genreButton(
+                                    title: option.title,
+                                    categoryID: option.id,
+                                    tint: themeColor(for: option)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            HStack {
+                Spacer()
+                groupingMenu
+            }
+            .frame(minHeight: 38)
+        }
+    }
+
+    private func controlLabel(_ title: String) -> some View {
+        Text(title)
+            .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+            .foregroundStyle(TicketOverviewStyle.text)
     }
 
     private func category(for attempt: TicketAttempt) -> RecordCategory? {
@@ -568,12 +621,13 @@ struct TicketOverviewView: View {
                 FavorecoIcon(systemName: "chevron.down", size: 10)
             }
             .font(FavorecoTypography.captionStrong)
-            .foregroundStyle(TicketOverviewStyle.accent)
-            .padding(.horizontal, 11)
-            .frame(height: 32)
-            .background(TicketOverviewStyle.accent.opacity(0.08), in: Capsule())
+            .foregroundStyle(TicketOverviewStyle.editorAccent)
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background(TicketOverviewStyle.surface)
             .overlay {
-                Capsule().stroke(TicketOverviewStyle.accent.opacity(0.24), lineWidth: 0.8)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(TicketOverviewStyle.editorAccent.opacity(0.42), lineWidth: 1)
             }
         }
         .accessibilityLabel("表示方法")
@@ -622,7 +676,7 @@ struct TicketOverviewView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
     }
@@ -742,14 +796,15 @@ struct TicketOverviewView: View {
             .font(FavorecoTypography.captionStrong)
             .foregroundStyle(isSelected ? Color.white : TicketOverviewStyle.text)
             .padding(.horizontal, 12)
-            .frame(height: 34)
+            .frame(height: 38)
             .background(
-                isSelected ? TicketOverviewStyle.accent : TicketOverviewStyle.surface,
-                in: Capsule()
+                isSelected ? TicketOverviewStyle.editorAccent : TicketOverviewStyle.surface,
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
             )
             .overlay {
                 if !isSelected {
-                    Capsule().stroke(Color.primary.opacity(0.12), lineWidth: 0.8)
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(TicketOverviewStyle.text.opacity(0.18), lineWidth: 1)
                 }
             }
         }
@@ -766,10 +821,14 @@ struct TicketOverviewView: View {
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(isSelected ? Color.white : tint)
                 .padding(.horizontal, 12)
-                .frame(height: 32)
-                .background(isSelected ? tint : tint.opacity(0.10), in: Capsule())
+                .frame(height: 36)
+                .background(
+                    isSelected ? tint : TicketOverviewStyle.surface,
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
                 .overlay {
-                    Capsule().stroke(tint.opacity(isSelected ? 0 : 0.28), lineWidth: 0.8)
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(tint.opacity(isSelected ? 0 : 0.34), lineWidth: 1)
                 }
         }
         .buttonStyle(.plain)
@@ -915,9 +974,10 @@ struct TicketOverviewView: View {
 }
 
 private enum TicketOverviewStyle {
-    static let canvas = Color(hex: "#F7F5F3")
+    static let canvas = Color.white
     static let surface = Color.white
     static let accent = Color(hex: "#B04464")
+    static let editorAccent = Color(hex: "#8B2F45")
     static let text = Color(hex: "#302A2D")
     static let secondaryText = Color(hex: "#746B70")
     static let advanceAction = Color(hex: "#2F9FB0")
@@ -1005,7 +1065,7 @@ enum TicketOverviewFilter: String, CaseIterable, Identifiable {
         case .archived:
             "個別に非表示にした申込を、ここから再表示できます。"
         default:
-            "右上の＋または下部の「追加」から、申込・発売を登録できます。"
+            "右上の「チケットを追加」または下部の「追加」から、申込・発売を登録できます。"
         }
     }
 
@@ -1076,7 +1136,7 @@ private struct TicketOverviewSearchField: View {
                 .foregroundStyle(.secondary)
 
             TextField("公演名・申込先・プレイガイドを検索", text: $text)
-                .font(FavorecoTypography.body)
+                .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -1091,12 +1151,15 @@ private struct TicketOverviewSearchField: View {
                 .accessibilityLabel("検索文字を消去")
             }
         }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 40)
-        .background(TicketOverviewStyle.surface, in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 14)
+        .frame(height: 54)
+        .background(
+            TicketOverviewStyle.surface,
+            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+        )
         .overlay {
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(TicketOverviewStyle.text.opacity(0.10), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(TicketOverviewStyle.text.opacity(0.20), lineWidth: 1)
         }
     }
 }

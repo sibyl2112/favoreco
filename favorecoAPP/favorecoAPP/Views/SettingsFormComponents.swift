@@ -11,7 +11,7 @@ struct FavorecoSettingsSection<Content: View>: View {
 
     var body: some View {
         Section {
-            content
+            settingsCardRows(content)
         } header: {
             FavorecoRegistrationSectionHeader(title)
         }
@@ -35,7 +35,7 @@ struct FavorecoSettingsSectionWithFooter<Content: View, Footer: View>: View {
 
     var body: some View {
         Section {
-            content
+            settingsCardRows(content)
         } header: {
             FavorecoRegistrationSectionHeader(title)
         } footer: {
@@ -45,11 +45,156 @@ struct FavorecoSettingsSectionWithFooter<Content: View, Footer: View>: View {
     }
 }
 
+/// A headerless settings card for status, warning, preview, and action rows.
+/// It deliberately uses the same row treatment as named settings sections.
+struct FavorecoSettingsCard<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        Section {
+            settingsCardRows(content)
+        }
+    }
+}
+
+/// Settings rows use the native symbol treatment of the Master Data row as
+/// their optical baseline. Keeping this separate from the app-wide icon font
+/// prevents mixed fallback symbols from changing size or stroke weight.
+struct FavorecoSettingsRowIcon: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    let systemImage: String
+    var color: Color? = nil
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 20, weight: .semibold))
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(color ?? themePalette.globalTint)
+            .frame(width: 30, height: 24, alignment: .center)
+            .accessibilityHidden(true)
+    }
+}
+
+struct FavorecoSettingsIconLabel: View {
+    let title: String
+    let systemImage: String
+    var color: Color? = nil
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            FavorecoSettingsRowIcon(systemImage: systemImage, color: color)
+
+            Text(title)
+                .foregroundStyle(color ?? .primary)
+                .frame(minHeight: 24, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+@ViewBuilder
+private func settingsCardRows<Content: View>(_ content: Content) -> some View {
+    Group(subviews: content) { subviews in
+        ForEach(subviews.indices, id: \.self) { index in
+            let isFirst = index == subviews.startIndex
+            let isLast = index == subviews.index(before: subviews.endIndex)
+            subviews[index]
+                .padding(.horizontal, 14)
+                .frame(minHeight: 52)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                .listRowBackground(
+                    FavorecoSettingsCardRowBackground(isFirst: isFirst, isLast: isLast)
+                )
+                .listRowSeparator(.hidden)
+        }
+    }
+}
+
+private struct FavorecoSettingsCardRowBackground: View {
+    let isFirst: Bool
+    let isLast: Bool
+
+    var body: some View {
+        UnevenRoundedRectangle(
+            topLeadingRadius: isFirst ? 8 : 0,
+            bottomLeadingRadius: isLast ? 8 : 0,
+            bottomTrailingRadius: isLast ? 8 : 0,
+            topTrailingRadius: isFirst ? 8 : 0,
+            style: .continuous
+        )
+        .fill(TheaterLifecycleFlatStyle.fieldBackground)
+        .overlay {
+            GeometryReader { proxy in
+                ZStack {
+                    settingsCardBorder(in: proxy.size)
+                        .stroke(Color.secondary.opacity(0.20), lineWidth: 1)
+
+                    if !isLast {
+                        settingsCardSeparator(in: proxy.size)
+                            .stroke(ExplicitFormMetrics.rowSeparatorColor, lineWidth: 1)
+                    }
+                }
+            }
+        }
+    }
+
+    private func settingsCardBorder(in size: CGSize) -> Path {
+        let radius: CGFloat = 8
+        var path = Path()
+
+        if isFirst {
+            path.move(to: CGPoint(x: 0, y: radius))
+            path.addQuadCurve(to: CGPoint(x: radius, y: 0), control: .zero)
+            path.addLine(to: CGPoint(x: size.width - radius, y: 0))
+            path.addQuadCurve(
+                to: CGPoint(x: size.width, y: radius),
+                control: CGPoint(x: size.width, y: 0)
+            )
+        }
+
+        path.move(to: CGPoint(x: 0, y: isFirst ? radius : 0))
+        path.addLine(to: CGPoint(x: 0, y: size.height - (isLast ? radius : 0)))
+        path.move(to: CGPoint(x: size.width, y: isFirst ? radius : 0))
+        path.addLine(to: CGPoint(x: size.width, y: size.height - (isLast ? radius : 0)))
+
+        if isLast {
+            path.move(to: CGPoint(x: 0, y: size.height - radius))
+            path.addQuadCurve(
+                to: CGPoint(x: radius, y: size.height),
+                control: CGPoint(x: 0, y: size.height)
+            )
+            path.addLine(to: CGPoint(x: size.width - radius, y: size.height))
+            path.addQuadCurve(
+                to: CGPoint(x: size.width, y: size.height - radius),
+                control: CGPoint(x: size.width, y: size.height)
+            )
+        }
+        return path
+    }
+
+    private func settingsCardSeparator(in size: CGSize) -> Path {
+        var path = Path()
+        let y = max(0, size.height - 0.5)
+        path.move(to: CGPoint(x: 0, y: y))
+        path.addLine(to: CGPoint(x: size.width, y: y))
+        return path
+    }
+}
+
 extension View {
     func favorecoSettingsListLayout() -> some View {
         self
-            .environment(\.defaultMinListRowHeight, 54)
-            .listSectionSpacing(24)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(TheaterLifecycleFlatStyle.canvasBackground.ignoresSafeArea())
+            .environment(\.defaultMinListRowHeight, 52)
+            .listSectionSpacing(18)
+            .contentMargins(.top, 12, for: .scrollContent)
     }
 
     func favorecoSettingsRowLayout() -> some View {
@@ -89,10 +234,12 @@ struct FavorecoSettingsInfoCallout: View {
         .padding(.vertical, 8)
         .background(
             themePalette.globalTint.opacity(0.09),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
         )
-        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-        .listRowSeparator(.hidden)
+        .overlay {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(themePalette.globalTint.opacity(0.14), lineWidth: 1)
+        }
     }
 }
 
@@ -122,8 +269,8 @@ struct FavorecoSettingsToggleRow: View {
                 .labelsHidden()
                 .accessibilityLabel(title)
         }
-        .padding(.vertical, 8)
-        .frame(minHeight: 62)
+        .padding(.vertical, 5)
+        .frame(minHeight: 54)
         .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
     }
 }
@@ -172,8 +319,8 @@ struct FavorecoSettingsSelectionRow: View {
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
-            .padding(.vertical, 8)
-            .frame(minHeight: 62)
+            .padding(.vertical, 5)
+            .frame(minHeight: 54)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

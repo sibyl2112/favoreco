@@ -94,7 +94,7 @@ struct RecordFacetMasterManagementView: View {
             }
 
             if !errorMessage.isEmpty {
-                Section {
+                FavorecoSettingsCard {
                     Text(errorMessage)
                         .foregroundStyle(.red)
                 }
@@ -299,7 +299,7 @@ struct CompanionMasterManagementView: View {
             }
 
             if !errorMessage.isEmpty {
-                Section { Text(errorMessage).foregroundStyle(.red) }
+                FavorecoSettingsCard { Text(errorMessage).foregroundStyle(.red) }
             }
         }
         .favorecoSettingsListLayout()

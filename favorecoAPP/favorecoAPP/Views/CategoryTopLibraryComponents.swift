@@ -107,8 +107,11 @@ private struct CategoryGalleryMetadata: View {
                 Spacer(minLength: 1)
 
                 Rectangle()
-                    .fill(tint.opacity(0.34))
-                    .frame(width: 0.6, height: 11)
+                    .fill(tint.opacity(CategoryLibraryChrome.galleryMetadataSeparatorOpacity))
+                    .frame(
+                        width: CategoryLibraryChrome.galleryMetadataSeparatorLineWidth,
+                        height: 11
+                    )
 
                 Spacer(minLength: 1)
 
@@ -123,6 +126,13 @@ private struct CategoryGalleryMetadata: View {
         .lineLimit(1)
         .padding(.horizontal, 6)
         .padding(.vertical, 7)
+        .frame(maxWidth: .infinity)
+        .background(CategoryLibraryChrome.galleryMetadataBackground)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(tint.opacity(CategoryLibraryChrome.galleryDividerOpacity))
+                .frame(height: CategoryLibraryChrome.galleryDividerLineWidth)
+        }
     }
 }
 
@@ -802,6 +812,13 @@ enum CategoryLibraryChrome {
     static let borderLineWidth: CGFloat = 0.7
     static let cardBorderOpacity: Double = 0.42
     static let artworkBorderOpacity: Double = 0.62
+    static let galleryBorderLineWidth: CGFloat = 0.75
+    static let galleryBorderOpacity: Double = 0.38
+    static let galleryDividerLineWidth: CGFloat = 1
+    static let galleryDividerOpacity: Double = 0.42
+    static let galleryMetadataSeparatorLineWidth: CGFloat = 0.6
+    static let galleryMetadataSeparatorOpacity: Double = 0.34
+    static let galleryMetadataBackground = Color(.systemBackground)
 }
 
 private struct CategoryLibraryGallery: View {
@@ -841,8 +858,8 @@ private struct CategoryLibraryGallery: View {
                     .overlay {
                         Rectangle()
                             .stroke(
-                                tint.opacity(CategoryLibraryChrome.cardBorderOpacity),
-                                lineWidth: CategoryLibraryChrome.borderLineWidth
+                                tint.opacity(CategoryLibraryChrome.galleryBorderOpacity),
+                                lineWidth: CategoryLibraryChrome.galleryBorderLineWidth
                             )
                     }
                 }
@@ -862,7 +879,7 @@ private struct CategoryLibraryGallery: View {
         switch category.templateKey {
         case "theater": TheaterCategoryStyle.tileBackground
         case "live": LiveCategoryStyle.tileBackground
-        default: Color(.secondarySystemGroupedBackground)
+        default: CategoryLibraryChrome.galleryMetadataBackground
         }
     }
 }
@@ -1239,7 +1256,7 @@ private struct CategoryLibraryArtwork: View {
                     ThumbnailImage(
                         reference: .event(item.event.id),
                         displaySize: geometry.size,
-                        contentMode: .fill
+                        contentMode: category.templateKey == "museum" ? .fit : .fill
                     ) {
                         CategoryDefaultArtworkImage(
                             templateKey: category.templateKey,
@@ -1247,6 +1264,7 @@ private struct CategoryLibraryArtwork: View {
                         )
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
+                    .background(Color(.secondarySystemBackground))
                     .clipped()
                 }
                 .aspectRatio(aspectRatio, contentMode: .fit)

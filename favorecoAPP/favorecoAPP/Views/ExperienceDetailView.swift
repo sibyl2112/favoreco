@@ -480,7 +480,8 @@ struct ExperienceDetailView: View {
             }
         }
         .sheet(isPresented: $isShowingEdit) {
-            EditExperienceView(visit: visit)
+            TheaterLifecycleEditorSheet(recorded: visit)
+                .favorecoRegistrationTheme(categoryHex: visit.event?.category?.colorHex)
         }
         .fullScreenCover(item: $eyecatchPreviewRequest) { request in
             DetailEyecatchPreview(request: request)
@@ -507,10 +508,14 @@ struct ExperienceDetailView: View {
                     initialHeroBackgroundPresetKey: fields.heroBackgroundPresetKey,
                     inheritedVisualSource: visit
                 )
+                .favorecoRegistrationTheme(categoryHex: event.category?.colorHex)
             }
         }
         .sheet(item: $ticketPlanForEditor) { plan in
             EditTicketAttemptView(plan: plan)
+                .favorecoRegistrationTheme(
+                    categoryHex: plan.event?.category?.colorHex ?? plan.category?.colorHex
+                )
         }
         .sheet(item: $personMasterEditTarget) { target in
             NavigationStack {
@@ -1178,6 +1183,14 @@ struct ExperienceDetailView: View {
     }
 
     private func detailEyecatchPhoto(in snapshot: ExperienceDetailSnapshot) -> PhotoBlob? {
+        if TargetEyecatchPresentationPolicy.prefersSharedEventEyecatch(
+            templateKey: snapshot.category?.templateKey ?? "",
+            hasEventEyecatch: snapshot.event?.eyecatchData != nil
+        ) {
+            // nilを返すとRecordDetailEyecatchがEvent参照を使う。
+            // 対象編集直後も一覧と詳細で同じ対象アイキャッチになる。
+            return nil
+        }
         let visitEyecatchPath = visit.eyecatchPath.trimmingCharacters(in: .whitespacesAndNewlines)
         if !visitEyecatchPath.isEmpty,
            let visitEyecatch = snapshot.photos.first(where: { $0.relativePath == visitEyecatchPath }) {

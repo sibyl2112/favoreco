@@ -132,7 +132,7 @@ struct PublicPlaceCatalogView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
+                FavorecoSettingsCard {
                     FavorecoSettingsInfoCallout(
                         title: "公開カタログから場所マスターへ追加",
                         message: "公式サイトと情報元を確認してから追加できます。追加した場所は、設定の「マスターデータ > 場所」と予定・記録の場所候補に表示されます。",
@@ -143,7 +143,7 @@ struct PublicPlaceCatalogView: View {
                 syncStatusSection
                 catalogSection
             }
-            .contentMargins(.top, 4, for: .scrollContent)
+            .favorecoSettingsListLayout()
             .navigationTitle(scope.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -180,7 +180,7 @@ struct PublicPlaceCatalogView: View {
     }
 
     private var filterSection: some View {
-        Section("絞り込み") {
+        FavorecoSettingsSection("絞り込み") {
             Picker("エリア", selection: $selectedArea) {
                 Text("全国").tag(JapanArea?.none)
                 ForEach(JapanArea.allCases) { area in
@@ -204,11 +204,9 @@ struct PublicPlaceCatalogView: View {
     }
 
     private var catalogSection: some View {
-        Section {
+        FavorecoSettingsSectionWithFooter("公開場所カタログ") {
             catalogSearchField
             catalogRows
-        } header: {
-            Text("公開場所カタログ")
         } footer: {
             catalogFooter
         }

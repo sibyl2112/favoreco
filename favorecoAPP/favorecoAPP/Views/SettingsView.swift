@@ -37,7 +37,7 @@ struct SettingsView: View {
                         SettingsNavigationLabel(
                             title: "ジャンル設定",
                             detail: "表示順、表示・非表示、色、記録項目",
-                            systemImage: "square.grid.2x2"
+                            systemImage: "chart.bar.xaxis"
                         )
                     }
 

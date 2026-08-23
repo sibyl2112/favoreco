@@ -35,9 +35,19 @@ struct ReleaseUpdateSheet: View {
                     .buttonStyle(.bordered)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
+                .padding(16)
+                .background(
+                    TheaterLifecycleFlatStyle.fieldBackground,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.20), lineWidth: 1)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(TheaterLifecycleFlatStyle.canvasBackground.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") {
@@ -53,15 +63,13 @@ struct ReleaseHistoryView: View {
     var body: some View {
         List {
             ForEach(AppReleaseNotes.entries) { release in
-                Section {
+                FavorecoSettingsSection("Version \(release.version) ・ \(release.publishedAt)") {
                     ReleaseNoteContent(release: release)
                         .padding(.vertical, 4)
-                } header: {
-                    Text("Version \(release.version) ・ \(release.publishedAt)")
                 }
             }
 
-            Section {
+            FavorecoSettingsSectionWithFooter("関連リンク") {
                 Link(destination: AppReleaseNotes.detailURL) {
                     Label("詳細な更新履歴を見る", systemImage: "arrow.up.right.square")
                 }
@@ -69,6 +77,7 @@ struct ReleaseHistoryView: View {
                 Text("Favoreco公式サイトで、各アップデートの詳しい内容を確認できます。")
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("更新履歴")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -119,7 +119,18 @@ struct CategoryTopView: View {
             ScrollViewReader { scrollProxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        VStack(alignment: .leading, spacing: 18) {
+                        GenreSwipeContainer(
+                            canMoveBackward: !visibleCategories.isEmpty,
+                            canMoveForward: !visibleCategories.isEmpty,
+                            onMove: { direction in
+                                if let destination = neighboringCategory(from: activeCategory, offset: direction) {
+                                    switchCategory(to: destination)
+                                } else {
+                                    dismiss()
+                                }
+                            }
+                        ) {
+                            VStack(alignment: .leading, spacing: 18) {
                             if activeCategory.templateKey == "movie" {
                                 ScreenWorkFilterBar(
                                     selection: $screenWorkFilter,
@@ -156,22 +167,12 @@ struct CategoryTopView: View {
                                             selectedCategoryDetail = .visit(visit.id)
                                         }
                                     )
+                                    .padding(.horizontal, -20)
                                 }
                             }
                             .id("category-hero-\(activeCategory.id.uuidString)")
 
-                            GenreSwipeContainer(
-                                canMoveBackward: !visibleCategories.isEmpty,
-                                canMoveForward: !visibleCategories.isEmpty,
-                                onMove: { direction in
-                                    if let destination = neighboringCategory(from: activeCategory, offset: direction) {
-                                        switchCategory(to: destination)
-                                    } else {
-                                        dismiss()
-                                    }
-                                }
-                            ) {
-                                VStack(alignment: .leading, spacing: 24) {
+                            VStack(alignment: .leading, spacing: 24) {
                                     if activeCategory.templateKey == "theater" {
                                         categoryLibrarySection(
                                             category: activeCategory,
@@ -240,14 +241,14 @@ struct CategoryTopView: View {
                                         },
                                         onOpenSettings: { isShowingCategorySettings = true }
                                     )
-                                }
-                                .id("category-content-\(activeCategory.id.uuidString)")
                             }
+                            .id("category-content-\(activeCategory.id.uuidString)")
                         }
+                        .padding(.top, 12)
                         .id(CategoryScrollAnchor.top)
                     }
+                    }
                     .padding(.horizontal, 20)
-                    .padding(.top, 2)
                     .padding(.bottom, 24)
                 }
             }
@@ -294,14 +295,18 @@ struct CategoryTopView: View {
             )
         }
         .sheet(isPresented: $isShowingAddExperience) {
-            if activeCategory.templateKey == "random_goods" {
-                AddCollectibleSeriesView(category: activeCategory)
-            } else {
-                AddExperienceView(category: activeCategory)
+            Group {
+                if activeCategory.templateKey == "random_goods" {
+                    AddCollectibleSeriesView(category: activeCategory)
+                } else {
+                    AddExperienceView(category: activeCategory)
+                }
             }
+            .favorecoRegistrationTheme(categoryHex: activeCategory.colorHex)
         }
         .sheet(isPresented: $isShowingTheaterPerformanceRegistration) {
             TheaterPerformanceRegistrationView(category: activeCategory)
+                .favorecoRegistrationTheme(categoryHex: activeCategory.colorHex)
         }
         .sheet(isPresented: $isShowingInterestedTargetRegistration) {
             QuickRegistrationView(
@@ -311,6 +316,7 @@ struct CategoryTopView: View {
                 ),
                 locksCategory: true
             )
+            .favorecoRegistrationTheme(categoryHex: activeCategory.colorHex)
         }
         .sheet(isPresented: $isShowingTicketOverview) {
             NavigationStack {
@@ -320,6 +326,7 @@ struct CategoryTopView: View {
         .sheet(item: $ticketDetailsEditAttempt) { attempt in
             if let plan = attempt.plan {
                 EditTicketAttemptView(plan: plan, attempt: attempt)
+                    .favorecoRegistrationTheme(categoryHex: activeCategory.colorHex)
             } else {
                 FavorecoContentUnavailableView("予定が見つかりません", systemImage: "trash")
             }
@@ -352,6 +359,7 @@ struct CategoryTopView: View {
         }
         .sheet(item: $selectedEventForNewVisit) { event in
             AddVisitView(event: event)
+                .favorecoRegistrationTheme(categoryHex: event.category?.colorHex)
         }
         .sheet(item: $selectedGoshuinBook) { selection in
             GoshuinBookGalleryView(selection: selection)

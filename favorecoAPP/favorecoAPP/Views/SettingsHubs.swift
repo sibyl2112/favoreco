@@ -2,17 +2,14 @@ import SwiftUI
 import SwiftData
 
 struct SettingsNavigationLabel: View {
-    @Environment(\.favorecoThemePalette) private var themePalette
-
     let title: String
     let detail: String
     let systemImage: String
 
     var body: some View {
-        HStack(spacing: 12) {
-            FavorecoIcon(systemName: systemImage, size: 20, fallbackWeight: .semibold)
-                .foregroundStyle(themePalette.globalTint)
-                .frame(width: 30)
+        HStack(alignment: .top, spacing: 12) {
+            FavorecoSettingsRowIcon(systemImage: systemImage)
+                .padding(.top, 1)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)

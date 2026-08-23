@@ -47,7 +47,7 @@ struct DataManagementView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsCard {
                 VStack(spacing: 6) {
                     Text("\(visits.count)件の記録")
                         .font(FavorecoTypography.heroLead)
@@ -228,7 +228,7 @@ private struct ArchivedEventManagementView: View {
                     description: "対象詳細のメニューから非表示にした項目がここへ表示されます。"
                 )
             } else {
-                Section {
+                FavorecoSettingsSectionWithFooter("非表示の対象") {
                     ForEach(archivedEvents) { event in
                         HStack(spacing: 12) {
                             FavorecoIcon(
@@ -327,7 +327,7 @@ struct FullDataDeletionView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsCard {
                 Label("すべての記録データが失われます", systemImage: "exclamationmark.triangle.fill")
                     .font(FavorecoTypography.sectionTitle)
                     .foregroundStyle(.red)
@@ -465,7 +465,7 @@ struct CSVExportView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsCard {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("記録CSV")
                         .font(FavorecoTypography.sectionTitle)
@@ -546,6 +546,7 @@ struct JSONExportView: View {
     @Query(sort: \Plan.startsAt, order: .reverse) private var plans: [Plan]
     @Query(sort: \TicketAccount.serviceName) private var ticketAccounts: [TicketAccount]
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var ticketAttempts: [TicketAttempt]
+    @Query(sort: \MovieBestEntry.updatedAt, order: .reverse) private var movieBestEntries: [MovieBestEntry]
 
     @State private var isExporterPresented = false
     @State private var exportDocument = JSONBackupDocument()
@@ -556,12 +557,12 @@ struct JSONExportView: View {
     }
 
     private var totalRecordCount: Int {
-        categories.count + events.count + bookShelves.count + visits.count + inboxItems.count + socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count
+        categories.count + events.count + bookShelves.count + visits.count + inboxItems.count + socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count + personLinks.count + places.count + plans.count + ticketAccounts.count + ticketAttempts.count + movieBestEntries.count
     }
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsCard {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("JSONバックアップ")
                         .font(FavorecoTypography.sectionTitle)
@@ -587,6 +588,7 @@ struct JSONExportView: View {
                 LabeledContent("予定", value: "\(plans.count)")
                 LabeledContent("登録情報・名義", value: "\(ticketAccounts.count)")
                 LabeledContent("チケット申込", value: "\(ticketAttempts.count)")
+                LabeledContent("映画MY BEST", value: "\(movieBestEntries.count)")
                 LabeledContent("気になる対象", value: "\(events.filter { $0.stateKey == "interested" && !$0.isArchived }.count)")
                 if !inboxItems.isEmpty {
                     LabeledContent("旧クイックデータ", value: "\(inboxItems.count)")
@@ -616,7 +618,8 @@ struct JSONExportView: View {
                             places: places,
                             plans: plans,
                             ticketAccounts: ticketAccounts,
-                            ticketAttempts: ticketAttempts
+                            ticketAttempts: ticketAttempts,
+                            movieBestEntries: movieBestEntries
                         )
                         exportDocument = JSONBackupDocument(text: text)
                         exportErrorMessage = ""
@@ -683,7 +686,7 @@ struct SyncBackupSettingsView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsSectionWithFooter("同期") {
                 Toggle("iCloud同期", isOn: $iCloudSyncEnabled)
                     .disabled(!canUseSyncFeatures)
                 LabeledContent("現在の保存先", value: iCloudSyncActiveAtLaunch ? "端末 + iCloud" : "この端末")
@@ -712,8 +715,6 @@ struct SyncBackupSettingsView: View {
                 .disabled(isRefreshingDiagnostic)
                 LabeledContent("写真の同期", value: iCloudSyncActiveAtLaunch ? "含む" : "OFF")
                 LabeledContent("写真データ", value: ByteCountFormatter.string(fromByteCount: totalPhotoBytes, countStyle: .file))
-            } header: {
-                Text("同期")
             } footer: {
                 Text("ONでは同じApple Accountの端末間で記録と写真を自動同期します。まず端末内へ保存されるため、通信やiCloud容量の問題で記録が失われることはありません。初回はWi-Fi環境を推奨します。")
             }

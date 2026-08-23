@@ -21,7 +21,7 @@ struct JSONImportView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsCard {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("JSONバックアップを確認")
                         .font(FavorecoTypography.sectionTitle)
@@ -32,7 +32,7 @@ struct JSONImportView: View {
                 .padding(.vertical, 6)
             }
 
-            Section("ファイル") {
+            FavorecoSettingsSection("ファイル") {
                 Button {
                     isImporterPresented = true
                 } label: {
@@ -51,7 +51,7 @@ struct JSONImportView: View {
             }
 
             if let preview {
-                Section("形式確認") {
+                FavorecoSettingsSection("形式確認") {
                     Label("Favorecoバックアップとして確認できました", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
                     LabeledContent("形式", value: "schema \(preview.schemaVersion)")
@@ -59,7 +59,7 @@ struct JSONImportView: View {
                     LabeledContent("復元対象モデル", value: "\(preview.totalModelCount)件")
                 }
 
-                Section("内容") {
+                FavorecoSettingsSection("内容") {
                     previewRow("ジャンル", preview.categoryCount)
                     previewRow("対象", preview.eventCount)
                     previewRow("訪問/鑑賞記録", preview.visitCount)
@@ -75,7 +75,7 @@ struct JSONImportView: View {
                     previewRow("写真メタデータ", preview.photoMetadataCount)
                 }
 
-                Section("写真について") {
+                FavorecoSettingsSection("写真について") {
                     Label("写真・動画本体はこのJSONに含まれません", systemImage: "photo.badge.exclamationmark")
                         .font(FavorecoTypography.bodyStrong)
                         .foregroundStyle(.orange)
@@ -84,7 +84,7 @@ struct JSONImportView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("復元") {
+                FavorecoSettingsSection("復元") {
                     Button {
                         isConfirmingRestore = true
                     } label: {
@@ -98,7 +98,7 @@ struct JSONImportView: View {
                 }
 
                 if let restoreResult {
-                    Section("復元結果") {
+                    FavorecoSettingsSection("復元結果") {
                         Label("復元が完了しました", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                         LabeledContent("追加", value: "\(restoreResult.insertedCount)件")
@@ -109,6 +109,7 @@ struct JSONImportView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("JSONインポート")
         .navigationBarTitleDisplayMode(.inline)
         .fileImporter(

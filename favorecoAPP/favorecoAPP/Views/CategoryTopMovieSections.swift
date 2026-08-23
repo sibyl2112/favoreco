@@ -113,7 +113,7 @@ struct CategoryVisitRecordLibrarySection: View {
                         Button {
                             onOpenVisit(item.visit)
                         } label: {
-                            CategoryVisitRecordPosterTile(item: item, category: category)
+                            CategoryVisitRecordPosterTile(item: item, category: category, tint: tint)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -143,6 +143,7 @@ struct CategoryVisitRecordLibrarySection: View {
 struct CategoryVisitRecordPosterTile: View {
     let item: CategoryVisitRecordItem
     let category: RecordCategory
+    let tint: Color
 
     private var posterAspectRatio: CGFloat {
         if category.templateKey == "movie" {
@@ -152,7 +153,7 @@ struct CategoryVisitRecordPosterTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: category.templateKey == "live" ? 4 : 7) {
+        VStack(alignment: .leading, spacing: 0) {
             GeometryReader { geometry in
                 ZStack(alignment: .bottomTrailing) {
                     ThumbnailImage(
@@ -184,7 +185,16 @@ struct CategoryVisitRecordPosterTile: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
-                Spacer(minLength: 2)
+                Spacer(minLength: 1)
+
+                Rectangle()
+                    .fill(tint.opacity(CategoryLibraryChrome.galleryMetadataSeparatorOpacity))
+                    .frame(
+                        width: CategoryLibraryChrome.galleryMetadataSeparatorLineWidth,
+                        height: 11
+                    )
+
+                Spacer(minLength: 1)
 
                 Image(systemName: item.visit.overallRating > 0 ? "star.fill" : "star")
                     .foregroundStyle(item.visit.overallRating > 0 ? Color.yellow : Color.secondary)
@@ -196,13 +206,24 @@ struct CategoryVisitRecordPosterTile: View {
             .font(FavorecoTypography.caption)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
+            .padding(.top, category.templateKey == "live" ? 4 : 7)
             .padding(.bottom, 7)
+            .frame(maxWidth: .infinity)
+            .background(CategoryLibraryChrome.galleryMetadataBackground)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(tint.opacity(CategoryLibraryChrome.galleryDividerOpacity))
+                    .frame(height: CategoryLibraryChrome.galleryDividerLineWidth)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemBackground))
+        .background(CategoryLibraryChrome.galleryMetadataBackground)
         .overlay {
             Rectangle()
-                .stroke(Color.secondary.opacity(0.18), lineWidth: 0.5)
+                .stroke(
+                    tint.opacity(CategoryLibraryChrome.galleryBorderOpacity),
+                    lineWidth: CategoryLibraryChrome.galleryBorderLineWidth
+                )
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)

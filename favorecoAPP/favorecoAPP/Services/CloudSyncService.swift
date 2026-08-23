@@ -24,6 +24,7 @@ enum FavorecoModelContainerBootstrap {
         TicketAttempt.self,
         CollectibleItem.self,
         CollectibleTransaction.self,
+        MovieBestEntry.self,
     ])
 
     @MainActor

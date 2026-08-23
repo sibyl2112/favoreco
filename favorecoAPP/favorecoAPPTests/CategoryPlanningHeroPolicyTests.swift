@@ -2,6 +2,33 @@ import XCTest
 @testable import favoreco
 
 final class CategoryPlanningHeroPolicyTests: XCTestCase {
+    func testSharedTargetEyecatchPriorityKeepsPerformanceAndBookExceptions() {
+        for templateKey in ["museum", "movie", "theme_park", "nature_living", "custom"] {
+            XCTAssertTrue(
+                TargetEyecatchPresentationPolicy.prefersSharedEventEyecatch(
+                    templateKey: templateKey,
+                    hasEventEyecatch: true
+                ),
+                templateKey
+            )
+        }
+        for templateKey in ["theater", "live", "book"] {
+            XCTAssertFalse(
+                TargetEyecatchPresentationPolicy.prefersSharedEventEyecatch(
+                    templateKey: templateKey,
+                    hasEventEyecatch: true
+                ),
+                templateKey
+            )
+        }
+        XCTAssertFalse(
+            TargetEyecatchPresentationPolicy.prefersSharedEventEyecatch(
+                templateKey: "museum",
+                hasEventEyecatch: false
+            )
+        )
+    }
+
     func testMemoryHeroIndexIsEmptySafeAndStableWithinTheDay() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

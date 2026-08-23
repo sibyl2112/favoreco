@@ -261,7 +261,7 @@ struct EditSocialAccountView: View {
             }
 
             if account != nil {
-                Section {
+                FavorecoSettingsCard {
                     Button(role: .destructive) {
                         archive()
                     } label: {

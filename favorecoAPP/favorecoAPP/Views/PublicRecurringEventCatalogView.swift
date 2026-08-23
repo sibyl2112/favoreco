@@ -46,14 +46,14 @@ struct PublicRecurringEventCatalogView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
+                FavorecoSettingsCard {
                     FavorecoSettingsInfoCallout(
                         title: onSelect == nil ? "定期イベントを対象へ追加" : "定期イベントから入力",
                         message: "シリーズの名称と公式URLだけを利用者データへ写します。開催回の会期は予定日候補として選べます。"
                     )
                 }
 
-                Section("絞り込み") {
+                FavorecoSettingsSection("絞り込み") {
                     Picker("ジャンル", selection: $selectedTemplateKey) {
                         Text("すべて").tag("")
                         Text("ミュージアム").tag("museum")
@@ -65,7 +65,7 @@ struct PublicRecurringEventCatalogView: View {
 
                 syncSection
 
-                Section("公開定期イベントカタログ") {
+                FavorecoSettingsSection("公開定期イベントカタログ") {
                     if filteredEntries.isEmpty {
                         if store.entries.isEmpty {
                             Button {
@@ -105,6 +105,7 @@ struct PublicRecurringEventCatalogView: View {
                     }
                 }
             }
+            .favorecoSettingsListLayout()
             .navigationTitle("定期イベントカタログ")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "名称・よみ・地域・別名を検索")
@@ -135,15 +136,15 @@ struct PublicRecurringEventCatalogView: View {
     private var syncSection: some View {
         switch store.state {
         case .idle, .loadingCache:
-            Section { ProgressView("端末キャッシュを読み込み中…") }
+            FavorecoSettingsCard { ProgressView("端末キャッシュを読み込み中…") }
         case .syncing:
-            Section { ProgressView("公開カタログを更新中…") }
+            FavorecoSettingsCard { ProgressView("公開カタログを更新中…") }
         case let .ready(lastSyncedAt):
             if let lastSyncedAt {
-                Section { LabeledContent("最終更新", value: FavorecoDateText.compactDateTime(lastSyncedAt)) }
+                FavorecoSettingsCard { LabeledContent("最終更新", value: FavorecoDateText.compactDateTime(lastSyncedAt)) }
             }
         case let .failed(message, hasCache):
-            Section {
+            FavorecoSettingsCard {
                 Label(hasCache ? "取得済みデータを表示しています" : "公開カタログを取得できませんでした", systemImage: "exclamationmark.icloud")
                 Text(message).font(FavorecoTypography.caption).foregroundStyle(.secondary)
             }

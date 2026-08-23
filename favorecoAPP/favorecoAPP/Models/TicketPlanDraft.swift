@@ -10,10 +10,18 @@ struct TicketPlanDraft {
     var categoryID: UUID?
     var title = ""
     var subtitle = ""
+    var seriesName = ""
+    var performanceTypeKey = TheaterPerformanceType.play.rawValue
+    var performanceTypeCustomName = ""
+    var organizerName = ""
+    var socialLinksText = ""
+    var eventCreditsText = ""
+    var attendanceMethodKey = "onsite"
     var startsAt = Date().roundedToNearestTenMinutes()
     var endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: Date().roundedToNearestTenMinutes()) ?? Date()
     var opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: Date().roundedToNearestTenMinutes()) ?? Date()
     var hasOpeningTime = false
+    var hasEndTime = false
     var venueName = ""
     var venueAddress = ""
     var venueOfficialURL = ""
@@ -48,6 +56,11 @@ struct TicketPlanDraft {
     var seatText = ""
     var tagNamesText = ""
     var planTagNamesText = ""
+    var planMemoStyleRuns: [MemoStyleRun] = []
+    var planOverallRating: Double = 0
+    var planMomentEntries: [VisitMomentEntry] = []
+    var planLiveSetlistEntries: [LiveSetlistEntry] = []
+    var planPeople: [PlanMemoryPerson] = []
     var planUnitFieldsRawSnapshot = ""
     var purchaseURL = ""
     var memo = ""
@@ -86,6 +99,13 @@ struct TicketPlanDraft {
     ) {
         categoryID = event.category?.id
         title = event.title
+        seriesName = event.seriesName
+        performanceTypeKey = event.subTypeKey.isEmpty ? TheaterPerformanceType.play.rawValue : event.subTypeKey
+        organizerName = event.organizerNameSnapshot
+        let eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
+        socialLinksText = eventFields.socialLinks.joined(separator: "\n")
+        eventCreditsText = eventFields.eventCreditsText
         officialURL = event.officialURL
         memo = event.memo
         let registeredVenues = VisitUnitFields(rawValue: event.unitFieldsRaw)
@@ -128,10 +148,20 @@ struct TicketPlanDraft {
 
         categoryID = plan.category?.id
         title = plan.event?.title.isEmpty == false ? plan.event?.title ?? plan.title : plan.title
+        seriesName = plan.event?.seriesName ?? ""
+        performanceTypeKey = plan.event?.subTypeKey.isEmpty == false
+            ? plan.event?.subTypeKey ?? TheaterPerformanceType.play.rawValue
+            : TheaterPerformanceType.play.rawValue
+        organizerName = plan.event?.organizerNameSnapshot ?? ""
+        let eventFields = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "")
+        performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
+        socialLinksText = eventFields.socialLinks.joined(separator: "\n")
+        eventCreditsText = eventFields.eventCreditsText
         subtitle = plan.subtitle
         hasConfirmedSchedule = plan.hasConfirmedSchedule
         startsAt = plan.startsAt
         endsAt = plan.endsAt
+        hasEndTime = plan.endsAt > plan.startsAt
         opensAt = plan.opensAt
         hasOpeningTime = plan.opensAt != Date.distantPast
         venueName = plan.venueNameSnapshot
@@ -140,11 +170,17 @@ struct TicketPlanDraft {
         latitude = plan.placeMaster?.latitude ?? 0
         longitude = plan.placeMaster?.longitude ?? 0
         officialURL = plan.officialURL
+        attendanceMethodKey = PlanPreparationFields(rawValue: plan.unitFieldsRaw).attendanceMethodKey
         memo = plan.memo
         planUnitFieldsRawSnapshot = plan.unitFieldsRaw
-        planTagNamesText = PlanPreparationFields(rawValue: plan.unitFieldsRaw)
-            .tagNames
-            .joined(separator: "\n")
+        let preparationFields = PlanPreparationFields(rawValue: plan.unitFieldsRaw)
+        attendanceMethodKey = preparationFields.attendanceMethodKey
+        planTagNamesText = preparationFields.tagNames.joined(separator: "\n")
+        planMemoStyleRuns = preparationFields.memoStyleRuns
+        planOverallRating = preparationFields.overallRating
+        planMomentEntries = preparationFields.momentEntries
+        planLiveSetlistEntries = preparationFields.liveSetlistEntries
+        planPeople = preparationFields.people
 
         guard entryMode == .ticketSchedule else {
             createsTicketAttempt = false
@@ -182,6 +218,17 @@ struct TicketPlanDraft {
 
     var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedSubtitle: String { subtitle.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedSeriesName: String { seriesName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var trimmedOrganizerName: String { organizerName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var normalizedSocialLinks: [String] {
+        socialLinksText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+    var trimmedEventCreditsText: String {
+        eventCreditsText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     var trimmedVenueName: String { venueName.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedOfficialURL: String { officialURL.trimmingCharacters(in: .whitespacesAndNewlines) }
     var trimmedTicketSite: String { ticketSite.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -218,6 +265,12 @@ struct TicketPlanDraft {
     var planUnitFieldsRaw: String {
         var fields = PlanPreparationFields(rawValue: planUnitFieldsRawSnapshot)
         fields.tagNames = TicketAttemptUnitFields.normalizedTagNames(from: planTagNamesText)
+        fields.memoStyleRuns = planMemoStyleRuns
+        fields.overallRating = planOverallRating
+        fields.momentEntries = planMomentEntries
+        fields.liveSetlistEntries = planLiveSetlistEntries
+        fields.people = planPeople
+        fields.attendanceMethodKey = attendanceMethodKey
         return fields.encodedRawValue
     }
     var trimmedPurchaseURL: String { purchaseURL.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -425,6 +478,13 @@ struct TicketPlanDraft {
     mutating func applyTarget(_ event: ExperienceEvent) {
         categoryID = event.category?.id
         title = event.title
+        seriesName = event.seriesName
+        performanceTypeKey = event.subTypeKey.isEmpty ? TheaterPerformanceType.play.rawValue : event.subTypeKey
+        organizerName = event.organizerNameSnapshot
+        let eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
+        socialLinksText = eventFields.socialLinks.joined(separator: "\n")
+        eventCreditsText = eventFields.eventCreditsText
         officialURL = event.officialURL
         venueName = ""
         venueAddress = ""
@@ -444,9 +504,19 @@ struct TicketPlanDraft {
         categoryID = plan.category?.id
         let eventTitle = plan.event?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         title = eventTitle.isEmpty ? plan.title : eventTitle
+        seriesName = plan.event?.seriesName ?? ""
+        performanceTypeKey = plan.event?.subTypeKey.isEmpty == false
+            ? plan.event?.subTypeKey ?? TheaterPerformanceType.play.rawValue
+            : TheaterPerformanceType.play.rawValue
+        organizerName = plan.event?.organizerNameSnapshot ?? ""
+        let eventFields = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "")
+        performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
+        socialLinksText = eventFields.socialLinks.joined(separator: "\n")
+        eventCreditsText = eventFields.eventCreditsText
         subtitle = plan.subtitle
         startsAt = plan.startsAt
         endsAt = plan.endsAt
+        hasEndTime = plan.endsAt > plan.startsAt
         opensAt = plan.opensAt
         hasOpeningTime = plan.opensAt != Date.distantPast
         venueName = plan.venueNameSnapshot
@@ -454,6 +524,7 @@ struct TicketPlanDraft {
         latitude = plan.placeMaster?.latitude ?? 0
         longitude = plan.placeMaster?.longitude ?? 0
         officialURL = plan.officialURL
+        attendanceMethodKey = PlanPreparationFields(rawValue: plan.unitFieldsRaw).attendanceMethodKey
 
         guard applicationGroupIDRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
@@ -492,10 +563,18 @@ struct TicketPlanDraft {
         categoryID = nil
         title = ""
         subtitle = ""
+        seriesName = ""
+        performanceTypeKey = TheaterPerformanceType.play.rawValue
+        performanceTypeCustomName = ""
+        organizerName = ""
+        socialLinksText = ""
+        eventCreditsText = ""
+        attendanceMethodKey = "onsite"
         startsAt = now
         endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: now) ?? now
         opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: now) ?? now
         hasOpeningTime = false
+        hasEndTime = false
         venueName = ""
         venueAddress = ""
         latitude = 0

@@ -212,12 +212,14 @@ actor AutomaticBackupModelActor {
         let plans = try modelContext.fetch(FetchDescriptor<Plan>())
         let ticketAccounts = try modelContext.fetch(FetchDescriptor<TicketAccount>())
         let ticketAttempts = try modelContext.fetch(FetchDescriptor<TicketAttempt>())
+        let movieBestEntries = try modelContext.fetch(FetchDescriptor<MovieBestEntry>())
         let primaryContentCount = categories.filter { !$0.isBuiltIn }.count
             + events.count + bookShelves.count + visits.count + inboxItems.count + photos.count
         let profileContentCount = socialAccounts.count + people.count + companions.count
             + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count
         let linkedContentCount = favoPins.count + personLinks.count + places.count
         let planningContentCount = plans.count + ticketAccounts.count + ticketAttempts.count
+            + movieBestEntries.count
         let userContentCount = primaryContentCount
             + profileContentCount
             + linkedContentCount
@@ -256,6 +258,7 @@ actor AutomaticBackupModelActor {
             plans: plans,
             ticketAccounts: ticketAccounts,
             ticketAttempts: ticketAttempts,
+            movieBestEntries: movieBestEntries,
             includesPhotoBinaryData: false,
             isFullBackupManifest: true
         )

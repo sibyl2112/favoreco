@@ -15,29 +15,69 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
     }
 
     var checklistModeKey: String = ChecklistMode.automatic.rawValue
+    var attendanceMethodKey: String = "onsite"
     var tasks: [PlanPreparationTask] = []
     var tagNames: [String] = []
+    var memoStyleRuns: [MemoStyleRun] = []
+    var overallRating: Double = 0
+    var momentEntries: [VisitMomentEntry] = []
+    var liveSetlistEntries: [LiveSetlistEntry] = []
+    var people: [PlanMemoryPerson] = []
+    var amountText: String = ""
+    var expenseEntries: [VisitExpenseEntry] = []
+    var ocrText: String = ""
+    var advancedEntries: [AdvancedFieldEntry] = []
     var admissionPreparationConfirmedAt: Date?
     var admissionPreparationSnoozedUntil: Date?
 
     init(
         checklistModeKey: String = ChecklistMode.automatic.rawValue,
+        attendanceMethodKey: String = "onsite",
         tasks: [PlanPreparationTask] = [],
         tagNames: [String] = [],
+        memoStyleRuns: [MemoStyleRun] = [],
+        overallRating: Double = 0,
+        momentEntries: [VisitMomentEntry] = [],
+        liveSetlistEntries: [LiveSetlistEntry] = [],
+        people: [PlanMemoryPerson] = [],
+        amountText: String = "",
+        expenseEntries: [VisitExpenseEntry] = [],
+        ocrText: String = "",
+        advancedEntries: [AdvancedFieldEntry] = [],
         admissionPreparationConfirmedAt: Date? = nil,
         admissionPreparationSnoozedUntil: Date? = nil
     ) {
         self.checklistModeKey = checklistModeKey
+        self.attendanceMethodKey = attendanceMethodKey
         self.tasks = tasks
         self.tagNames = tagNames
+        self.memoStyleRuns = memoStyleRuns
+        self.overallRating = overallRating
+        self.momentEntries = momentEntries
+        self.liveSetlistEntries = liveSetlistEntries
+        self.people = people
+        self.amountText = amountText
+        self.expenseEntries = expenseEntries
+        self.ocrText = ocrText
+        self.advancedEntries = advancedEntries
         self.admissionPreparationConfirmedAt = admissionPreparationConfirmedAt
         self.admissionPreparationSnoozedUntil = admissionPreparationSnoozedUntil
     }
 
     private enum CodingKeys: String, CodingKey {
         case checklistModeKey
+        case attendanceMethodKey
         case tasks
         case tagNames
+        case memoStyleRuns
+        case overallRating
+        case momentEntries
+        case liveSetlistEntries
+        case people
+        case amountText
+        case expenseEntries
+        case ocrText
+        case advancedEntries
         case admissionPreparationConfirmedAt
         case admissionPreparationSnoozedUntil
     }
@@ -46,8 +86,18 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         checklistModeKey = try container.decodeIfPresent(String.self, forKey: .checklistModeKey)
             ?? ChecklistMode.automatic.rawValue
+        attendanceMethodKey = try container.decodeIfPresent(String.self, forKey: .attendanceMethodKey) ?? "onsite"
         tasks = try container.decodeIfPresent([PlanPreparationTask].self, forKey: .tasks) ?? []
         tagNames = try container.decodeIfPresent([String].self, forKey: .tagNames) ?? []
+        memoStyleRuns = try container.decodeIfPresent([MemoStyleRun].self, forKey: .memoStyleRuns) ?? []
+        overallRating = try container.decodeIfPresent(Double.self, forKey: .overallRating) ?? 0
+        momentEntries = try container.decodeIfPresent([VisitMomentEntry].self, forKey: .momentEntries) ?? []
+        liveSetlistEntries = try container.decodeIfPresent([LiveSetlistEntry].self, forKey: .liveSetlistEntries) ?? []
+        people = try container.decodeIfPresent([PlanMemoryPerson].self, forKey: .people) ?? []
+        amountText = try container.decodeIfPresent(String.self, forKey: .amountText) ?? ""
+        expenseEntries = try container.decodeIfPresent([VisitExpenseEntry].self, forKey: .expenseEntries) ?? []
+        ocrText = try container.decodeIfPresent(String.self, forKey: .ocrText) ?? ""
+        advancedEntries = try container.decodeIfPresent([AdvancedFieldEntry].self, forKey: .advancedEntries) ?? []
         admissionPreparationConfirmedAt = try container.decodeIfPresent(
             Date.self,
             forKey: .admissionPreparationConfirmedAt
@@ -98,14 +148,35 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
         }
         let normalized = PlanPreparationFields(
             checklistModeKey: checklistModeKey,
+            attendanceMethodKey: attendanceMethodKey,
             tasks: normalizedTasks,
             tagNames: tagNames,
+            memoStyleRuns: memoStyleRuns,
+            overallRating: overallRating,
+            momentEntries: momentEntries.map(\.normalized).filter { !$0.isEmpty },
+            liveSetlistEntries: liveSetlistEntries.map(\.normalized).filter { !$0.isEmpty },
+            people: people.filter { !$0.trimmedName.isEmpty },
+            amountText: amountText.trimmingCharacters(in: .whitespacesAndNewlines),
+            expenseEntries: expenseEntries
+                .map { VisitExpenseEntry(id: $0.id, title: $0.normalizedTitle, amount: $0.normalizedAmount) }
+                .filter { !$0.isEmpty },
+            ocrText: ocrText.trimmingCharacters(in: .whitespacesAndNewlines),
+            advancedEntries: advancedEntries.map(\.normalized).filter { !$0.isEmpty },
             admissionPreparationConfirmedAt: admissionPreparationConfirmedAt,
             admissionPreparationSnoozedUntil: admissionPreparationSnoozedUntil
         )
         guard normalized.checklistMode != .automatic
                 || !normalized.tasks.isEmpty
                 || !normalized.tagNames.isEmpty
+                || !normalized.memoStyleRuns.isEmpty
+                || normalized.overallRating > 0
+                || !normalized.momentEntries.isEmpty
+                || !normalized.liveSetlistEntries.isEmpty
+                || !normalized.people.isEmpty
+                || !normalized.amountText.isEmpty
+                || !normalized.expenseEntries.isEmpty
+                || !normalized.ocrText.isEmpty
+                || !normalized.advancedEntries.isEmpty
                 || normalized.admissionPreparationConfirmedAt != nil
                 || normalized.admissionPreparationSnoozedUntil != nil,
               let data = try? JSONEncoder().encode(normalized),
@@ -113,6 +184,100 @@ nonisolated struct PlanPreparationFields: Codable, Equatable {
             return ""
         }
         return string
+    }
+}
+
+/// 予定段階で入力した「人物・団体」を、記録作成まで保持する軽量スナップショット。
+/// PersonMaster / EventPersonLink は記録保存時に既存の解決処理を通して作成する。
+nonisolated struct PlanMemoryPerson: Codable, Equatable {
+    var name: String = ""
+    var reading: String = ""
+    var roleKey: String = "cast"
+    var roleDetail: String = ""
+    var affiliationName: String = ""
+    var entityKindKey: String = PersonEntityKind.person.rawValue
+    var parentOrganizationID: UUID?
+    var relationshipTagKeys: [String] = []
+    var isEventFocus = false
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case reading
+        case roleKey
+        case roleDetail
+        case affiliationName
+        case entityKindKey
+        case parentOrganizationID
+        case relationshipTagKeys
+        case isEventFocus
+    }
+
+    var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    init(
+        name: String = "",
+        reading: String = "",
+        roleKey: String = "cast",
+        roleDetail: String = "",
+        affiliationName: String = "",
+        entityKindKey: String = PersonEntityKind.person.rawValue,
+        parentOrganizationID: UUID? = nil,
+        relationshipTagKeys: [String] = [],
+        isEventFocus: Bool = false
+    ) {
+        self.name = name
+        self.reading = reading
+        self.roleKey = roleKey
+        self.roleDetail = roleDetail
+        self.affiliationName = affiliationName
+        self.entityKindKey = entityKindKey
+        self.parentOrganizationID = parentOrganizationID
+        self.relationshipTagKeys = relationshipTagKeys
+        self.isEventFocus = isEventFocus
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        reading = try container.decodeIfPresent(String.self, forKey: .reading) ?? ""
+        roleKey = try container.decodeIfPresent(String.self, forKey: .roleKey) ?? "cast"
+        roleDetail = try container.decodeIfPresent(String.self, forKey: .roleDetail) ?? ""
+        affiliationName = try container.decodeIfPresent(String.self, forKey: .affiliationName) ?? ""
+        entityKindKey = try container.decodeIfPresent(String.self, forKey: .entityKindKey)
+            ?? PersonEntityKind.person.rawValue
+        parentOrganizationID = try container.decodeIfPresent(UUID.self, forKey: .parentOrganizationID)
+        relationshipTagKeys = try container.decodeIfPresent([String].self, forKey: .relationshipTagKeys) ?? []
+        isEventFocus = try container.decodeIfPresent(Bool.self, forKey: .isEventFocus) ?? false
+    }
+
+    @MainActor init(_ pending: PendingPersonLink) {
+        self.init(
+            name: pending.name,
+            reading: pending.reading,
+            roleKey: pending.role.key,
+            roleDetail: pending.roleDetail,
+            affiliationName: pending.affiliationName,
+            entityKindKey: pending.entityKind.rawValue,
+            parentOrganizationID: pending.parentOrganizationID,
+            relationshipTagKeys: pending.relationshipTagKeys,
+            isEventFocus: pending.isEventFocus
+        )
+    }
+
+    @MainActor var pendingPersonLink: PendingPersonLink {
+        PendingPersonLink(
+            name: trimmedName,
+            reading: reading,
+            role: PersonRoleOption.option(for: roleKey),
+            roleDetail: roleDetail,
+            affiliationName: affiliationName,
+            entityKind: PersonEntityKind(rawValue: entityKindKey) ?? .person,
+            parentOrganizationID: parentOrganizationID,
+            relationshipTagKeys: relationshipTagKeys,
+            isEventFocus: isEventFocus
+        )
     }
 }
 

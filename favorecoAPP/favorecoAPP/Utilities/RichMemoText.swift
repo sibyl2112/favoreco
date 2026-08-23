@@ -26,10 +26,20 @@ nonisolated enum MemoTextColorKey: String, CaseIterable, Identifiable, Sendable 
     var title: String {
         switch self {
         case .standard: "標準"
-        case .accent: "テーマ色"
+        case .accent: "ピンク"
         case .red: "赤"
         case .blue: "青"
         case .green: "緑"
+        }
+    }
+
+    var menuSwatch: String {
+        switch self {
+        case .standard: "⚫️"
+        case .accent: "🩷"
+        case .red: "🔴"
+        case .blue: "🔵"
+        case .green: "🟢"
         }
     }
 
@@ -286,6 +296,18 @@ struct RichMemoTextView: UIViewRepresentable {
             context.coordinator.apply(text: text, runs: styleRuns, to: uiView)
         }
         context.coordinator.reportHeight(of: uiView)
+    }
+
+    func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: UITextView,
+        context _: Context
+    ) -> CGSize? {
+        guard let width = proposal.width, width > 0 else { return nil }
+        let measured = uiView.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)
+        )
+        return CGSize(width: width, height: max(190, ceil(measured.height)))
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {

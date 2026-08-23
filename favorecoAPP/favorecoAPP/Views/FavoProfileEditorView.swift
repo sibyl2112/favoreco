@@ -31,6 +31,8 @@ struct FavoProfileEditorView: View {
                 Section { Text(errorMessage).foregroundStyle(.red) }
             }
         }
+        .favorecoRegistrationFormCanvas()
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
         .navigationTitle("FAVOプロフィール")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -502,6 +504,8 @@ struct FavoNewPersonView: View {
                     Section { Text(errorMessage).foregroundStyle(.red) }
                 }
             }
+            .favorecoRegistrationFormCanvas()
+            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle("人物・団体を追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

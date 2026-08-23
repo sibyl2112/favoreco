@@ -1,20 +1,20 @@
 import SwiftUI
 
 enum ExplicitFormMetrics {
-    static let rowMinimumHeight: CGFloat = 66
-    static let labelFontSize: CGFloat = 16
+    static let rowMinimumHeight: CGFloat = 54
+    static let labelFontSize: CGFloat = 14
     static let inputFontSize: CGFloat = 16
     static let dateControlScale: CGFloat = 15.0 / 17.0
-    static let rowTopPadding: CGFloat = 9
-    static let rowBottomPadding: CGFloat = 8
+    static let rowTopPadding: CGFloat = 6
+    static let rowBottomPadding: CGFloat = 6
     static let controlTrailingPadding: CGFloat = 4
-    static let rowSeparatorColor = Color.secondary.opacity(0.46)
+    static let rowSeparatorColor = Color.secondary.opacity(0.18)
 
     /// ライトテーマの登録画面で、白い入力Sectionを判別しやすくする外側キャンバス。
     static func canvasColor(for colorScheme: ColorScheme) -> Color {
         colorScheme == .dark
-            ? Color(.systemGroupedBackground)
-            : Color(red: 0.925, green: 0.925, blue: 0.945)
+            ? Color(.secondarySystemBackground)
+            : Color(red: 0.975, green: 0.963, blue: 0.967)
     }
 
     /// 入力カード外のグレー面に置く補足文。プレースホルダーより一段濃く見せる。
@@ -24,22 +24,35 @@ enum ExplicitFormMetrics {
 }
 
 private struct FavorecoRegistrationFormCanvasModifier: ViewModifier {
+    let isEnabled: Bool
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.favorecoThemePalette) private var themePalette
 
     func body(content: Content) -> some View {
-        content
-            .scrollContentBackground(.hidden)
-            .background(
-                ExplicitFormMetrics.canvasColor(for: colorScheme)
+        if isEnabled {
+            content
+                .scrollContentBackground(.hidden)
+                .environment(\.defaultMinListRowHeight, ExplicitFormMetrics.rowMinimumHeight)
+                .listSectionSpacing(18)
+                .background(
+                    ZStack {
+                        ExplicitFormMetrics.canvasColor(for: colorScheme)
+                        if themePalette.registrationAccentHex != nil {
+                            themePalette.globalTint.opacity(colorScheme == .dark ? 0.10 : 0.055)
+                        }
+                    }
                     .ignoresSafeArea()
-            )
+                )
+        } else {
+            content
+        }
     }
 }
 
 extension View {
     /// 登録・編集フォームの白い入力Sectionと外側背景の明度差を全画面で統一する。
-    func favorecoRegistrationFormCanvas() -> some View {
-        modifier(FavorecoRegistrationFormCanvasModifier())
+    func favorecoRegistrationFormCanvas(isEnabled: Bool = true) -> some View {
+        modifier(FavorecoRegistrationFormCanvasModifier(isEnabled: isEnabled))
     }
 }
 
@@ -53,7 +66,9 @@ struct FavorecoRegistrationSectionHeader: View {
 
     var body: some View {
         Text(title)
+            .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
             .foregroundStyle(themePalette.registrationSectionHeaderTint)
+            .textCase(nil)
     }
 }
 
@@ -72,6 +87,8 @@ struct FavorecoRegistrationSection<Content: View>: View {
         } header: {
             FavorecoRegistrationSectionHeader(title)
         }
+        .listRowBackground(Color(uiColor: .systemBackground))
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
     }
 }
 
@@ -365,6 +382,8 @@ struct TheaterPerformanceTypePicker: View {
 }
 
 struct ExplicitFormTextField: View {
+    @Environment(\.usesTheaterLifecycleFlatLayout) private var usesTheaterLifecycleFlatLayout
+
     enum LabelStyle: Equatable {
         case stacked
         case horizontal
@@ -383,6 +402,7 @@ struct ExplicitFormTextField: View {
     var labelLineLimit = 1
     var labelNote = ""
     var focusesFromWholeRow = false
+    var emphasizesHorizontalLabel = false
 
     @FocusState private var isFocused: Bool
 
@@ -413,6 +433,14 @@ struct ExplicitFormTextField: View {
         return 24 + CGFloat(minimumLines) * 20
     }
 
+    private var effectiveLabelStyle: LabelStyle {
+        usesTheaterLifecycleFlatLayout ? .stacked : labelStyle
+    }
+
+    private var displaysInputBoundary: Bool {
+        usesTheaterLifecycleFlatLayout || showsInputBoundary
+    }
+
     @ViewBuilder
     var body: some View {
         if focusesFromWholeRow {
@@ -427,30 +455,34 @@ struct ExplicitFormTextField: View {
     }
 
     private var fieldRow: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            fieldTitle
-            HStack(alignment: .top, spacing: 6) {
-                inputField
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                if !text.isEmpty {
-                    Button {
-                        text = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(Color.secondary.opacity(0.72))
-                            .frame(width: 28, height: 27)
-                            .contentShape(Rectangle())
+        Group {
+            if effectiveLabelStyle == .horizontal {
+                HStack(alignment: .top, spacing: 12) {
+                    if emphasizesHorizontalLabel {
+                        ExplicitFormProminentInlineLabel(
+                            title: displayedTitle,
+                            isOptional: isOptional,
+                            isRequired: isRequired
+                        )
+                    } else {
+                        fieldTitle
+                            .frame(width: 112, alignment: .leading)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(displayedTitle)をすべて消去")
+                    fieldInput
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    fieldTitle
+                    fieldInput
                 }
             }
         }
         .padding(.top, ExplicitFormMetrics.rowTopPadding)
         .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
-        .frame(minHeight: minimumRowHeight, alignment: .topLeading)
+        .frame(
+            minHeight: effectiveLabelStyle == .horizontal ? 48 : minimumRowHeight,
+            alignment: .topLeading
+        )
         .contentShape(Rectangle())
         .listRowInsets(
             EdgeInsets(
@@ -461,6 +493,27 @@ struct ExplicitFormTextField: View {
             )
         )
         .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+    }
+
+    private var fieldInput: some View {
+        HStack(alignment: .top, spacing: 6) {
+            inputField
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(Color.secondary.opacity(0.72))
+                        .frame(width: 28, height: 27)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(displayedTitle)をすべて消去")
+            }
+        }
     }
 
     private var fieldTitle: some View {
@@ -483,14 +536,20 @@ struct ExplicitFormTextField: View {
                     .lineLimit(minimumLines...maximumLines)
             }
         }
-        .padding(showsInputBoundary ? 10 : 0)
+        .padding(displaysInputBoundary ? 10 : 0)
         .background {
-            if showsInputBoundary {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.secondary.opacity(0.055))
+            if displaysInputBoundary {
+                RoundedRectangle(
+                    cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                    style: .continuous
+                )
+                    .fill(TheaterLifecycleFlatStyle.fieldBackground)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.secondary.opacity(0.24), lineWidth: 0.8)
+                        RoundedRectangle(
+                            cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                            style: .continuous
+                        )
+                            .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
                     }
             }
         }
@@ -532,45 +591,105 @@ struct ExplicitFormTextField: View {
 }
 
 struct ExplicitFormControlRow<Control: View>: View {
+    @Environment(\.usesTheaterLifecycleFlatLayout) private var usesTheaterLifecycleFlatLayout
+
+    enum Layout {
+        case stacked
+        case horizontal
+    }
+
     let title: String
     var isOptional = false
     var isRequired = false
     var density: ExplicitFormControlRowDensity = .standard
+    var layout: Layout = .stacked
+    var emphasizesHorizontalLabel = false
     @ViewBuilder let control: () -> Control
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: density.titleControlSpacing) {
-            ExplicitFormFieldTitle(
-                title: title,
-                isOptional: isOptional,
-                isRequired: isRequired
-            )
+    private var effectiveLayout: Layout {
+        usesTheaterLifecycleFlatLayout ? .stacked : layout
+    }
 
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                control()
-                    .font(
-                        FavorecoTypography.jpSans(
-                            ExplicitFormMetrics.inputFontSize,
-                            weight: .regular,
-                            relativeTo: .body
+    var body: some View {
+        Group {
+            if effectiveLayout == .horizontal {
+                HStack(alignment: .center, spacing: 12) {
+                    if emphasizesHorizontalLabel {
+                        ExplicitFormProminentInlineLabel(
+                            title: title,
+                            isOptional: isOptional,
+                            isRequired: isRequired
                         )
-                    )
+                    } else {
+                        fieldTitle
+                            .frame(width: 112, alignment: .leading)
+                    }
+                    controlArea
+                }
+            } else {
+                VStack(alignment: .leading, spacing: density.titleControlSpacing) {
+                    fieldTitle
+                    controlArea
+                }
             }
-            .frame(height: 27)
-            .padding(.trailing, ExplicitFormMetrics.controlTrailingPadding)
         }
         .padding(.top, density.topPadding)
         .padding(.bottom, density.bottomPadding)
-        .frame(minHeight: density.minimumHeight, alignment: .topLeading)
+        .frame(
+            minHeight: effectiveLayout == .horizontal ? 48 : density.minimumHeight,
+            alignment: .topLeading
+        )
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+    }
+
+    private var fieldTitle: some View {
+        ExplicitFormFieldTitle(
+            title: title,
+            isOptional: isOptional,
+            isRequired: isRequired
+        )
+    }
+
+    private var controlArea: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            control()
+                .font(
+                    FavorecoTypography.jpSans(
+                        ExplicitFormMetrics.inputFontSize,
+                        weight: .regular,
+                        relativeTo: .body
+                    )
+                )
+        }
+        .frame(height: usesTheaterLifecycleFlatLayout ? 52 : 27)
+        .padding(.horizontal, usesTheaterLifecycleFlatLayout ? 12 : 0)
+        .padding(.trailing, usesTheaterLifecycleFlatLayout ? 0 : ExplicitFormMetrics.controlTrailingPadding)
+        .background {
+            if usesTheaterLifecycleFlatLayout {
+                RoundedRectangle(
+                    cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                    style: .continuous
+                )
+                .fill(TheaterLifecycleFlatStyle.fieldBackground)
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                        style: .continuous
+                    )
+                    .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                }
+            }
+        }
     }
 }
 
 /// セグメントなど、入力領域を行幅いっぱいに使う選択項目。
 /// 明示ラベル・入力領域・区切り線の寸法をテキスト入力行と揃える。
 struct ExplicitFormFullWidthControlRow<Control: View>: View {
+    @Environment(\.usesTheaterLifecycleFlatLayout) private var usesTheaterLifecycleFlatLayout
+
     let title: String
     var isOptional = false
     var isRequired = false
@@ -593,6 +712,23 @@ struct ExplicitFormFullWidthControlRow<Control: View>: View {
                     )
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(usesTheaterLifecycleFlatLayout ? 10 : 0)
+                .background {
+                    if usesTheaterLifecycleFlatLayout {
+                        RoundedRectangle(
+                            cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                            style: .continuous
+                        )
+                        .fill(TheaterLifecycleFlatStyle.fieldBackground)
+                        .overlay {
+                            RoundedRectangle(
+                                cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                                style: .continuous
+                            )
+                            .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                        }
+                    }
+                }
         }
         .padding(.top, ExplicitFormMetrics.rowTopPadding)
         .padding(.bottom, ExplicitFormMetrics.rowBottomPadding)
@@ -649,6 +785,57 @@ struct ExplicitFormFieldTitle: View {
     }
 }
 
+/// 予定の日時・住所など、値と同じ行に置く見出しを明確に分ける角型ラベル。
+struct ExplicitFormProminentInlineLabel: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+    @Environment(\.usesTheaterLifecycleFlatLayout) private var usesTheaterLifecycleFlatLayout
+
+    let title: String
+    let isOptional: Bool
+    let isRequired: Bool
+    var width: CGFloat? = 112
+
+    private let cream = Color(red: 0.98, green: 0.95, blue: 0.87)
+
+    @ViewBuilder
+    var body: some View {
+        if usesTheaterLifecycleFlatLayout {
+            ExplicitFormFieldTitle(
+                title: title,
+                isOptional: isOptional,
+                isRequired: isRequired
+            )
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(title)
+                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .allowsTightening(true)
+
+                if isOptional {
+                    Text("任意")
+                        .font(FavorecoTypography.jpSans(9, weight: .regular, relativeTo: .caption2))
+                        .opacity(0.78)
+                } else if isRequired {
+                    Text("必須")
+                        .font(FavorecoTypography.jpSans(9, weight: .bold, relativeTo: .caption2))
+                        .opacity(0.9)
+                }
+            }
+            .foregroundStyle(cream)
+            .padding(.horizontal, 8)
+            .frame(width: width, alignment: .leading)
+            .frame(minHeight: 29)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(themePalette.globalTint)
+            )
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
 struct TicketTagInputField: View {
     @Binding var text: String
     @State private var committedTags: [String]
@@ -672,11 +859,10 @@ struct TicketTagInputField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ExplicitFormFieldTitle(
+            ExplicitFormProminentInlineLabel(
                 title: "タグ",
                 isOptional: true,
-                isRequired: false,
-                note: "改行すると追加します"
+                isRequired: false
             )
 
             if !tags.isEmpty {

@@ -23,7 +23,7 @@ struct AppSettingsHubView: View {
                 SettingsNavigationLabel(
                     title: "記録・入力補助",
                     detail: "初期値、写真圧縮、URL・OCR・Map・天気の補助",
-                    systemImage: "wand.and.sparkles"
+                    systemImage: "sparkles"
                 )
             }
             }

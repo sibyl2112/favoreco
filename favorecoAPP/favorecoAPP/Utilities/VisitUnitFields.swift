@@ -76,7 +76,7 @@ struct EventVenueEntry: Codable, Identifiable, Equatable {
     }
 }
 
-struct VisitExpenseEntry: Codable, Identifiable, Equatable {
+nonisolated struct VisitExpenseEntry: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var title: String = ""
     var amount: Decimal = Decimal(0)
@@ -96,7 +96,7 @@ struct VisitExpenseEntry: Codable, Identifiable, Equatable {
 
 /// パークや自然系の1回の体験に含まれる、繰り返し追加可能な見どころ。
 /// 写真本体は複製せず、同じVisitに属するPhotoBlobのUUIDだけを参照する。
-struct VisitMomentEntry: Codable, Identifiable, Equatable {
+nonisolated struct VisitMomentEntry: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var title: String = ""
     var note: String = ""
@@ -121,6 +121,8 @@ struct VisitUnitFields: Codable {
     var ocrText: String = ""
     var styleNames: [String] = []
     var socialLinks: [String] = []
+    /// この回の同行者に紐づけて残すSNS名・URL。公演公式SNSとは分離する。
+    var companionSocialLinks: [String] = []
     var eventSubtitle: String = ""
     /// 施設そのものではなく、この1回で見た展示・目的を表す短い副題。
     var visitSubtitle: String = ""
@@ -183,6 +185,7 @@ struct VisitUnitFields: Codable {
         ocrText: String = "",
         styleNames: [String] = [],
         socialLinks: [String] = [],
+        companionSocialLinks: [String] = [],
         eventSubtitle: String = "",
         visitSubtitle: String = "",
         venueAddressSnapshot: String = "",
@@ -232,6 +235,7 @@ struct VisitUnitFields: Codable {
         self.ocrText = ocrText
         self.styleNames = styleNames
         self.socialLinks = socialLinks
+        self.companionSocialLinks = companionSocialLinks
         self.eventSubtitle = eventSubtitle
         self.visitSubtitle = visitSubtitle
         self.venueAddressSnapshot = venueAddressSnapshot
@@ -283,6 +287,7 @@ struct VisitUnitFields: Codable {
         case ocrText
         case styleNames
         case socialLinks
+        case companionSocialLinks
         case eventSubtitle
         case visitSubtitle
         case venueAddressSnapshot
@@ -335,6 +340,7 @@ struct VisitUnitFields: Codable {
         ocrText = try container.decodeIfPresent(String.self, forKey: .ocrText) ?? ""
         styleNames = try container.decodeIfPresent([String].self, forKey: .styleNames) ?? []
         socialLinks = try container.decodeIfPresent([String].self, forKey: .socialLinks) ?? []
+        companionSocialLinks = try container.decodeIfPresent([String].self, forKey: .companionSocialLinks) ?? []
         eventSubtitle = try container.decodeIfPresent(String.self, forKey: .eventSubtitle) ?? ""
         visitSubtitle = try container.decodeIfPresent(String.self, forKey: .visitSubtitle) ?? ""
         venueAddressSnapshot = try container.decodeIfPresent(String.self, forKey: .venueAddressSnapshot) ?? ""
@@ -720,7 +726,7 @@ struct HeroBackgroundPreset: Identifiable, Equatable {
     }
 }
 
-struct AdvancedFieldEntry: Codable, Identifiable, Equatable {
+nonisolated struct AdvancedFieldEntry: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var label: String = ""
     var value: String = ""
@@ -742,7 +748,7 @@ struct AdvancedFieldEntry: Codable, Identifiable, Equatable {
     }
 }
 
-enum LiveSetlistEntryKind: String, Codable, CaseIterable, Identifiable {
+nonisolated enum LiveSetlistEntryKind: String, Codable, CaseIterable, Identifiable {
     case song
     case mc
     case encore
@@ -758,7 +764,7 @@ enum LiveSetlistEntryKind: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct LiveSetlistEntry: Codable, Identifiable, Equatable {
+nonisolated struct LiveSetlistEntry: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var kind: LiveSetlistEntryKind = .song
     var text: String = ""

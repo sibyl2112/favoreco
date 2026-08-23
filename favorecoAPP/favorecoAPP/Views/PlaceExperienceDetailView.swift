@@ -475,12 +475,14 @@ private struct PlaceExperienceDetailView: View {
                 initialCategoryID: category.id,
                 initialPlaceMaster: place
             )
+            .favorecoRegistrationTheme(categoryHex: category.colorHex)
         }
         .sheet(isPresented: $isShowingRecordCreation) {
             AddExperienceView(
                 category: category,
                 initialPlaceMaster: place
             )
+            .favorecoRegistrationTheme(categoryHex: category.colorHex)
         }
         .sheet(isPresented: $isShowingPlaceEdit) {
             NavigationStack {

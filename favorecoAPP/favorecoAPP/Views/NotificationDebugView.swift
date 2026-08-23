@@ -27,7 +27,7 @@ struct NotificationDebugView: View {
 
     var body: some View {
         Form {
-            Section("通知権限") {
+            FavorecoSettingsSection("通知権限") {
                 LabeledContent("iOS通知許可", value: authorizationStatusText)
                 LabeledContent("集中モード", value: "確認できません")
                 Button {
@@ -50,7 +50,7 @@ struct NotificationDebugView: View {
                 }
             }
 
-            Section("サマリー") {
+            FavorecoSettingsSection("サマリー") {
                 LabeledContent("予約中", value: "\(pendingRequests.count) 件")
                 LabeledContent("配信済み", value: "\(deliveredNotifications.count) 件")
                 Button {
@@ -60,7 +60,7 @@ struct NotificationDebugView: View {
                 }
             }
 
-            Section("テスト通知") {
+            FavorecoSettingsSection("テスト通知") {
                 Button {
                     Task { await scheduleTestNotification(after: 5) }
                 } label: {
@@ -81,7 +81,7 @@ struct NotificationDebugView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("予約中 (\(pendingRequests.count))") {
+            FavorecoSettingsSection("予約中 (\(pendingRequests.count))") {
                 if pendingRequests.isEmpty {
                     Text("予約中の通知はありません。")
                         .font(FavorecoTypography.caption)
@@ -102,7 +102,7 @@ struct NotificationDebugView: View {
                 }
             }
 
-            Section("配信済み (\(deliveredNotifications.count))") {
+            FavorecoSettingsSection("配信済み (\(deliveredNotifications.count))") {
                 if deliveredNotifications.isEmpty {
                     Text("配信済みの通知はありません。")
                         .font(FavorecoTypography.caption)
@@ -125,7 +125,7 @@ struct NotificationDebugView: View {
                 }
             }
 
-            Section("削除") {
+            FavorecoSettingsSection("削除") {
                 Button(role: .destructive) {
                     Task { await removeFavorecoNotifications() }
                 } label: {
@@ -137,13 +137,14 @@ struct NotificationDebugView: View {
             }
 
             if !statusMessage.isEmpty {
-                Section {
+                FavorecoSettingsCard {
                     Text(statusMessage)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("チケット・通知診断")
         .navigationBarTitleDisplayMode(.inline)
         .task {

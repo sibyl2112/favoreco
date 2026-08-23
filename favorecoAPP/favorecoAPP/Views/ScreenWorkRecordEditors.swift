@@ -9,6 +9,7 @@ struct ScreenWorkMinimumEditor: View {
     @Binding var overallRating: Double
     let ratingText: String
     var showsRating: Bool = true
+    var usesLifecycleEditLayout = false
 
     private var type: ScreenWorkType {
         ScreenWorkType.resolved(from: typeKey)
@@ -18,10 +19,14 @@ struct ScreenWorkMinimumEditor: View {
         VStack(alignment: .leading, spacing: 0) {
             if let title {
                 ExplicitFormTextField(
-                    title: "作品タイトル",
+                    title: usesLifecycleEditLayout ? "イベント名（必須）" : "作品タイトル",
                     prompt: "作品タイトルを入力",
                     text: title,
-                    labelStyle: .horizontal
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: usesLifecycleEditLayout ? 3 : 1,
+                    labelStyle: usesLifecycleEditLayout ? .stacked : .horizontal,
+                    inputFontSize: usesLifecycleEditLayout ? 17 : ExplicitFormMetrics.inputFontSize
                 )
             } else {
                 ExplicitFormControlRow(title: "作品タイトル") {
@@ -46,7 +51,9 @@ struct ScreenWorkMinimumEditor: View {
                     endsAt: $endedAt,
                     dateLabel: "鑑賞日",
                     startTimeLabel: "開始時刻",
-                    endTimeLabel: "終了時刻"
+                    endTimeLabel: "終了時刻",
+                    usesHorizontalRows: usesLifecycleEditLayout,
+                    emphasizesHorizontalLabels: usesLifecycleEditLayout
                 )
             } else {
                 screenWorkYearAndSeason
@@ -73,7 +80,11 @@ struct ScreenWorkMinimumEditor: View {
 
     private var screenWorkYearAndSeason: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ExplicitFormControlRow(title: "鑑賞年") {
+            ExplicitFormControlRow(
+                title: "鑑賞年",
+                layout: usesLifecycleEditLayout ? .horizontal : .stacked,
+                emphasizesHorizontalLabel: usesLifecycleEditLayout
+            ) {
                 Picker("鑑賞年", selection: yearSelection) {
                     ForEach(years, id: \.self) { year in
                         Text(verbatim: FavorecoDateText.year(year)).tag(year)
@@ -84,7 +95,11 @@ struct ScreenWorkMinimumEditor: View {
             }
 
             divider
-            ExplicitFormControlRow(title: "季節") {
+            ExplicitFormControlRow(
+                title: "季節",
+                layout: usesLifecycleEditLayout ? .horizontal : .stacked,
+                emphasizesHorizontalLabel: usesLifecycleEditLayout
+            ) {
                 Picker("季節", selection: broadcastSeasonSelection) {
                     ForEach(ScreenWorkBroadcastSeason.allCases) { season in
                         Text(season.label(for: type)).tag(season)

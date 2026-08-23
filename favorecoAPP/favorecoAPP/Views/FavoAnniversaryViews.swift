@@ -255,6 +255,8 @@ private struct FavoAnniversaryEditorView: View {
                 Section { Text(errorMessage).foregroundStyle(.red) }
             }
         }
+        .favorecoRegistrationFormCanvas()
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
         .navigationTitle(anniversary == nil ? "記念日を追加" : "記念日を編集")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

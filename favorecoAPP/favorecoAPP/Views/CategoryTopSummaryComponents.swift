@@ -7,6 +7,69 @@
 
 import SwiftUI
 
+struct CategoryTickerMetric: Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let unit: String
+
+    init(id: String? = nil, title: String, value: String, unit: String) {
+        self.id = id ?? "\(title)-\(unit)"
+        self.title = title
+        self.value = value
+        self.unit = unit
+    }
+}
+
+/// 各項目の実幅に合わせて区切り線を動かし、長い名称や3桁値では文字列全体を縮める。
+struct CategoryTickerStrip: View {
+    let metrics: [CategoryTickerMetric]
+    let tint: Color
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            ForEach(Array(metrics.prefix(3).enumerated()), id: \.element.id) { index, metric in
+                if index > 0 {
+                    divider
+                        .padding(.horizontal, 9)
+                }
+
+                metricText(metric)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.76)
+                    .allowsTightening(true)
+                    .layoutPriority(1)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 42, alignment: .center)
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            metrics.prefix(3).map { "\($0.title)\($0.value)\($0.unit)" }.joined(separator: "、")
+        )
+    }
+
+    private func metricText(_ metric: CategoryTickerMetric) -> Text {
+        Text(metric.title + " ")
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(.secondary)
+        + Text(metric.value)
+            .font(FavorecoTypography.latinDisplay(21, weight: .medium, relativeTo: .title3))
+            .foregroundStyle(tint.opacity(0.92))
+        + Text(" " + metric.unit)
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(.secondary)
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(tint.opacity(colorScheme == .dark ? 0.54 : 0.42))
+            .frame(width: 1, height: 20)
+    }
+}
+
 struct CategoryMemoryHeroSection: View {
     let visits: [Visit]
     let category: RecordCategory
@@ -51,39 +114,16 @@ struct CategoryTopStatusStrip: View {
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(items.prefix(3).enumerated()), id: \.element.id) { index, item in
-                if index > 0 {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.20))
-                        .frame(width: 0.6, height: 20)
-                }
-
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(item.title)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-
-                    Text(item.value)
-                        .font(FavorecoTypography.jpSerif(22, weight: .medium, relativeTo: .title3))
-                        .foregroundStyle(tint.opacity(0.88))
-                        .monospacedDigit()
-
-                    Text(item.unit)
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity)
-                .minimumScaleFactor(0.72)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 42)
-        .padding(.horizontal, 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            items.prefix(3).map { "\($0.title)\($0.value)\($0.unit)" }.joined(separator: "、")
+        CategoryTickerStrip(
+            metrics: items.prefix(3).map {
+                CategoryTickerMetric(
+                    id: $0.id,
+                    title: $0.title,
+                    value: $0.value,
+                    unit: $0.unit
+                )
+            },
+            tint: tint
         )
     }
 }
@@ -97,7 +137,7 @@ struct CategoryMemoryHeroCard: View {
 
     var body: some View {
         Button(action: onOpen) {
-            HStack(spacing: 14) {
+            HStack(spacing: 0) {
                 GeometryReader { geometry in
                     ThumbnailImage(
                         reference: thumbnailReference,
@@ -112,9 +152,8 @@ struct CategoryMemoryHeroCard: View {
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .clipped()
                 }
-                .frame(width: 94, height: 132)
+                .frame(width: 132, height: 168)
                 .background(tint.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text("MEMORY")
@@ -150,20 +189,25 @@ struct CategoryMemoryHeroCard: View {
                         .font(FavorecoTypography.captionStrong)
                         .foregroundStyle(tint)
                 }
+                .padding(.leading, 16)
+                .padding(.vertical, 18)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
                 FavorecoIcon(systemName: "chevron.right", size: 13)
                     .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 14)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156, alignment: .leading)
-            .background(
-                Color(.secondarySystemGroupedBackground).opacity(0.82),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(tint.opacity(0.24), lineWidth: 0.8)
+            .frame(maxWidth: .infinity, minHeight: 168, maxHeight: 168, alignment: .leading)
+            .background(Color(.secondarySystemGroupedBackground).opacity(0.86))
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(tint.opacity(0.30))
+                    .frame(height: 0.8)
+            }
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(tint.opacity(0.30))
+                    .frame(height: 0.8)
             }
         }
         .buttonStyle(.plain)
@@ -181,6 +225,20 @@ struct CategoryMemoryHeroCard: View {
     }
 
     private var thumbnailReference: ThumbnailReference? {
+        if let event = visit.event,
+           TargetEyecatchPresentationPolicy.prefersSharedEventEyecatch(
+               templateKey: category.templateKey,
+               hasEventEyecatch: event.eyecatchData != nil
+           ) {
+            return .event(event.id)
+        }
+        let visitEyecatchPath = visit.eyecatchPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !visitEyecatchPath.isEmpty,
+           let photo = (visit.photos ?? []).first(where: {
+               $0.relativePath == visitEyecatchPath && $0.hasStoredData
+           }) {
+            return .photo(photo.id)
+        }
         if let photo = (visit.photos ?? [])
             .filter(\.hasStoredData)
             .sorted(by: { $0.createdAt < $1.createdAt })

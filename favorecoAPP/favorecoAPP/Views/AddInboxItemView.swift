@@ -41,11 +41,13 @@ struct QuickRegistrationView: View {
     private let initialTemplateKey: String?
     private let screenTitle: String
     private let locksCategory: Bool
+    private let simpleRegistrationPurpose: Binding<SimpleCategoryRegistrationPurpose>?
 
     init(
         initialTemplateKey: String? = nil,
         screenTitle: String = "クイック登録",
         locksCategory: Bool = false,
+        simpleRegistrationPurpose: Binding<SimpleCategoryRegistrationPurpose>? = nil,
         initialBookTitle: String = "",
         initialBookSeriesName: String = "",
         initialBookVolumeNumber: String = "",
@@ -57,6 +59,7 @@ struct QuickRegistrationView: View {
         self.initialTemplateKey = initialTemplateKey
         self.screenTitle = screenTitle
         self.locksCategory = locksCategory
+        self.simpleRegistrationPurpose = simpleRegistrationPurpose
         var initialDraft = QuickRegistrationDraft()
         initialDraft.targetTemplateKey = initialTemplateKey ?? ""
         initialDraft.title = initialBookTitle
@@ -114,6 +117,13 @@ struct QuickRegistrationView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let simpleRegistrationPurpose, let selectedCategory {
+                    SimpleCategoryRegistrationPurposePicker(
+                        selection: simpleRegistrationPurpose,
+                        category: selectedCategory
+                    )
+                }
+
                 if isMovieRegistration {
                     screenWorkSearchSection
                 }

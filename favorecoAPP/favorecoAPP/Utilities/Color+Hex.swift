@@ -413,6 +413,19 @@ struct FavorecoThemePalette {
     let baseTheme: FavorecoBaseTheme
     let mode: FavorecoThemeMode
     let unifiedColorHex: String
+    let registrationAccentHex: String?
+
+    init(
+        baseTheme: FavorecoBaseTheme,
+        mode: FavorecoThemeMode,
+        unifiedColorHex: String,
+        registrationAccentHex: String? = nil
+    ) {
+        self.baseTheme = baseTheme
+        self.mode = mode
+        self.unifiedColorHex = unifiedColorHex
+        self.registrationAccentHex = registrationAccentHex
+    }
 
     static let standard = FavorecoThemePalette(
         baseTheme: .favoNeon,
@@ -421,6 +434,7 @@ struct FavorecoThemePalette {
     )
 
     var globalTint: Color {
+        if let registrationAccentHex { return Color(hex: registrationAccentHex) }
         guard mode != .unified else { return Color(hex: unifiedColorHex) }
         return Color.adaptive(
             lightHex: baseTheme.accentHex,
@@ -436,6 +450,7 @@ struct FavorecoThemePalette {
     }
 
     var prominentAction: Color {
+        if let registrationAccentHex { return Color(hex: registrationAccentHex) }
         guard mode != .unified else { return Color(hex: unifiedColorHex) }
         return Color.adaptive(
             lightHex: baseTheme.prominentActionHex,
@@ -450,7 +465,9 @@ struct FavorecoThemePalette {
 
     func prominentActionForeground(for colorScheme: ColorScheme) -> Color {
         let backgroundHex: String
-        if mode == .unified {
+        if let registrationAccentHex {
+            backgroundHex = registrationAccentHex
+        } else if mode == .unified {
             backgroundHex = unifiedColorHex
         } else {
             backgroundHex = colorScheme == .dark
@@ -510,6 +527,17 @@ struct FavorecoThemePalette {
     func resolvedHex(categoryHex: String) -> String {
         mode == .unified ? unifiedColorHex : categoryHex
     }
+
+    /// 登録フロー内だけ、呼び出し元ジャンルの実効アクセントを共通Tintとして扱う。
+    /// 統一テーマ利用時は、その設定色を保ったまま登録画面へ引き継ぐ。
+    func scopedForRegistration(categoryHex: String) -> FavorecoThemePalette {
+        FavorecoThemePalette(
+            baseTheme: baseTheme,
+            mode: mode,
+            unifiedColorHex: unifiedColorHex,
+            registrationAccentHex: resolvedHex(categoryHex: categoryHex)
+        )
+    }
 }
 
 private struct FavorecoThemePaletteKey: EnvironmentKey {
@@ -546,6 +574,28 @@ extension View {
     /// ジャンル固有のLight / Dark環境を引き継がず、利用者が選んだアプリ外観へ戻す境界。
     func favorecoAppAppearance() -> some View {
         modifier(FavorecoAppAppearanceModifier())
+    }
+
+    /// 追加メニューから登録フォームまで、表示中ジャンルの色文脈を切らずに渡す。
+    func favorecoRegistrationTheme(categoryHex: String?) -> some View {
+        modifier(FavorecoRegistrationThemeModifier(categoryHex: categoryHex))
+    }
+}
+
+private struct FavorecoRegistrationThemeModifier: ViewModifier {
+    @Environment(\.favorecoThemePalette) private var themePalette
+    let categoryHex: String?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let categoryHex {
+            let scopedPalette = themePalette.scopedForRegistration(categoryHex: categoryHex)
+            content
+                .environment(\.favorecoThemePalette, scopedPalette)
+                .tint(scopedPalette.globalTint)
+        } else {
+            content
+        }
     }
 }
 

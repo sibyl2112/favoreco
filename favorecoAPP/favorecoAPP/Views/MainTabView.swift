@@ -132,8 +132,8 @@ struct MainTabView: View {
     @State private var isShowingAddPlan = false
     @State private var isShowingAddTicketSchedule = false
     @State private var isShowingUnifiedTheaterRegistration = false
+    @State private var unifiedTheaterInitialPurpose: TheaterLifecycleRegistrationPurpose = .interested
     @State private var isShowingSimpleCategoryRegistration = false
-    @State private var pendingSimpleRegistrationPurpose: SimpleCategoryRegistrationPurpose?
     @State private var isShowingTheaterPlanChoice = false
     @State private var isShowingQuickRegistration = false
     @State private var isShowingPublicPlaceCatalog = false
@@ -178,14 +178,7 @@ struct MainTabView: View {
             get: { selectedTab },
             set: { newValue in
                 if newValue == .create {
-                    let request = createEntryContextRouter.createMenuRequest(
-                        isHomeTabActive: selectedTab == .home
-                    )
-                    presentedCreateContextCategoryID = request.categoryID
-                    presentCreateMenuAfterRetainingCurrentTab(
-                        request,
-                        sourceTab: selectedTab
-                    )
+                    presentCreateMenu()
                 } else {
                     selectedTab = newValue
                 }
@@ -193,18 +186,13 @@ struct MainTabView: View {
         )
     }
 
-    private func presentCreateMenuAfterRetainingCurrentTab(
-        _ request: CreateEntryMenuRequest,
-        sourceTab: MainTab
-    ) {
-        Task { @MainActor in
-            // The center item is an action, not a destination. Let TabView finish
-            // rejecting the attempted selection before creating the sheet host.
-            await Task.yield()
-            guard selectedTab == sourceTab else { return }
-            guard presentedCreateMenuRequest == nil else { return }
-            presentedCreateMenuRequest = request
-        }
+    private func presentCreateMenu() {
+        guard presentedCreateMenuRequest == nil else { return }
+        let request = createEntryContextRouter.createMenuRequest(
+            isHomeTabActive: selectedTab == .home
+        )
+        presentedCreateContextCategoryID = request.categoryID
+        presentedCreateMenuRequest = request
     }
 
     var body: some View {
@@ -215,7 +203,8 @@ struct MainTabView: View {
                 },
                 onCategoryNavigate: { categoryID in
                     createEntryContextRouter.activate(categoryID: categoryID)
-                }
+                },
+                onCreatePlan: openHomePlanCreation
             )
                 .ignoresSafeArea(.container, edges: .bottom)
                 .tabItem {
@@ -249,6 +238,10 @@ struct MainTabView: View {
                     }
                 }
                 .tag(MainTab.create)
+                // The center item reserves the native five-column tab-bar slot only.
+                // Its action is handled by the overlay below so TabView never selects
+                // this transparent page and exposes a white frame.
+                .disabled(true)
 
             DeferredTabContent(isActive: selectedTab == .calendar) {
                 CalendarView(
@@ -285,29 +278,72 @@ struct MainTabView: View {
         .tint(selectedTab == .records ? themePalette.emotionTint : themePalette.globalTint)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
-        .sheet(item: $presentedCreateMenuRequest, onDismiss: openPendingCreateAction) { request in
+        .overlay {
+            GeometryReader { proxy in
+                Button(action: presentCreateMenu) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .frame(
+                    width: max(proxy.size.width / 5, 64),
+                    height: 49
+                )
+                .position(
+                    x: proxy.size.width / 2,
+                    y: proxy.size.height - proxy.safeAreaInsets.bottom - 24.5
+                )
+                .accessibilityLabel("追加")
+                .accessibilityHint("現在の画面に対応する追加メニューを開きます")
+            }
+            .ignoresSafeArea()
+        }
+        .overlay {
+            if let request = presentedCreateMenuRequest {
             let category = request.categoryID.flatMap { categoryID in
                 visibleCategories.first(where: { $0.id == categoryID })
             }
             let definition = CreateEntryMenuDefinition.resolve(
                 templateKey: category?.templateKey
             )
-            CreateEntryMenuView(
-                canCreateRecord: !visibleCategories.isEmpty,
-                definition: definition,
-                onSelect: { action in
-                    presentedCreateContextCategoryID = request.categoryID
-                    presentedCreateContextTemplateKey = category?.templateKey
-                    pendingCreateAction = action
-                    presentedCreateMenuRequest = nil
+                ZStack(alignment: .bottom) {
+                    Color.clear
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            dismissCreateMenu()
+                        }
+
+                    CreateEntryMenuView(
+                        canCreateRecord: !visibleCategories.isEmpty,
+                        definition: definition,
+                        onSelect: { action in
+                            presentedCreateContextCategoryID = request.categoryID
+                            presentedCreateContextTemplateKey = category?.templateKey
+                            pendingCreateAction = action
+                            dismissCreateMenu(opensPendingAction: true)
+                        },
+                        onClose: { dismissCreateMenu() }
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: CreateEntryMenuView.preferredSheetHeight(
+                        itemCount: definition.items.count
+                    ))
+                    .favorecoRegistrationTheme(
+                        categoryHex: category?.colorHex ?? themePalette.baseTheme.accentHex
+                    )
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 22,
+                            topTrailingRadius: 22
+                        )
+                    )
+                    .shadow(color: .black.opacity(0.18), radius: 18, y: -4)
+                    .transition(.move(edge: .bottom))
                 }
-            )
-            .presentationDetents([
-                .height(CreateEntryMenuView.preferredSheetHeight(
-                    itemCount: definition.items.count
-                ))
-            ])
-            .presentationDragIndicator(.visible)
+                .ignoresSafeArea(edges: .bottom)
+                .zIndex(10)
+            }
         }
         .sheet(isPresented: $isShowingRecordTargetSelection, onDismiss: openPendingRecordDestination) {
             RecordTargetSelectionView(
@@ -321,6 +357,11 @@ struct MainTabView: View {
                 pendingRecordDestination = destination
                 isShowingRecordTargetSelection = false
             }
+            .favorecoRegistrationTheme(
+                categoryHex: presentedCreateContextCategory?.colorHex
+                    ?? preferredCategory?.colorHex
+                    ?? themePalette.baseTheme.accentHex
+            )
         }
         .sheet(isPresented: $isShowingTheaterMemorySelection, onDismiss: openPendingRecordDestination) {
             if let theaterCategory = presentedCreateContextCategory,
@@ -329,6 +370,7 @@ struct MainTabView: View {
                     pendingRecordDestination = destination
                     isShowingTheaterMemorySelection = false
                 }
+                .favorecoRegistrationTheme(categoryHex: theaterCategory.colorHex)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openFavorecoStats)) { _ in
@@ -377,14 +419,22 @@ struct MainTabView: View {
             case .new(let category):
                 if category.templateKey == "random_goods" {
                     AddCollectibleSeriesView(category: category)
+                        .favorecoRegistrationTheme(categoryHex: category.colorHex)
                 } else {
                     AddExperienceView(category: category)
+                        .favorecoRegistrationTheme(categoryHex: category.colorHex)
                 }
             case .existing(let event):
                 if event.category?.templateKey == "random_goods" {
                     CollectibleTransactionEditorView(series: event)
+                        .favorecoRegistrationTheme(
+                            categoryHex: event.category?.colorHex ?? themePalette.baseTheme.accentHex
+                        )
                 } else {
                     AddVisitView(event: event)
+                        .favorecoRegistrationTheme(
+                            categoryHex: event.category?.colorHex ?? themePalette.baseTheme.accentHex
+                        )
                 }
             case .plan(let plan):
                 if let event = plan.event {
@@ -393,15 +443,26 @@ struct MainTabView: View {
                         initialDraft: VisitDraft(plan: plan),
                         sourcePlan: plan
                     )
+                    .favorecoRegistrationTheme(
+                        categoryHex: event.category?.colorHex ?? themePalette.baseTheme.accentHex
+                    )
                 }
             case .edit(let visit):
-                EditExperienceView(visit: visit)
+                TheaterLifecycleEditorSheet(recorded: visit)
+                    .favorecoRegistrationTheme(
+                        categoryHex: visit.event?.category?.colorHex ?? themePalette.baseTheme.accentHex
+                    )
             }
         }
         .sheet(isPresented: $isShowingAddPlan) {
             AddTicketPlanView(
                 entryMode: .plan,
                 initialCategoryID: presentedCreateContextCategory?.id
+            )
+            .favorecoRegistrationTheme(
+                categoryHex: presentedCreateContextCategory?.colorHex
+                    ?? preferredCategory?.colorHex
+                    ?? themePalette.baseTheme.accentHex
             )
         }
         .sheet(isPresented: $isShowingQuickRegistration) {
@@ -410,30 +471,49 @@ struct MainTabView: View {
                 screenTitle: quickRegistrationScreenTitle,
                 locksCategory: presentedCreateContextTemplateKey != nil
             )
+            .favorecoRegistrationTheme(
+                categoryHex: presentedCreateContextCategory?.colorHex
+                    ?? preferredCategory?.colorHex
+                    ?? themePalette.baseTheme.accentHex
+            )
         }
         .sheet(isPresented: $isShowingPublicPlaceCatalog) {
             PublicPlaceCatalogView(scope: publicPlaceCatalogScope)
+                .favorecoRegistrationTheme(
+                    categoryHex: presentedCreateContextCategory?.colorHex
+                        ?? preferredCategory?.colorHex
+                        ?? themePalette.baseTheme.accentHex
+                )
         }
         .sheet(isPresented: $isShowingAddTicketSchedule) {
             AddTicketPlanView(entryMode: .ticketSchedule)
+                .favorecoRegistrationTheme(
+                    categoryHex: presentedCreateContextCategory?.colorHex
+                        ?? preferredCategory?.colorHex
+                        ?? themePalette.baseTheme.accentHex
+                )
         }
         .sheet(isPresented: $isShowingUnifiedTheaterRegistration) {
-            AddTicketPlanView(entryMode: .unified)
+            TheaterLifecycleEditorSheet(
+                initialPurpose: unifiedTheaterInitialPurpose,
+                initialCategoryID: presentedCreateContextCategoryID
+            )
+                .favorecoRegistrationTheme(
+                    categoryHex: presentedCreateContextCategory?.colorHex
+                        ?? preferredCategory?.colorHex
+                        ?? themePalette.baseTheme.accentHex
+                )
         }
-        .sheet(
-            isPresented: $isShowingSimpleCategoryRegistration,
-            onDismiss: openPendingSimpleRegistrationPurpose
-        ) {
+        .sheet(isPresented: $isShowingSimpleCategoryRegistration) {
             if let category = presentedCreateContextCategory,
                ["movie", "museum"].contains(category.templateKey) {
-                SimpleCategoryRegistrationView(category: category) { purpose in
-                    pendingSimpleRegistrationPurpose = purpose
-                    isShowingSimpleCategoryRegistration = false
-                }
+                SimpleCategoryRegistrationView(category: category)
+                    .favorecoRegistrationTheme(categoryHex: category.colorHex)
             }
         }
         .sheet(item: $theaterRegistrationCategory) { category in
             TheaterPerformanceRegistrationView(category: category)
+                .favorecoRegistrationTheme(categoryHex: category.colorHex)
         }
         .confirmationDialog(
             "予定の登録方法",
@@ -468,6 +548,7 @@ struct MainTabView: View {
         case .placeCatalog:
             isShowingPublicPlaceCatalog = true
         case .theaterRegistration:
+            unifiedTheaterInitialPurpose = .interested
             isShowingUnifiedTheaterRegistration = true
         case .performanceRegistration:
             theaterRegistrationCategory = presentedCreateContextCategory
@@ -475,6 +556,26 @@ struct MainTabView: View {
             isShowingSimpleCategoryRegistration = true
         case .ticketSchedule:
             isShowingAddTicketSchedule = true
+        }
+    }
+
+    /// The add menu and its destination are sibling sheets on this view.
+    /// Wait until SwiftUI has fully removed the menu host before presenting the destination.
+    private func schedulePendingCreateAction() {
+        guard pendingCreateAction != nil else { return }
+        Task { @MainActor in
+            await Task.yield()
+            guard presentedCreateMenuRequest == nil else { return }
+            openPendingCreateAction()
+        }
+    }
+
+    private func dismissCreateMenu(opensPendingAction: Bool = false) {
+        withAnimation(.easeOut(duration: 0.22)) {
+            presentedCreateMenuRequest = nil
+        }
+        if opensPendingAction {
+            schedulePendingCreateAction()
         }
     }
 
@@ -486,25 +587,25 @@ struct MainTabView: View {
         }
     }
 
+    /// Homeの「予定を立てる」は通知や確認ダイアログを介さず、
+    /// 現在のジャンルに対応する予定登録シートを直接開く。
+    private func openHomePlanCreation() {
+        let category = activeCreateContextCategory
+        presentedCreateContextCategoryID = category?.id
+        presentedCreateContextTemplateKey = category?.templateKey
+
+        if category?.templateKey == "theater" {
+            unifiedTheaterInitialPurpose = .plan
+            isShowingUnifiedTheaterRegistration = true
+        } else {
+            isShowingAddPlan = true
+        }
+    }
+
     private func openPendingRecordDestination() {
         guard let pendingRecordDestination else { return }
         self.pendingRecordDestination = nil
         recordDestination = pendingRecordDestination
-    }
-
-    private func openPendingSimpleRegistrationPurpose() {
-        guard let purpose = pendingSimpleRegistrationPurpose,
-              let category = presentedCreateContextCategory else { return }
-        pendingSimpleRegistrationPurpose = nil
-
-        switch purpose {
-        case .interested:
-            isShowingQuickRegistration = true
-        case .plan:
-            isShowingAddPlan = true
-        case .visited:
-            recordDestination = .new(category)
-        }
     }
 
     private var quickRegistrationScreenTitle: String {
@@ -1516,11 +1617,11 @@ private struct CreateEntryMenuDefinition {
 }
 
 private struct CreateEntryMenuView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.favorecoThemePalette) private var themePalette
     let canCreateRecord: Bool
     let definition: CreateEntryMenuDefinition
     let onSelect: (CreateAction) -> Void
+    let onClose: () -> Void
 
     static func preferredSheetHeight(itemCount: Int) -> CGFloat {
         let buttonHeight: CGFloat = 64
@@ -1532,7 +1633,23 @@ private struct CreateEntryMenuView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            ZStack {
+                Text("追加")
+                    .font(.headline)
+
+                HStack {
+                    Spacer()
+                    Button("閉じる", action: onClose)
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+            .frame(height: 52)
+            .padding(.horizontal, 20)
+            .overlay(alignment: .bottom) {
+                Divider()
+            }
+
             VStack(spacing: 10) {
                 ForEach(definition.items) { item in
                     CreateEntryButton(
@@ -1550,16 +1667,25 @@ private struct CreateEntryMenuView: View {
             .padding(.top, 12)
             .padding(.bottom, 16)
             .frame(maxHeight: .infinity, alignment: .top)
-            .navigationTitle("追加")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
+        }
+        .background {
+            CreateEntryMenuBackground()
+                .ignoresSafeArea()
         }
         .favorecoAppAppearance()
         .tint(themePalette.globalTint)
+    }
+}
+
+private struct CreateEntryMenuBackground: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            ExplicitFormMetrics.canvasColor(for: colorScheme)
+            themePalette.globalTint.opacity(colorScheme == .dark ? 0.10 : 0.055)
+        }
     }
 }
 
@@ -1659,5 +1785,5 @@ struct PlaceholderRow: View {
 #Preview {
     MainTabView()
         .environmentObject(PurchaseManager.shared)
-        .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self, PersonMaster.self, CompanionMaster.self, FavoriteProfile.self, FavoGalleryPhoto.self, FavoAnniversary.self, FavoPin.self, EventPersonLink.self, PlaceMaster.self, Plan.self, TicketAccount.self, TicketAttempt.self], inMemory: true)
+        .modelContainer(for: [RecordCategory.self, ExperienceEvent.self, Visit.self, InboxItem.self, PhotoBlob.self, SocialAccount.self, PersonMaster.self, CompanionMaster.self, FavoriteProfile.self, FavoGalleryPhoto.self, FavoAnniversary.self, FavoPin.self, EventPersonLink.self, PlaceMaster.self, Plan.self, TicketAccount.self, TicketAttempt.self, MovieBestEntry.self], inMemory: true)
 }

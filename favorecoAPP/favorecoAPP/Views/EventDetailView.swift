@@ -42,6 +42,7 @@ struct TheaterPublicLink: Identifiable {
 private struct EventHeroBackgroundPicker: View {
     let categoryKey: String
     @Binding var selection: String
+    var title = "ページ背景"
 
     private var presets: [HeroBackgroundPreset] {
         HeroBackgroundPreset.presets(for: categoryKey)
@@ -53,8 +54,8 @@ private struct EventHeroBackgroundPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ページ背景")
-                .font(FavorecoTypography.bodyStrong)
+            Text(title)
+                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(presets) { preset in
@@ -233,7 +234,8 @@ struct EventDetailView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 24)
+            .padding(.top, 24)
+            .padding(.bottom, isTheater ? 132 : 24)
         }
         .id(eyecatchRefreshVersion)
         .ignoresSafeArea(edges: isTheater ? .top : [])
@@ -254,7 +256,11 @@ struct EventDetailView: View {
         }
         .overlay(alignment: .top) {
             if isTheater {
-                theaterNavigationControls
+                GeometryReader { proxy in
+                    theaterNavigationControls
+                        .padding(.top, proxy.safeAreaInsets.top + 8)
+                }
+                .ignoresSafeArea()
             }
         }
         .toolbar {
@@ -268,31 +274,39 @@ struct EventDetailView: View {
             isPresented: $isShowingActionMenu,
             genreColor: eventMenuGenreColor,
             accentColor: eventMenuAccentColor,
-            topPadding: isTheater ? 70 : 54,
+            topPadding: isTheater ? 126 : 54,
             actions: eventMenuActions
         )
         .navigationDestination(item: $selectedPlanID) { planID in
             EventPlanDestination(planID: planID)
         }
         .sheet(isPresented: $isShowingAddVisit) {
-            if category?.templateKey == "random_goods" {
-                CollectibleTransactionEditorView(series: event)
-            } else {
-                AddVisitView(event: event)
+            Group {
+                if category?.templateKey == "random_goods" {
+                    CollectibleTransactionEditorView(series: event)
+                } else {
+                    AddVisitView(event: event)
+                }
             }
+            .favorecoRegistrationTheme(categoryHex: category?.colorHex)
         }
         .sheet(isPresented: $isShowingAddPlan) {
             AddTicketPlanView(event: event, entryMode: .plan)
+                .favorecoRegistrationTheme(categoryHex: category?.colorHex)
         }
         .sheet(isPresented: $isShowingAddTicketSchedule) {
             AddTicketPlanView(event: event, entryMode: .ticketSchedule)
+                .favorecoRegistrationTheme(categoryHex: category?.colorHex)
         }
         .sheet(isPresented: $isShowingEditEvent) {
-            if category?.templateKey == "random_goods" {
-                AddCollectibleSeriesView(series: event)
-            } else {
-                EditEventView(event: event)
+            Group {
+                if category?.templateKey == "random_goods" {
+                    AddCollectibleSeriesView(series: event)
+                } else {
+                    TheaterLifecycleEditorSheet(interested: event)
+                }
             }
+            .favorecoRegistrationTheme(categoryHex: category?.colorHex)
         }
         .sheet(isPresented: $isShowingRepresentativePhotoPicker) {
             RepresentativePhotoPicker(event: event)
@@ -455,7 +469,6 @@ struct EventDetailView: View {
             )
         }
         .padding(.horizontal, 20)
-        .safeAreaPadding(.top, 8)
     }
 
     private var theaterPageBackground: some View {
@@ -676,19 +689,17 @@ struct EventDetailView: View {
         let officialURL = EventDetailPresentation.theaterOfficialURL(event: event)
         let ticketURL = EventDetailPresentation.theaterTicketURL(event: event)
 
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             theaterPublicLinkButton(
                 title: "公式サイト",
                 systemImage: "link",
                 url: officialURL
             )
-            .frame(maxWidth: .infinity)
             theaterPublicLinkButton(
                 title: "チケット",
                 systemImage: "ticket",
                 url: ticketURL
             )
-            .frame(maxWidth: .infinity)
 
             ForEach(TheaterSocialPlatform.allCases) { platform in
                 let url = EventDetailPresentation.theaterSocialURL(
@@ -706,12 +717,12 @@ struct EventDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(url == nil)
-                .frame(maxWidth: .infinity)
+                .frame(width: 36, height: 36)
                 .accessibilityLabel(platform.displayName)
                 .accessibilityValue(url == nil ? "未登録" : "登録済み")
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityElement(children: .contain)
     }
 
@@ -729,19 +740,19 @@ struct EventDetailView: View {
                 .minimumScaleFactor(0.82)
                 .padding(.horizontal, 9)
                 .frame(height: 30)
-                .background(.black.opacity(url == nil ? 0.10 : 0.24), in: Capsule())
+                .background(.black.opacity(url == nil ? 0.16 : 0.24), in: Capsule())
                 .overlay {
                     Capsule()
                         .stroke(
                             url == nil
-                                ? Color.white.opacity(0.10)
+                                ? Color.white.opacity(0.18)
                                 : theaterGold.opacity(0.42),
                             lineWidth: 0.7
                         )
                 }
         }
         .buttonStyle(.plain)
-        .foregroundStyle(url == nil ? Color.white.opacity(0.30) : theaterGold)
+        .foregroundStyle(url == nil ? Color.white.opacity(0.52) : theaterGold)
         .disabled(url == nil)
         .accessibilityValue(url == nil ? "未登録" : "登録済み")
     }
@@ -1370,6 +1381,7 @@ private struct RepresentativePhotoPicker: View {
 
 struct EditEventView: View {
     let event: ExperienceEvent
+    let usesTheaterLifecycleLayout: Bool
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -1397,16 +1409,361 @@ struct EditEventView: View {
 
     private var isLiveEvent: Bool { event.category?.templateKey == "live" }
 
-    init(event: ExperienceEvent) {
+    init(event: ExperienceEvent, usesTheaterLifecycleLayout: Bool = false) {
         self.event = event
+        self.usesTheaterLifecycleLayout = usesTheaterLifecycleLayout
         _draft = State(initialValue: EventDraft(event: event))
         _eyecatchData = State(initialValue: event.eyecatchData)
     }
 
+    private var editEventTitle: String {
+        isPerformanceEvent
+            ? (isLiveEvent ? "ライブ情報を編集" : TheaterUnifiedFormEntry.performanceEditing.navigationTitle)
+            : "対象を編集"
+    }
+
+    @ViewBuilder
+    private var theaterLifecycleEventContent: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            lifecycleSectionHeader(
+                "作品・公演",
+                info: "ここでは公演そのものの情報を編集します。観劇日・チケット・評価・感想は、予定または観劇記録で入力します。"
+            )
+            lifecycleTextField("公演名", required: true, prompt: "公演・イベント名を入力", text: $draft.title)
+            lifecycleMenuField(
+                "公演種別",
+                required: true,
+                value: TheaterPerformanceType.displayName(
+                    for: draft.subTypeKey,
+                    customName: draft.performanceTypeCustomName
+                )
+            ) {
+                ForEach(TheaterPerformanceType.allCases) { type in
+                    Button(type.displayName) { draft.subTypeKey = type.rawValue }
+                }
+            }
+            if draft.subTypeKey == TheaterPerformanceType.other.rawValue {
+                lifecycleTextField(
+                    "その他の種別",
+                    prompt: "例：能、狂言、朗読劇",
+                    text: $draft.performanceTypeCustomName
+                )
+            }
+            lifecycleTextField(
+                "シリーズ・ツアー名",
+                prompt: "例：冬の庭 2026",
+                text: $draft.seriesName,
+                info: "同じ作品の連続公演・再演・ツアーをまとめる名前です。"
+            )
+            lifecycleTextField("公演団体", prompt: "劇団・制作団体・主催者", text: $draft.creditsText)
+            lifecycleTextField("サブタイトル", prompt: "東京公演限定版", text: $draft.eventSubtitle)
+            lifecycleTextField("公式サイト", prompt: "https://", text: $draft.officialURL)
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+            TheaterSocialLinksEditor(
+                xURL: $draft.xURL,
+                instagramURL: $draft.instagramURL,
+                threadsURL: $draft.threadsURL
+            )
+        }
+
+        VStack(alignment: .leading, spacing: 13) {
+            lifecycleSectionHeader(
+                "アイキャッチ・背景",
+                info: "背景は公演ページと、記録写真がない観劇記録の代表表示に使います。"
+            )
+            HStack(alignment: .top, spacing: 14) {
+                Group {
+                    if let eyecatchData, let image = UIImage(data: eyecatchData) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Color(.secondarySystemFill)
+                            Text("No Image")
+                                .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(width: 104, height: 146)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipped()
+
+                VStack(spacing: 10) {
+                    PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
+                        FavorecoIconLabel(
+                            eyecatchData == nil ? "アイキャッチを選ぶ" : "アイキャッチを変更",
+                            systemImage: "photo",
+                            iconSize: 14
+                        )
+                        .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                        .foregroundStyle(Color(hex: "#8B2F45"))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.secondary.opacity(0.24), lineWidth: 1))
+                    }
+                    .disabled(isProcessingEyecatch)
+                    .onChange(of: selectedEyecatchItem) { _, item in
+                        guard let item else { return }
+                        Task { await loadEyecatch(from: item) }
+                    }
+
+                    if eyecatchData != nil {
+                        Button {
+                            isConfirmingEyecatchRemoval = true
+                        } label: {
+                            FavorecoIconLabel("アイキャッチを外す", systemImage: "trash", iconSize: 13)
+                                .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                                .foregroundStyle(Color(hex: "#8B2F45"))
+                                .frame(maxWidth: .infinity, minHeight: 40)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            EventHeroBackgroundPicker(
+                categoryKey: "theater",
+                selection: $draft.heroBackgroundPresetKey,
+                title: "背景"
+            )
+        }
+
+        VStack(alignment: .leading, spacing: 13) {
+            lifecycleSectionHeader(
+                "公演期間・公演会場",
+                info: "東京公演・大阪公演など、公演地ごとに期間と会場を複数追加できます。"
+            )
+            ForEach($draft.venueEntries) { $venue in
+                ZStack(alignment: .topTrailing) {
+                    TheaterScheduleEntryEditor(
+                        entry: $venue,
+                        fallbackStart: draft.performanceStartsAt,
+                        fallbackEnd: draft.performanceEndsAt,
+                        usesFlatLayout: true
+                    )
+                    Button {
+                        draft.venueEntries.removeAll { $0.id == venue.id }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28, height: 28)
+                            .background(Color(.systemBackground), in: Circle())
+                            .overlay(Circle().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(7)
+                    .accessibilityLabel("この公演地を削除")
+                }
+            }
+
+            Button {
+                let usesLegacySharedPeriod = draft.venueEntries.isEmpty && draft.hasPerformancePeriod
+                draft.venueEntries.append(
+                    EventVenueEntry(
+                        startsAt: usesLegacySharedPeriod ? draft.performanceStartsAt : nil,
+                        endsAt: usesLegacySharedPeriod ? draft.performanceEndsAt : nil
+                    )
+                )
+            } label: {
+                FavorecoIconLabel("公演地を追加", systemImage: "plus.circle", iconSize: 14)
+                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                    .foregroundStyle(Color(hex: "#8B2F45"))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color(hex: "#8B2F45").opacity(0.5), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+
+        VStack(alignment: .leading, spacing: 13) {
+            lifecycleSectionHeader(
+                "キャスト・スタッフ",
+                info: "公式サイトやパンフレットから、画像OCR・テキスト貼付け・直接入力でまとめて登録できます。"
+            )
+            TheaterEventCreditsEditor(
+                bulkText: $draft.creditsText,
+                existingLinks: visibleEventCreditLinks,
+                deletedLinkIDs: $deletedPersonLinkIDs,
+                pendingLinks: $pendingPeople,
+                personMasters: personMasters,
+                showsHeader: false
+            )
+        }
+
+        VStack(alignment: .leading, spacing: 12) {
+            lifecycleDisclosureHeader("感想・メモ", isExpanded: $showingPerformanceDetails)
+            if showingPerformanceDetails {
+                lifecycleMemoField(
+                    prompt: "気になった理由、公演そのものについて残しておくこと",
+                    text: $draft.memo
+                )
+            }
+        }
+        .theaterLifecycleDisclosureSurface(isExpanded: showingPerformanceDetails)
+
+        VStack(alignment: .leading, spacing: 12) {
+            lifecycleDisclosureHeader("その他", isExpanded: $showingImportDetails)
+            if showingImportDetails {
+                lifecycleMemoField(prompt: "URL・OCRから取得した原文", text: $draft.importMemo)
+            }
+        }
+        .theaterLifecycleDisclosureSurface(isExpanded: showingImportDetails)
+    }
+
+    private func lifecycleSectionHeader(_ title: String, info: String? = nil) -> some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color(hex: "#8B2F45"))
+                .frame(width: 4, height: 24)
+            Text(title)
+                .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                .foregroundStyle(.primary)
+            if let info {
+                TheaterLifecycleInfoButton(text: info)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func lifecycleDisclosureHeader(_ title: String, isExpanded: Binding<Bool>) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.16)) { isExpanded.wrappedValue.toggle() }
+        } label: {
+            HStack(spacing: 10) {
+                lifecycleSectionHeader(title)
+                Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func lifecycleFieldLabel(
+        _ title: String,
+        required: Bool,
+        info: String? = nil
+    ) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+            Text(required ? "* 必須" : "任意")
+                .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption2))
+                .foregroundStyle(required ? Color(hex: "#8B2F45") : .secondary)
+            if let info {
+                TheaterLifecycleInfoButton(text: info)
+            }
+        }
+    }
+
+    private func lifecycleTextField(
+        _ title: String,
+        required: Bool = false,
+        prompt: String,
+        text: Binding<String>,
+        info: String? = nil
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            lifecycleFieldLabel(title, required: required, info: info)
+            TextField(prompt, text: text)
+                .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                .padding(.horizontal, 14)
+                .frame(minHeight: 52)
+                .background(
+                    TheaterLifecycleFlatStyle.fieldBackground,
+                    in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                        .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                )
+        }
+    }
+
+    private func lifecycleMenuField<Items: View>(
+        _ title: String,
+        required: Bool = false,
+        value: String,
+        @ViewBuilder items: () -> Items
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            lifecycleFieldLabel(title, required: required)
+            Menu(content: items) {
+                HStack {
+                    Text(value)
+                        .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .frame(minHeight: 52)
+                .background(
+                    TheaterLifecycleFlatStyle.fieldBackground,
+                    in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                        .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func lifecycleMemoField(prompt: String, text: Binding<String>) -> some View {
+        TextField(prompt, text: text, axis: .vertical)
+            .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+            .lineLimit(4...6)
+            .padding(12)
+            .frame(minHeight: 104, alignment: .topLeading)
+            .background(
+                TheaterLifecycleFlatStyle.fieldBackground,
+                in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                    .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+            )
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                if isPerformanceEvent {
+            TheaterLifecycleEditorCanvas(
+                usesFlatLayout: usesTheaterLifecycleLayout && isPerformanceEvent && !isLiveEvent,
+                title: editEventTitle,
+                canSave: draft.canSave && !isProcessingEyecatch,
+                onClose: { dismiss() },
+                onSave: save
+            ) {
+                if usesTheaterLifecycleLayout && isPerformanceEvent && !isLiveEvent {
+                    theaterLifecycleEventContent
+                } else {
+                if usesTheaterLifecycleLayout && isPerformanceEvent && !isLiveEvent {
+                    HStack(alignment: .top, spacing: 9) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color(hex: "#8B2F45"))
+                            .padding(.top, 2)
+                        Text("この画面は公演そのものの情報を編集します。個別の観劇日・チケット・評価・感想は、予定または観劇記録で入力します。")
+                            .font(FavorecoTypography.jpSans(12, weight: .regular, relativeTo: .body))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color(hex: "#8B2F45").opacity(0.2), lineWidth: 1)
+                    )
+                }
+                if isPerformanceEvent, !usesTheaterLifecycleLayout {
                     Section {
                         TheaterUnifiedFormIntroduction(entry: .performanceEditing, isLive: isLiveEvent)
                     }
@@ -1664,11 +2021,35 @@ struct EditEventView: View {
                 if isPerformanceEvent {
                     Section {
                         ForEach($draft.venueEntries) { $venue in
-                            TheaterScheduleEntryEditor(
-                                entry: $venue,
-                                fallbackStart: draft.performanceStartsAt,
-                                fallbackEnd: draft.performanceEndsAt
-                            )
+                            if usesTheaterLifecycleLayout && !isLiveEvent {
+                                ZStack(alignment: .topTrailing) {
+                                    TheaterScheduleEntryEditor(
+                                        entry: $venue,
+                                        fallbackStart: draft.performanceStartsAt,
+                                        fallbackEnd: draft.performanceEndsAt,
+                                        usesFlatLayout: true
+                                    )
+                                    Button {
+                                        draft.venueEntries.removeAll { $0.id == venue.id }
+                                    } label: {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+                                            .frame(width: 30, height: 30)
+                                            .background(Color(.systemBackground), in: Circle())
+                                            .overlay(Circle().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(8)
+                                    .accessibilityLabel("この公演地を削除")
+                                }
+                            } else {
+                                TheaterScheduleEntryEditor(
+                                    entry: $venue,
+                                    fallbackStart: draft.performanceStartsAt,
+                                    fallbackEnd: draft.performanceEndsAt
+                                )
+                            }
                         }
                         .onDelete { offsets in
                             draft.venueEntries.remove(atOffsets: offsets)
@@ -1685,29 +2066,50 @@ struct EditEventView: View {
                             )
                         } label: {
                             FavorecoIconLabel("公演地を追加", systemImage: "plus.circle", iconSize: 17)
+                                .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                                .foregroundStyle(Color(hex: "#8B2F45"))
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color(hex: "#8B2F45").opacity(0.55), lineWidth: 1)
+                                )
                         }
+                        .buttonStyle(.plain)
                     } header: {
-                        TheaterUnifiedSectionLabel(section: .venueSchedule, isLive: isLiveEvent)
+                        if usesTheaterLifecycleLayout && !isLiveEvent {
+                            HStack(spacing: 10) {
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(Color(hex: "#8B2F45"))
+                                    .frame(width: 4, height: 28)
+                                Text("公演期間・公演会場")
+                                    .font(FavorecoTypography.jpSans(19, weight: .semibold, relativeTo: .headline))
+                                    .foregroundStyle(.primary)
+                            }
+                            .textCase(nil)
+                        } else {
+                            TheaterUnifiedSectionLabel(section: .venueSchedule, isLive: isLiveEvent)
+                        }
                     } footer: {
-                        Text("東京公演・大阪公演など、公演地ごとに会期と会場を登録します。未登録の場合は予定と参加履歴から補完表示します。")
+                        Text("公演全体の開催期間と会場です。東京公演・大阪公演など、公演地ごとに複数追加できます。個別の観劇日やチケットはここでは入力しません。")
                     }
                 }
 
                 if isPerformanceEvent {
                     Section {
+                        TheaterEventCreditsEditor(
+                            bulkText: $draft.creditsText,
+                            existingLinks: visibleEventCreditLinks,
+                            deletedLinkIDs: $deletedPersonLinkIDs,
+                            pendingLinks: $pendingPeople,
+                            personMasters: personMasters
+                        )
+                    }
+
+                    Section {
                         DisclosureGroup(isExpanded: $showingPerformanceDetails) {
-                            PeopleUnitEditor(
-                                existingLinks: visibleEventOrganizationLinks,
-                                deletedLinkIDs: $deletedPersonLinkIDs,
-                                pendingLinks: $pendingPeople,
-                                personMasters: personMasters,
-                                roleOptions: PersonRoleOption.theaterOrganizations,
-                                emptyDescription: "団体別に振り返りたい場合だけ、上演団体・主催・制作などを追加します。"
-                            )
-                            Divider()
                             ExplicitFormTextField(
-                                title: "メモ（任意）",
-                                prompt: "あらすじ・自由メモ",
+                                title: "公演メモ（任意）",
+                                prompt: "あらすじ・公演そのものについてのメモ",
                                 text: $draft.memo,
                                 axis: .vertical,
                                 minimumLines: 5,
@@ -1752,14 +2154,13 @@ struct EditEventView: View {
                         TheaterUnifiedSectionLabel(section: .importDetails, isLive: isLiveEvent)
                     }
                 }
+                }
             }
-            .favorecoRegistrationFormCanvas()
-            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
-            .navigationTitle(
-                isPerformanceEvent
-                    ? (isLiveEvent ? "ライブ情報を編集" : TheaterUnifiedFormEntry.performanceEditing.navigationTitle)
-                    : "対象を編集"
+            .favorecoRegistrationFormCanvas(
+                isEnabled: !(usesTheaterLifecycleLayout && isPerformanceEvent && !isLiveEvent)
             )
+            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+            .navigationTitle(editEventTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1966,14 +2367,14 @@ struct EditEventView: View {
         }
     }
 
-    private var visibleEventOrganizationLinks: [EventPersonLink] {
-        let organizationRoleKeys = Set(PersonRoleOption.theaterOrganizations.map(\.key))
+    private var visibleEventCreditLinks: [EventPersonLink] {
+        let roleKeys = Set(PersonRoleOption.theaterEvent.map(\.key))
         return (event.personLinks ?? [])
             .filter {
                 !$0.isArchived
                     && !deletedPersonLinkIDs.contains($0.id)
                     && $0.visit == nil
-                    && organizationRoleKeys.contains($0.roleKey)
+                    && roleKeys.contains($0.roleKey)
             }
             .sorted { $0.sortOrder < $1.sortOrder }
     }

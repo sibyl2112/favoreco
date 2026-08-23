@@ -35,6 +35,95 @@ struct TicketMilestoneDateGuidance: View {
     }
 }
 
+/// チケット工程日の共通入力ユニット。
+/// 日付と時刻を同じ54pt枠に収め、未設定の工程は追加ボタンだけを表示する。
+struct TicketMilestoneDateField: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+    let title: String
+    @Binding var isOn: Bool
+    @Binding var date: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            if isOn {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                        .foregroundStyle(.primary)
+
+                    Spacer(minLength: 8)
+
+                    Button {
+                        isOn = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .background(Color.secondary.opacity(0.08), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(title)を削除")
+                }
+
+                HStack(spacing: 8) {
+                    DatePicker(
+                        "\(title)の日付",
+                        selection: $date,
+                        displayedComponents: .date
+                    )
+                    .labelsHidden()
+                    .environment(\.locale, Locale(identifier: "ja_JP"))
+
+                    Divider()
+                        .frame(height: 26)
+
+                    DatePicker(
+                        "\(title)の時刻",
+                        selection: $date,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .labelsHidden()
+                    .environment(\.locale, Locale(identifier: "ja_JP"))
+                }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, minHeight: 54)
+                .background(
+                    TheaterLifecycleFlatStyle.fieldBackground,
+                    in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                        style: .continuous
+                    )
+                        .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                }
+            } else {
+                Button {
+                    isOn = true
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("\(title)を追加")
+                            .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                    }
+                    .foregroundStyle(themePalette.prominentAction)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(themePalette.prominentAction.opacity(0.62), lineWidth: 1)
+                }
+                .accessibilityLabel("\(title)を追加")
+            }
+        }
+    }
+}
+
 struct FiveMinuteDateTimeRow: View {
     let title: String
     @Binding var selection: Date
@@ -64,9 +153,16 @@ struct TheaterScheduleDateRow: View {
     @Binding var selection: Date
     @Binding var isSet: Bool
     let onClear: () -> Void
+    var usesHorizontalLayout = false
+    var emphasizesHorizontalLabel = false
 
     var body: some View {
-        ExplicitFormControlRow(title: "日付", density: .compactSchedule) {
+        ExplicitFormControlRow(
+            title: "日付",
+            density: .compactSchedule,
+            layout: usesHorizontalLayout ? .horizontal : .stacked,
+            emphasizesHorizontalLabel: emphasizesHorizontalLabel
+        ) {
             HStack(spacing: 6) {
                 if isSet {
                     DatePicker(
@@ -105,9 +201,16 @@ struct TheaterScheduleDateRow: View {
 struct TenMinuteTimeRow: View {
     let title: String
     @Binding var selection: Date
+    var usesHorizontalLayout = false
+    var emphasizesHorizontalLabel = false
 
     var body: some View {
-        ExplicitFormControlRow(title: title, density: .compactSchedule) {
+        ExplicitFormControlRow(
+            title: title,
+            density: .compactSchedule,
+            layout: usesHorizontalLayout ? .horizontal : .stacked,
+            emphasizesHorizontalLabel: emphasizesHorizontalLabel
+        ) {
             TenMinuteTimeField(
                 selection: $selection,
                 accessibilityLabel: "\(title)時刻"
@@ -121,9 +224,17 @@ struct OptionalTenMinuteTimeRow: View {
     @Binding var selection: Date
     @Binding var isSet: Bool
     let defaultValue: Date
+    var usesHorizontalLayout = false
+    var emphasizesHorizontalLabel = false
 
     var body: some View {
-        ExplicitFormControlRow(title: title, isOptional: true, density: .compactSchedule) {
+        ExplicitFormControlRow(
+            title: title,
+            isOptional: true,
+            density: .compactSchedule,
+            layout: usesHorizontalLayout ? .horizontal : .stacked,
+            emphasizesHorizontalLabel: emphasizesHorizontalLabel
+        ) {
             HStack(spacing: 6) {
                 TenMinuteTimeField(
                     selection: $selection,

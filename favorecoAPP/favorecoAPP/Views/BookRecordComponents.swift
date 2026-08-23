@@ -149,6 +149,8 @@ struct BookInformationEditor: View {
     @Binding var contentTypeKey: String
     @Binding var aspectRatioKey: String
     let isEditable: Bool
+    var titleFieldLabel = "書名"
+    var usesLifecycleEditLayout = false
 
     private var formats: [EyecatchAspectRatio] {
         if aspectRatioKey == EyecatchAspectRatio.bookCover.key {
@@ -161,13 +163,14 @@ struct BookInformationEditor: View {
         VStack(alignment: .leading, spacing: 0) {
             if isEditable {
                 ExplicitFormTextField(
-                    title: "書名（必須）",
-                    prompt: "書名を入力",
+                    title: "\(titleFieldLabel)（必須）",
+                    prompt: "\(titleFieldLabel)を入力",
                     text: $title,
                     axis: .vertical,
                     minimumLines: 1,
-                    maximumLines: 2,
-                    labelStyle: .horizontal
+                    maximumLines: usesLifecycleEditLayout ? 3 : 2,
+                    labelStyle: usesLifecycleEditLayout ? .stacked : .horizontal,
+                    inputFontSize: usesLifecycleEditLayout ? 17 : ExplicitFormMetrics.inputFontSize
                 )
                 fieldDivider
                 ExplicitFormTextField(
@@ -355,12 +358,18 @@ struct BookReadingPeriodEditor: View {
     @Binding var rating: Double
     let ratingText: String
     var showsRating: Bool = true
+    var usesLifecycleEditLayout = false
 
     @State private var isShowingCalendar = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ExplicitFormControlRow(title: "読書状態", isOptional: false) {
+            ExplicitFormControlRow(
+                title: "読書状態",
+                isOptional: false,
+                layout: usesLifecycleEditLayout ? .horizontal : .stacked,
+                emphasizesHorizontalLabel: usesLifecycleEditLayout
+            ) {
                 Picker("読書状態", selection: readingStatusBinding) {
                     Text("読書中").tag(false)
                     Text("読了").tag(true)
@@ -375,15 +384,22 @@ struct BookReadingPeriodEditor: View {
                 isShowingCalendar = true
             } label: {
                 HStack(spacing: 10) {
-                    FavorecoIcon(systemName: "calendar", size: 17)
-                    VStack(alignment: .leading, spacing: 3) {
+                    if usesLifecycleEditLayout {
+                        ExplicitFormProminentInlineLabel(
+                            title: "読書期間",
+                            isOptional: false,
+                            isRequired: false
+                        )
+                    } else {
+                        FavorecoIcon(systemName: "calendar", size: 17)
                         Text("読書期間")
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
-                        Text(periodText)
-                            .font(FavorecoTypography.bodyStrong)
-                            .foregroundStyle(.primary)
                     }
+                    Text(periodText)
+                        .font(FavorecoTypography.bodyStrong)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .foregroundStyle(.secondary)

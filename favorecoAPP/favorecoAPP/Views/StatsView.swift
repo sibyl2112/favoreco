@@ -14,10 +14,13 @@ struct StatsView: View {
     @Query(sort: \PersonMaster.displayName) private var people: [PersonMaster]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
     @Query(sort: \FavoPin.sortOrder) private var favoPins: [FavoPin]
+    @Query(sort: \MovieBestEntry.rank) private var movieBestEntries: [MovieBestEntry]
     @State private var showsAmount = false
     @State private var selectedStatisticsCategoryID: UUID?
     @State private var selectedStatisticsYear = Calendar.current.component(.year, from: Date())
     @State private var selectedStatisticsMonth: Int?
+    @State private var screenWorkStatisticsFilter: ScreenWorkFilter = .all
+    @State private var movieBestEditingPeriod: MovieBestPeriod?
     @AppStorage(AppStorageKeys.opensPreviousMonthlyReport) private var opensPreviousMonthlyReport = false
     @AppStorage(AppStorageKeys.opensPreviousYearlyReport) private var opensPreviousYearlyReport = false
     @State private var isShowingAutomaticMonthlyReport = false
@@ -42,7 +45,34 @@ struct StatsView: View {
 
     private var scopedStatisticsVisits: [Visit] {
         guard let selectedStatisticsCategoryID else { return visibleVisits }
-        return visibleVisits.filter { $0.event?.category?.id == selectedStatisticsCategoryID }
+        let categoryVisits = visibleVisits.filter { $0.event?.category?.id == selectedStatisticsCategoryID }
+        guard selectedStatisticsCategory?.templateKey == "movie" else { return categoryVisits }
+        return categoryVisits.filter { visit in
+            guard let type = visit.event?.screenWorkType else { return false }
+            return screenWorkStatisticsFilter.includes(type)
+        }
+    }
+
+    private var isMovieStatistics: Bool {
+        selectedStatisticsCategory?.templateKey == "movie" && screenWorkStatisticsFilter == .movie
+    }
+
+    private var yearlyMovieBestPeriod: MovieBestPeriod {
+        MovieBestPeriod(kind: .yearly, year: selectedStatisticsYear)
+    }
+
+    private var yearlyMovieBestCandidates: [Visit] {
+        selectedYearStatisticsVisits.filter {
+            MovieBestPolicy.isMovieCandidate($0, period: yearlyMovieBestPeriod)
+        }
+    }
+
+    private var yearlyMovieBestVisits: [Visit] {
+        MovieBestPolicy.orderedVisits(
+            entries: movieBestEntries,
+            visits: yearlyMovieBestCandidates,
+            period: yearlyMovieBestPeriod
+        )
     }
 
     private var selectedYearStatisticsVisits: [Visit] {
@@ -378,9 +408,18 @@ struct StatsView: View {
         }
         .onChange(of: selectedStatisticsCategoryID) { _, _ in
             selectedStatisticsMonth = nil
+            screenWorkStatisticsFilter = .all
         }
         .onChange(of: selectedStatisticsYear) { _, _ in
             selectedStatisticsMonth = nil
+        }
+        .sheet(item: $movieBestEditingPeriod) { period in
+            MovieBestEditorView(
+                period: period,
+                candidates: visibleVisits.filter { MovieBestPolicy.isMovieCandidate($0, period: period) },
+                entries: movieBestEntries,
+                tint: statisticsAccent
+            )
         }
     }
 
@@ -388,6 +427,12 @@ struct StatsView: View {
         VStack(alignment: .leading, spacing: 14) {
             statisticsCategorySelector
             statisticsYearSelector
+            if selectedStatisticsCategory?.templateKey == "movie" {
+                StatsScreenWorkFilterBar(
+                    selection: $screenWorkStatisticsFilter,
+                    tint: statisticsAccent
+                )
+            }
             LayeredCategorySectionTitle(
                 englishTitle: "Overview",
                 japaneseTitle: "概要",
@@ -400,6 +445,16 @@ struct StatsView: View {
                 previousYearCount: previousYearStatisticsVisits.count,
                 tint: statisticsAccent
             )
+            if isMovieStatistics {
+                MovieBestStatsSection(
+                    period: yearlyMovieBestPeriod,
+                    candidates: yearlyMovieBestCandidates,
+                    selectedVisits: yearlyMovieBestVisits,
+                    tint: statisticsAccent,
+                    isUnlocked: purchaseManager.currentPlan.includesLocalFullFeatures,
+                    onEdit: { movieBestEditingPeriod = yearlyMovieBestPeriod }
+                )
+            }
             statisticsMonthlyStackedChart
         }
     }
@@ -791,6 +846,30 @@ struct StatsView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+            }
+
+            if isMovieStatistics {
+                let period = MovieBestPeriod(
+                    kind: .monthly,
+                    year: selectedStatisticsYear,
+                    month: month
+                )
+                let candidates = selectedMonthVisits.filter {
+                    MovieBestPolicy.isMovieCandidate($0, period: period)
+                }
+                MovieBestStatsSection(
+                    period: period,
+                    candidates: candidates,
+                    selectedVisits: MovieBestPolicy.orderedVisits(
+                        entries: movieBestEntries,
+                        visits: candidates,
+                        period: period
+                    ),
+                    tint: statisticsAccent,
+                    isUnlocked: purchaseManager.currentPlan.includesLocalFullFeatures,
+                    compact: true,
+                    onEdit: { movieBestEditingPeriod = period }
+                )
             }
         }
         .padding(12)

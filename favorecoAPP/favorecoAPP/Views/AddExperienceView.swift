@@ -13,6 +13,7 @@ import UIKit
 struct AddExperienceView: View {
     let category: RecordCategory
     let onSave: (() -> Void)?
+    private let simpleRegistrationPurpose: Binding<SimpleCategoryRegistrationPurpose>?
 
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
@@ -48,10 +49,12 @@ struct AddExperienceView: View {
         category: RecordCategory,
         initialDraft: AddExperienceDraft = AddExperienceDraft(),
         initialPlaceMaster: PlaceMaster? = nil,
-        onSave: (() -> Void)? = nil
+        onSave: (() -> Void)? = nil,
+        simpleRegistrationPurpose: Binding<SimpleCategoryRegistrationPurpose>? = nil
     ) {
         self.category = category
         self.onSave = onSave
+        self.simpleRegistrationPurpose = simpleRegistrationPurpose
         var preparedDraft = initialDraft
         if let initialPlaceMaster {
             if preparedDraft.trimmedTitle.isEmpty {
@@ -80,6 +83,13 @@ struct AddExperienceView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let simpleRegistrationPurpose {
+                    SimpleCategoryRegistrationPurposePicker(
+                        selection: simpleRegistrationPurpose,
+                        category: category
+                    )
+                }
+
                 if category.templateKey == "book" {
                     addBookRecordForm
                 } else if category.templateKey == "theater" {
@@ -275,6 +285,7 @@ struct AddExperienceView: View {
                 selectedItems: $selectedPhotoItems,
                 category: category,
                 theaterContentMode: .libraryOnly,
+                showsHeading: false,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
                 coverPhotoPath: $coverPhotoPath,
                 heroBackgroundPath: $heroBackgroundPath,
@@ -532,11 +543,33 @@ struct AddExperienceView: View {
                 selectedItems: $selectedPhotoItems,
                 category: category,
                 theaterContentMode: .libraryOnly,
+                showsHeading: false,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
                 coverPhotoPath: $coverPhotoPath,
                 heroBackgroundPath: $heroBackgroundPath,
                 heroBackgroundPresetKey: $heroBackgroundPresetKey
             )
+        case "companions":
+            VStack(alignment: .leading, spacing: 12) {
+                ExplicitFormTextField(
+                    title: "同行者（任意）",
+                    prompt: "名前を「、」区切りで入力",
+                    text: $draft.companionNamesText,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 3,
+                    labelStyle: .stacked
+                )
+                ExplicitFormTextField(
+                    title: "同行者のSNS（任意）",
+                    prompt: "アカウント名・URLを1行1件",
+                    text: $draft.companionSocialLinksText,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 3,
+                    labelStyle: .stacked
+                )
+            }
         case "goshuinBook":
             ExperienceGoshuinBookUnitEditor(
                 sizeKey: $draft.goshuinBookSizeKey,
@@ -750,7 +783,9 @@ struct AddExperienceView: View {
 }
 
 struct EditExperienceView: View {
-    let visit: Visit
+    let visit: Visit?
+    let plan: Plan?
+    let usesTheaterLifecycleLayout: Bool
 
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \EventPersonLink.sortOrder) private var personLinks: [EventPersonLink]
@@ -788,11 +823,11 @@ struct EditExperienceView: View {
     @State private var isShowingTargetEyecatchCameraUnavailable = false
 
     private var event: ExperienceEvent? {
-        visit.event
+        visit?.event ?? plan?.event
     }
 
     private var category: RecordCategory? {
-        event?.category
+        event?.category ?? plan?.category
     }
 
     private var isPerformanceVisit: Bool {
@@ -811,8 +846,14 @@ struct EditExperienceView: View {
         category?.templateKey == "book"
     }
 
+    private var preparationPlan: Plan? {
+        if let plan { return plan }
+        return (visit?.plans ?? []).sorted { $0.updatedAt > $1.updatedAt }.first
+    }
+
     private var visitFocusLinks: [EventPersonLink] {
-        personLinks
+        guard let visit else { return [] }
+        return personLinks
             .filter {
                 !$0.isArchived
                     && $0.visit?.id == visit.id
@@ -822,8 +863,10 @@ struct EditExperienceView: View {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    init(visit: Visit) {
+    init(visit: Visit, usesTheaterLifecycleLayout: Bool = false) {
         self.visit = visit
+        self.plan = nil
+        self.usesTheaterLifecycleLayout = usesTheaterLifecycleLayout
         _draft = State(initialValue: AddExperienceDraft(visit: visit))
         let initialUnits = initialExpandedRecordUnitIDs(
             templateKey: visit.event?.category?.templateKey ?? "",
@@ -845,23 +888,58 @@ struct EditExperienceView: View {
         ))
     }
 
+    init(plan: Plan, usesTheaterLifecycleLayout: Bool = false) {
+        self.visit = nil
+        self.plan = plan
+        self.usesTheaterLifecycleLayout = usesTheaterLifecycleLayout
+        let initialDraft = AddExperienceDraft(plan: plan)
+        _draft = State(initialValue: initialDraft)
+        _expandedUnitIDs = State(initialValue: initialExpandedRecordUnitIDs(
+            templateKey: plan.event?.category?.templateKey ?? plan.category?.templateKey ?? "",
+            stage: .plannedTarget
+        ))
+        _coverPhotoPath = State(initialValue: "")
+        _heroBackgroundPath = State(initialValue: "")
+        _heroBackgroundPresetKey = State(initialValue: "")
+        _eventEyecatchData = State(initialValue: plan.event?.eyecatchData)
+        _pendingPeople = State(
+            initialValue: PlanPreparationFields(rawValue: plan.unitFieldsRaw)
+                .people
+                .map(\.pendingPersonLink)
+        )
+        _existingFocusReactionTagKeys = State(initialValue: [:])
+    }
+
     var body: some View {
         NavigationStack {
             editRecordPresentationContent
         }
     }
 
+    @ViewBuilder
     private var editRecordConfiguredContent: some View {
-        editRecordForm
-            .favorecoRegistrationFormCanvas()
-            .environment(\.defaultMinListRowHeight, 48)
-            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
-            .tint(themePalette.globalTint)
-            .navigationTitle(editRecordNavigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                editRecordToolbar
+        if usesTheaterLifecycleLayout, isTheaterVisit {
+            TheaterLifecycleFlatScaffold(
+                title: editRecordNavigationTitle,
+                canSave: draft.canSave,
+                onClose: { dismiss() },
+                onSave: save
+            ) {
+                editRecordFormContent
             }
+            .tint(Color(hex: "#8B2F45"))
+        } else {
+            editRecordForm
+                .favorecoRegistrationFormCanvas()
+                .environment(\.defaultMinListRowHeight, 48)
+                .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+                .tint(themePalette.globalTint)
+                .navigationTitle(editRecordNavigationTitle)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    editRecordToolbar
+                }
+        }
     }
 
     private var editRecordSearchContent: some View {
@@ -918,6 +996,11 @@ struct EditExperienceView: View {
     }
 
     private var editRecordNavigationTitle: String {
+        if plan != nil {
+            return category?.templateKey == "theater"
+                ? "観劇予定を編集"
+                : category?.templateKey == "live" ? "参戦予定を編集" : "予定を編集"
+        }
         if isPerformanceVisit {
             return category?.templateKey == "live"
                 ? "参戦記録を編集"
@@ -944,7 +1027,7 @@ struct EditExperienceView: View {
             Button("保存") {
                 save()
             }
-            .disabled(!isPerformanceVisit && !draft.canSave)
+            .disabled(!draft.canSave)
         }
     }
 
@@ -978,8 +1061,10 @@ struct EditExperienceView: View {
         case "book":
             editBookRecordForm
         case "theater":
-            Section {
-                TheaterUnifiedFormIntroduction(entry: .visitEditing)
+            if !usesTheaterLifecycleLayout {
+                Section {
+                    TheaterUnifiedFormIntroduction(entry: .visitEditing)
+                }
             }
             stagedTheaterForm(
                 definitions: activeUnitDefinitions(for: category),
@@ -1027,7 +1112,8 @@ struct EditExperienceView: View {
     }
 
     private var priorGoshuinVisits: [Visit] {
-        matchingPriorVisits(
+        guard let visit else { return [] }
+        return matchingPriorVisits(
             in: allVisits.filter { $0.id != visit.id },
             placeMasterID: visit.placeMaster?.id,
             venueName: draft.trimmedVenueName
@@ -1110,9 +1196,9 @@ struct EditExperienceView: View {
                     .font(FavorecoTypography.bodyStrong)
 
                 LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2),
                     alignment: .leading,
-                    spacing: 10
+                    spacing: 12
                 ) {
                     ForEach(HeroBackgroundPreset.presets(for: category?.templateKey)) { preset in
                         heroBackgroundPresetButton(preset)
@@ -1163,23 +1249,10 @@ struct EditExperienceView: View {
             heroBackgroundPresetKey = preset.key
         } label: {
             VStack(alignment: .leading, spacing: 5) {
-                Group {
-                    if let image = heroBackgroundBundledImage(named: preset.resourceName) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Color.secondary.opacity(0.08)
-                    }
-                }
-                .aspectRatio(0.82, contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(isSelected ? themePalette.globalTint : Color.secondary.opacity(0.28), lineWidth: isSelected ? 3 : 1)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                heroBackgroundChoicePreview(
+                    image: heroBackgroundBundledImage(named: preset.resourceName),
+                    isSelected: isSelected
+                )
 
                 Text(preset.title)
                     .font(FavorecoTypography.caption)
@@ -1200,27 +1273,10 @@ struct EditExperienceView: View {
             heroBackgroundPresetKey = HeroBackgroundPreset.eventEyecatchKey
         } label: {
             VStack(alignment: .leading, spacing: 5) {
-                Group {
-                    if let eventEyecatchData, let image = UIImage(data: eventEyecatchData) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Color.secondary.opacity(0.08)
-                            .overlay {
-                                FavorecoIcon(systemName: "photo", size: 22)
-                                    .foregroundStyle(.secondary)
-                            }
-                    }
-                }
-                .aspectRatio(0.82, contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(isSelected ? themePalette.globalTint : Color.secondary.opacity(0.28), lineWidth: isSelected ? 3 : 1)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                heroBackgroundChoicePreview(
+                    image: eventEyecatchData.flatMap(UIImage.init(data:)),
+                    isSelected: isSelected
+                )
 
                 Text("アイキャッチと同じ")
                     .font(FavorecoTypography.caption)
@@ -1232,6 +1288,35 @@ struct EditExperienceView: View {
         .buttonStyle(.plain)
         .disabled(eventEyecatchData == nil)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func heroBackgroundChoicePreview(image: UIImage?, isSelected: Bool) -> some View {
+        GeometryReader { geometry in
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color.secondary.opacity(0.08)
+                        .overlay {
+                            FavorecoIcon(systemName: "photo", size: 22)
+                                .foregroundStyle(.secondary)
+                        }
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
+        }
+        .aspectRatio(16 / 9, contentMode: .fit)
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(
+                    isSelected ? themePalette.globalTint : Color.secondary.opacity(0.28),
+                    lineWidth: isSelected ? 3 : 1
+                )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func heroBackgroundBundledImage(named resourceName: String) -> UIImage? {
@@ -1356,7 +1441,9 @@ struct EditExperienceView: View {
                 officialURL: $draft.officialURL,
                 contentTypeKey: $draft.bookContentTypeKey,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
-                isEditable: true
+                isEditable: true,
+                titleFieldLabel: "イベント名",
+                usesLifecycleEditLayout: true
             )
         case "bookReading":
             VStack(alignment: .leading, spacing: 14) {
@@ -1368,7 +1455,8 @@ struct EditExperienceView: View {
                     hasEndDate: $draft.bookReadingHasEndDate,
                     rating: $draft.overallRating,
                     ratingText: draft.ratingLabel,
-                    showsRating: false
+                    showsRating: false,
+                    usesLifecycleEditLayout: true
                 )
             }
         case "bookRating":
@@ -1385,6 +1473,7 @@ struct EditExperienceView: View {
                 selectedItems: $selectedPhotoItems,
                 category: event?.category,
                 theaterContentMode: .libraryOnly,
+                showsHeading: false,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
                 coverPhotoPath: $coverPhotoPath,
                 heroBackgroundPath: $heroBackgroundPath,
@@ -1412,7 +1501,7 @@ struct EditExperienceView: View {
         case "screenWorkViewing":
             return draft.hasScreenWorkViewingDetails ? .entered : .optional
         case "basic":
-            return isTheaterVisit || draft.canSave ? .entered : .required
+            return draft.canSave ? .entered : .required
         case "theaterRating", "liveRating", "outingRating", "screenWorkRating":
             return draft.overallRating > 0 ? .entered : .optional
         case "liveSetlist":
@@ -1420,7 +1509,7 @@ struct EditExperienceView: View {
         case "moments":
             return draft.normalizedMomentEntries.isEmpty ? .optional : .entered
         case "officialInfo":
-            if isTheaterVisit {
+            if visit != nil && isTheaterVisit {
                 let hasOfficialURL = !(event?.officialURL ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .isEmpty
@@ -1438,12 +1527,18 @@ struct EditExperienceView: View {
             return draft.hasTicketPlan || hasFocusPeople ? .entered : .optional
         case "photos":
             return visibleExistingPhotos.isEmpty && pendingPhotos.isEmpty ? .optional : .entered
+        case "companions":
+            return draft.normalizedCompanionNamesRaw.isEmpty && draft.normalizedCompanionSocialLinks.isEmpty
+                ? .optional
+                : .entered
         case "goshuinBook":
             return draft.goshuinBookSizeKey.isEmpty ? .optional : .entered
         case "importOCR":
             return draft.trimmedOCRText.isEmpty ? .optional : .entered
         case "money":
             return draft.trimmedAmountText.isEmpty ? .optional : .entered
+        case "tasks":
+            return preparationPlan?.preparationFields.tasks.isEmpty == false ? .entered : .optional
         case "memo":
             return draft.trimmedNote.isEmpty && draft.normalizedTagNamesRaw.isEmpty ? .optional : .entered
         case "advanced":
@@ -1470,7 +1565,8 @@ struct EditExperienceView: View {
                 endedAt: $draft.endedAt,
                 overallRating: $draft.overallRating,
                 ratingText: draft.ratingLabel,
-                showsRating: false
+                showsRating: false,
+                usesLifecycleEditLayout: true
             )
         case "screenWorkViewing":
             ScreenWorkViewingDetailsEditor(
@@ -1485,8 +1581,8 @@ struct EditExperienceView: View {
                 if isTheaterVisit || category?.templateKey == "live" {
                     ExperienceBasicUnitEditor(
                         template: template,
-                        eventTitle: event?.title ?? "",
-                        eventSeriesName: event?.seriesName ?? "",
+                        title: $draft.title,
+                        seriesName: $draft.seriesName,
                         visitedAt: $draft.visitedAt,
                         endedAt: $draft.endedAt,
                         performanceOpensAt: $draft.performanceOpensAt,
@@ -1506,6 +1602,7 @@ struct EditExperienceView: View {
                         usesExplicitTheaterLayout: true,
                         showsRating: false,
                         categoryTemplateKey: category?.templateKey ?? "",
+                        usesLifecycleEditLayout: true,
                         subTypeKey: $draft.subTypeKey,
                         screenWorkSeasonNumber: $draft.screenWorkSeasonNumber,
                         performanceTypeCustomName: $draft.performanceTypeCustomName,
@@ -1535,13 +1632,14 @@ struct EditExperienceView: View {
                         supportsPerformanceTime: category?.usesOpeningTime == true,
                         supportsExperienceDuration: usesDurationBasedExperienceTime(category),
                         supportsStyles: false,
-                        showsRating: !["museum", "theme_park", "nature_living", "sake"].contains(category?.templateKey ?? ""),
+                        showsRating: false,
                         datePrecision: screenWorkDatePrecision(
                             for: draft.subTypeKey,
                             category: category
                         ),
                         usesSimpleScreenWorkLayout: category?.templateKey == "movie",
                         categoryTemplateKey: category?.templateKey ?? "",
+                        usesLifecycleEditLayout: true,
                         subTypeKey: $draft.subTypeKey,
                         screenWorkSeasonNumber: $draft.screenWorkSeasonNumber,
                         performanceTypeCustomName: $draft.performanceTypeCustomName,
@@ -1577,7 +1675,7 @@ struct EditExperienceView: View {
                 }
             }
         case "officialInfo":
-            if isTheaterVisit {
+            if visit != nil && isTheaterVisit {
                 ExperienceOfficialInfoReferenceView()
             } else {
                 ExperienceOfficialInfoUnitEditor(
@@ -1655,11 +1753,33 @@ struct EditExperienceView: View {
                 selectedItems: $selectedPhotoItems,
                 category: event?.category,
                 theaterContentMode: .libraryOnly,
+                showsHeading: false,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
                 coverPhotoPath: $coverPhotoPath,
                 heroBackgroundPath: $heroBackgroundPath,
                 heroBackgroundPresetKey: $heroBackgroundPresetKey
             )
+        case "companions":
+            VStack(alignment: .leading, spacing: 12) {
+                ExplicitFormTextField(
+                    title: "同行者（任意）",
+                    prompt: "名前を「、」区切りで入力",
+                    text: $draft.companionNamesText,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 3,
+                    labelStyle: .stacked
+                )
+                ExplicitFormTextField(
+                    title: "同行者のSNS（任意）",
+                    prompt: "アカウント名・URLを1行1件",
+                    text: $draft.companionSocialLinksText,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 3,
+                    labelStyle: .stacked
+                )
+            }
         case "goshuinBook":
             ExperienceGoshuinBookUnitEditor(
                 sizeKey: $draft.goshuinBookSizeKey,
@@ -1688,6 +1808,21 @@ struct EditExperienceView: View {
                 expenseEntries: $draft.expenseEntries,
                 usesExplicitTheaterLayout: isTheaterVisit
             )
+        case "tasks":
+            if let preparationPlan {
+                PlanPreparationChecklistView(
+                    plan: preparationPlan,
+                    tint: themePalette.globalTint,
+                    title: "ToDo",
+                    presentation: visit == nil ? .planning : .record,
+                    showsHeader: false,
+                    appliesCardBackground: false
+                )
+            } else {
+                Text("予定に紐づけると、準備や観劇後のToDoを追加できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
         case "memo":
             VStack(alignment: .leading, spacing: 16) {
                 ExperienceMemoUnitEditor(
@@ -1731,6 +1866,11 @@ struct EditExperienceView: View {
     }
 
     private func save() {
+        if let plan {
+            save(plan: plan)
+            return
+        }
+        guard let visit else { return }
         let now = Date()
         let preservesWeather = visit.visitedAt == draft.visitedAt
             && visit.latitude == draft.latitude
@@ -1770,6 +1910,7 @@ struct EditExperienceView: View {
         visit.amount = parsedCurrencyAmount(from: draft.amountText)
         visit.note = draft.trimmedNote
         visit.tagNamesRaw = draft.normalizedTagNamesRaw
+        visit.companionNamesRaw = draft.normalizedCompanionNamesRaw
         var updatedUnitFields = draft.makeUnitFields(for: event?.category)
         if ["theater", "live"].contains(category?.templateKey ?? "") {
             // 旧形式の「この回だけのキャスト」状態は保持するが、
@@ -1811,7 +1952,7 @@ struct EditExperienceView: View {
     }
 
     private var visibleExistingPhotos: [PhotoBlob] {
-        (visit.photos ?? [])
+        ((visit?.photos ?? plan?.photos) ?? [])
             .filter { $0.mediaKind == "photo" && !deletedPhotoIDs.contains($0.id) }
             .sorted { $0.createdAt < $1.createdAt }
     }
@@ -1839,17 +1980,19 @@ struct EditExperienceView: View {
     }
 
     private var visiblePersonLinks: [EventPersonLink] {
-        personLinks
+        if plan != nil { return [] }
+        let visitID = visit?.id
+        return personLinks
             .filter { link in
                 !link.isArchived
                     && !deletedPersonLinkIDs.contains(link.id)
-                    && (link.event?.id == event?.id || link.visit?.id == visit.id)
+                    && (link.event?.id == event?.id || (visitID != nil && link.visit?.id == visitID))
             }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private func deleteMarkedPhotos() {
-        guard let photos = visit.photos else { return }
+        guard let photos = visit?.photos ?? plan?.photos else { return }
         for photo in photos where deletedPhotoIDs.contains(photo.id) {
             modelContext.delete(photo)
         }
@@ -1875,6 +2018,97 @@ struct EditExperienceView: View {
     private func insertPendingPhotos(for visit: Visit) {
         for pendingPhoto in pendingPhotos {
             modelContext.insert(pendingPhoto.makePhotoBlob(visit: visit))
+        }
+    }
+
+    private func insertPendingPhotos(for plan: Plan) {
+        for pendingPhoto in pendingPhotos {
+            modelContext.insert(pendingPhoto.makePhotoBlob(plan: plan))
+        }
+    }
+
+    private func save(plan: Plan) {
+        let now = Date()
+        let targetEvent: ExperienceEvent
+        if let event {
+            targetEvent = event
+        } else {
+            targetEvent = ExperienceEvent(
+                title: draft.trimmedTitle,
+                stateKey: "active",
+                createdAt: now,
+                updatedAt: now,
+                category: plan.category
+            )
+            modelContext.insert(targetEvent)
+            plan.event = targetEvent
+        }
+        let didChangeEventEyecatch = !isPerformanceVisit && targetEvent.eyecatchData != eventEyecatchData
+
+        applyTargetChangesFromExperienceEdit(
+            to: targetEvent,
+            draft: draft,
+            categories: categories,
+            at: now
+        )
+        if !isPerformanceVisit {
+            targetEvent.eyecatchData = eventEyecatchData
+        }
+
+        plan.title = targetEvent.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? draft.trimmedTitle
+            : targetEvent.title
+        plan.subtitle = draft.visitSubtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        plan.startsAt = draft.visitedAt
+        plan.endsAt = max(draft.endedAt, draft.visitedAt)
+        plan.opensAt = category?.usesOpeningTime == true
+            ? draft.performanceOpensAt ?? Date.distantPast
+            : Date.distantPast
+        plan.venueNameSnapshot = draft.trimmedVenueName
+        plan.placeMaster = resolvePlaceMaster(
+            for: draft.placeSnapshot,
+            publicSelection: draft.publicPlaceSelection,
+            from: placeMasters,
+            in: modelContext
+        )
+        plan.officialURL = draft.trimmedOfficialURL
+        plan.sourceURL = draft.trimmedOfficialURL
+        plan.memo = draft.trimmedNote
+        plan.category = targetEvent.category ?? plan.category
+        var preparation = PlanPreparationFields(rawValue: plan.unitFieldsRaw)
+        preparation.tagNames = TheaterEmotionTags.names(from: draft.tagNamesText)
+        preparation.memoStyleRuns = draft.memoStyleRuns
+        preparation.overallRating = draft.overallRating
+        preparation.momentEntries = draft.normalizedMomentEntries
+        preparation.liveSetlistEntries = draft.normalizedLiveSetlistEntries
+        preparation.people = pendingPeople.map(PlanMemoryPerson.init)
+        preparation.amountText = draft.trimmedAmountText
+        preparation.expenseEntries = draft.expenseEntries
+        preparation.ocrText = draft.trimmedOCRText
+        preparation.advancedEntries = draft.trimmedAdvancedEntries
+        plan.unitFieldsRaw = preparation.encodedRawValue
+        plan.updatedAt = now
+
+        applyExistingPhotoMetadata()
+        deleteMarkedPhotos()
+        insertPendingPhotos(for: plan)
+
+        do {
+            try modelContext.save()
+            if didChangeEventEyecatch {
+                ThumbnailLoader.purge(reference: .event(targetEvent.id))
+            }
+            Task {
+                await TicketNotificationScheduler.reschedule(plan: plan, attempt: nil)
+                for attempt in plan.ticketAttempts ?? [] where !attempt.isArchived {
+                    await TicketNotificationScheduler.reschedule(plan: plan, attempt: attempt)
+                }
+            }
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            saveErrorMessage = "予定を更新できませんでした。入力内容を確認して、もう一度お試しください。"
+            assertionFailure("Failed to update plan record: \(error)")
         }
     }
 
@@ -1985,6 +2219,22 @@ struct AddVisitView: View {
         let inheritedVisuals = Self.makeInheritedVisuals(from: inheritedVisualSource)
         _draft = State(initialValue: preparedDraft)
         _pendingPhotos = State(initialValue: inheritedVisuals.photos)
+        let planPeople = sourcePlan.map {
+            PlanPreparationFields(rawValue: $0.unitFieldsRaw).people.map(\.pendingPersonLink)
+        } ?? []
+        let eventFocusPeople = (event.personLinks ?? [])
+            .filter { !$0.isArchived && $0.visit == nil && TheaterEventCreditMetadata.isHighlighted($0) }
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map { link in
+                PendingPersonLink(
+                    name: TheaterVisitCastResolver.personName(for: link),
+                    reading: link.person?.reading ?? "",
+                    role: .theaterFocus,
+                    entityKind: .person
+                )
+            }
+        let inheritedPeople = planPeople.isEmpty ? eventFocusPeople : planPeople
+        _pendingPeople = State(initialValue: inheritedPeople)
         _coverPhotoPath = State(initialValue: inheritedVisuals.coverPath ?? initialCoverPhotoPath)
         _heroBackgroundPath = State(initialValue: inheritedVisuals.backgroundPath ?? initialHeroBackgroundPath)
         _heroBackgroundPresetKey = State(initialValue: initialHeroBackgroundPresetKey)
@@ -2281,6 +2531,7 @@ struct AddVisitView: View {
                 selectedItems: $selectedPhotoItems,
                 category: event.category,
                 theaterContentMode: .libraryOnly,
+                showsHeading: false,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
                 coverPhotoPath: $coverPhotoPath,
                 heroBackgroundPath: $heroBackgroundPath,
@@ -2473,6 +2724,7 @@ struct AddVisitView: View {
                 selectedItems: $selectedPhotoItems,
                 category: event.category,
                 theaterContentMode: .libraryOnly,
+                showsHeading: false,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
                 coverPhotoPath: $coverPhotoPath,
                 heroBackgroundPath: $heroBackgroundPath,
@@ -2758,6 +3010,8 @@ struct AddExperienceDraft {
     var performanceTypeCustomName: String = ""
     var officialURL: String = ""
     var socialLinksText: String = ""
+    var companionNamesText: String = ""
+    var companionSocialLinksText: String = ""
     var eventSubtitle: String = ""
     var visitSubtitle: String = ""
     var theaterCreditsText: String = ""
@@ -2832,6 +3086,8 @@ struct AddExperienceDraft {
         outcomeKey = visit.outcomeKey
         seatText = visit.seatText
         let unitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+        companionNamesText = visit.companionNamesRaw
+        companionSocialLinksText = unitFields.companionSocialLinks.joined(separator: "\n")
         performanceOpensAt = unitFields.performanceOpensAt
         visitSubtitle = unitFields.visitSubtitle
         ocrText = unitFields.ocrText
@@ -2857,6 +3113,60 @@ struct AddExperienceDraft {
             )
             excludedEventCastLinkIDs.formUnion(currentEventCastLinkIDs.subtracting(capturedEventLinkIDs))
         }
+    }
+
+    init(plan: Plan) {
+        let event = plan.event
+        let eventFields = VisitUnitFields(rawValue: event?.unitFieldsRaw ?? "")
+        let preparation = PlanPreparationFields(rawValue: plan.unitFieldsRaw)
+        let attempt = (plan.ticketAttempts ?? [])
+            .filter { !$0.isArchived }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .first
+
+        title = event?.title.isEmpty == false ? event?.title ?? plan.title : plan.title
+        seriesName = event?.seriesName ?? ""
+        subTypeKey = event?.subTypeKey ?? ""
+        officialURL = plan.officialURL.isEmpty ? event?.officialURL ?? "" : plan.officialURL
+        bookSeriesName = eventFields.bookSeriesName
+        bookVolumeNumber = eventFields.bookVolumeNumber
+        bookAuthorName = eventFields.bookAuthorName
+        bookTranslatorName = eventFields.bookTranslatorName
+        bookISBN = eventFields.bookISBN
+        bookPublisherName = eventFields.bookPublisherName
+        bookPublishedDate = eventFields.bookPublishedDate
+        bookPriceText = eventFields.bookPriceText
+        bookPageCountText = eventFields.bookPageCount > 0 ? String(eventFields.bookPageCount) : ""
+        bookContentTypeKey = eventFields.bookContentTypeKey
+        bookMediumKey = eventFields.bookMediumKey.isEmpty ? BookReadingMedium.paper.rawValue : eventFields.bookMediumKey
+        screenWorkSeasonNumber = eventFields.screenWorkSeasonNumber
+        performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
+        socialLinksText = eventFields.socialLinks.joined(separator: "\n")
+        eventSubtitle = eventFields.eventSubtitle
+        visitSubtitle = plan.subtitle
+        theaterCreditsText = eventFields.eventCreditsText
+        visitedAt = plan.startsAt
+        endedAt = max(plan.endsAt, plan.startsAt)
+        performanceOpensAt = event?.category?.usesOpeningTime == true && plan.opensAt != .distantPast
+            ? plan.opensAt
+            : nil
+        venueName = plan.venueNameSnapshot
+        venueAddress = plan.placeMaster?.address ?? ""
+        venueOfficialURL = plan.placeMaster?.officialURL ?? ""
+        latitude = plan.placeMaster?.latitude ?? 0
+        longitude = plan.placeMaster?.longitude ?? 0
+        overallRating = preparation.overallRating
+        outcomeKey = ""
+        seatText = attempt?.seatText ?? ""
+        ocrText = preparation.ocrText
+        advancedEntries = preparation.advancedEntries
+        liveSetlistEntries = preparation.liveSetlistEntries
+        amountText = preparation.amountText
+        expenseEntries = preparation.expenseEntries
+        momentEntries = preparation.momentEntries
+        note = plan.memo
+        memoStyleRuns = preparation.memoStyleRuns
+        tagNamesText = preparation.tagNames.joined(separator: "\n")
     }
 
     init(inboxItem: InboxItem) {
@@ -2923,6 +3233,21 @@ struct AddExperienceDraft {
 
     var normalizedSocialLinks: [String] {
         socialLinksText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    var normalizedCompanionNamesRaw: String {
+        companionNamesText
+            .components(separatedBy: CharacterSet(charactersIn: "、,\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "、")
+    }
+
+    var normalizedCompanionSocialLinks: [String] {
+        companionSocialLinksText
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -3048,6 +3373,7 @@ struct AddExperienceDraft {
         VisitUnitFields(
             ocrText: trimmedOCRText,
             styleNames: normalizedStyleNames(from: styleNamesText),
+            companionSocialLinks: normalizedCompanionSocialLinks,
             visitSubtitle: visitSubtitle.trimmingCharacters(in: .whitespacesAndNewlines),
             venueAddressSnapshot: venueAddress.trimmingCharacters(in: .whitespacesAndNewlines),
             performanceOpensAt: category?.usesOpeningTime == true ? performanceOpensAt : nil,
@@ -3144,8 +3470,13 @@ func applyTargetChangesFromExperienceEdit(
     categories: [RecordCategory],
     at now: Date
 ) {
-    // 観劇回は過去の一回を記録する単位。公演情報の正本は公演ハブの対象編集だけで更新する。
-    guard !["theater", "live"].contains(event.category?.templateKey ?? "") else { return }
+    if ["theater", "live"].contains(event.category?.templateKey ?? "") {
+        // 回別の記録編集から親へ反映するのは、画面で明示的に編集できる名称だけに限定する。
+        event.title = draft.trimmedTitle
+        event.seriesName = draft.trimmedSeriesName
+        event.updatedAt = now
+        return
+    }
 
     event.title = draft.trimmedTitle
     if event.category?.templateKey == "book" {
@@ -3272,6 +3603,7 @@ struct VisitDraft {
     }
 
     init(plan: Plan) {
+        let preparationFields = PlanPreparationFields(rawValue: plan.unitFieldsRaw)
         let attempt = (plan.ticketAttempts ?? [])
             .filter { !$0.isArchived }
             .sorted { $0.updatedAt > $1.updatedAt }
@@ -3298,6 +3630,15 @@ struct VisitDraft {
         ]
         .filter { !$0.isEmpty }
         .joined(separator: "\n")
+        memoStyleRuns = preparationFields.memoStyleRuns
+        tagNamesText = preparationFields.tagNames.joined(separator: "\n")
+        overallRating = preparationFields.overallRating
+        momentEntries = preparationFields.momentEntries
+        liveSetlistEntries = preparationFields.liveSetlistEntries
+        amountText = preparationFields.amountText
+        expenseEntries = preparationFields.expenseEntries
+        ocrText = preparationFields.ocrText
+        advancedEntries = preparationFields.advancedEntries
     }
 
     /// 同じ対象をもう一度記録する時に、場所と表示設定だけを引き継ぐ。
@@ -3677,8 +4018,8 @@ private func initialExpandedRecordUnitIDs(
     switch templateKey {
     case "theater":
         main = ["basic", "ticketPlan"]
-        memories = ["theaterRating", "photos", "memo"]
-        notes = ["money", "importOCR", "officialInfo", "advanced"]
+        memories = ["theaterRating", "photos", "companions", "memo"]
+        notes = ["tasks", "money", "importOCR", "officialInfo", "advanced"]
     case "live":
         main = ["basic", "ticketPlan"]
         memories = ["liveRating", "liveSetlist", "people", "photos", "memo"]
@@ -3778,7 +4119,7 @@ private let screenWorkRecordUnitDefinitions: [RecordUnitDefinition] = [
     ),
 ]
 
-private let screenWorkPeopleRoleOptions: [PersonRoleOption] = [
+let screenWorkPeopleRoleOptions: [PersonRoleOption] = [
     PersonRoleOption.option(for: "director"),
     PersonRoleOption.option(for: "lead"),
     PersonRoleOption.option(for: "cast"),
@@ -3801,7 +4142,7 @@ private enum TheaterRecordBlock: String, CaseIterable, Identifiable {
 
     var description: String {
         switch self {
-        case .viewing: "アイキャッチ・参加日・天気・会場・鑑賞方法・座席"
+        case .viewing: "イベント名・参加日・会場/場所"
         case .memories: "評価・注目した人・思い出・資料写真・同行者・感想"
         case .notes: "公式・参考情報・費用・OCR・自由項目"
         }
@@ -3814,9 +4155,9 @@ private enum TheaterRecordBlock: String, CaseIterable, Identifiable {
         case .viewing:
             ["basic", "ticketPlan"]
         case .memories:
-            ["theaterRating", "photos", "memo"]
+            ["theaterRating", "photos", "companions", "memo"]
         case .notes:
-            ["officialInfo", "money", "importOCR", "advanced"]
+            ["tasks", "money", "officialInfo", "importOCR", "advanced"]
         }
     }
 
@@ -3864,7 +4205,7 @@ private enum ScreenWorkRecordBlock: String, CaseIterable, Identifiable {
 
     var description: String {
         switch self {
-        case .viewing: "アイキャッチ・鑑賞日・シリーズ・鑑賞方法・鑑賞場所"
+        case .viewing: "イベント名・鑑賞日・会場/場所"
         case .memories: "評価・写真・同行者・感想"
         case .notes: "出演者・公式情報・OCR・制作情報・自由項目"
         }
@@ -3926,7 +4267,7 @@ private enum LiveRecordBlock: String, CaseIterable, Identifiable {
 
     var description: String {
         switch self {
-        case .attendance: "アイキャッチ・参戦日・会場・チケット・座席"
+        case .attendance: "イベント名・参加日・会場/場所"
         case .memories: "評価・セットリスト・写真・同行者・感想"
         case .notes: "公式情報・費用・OCR・自由項目"
         }
@@ -4118,9 +4459,9 @@ private func outingBlockTitle(_ block: OutingRecordBlock, templateKey: String) -
 private func outingBlockDescription(_ block: OutingRecordBlock, templateKey: String) -> String {
     guard block == .experience else { return block.description }
     switch templateKey {
-    case "museum": return "アイキャッチ・鑑賞日・施設・展示名"
-    case "theme_park": return "アイキャッチ・来園日・施設"
-    default: return "アイキャッチ・訪問日・施設・施設種別"
+    case "museum": return "イベント名・鑑賞日・会場/場所"
+    case "theme_park": return "イベント名・来園日・会場/場所"
+    default: return "イベント名・訪問日・会場/場所"
     }
 }
 
@@ -4208,10 +4549,10 @@ private enum GenericRecordBlock: String, CaseIterable, Identifiable {
 
     func description(templateKey: String) -> String {
         switch (self, templateKey) {
-        case (.primary, "goshuin"): "アイキャッチ・参拝日・寺社・御朱印帳・御朱印の種類"
-        case (.primary, "sake"): "飲んだ日・銘柄・飲んだ場所"
-        case (.primary, "random_goods"): "アイキャッチ・入手日・シリーズ・対象・金額"
-        case (.primary, _): "アイキャッチ・日時・場所"
+        case (.primary, "goshuin"): "寺社名・参拝日・会場/場所"
+        case (.primary, "sake"): "銘柄・飲んだ日・会場/場所"
+        case (.primary, "random_goods"): "対象名・入手日・入手場所"
+        case (.primary, _): "イベント名・参加日・会場/場所"
         case (.memories, "goshuin"): "写真・同行者・感想"
         case (.memories, "sake"): "評価・写真・感想"
         case (.memories, "random_goods"): "画像・メモ"
@@ -4235,7 +4576,8 @@ private enum GenericRecordBlock: String, CaseIterable, Identifiable {
             switch templateKey {
             case "sake": return ["outingRating", "photos", "memo"]
             case "random_goods": return ["photos", "memo"]
-            default: return ["photos", "people", "memo"]
+            case "goshuin": return ["photos", "people", "memo"]
+            default: return ["outingRating", "photos", "people", "memo"]
             }
         case .notes:
             switch templateKey {
@@ -4318,13 +4660,31 @@ private func activeUnitDefinitions(for category: RecordCategory?) -> [RecordUnit
             isRequired: false
         )
     )
+    theaterDefinitions.append(
+        RecordUnitDefinition(
+            id: "companions",
+            name: "同行者",
+            description: "一緒に観た人・SNS",
+            isRequired: false
+        )
+    )
+    theaterDefinitions.append(
+        RecordUnitDefinition(
+            id: "tasks",
+            name: "ToDo",
+            description: "準備・投稿・観劇後に残すこと",
+            isRequired: false
+        )
+    )
 
     let theaterOrder = [
         "basic",
         "theaterRating",
         "ticketPlan",
         "photos",
+        "companions",
         "memo",
+        "tasks",
         "money",
         "importOCR",
         "officialInfo",
@@ -4470,6 +4830,13 @@ private func theaterRecordUnitDefinition(
             description: "追加写真の分類・キャプション・金額",
             isRequired: definition.isRequired
         )
+    case "companions":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "同行者",
+            description: "一緒に観た人・SNS",
+            isRequired: false
+        )
     case "memo":
         return RecordUnitDefinition(
             id: definition.id,
@@ -4483,6 +4850,13 @@ private func theaterRecordUnitDefinition(
             name: "集計記録",
             description: "金額",
             isRequired: definition.isRequired
+        )
+    case "tasks":
+        return RecordUnitDefinition(
+            id: definition.id,
+            name: "ToDo",
+            description: "準備・投稿・観劇後に残すこと",
+            isRequired: false
         )
     case "importOCR":
         return RecordUnitDefinition(
@@ -4527,7 +4901,7 @@ private func normalizedStyleNames(from text: String) -> [String] {
         }
 }
 
-private struct MomentPhotoChoice: Identifiable {
+struct MomentPhotoChoice: Identifiable {
     let id: UUID
     let title: String
     let data: Data
@@ -4537,7 +4911,7 @@ private struct MomentPhotoSelection: Identifiable {
     let id: UUID
 }
 
-private struct VisitMomentEntriesEditor: View {
+struct VisitMomentEntriesEditor: View {
     @Binding var entries: [VisitMomentEntry]
     let availablePhotos: [MomentPhotoChoice]
     let itemName: String

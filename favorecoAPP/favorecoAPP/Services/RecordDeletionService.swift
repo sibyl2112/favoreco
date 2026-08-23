@@ -57,6 +57,10 @@ enum RecordDeletionService {
     @MainActor
     static func deleteVisit(_ visit: Visit, in context: ModelContext) throws {
         detachReferences(toVisitID: visit.id, in: context)
+        let movieBestEntries = try context.fetch(FetchDescriptor<MovieBestEntry>())
+        for entry in movieBestEntries where entry.visitID == visit.id {
+            context.delete(entry)
+        }
         context.delete(visit) // PhotoBlob は Visit.photos の .cascade で連鎖削除
         try context.save()
     }
@@ -69,6 +73,7 @@ enum RecordDeletionService {
         let eventID = event.id
         let allLinks = (try? context.fetch(FetchDescriptor<EventPersonLink>())) ?? []
         let allPlans = (try? context.fetch(FetchDescriptor<Plan>())) ?? []
+        let movieBestEntries = (try? context.fetch(FetchDescriptor<MovieBestEntry>())) ?? []
         let visitIDs = Set((event.visits ?? []).map(\.id))
         let ownedPlans = allPlans.filter { $0.event?.id == eventID }
         let notificationTargets = ownedPlans.map { plan in
@@ -86,6 +91,9 @@ enum RecordDeletionService {
         // event 参照・配下 visit 参照の EventPersonLink を削除
         for link in allLinks where link.event?.id == eventID || link.visit.map({ visitIDs.contains($0.id) }) == true {
             context.delete(link)
+        }
+        for entry in movieBestEntries where visitIDs.contains(entry.visitID) {
+            context.delete(entry)
         }
 
         context.delete(event) // Visit / Plan は Event の .cascade、PhotoBlob / TicketAttempt はさらに cascade
@@ -114,11 +122,13 @@ enum RecordDeletionService {
         let companions = try context.fetch(FetchDescriptor<CompanionMaster>())
         let places = try context.fetch(FetchDescriptor<PlaceMaster>())
         let links = try context.fetch(FetchDescriptor<EventPersonLink>())
+        let movieBestEntries = try context.fetch(FetchDescriptor<MovieBestEntry>())
 
         let archivedEvents = events.filter(\.isArchived)
         let archivedEventIDs = Set(archivedEvents.map(\.id))
         let archivedVisits = archivedEvents.flatMap { $0.visits ?? [] }
         let archivedVisitIDs = Set(archivedVisits.map(\.id))
+        let archivedMovieBestEntries = movieBestEntries.filter { archivedVisitIDs.contains($0.visitID) }
         let archivedPlans = plans.filter { plan in
             plan.isArchived || plan.event.map { archivedEventIDs.contains($0.id) } == true
         }
@@ -145,6 +155,9 @@ enum RecordDeletionService {
         }
         for link in archivedLinks {
             context.delete(link)
+        }
+        for entry in archivedMovieBestEntries {
+            context.delete(entry)
         }
         for attempt in archivedAttempts {
             if let plan = attempt.plan, archivedPlanIDs.contains(plan.id) { continue }
@@ -211,11 +224,13 @@ enum RecordDeletionService {
         let pins = try context.fetch(FetchDescriptor<FavoPin>())
         let collectibleItems = try context.fetch(FetchDescriptor<CollectibleItem>())
         let collectibleTransactions = try context.fetch(FetchDescriptor<CollectibleTransaction>())
+        let movieBestEntries = try context.fetch(FetchDescriptor<MovieBestEntry>())
         let planIDs = plans.map(\.id)
         let attemptIDs = attempts.map(\.id)
 
         // inverse がないリンクを先に外し、ExperienceEvent 配下は cascade に任せる。
         for link in links { context.delete(link) }
+        for entry in movieBestEntries { context.delete(entry) }
         for shelf in bookShelves { context.delete(shelf) }
         for event in events { context.delete(event) }
         for plan in plans where plan.event == nil { context.delete(plan) }
@@ -252,6 +267,7 @@ enum RecordDeletionService {
             + pins.count
             + collectibleItems.count
             + collectibleTransactions.count
+            + movieBestEntries.count
         return ExperienceDataDeletionResult(
             eventCount: events.count,
             visitCount: visits.count,
@@ -285,6 +301,7 @@ enum RecordDeletionService {
         let attempts = try context.fetch(FetchDescriptor<TicketAttempt>())
         let collectibleItems = try context.fetch(FetchDescriptor<CollectibleItem>())
         let collectibleTransactions = try context.fetch(FetchDescriptor<CollectibleTransaction>())
+        let movieBestEntries = try context.fetch(FetchDescriptor<MovieBestEntry>())
         let externalCalendarTargets = externalCalendarTargets(for: plans)
         let planNotificationIDs = plans.map(\.id)
         let attemptNotificationIDs = attempts.map(\.id)
@@ -294,10 +311,12 @@ enum RecordDeletionService {
         let masterModelCount = socialAccounts.count + people.count + companions.count + favoriteProfiles.count + favoGalleryPhotos.count + favoAnniversaries.count + favoPins.count
         let planningModelCount = links.count + places.count + plans.count + accounts.count + attempts.count
         let collectionModelCount = collectibleItems.count + collectibleTransactions.count
+            + movieBestEntries.count
         let deletedModelCount = coreModelCount + masterModelCount + planningModelCount + collectionModelCount
 
         // 親を先に削除し、親を持たない孤立モデルだけを個別削除する。
         for link in links { context.delete(link) }
+        for entry in movieBestEntries { context.delete(entry) }
         for shelf in bookShelves { context.delete(shelf) }
         for event in events { context.delete(event) }
         for plan in plans where plan.event == nil { context.delete(plan) }

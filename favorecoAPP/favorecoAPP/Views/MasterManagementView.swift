@@ -34,7 +34,7 @@ struct PersonMasterManagementView: View {
 
     var body: some View {
         List {
-            Section {
+            FavorecoSettingsCard {
                 PersonActivityFilterBar(
                     availableTags: availableActivityTags,
                     selectedIDs: $selectedActivityTagIDs,
@@ -57,6 +57,7 @@ struct PersonMasterManagementView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("人物・団体")
         .searchable(text: $searchText, prompt: "名前・よみ・別名・愛称を検索")
         .toolbar {
@@ -121,7 +122,7 @@ struct PersonMasterCreateView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("基本情報") {
+                FavorecoSettingsSection("基本情報") {
                     PersonPhotoEditor(
                         storedData: nil,
                         storedPath: "",
@@ -152,7 +153,7 @@ struct PersonMasterCreateView: View {
                 }
 
                 if !suggestions.isEmpty {
-                    Section {
+                    FavorecoSettingsSectionWithFooter("登録済み候補") {
                         ForEach(suggestions) { person in
                             NavigationLink {
                                 PersonMasterMergeView(person: person)
@@ -164,8 +165,6 @@ struct PersonMasterCreateView: View {
                                 )
                             }
                         }
-                    } header: {
-                        Text("登録済み候補")
                     } footer: {
                         Text("名前・よみ・別名が一致する人物は、新規作成せず登録済み候補を確認してください。")
                     }
@@ -173,7 +172,7 @@ struct PersonMasterCreateView: View {
 
                 PersonActivityTagEditor(rawValue: $roleTagsRaw)
 
-                Section {
+                FavorecoSettingsCard {
                     DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
                         TextField("別名・愛称（カンマ区切り）", text: $aliasesRaw)
                         TextField("公式URL", text: $officialURL)
@@ -187,12 +186,14 @@ struct PersonMasterCreateView: View {
                 }
 
                 if !errorMessage.isEmpty {
-                    Section { Text(errorMessage).foregroundStyle(.red) }
+                    FavorecoSettingsCard { Text(errorMessage).foregroundStyle(.red) }
                 }
                 if !photoErrorMessage.isEmpty {
-                    Section { Text(photoErrorMessage).foregroundStyle(.red) }
+                    FavorecoSettingsCard { Text(photoErrorMessage).foregroundStyle(.red) }
                 }
             }
+            .favorecoSettingsListLayout()
+            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .navigationTitle(locksEntityKind ? "団体を追加" : "人物・団体を追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -327,7 +328,7 @@ struct PlaceMasterManagementView: View {
 
     var body: some View {
         List {
-            Section("絞り込み") {
+            FavorecoSettingsSection("絞り込み") {
                 Picker("エリア", selection: $selectedArea) {
                     Text("全国").tag(JapanArea?.none)
                     ForEach(JapanArea.allCases) { area in
@@ -364,7 +365,7 @@ struct PlaceMasterManagementView: View {
                 LabeledContent("表示件数", value: "\(activePlaces.count) / \(allActivePlaces.count)件")
             }
 
-            Section {
+            FavorecoSettingsCard {
                 if allActivePlaces.isEmpty {
                     FavorecoContentUnavailableView(
                         "場所はまだありません",
@@ -393,6 +394,7 @@ struct PlaceMasterManagementView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("場所マスター")
         .searchable(text: $searchText, prompt: "名称・住所・別名を検索")
         .toolbar {
@@ -524,7 +526,7 @@ private struct PersonMasterMergeView: View {
 
     var body: some View {
         Form {
-            Section("基本情報") {
+            FavorecoSettingsSection("基本情報") {
                 EditScopeNotice(
                     scope: "すべての作品・予定・記録",
                     detail: "正式名、写真、活動分野の変更を、この人物・団体を使う画面へ反映します。"
@@ -580,7 +582,7 @@ private struct PersonMasterMergeView: View {
 
             PersonActivityTagEditor(rawValue: $draft.roleTagsRaw)
 
-            Section {
+            FavorecoSettingsCard {
                 DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
                     TextField("公式URL", text: $draft.officialURL)
                         .textInputAutocapitalization(.never)
@@ -592,7 +594,7 @@ private struct PersonMasterMergeView: View {
                 }
             }
 
-            Section("FAVO") {
+            FavorecoSettingsSection("FAVO") {
                 EditScopeNotice(
                     scope: "MY FAVOだけ",
                     detail: "推し区分、呼び名、推しカラー、きっかけは作品や観劇記録の公式情報を変えません。"
@@ -623,7 +625,7 @@ private struct PersonMasterMergeView: View {
                 }
             }
 
-            Section("似た人物・団体") {
+            FavorecoSettingsSection("似た人物・団体") {
                 if candidates.isEmpty {
                     Text("統合候補はありません。名称・よみ・別名が近い候補をここに表示します。")
                         .font(FavorecoTypography.caption)
@@ -645,12 +647,14 @@ private struct PersonMasterMergeView: View {
             }
 
             if !errorMessage.isEmpty {
-                Section { Text(errorMessage).foregroundStyle(.red) }
+                FavorecoSettingsCard { Text(errorMessage).foregroundStyle(.red) }
             }
             if !photoErrorMessage.isEmpty {
-                Section { Text(photoErrorMessage).foregroundStyle(.red) }
+                FavorecoSettingsCard { Text(photoErrorMessage).foregroundStyle(.red) }
             }
         }
+        .favorecoSettingsListLayout()
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
         .navigationTitle(person.displayName)
         .task(id: selectedPhoto) {
             await loadSelectedPersonPhoto()
@@ -823,7 +827,7 @@ private struct PlaceMasterMergeView: View {
 
     var body: some View {
         Form {
-            Section("施設アイキャッチ") {
+            FavorecoSettingsSection("施設アイキャッチ") {
                 PlaceMasterEyecatch(
                     imageData: selectedPhotoData ?? (removesStoredPhoto ? nil : place.imageData),
                     tint: .accentColor
@@ -871,7 +875,7 @@ private struct PlaceMasterMergeView: View {
                 }
             }
 
-            Section("基本情報") {
+            FavorecoSettingsSection("基本情報") {
                 TextField("名称", text: $draft.name)
                 TextField("よみ（任意）", text: $draft.reading)
                 Picker("都道府県（必須）", selection: $draft.prefecture) {
@@ -898,7 +902,7 @@ private struct PlaceMasterMergeView: View {
             PlaceMasterCategoryEditor(rawValue: $draft.placeTagsRaw)
 
             if draft.showsReligiousDetails {
-                Section("宗派・御祭神") {
+                FavorecoSettingsSection("宗派・御祭神") {
                     if draft.isTemple {
                         TextField("宗派（任意）", text: $draft.templeSect)
                     }
@@ -933,7 +937,7 @@ private struct PlaceMasterMergeView: View {
                 }
             }
 
-            Section("巡礼・札所") {
+            FavorecoSettingsSection("巡礼・札所") {
                 if draft.pilgrimageMemberships.isEmpty {
                     Text("西国・坂東・四国など、霊場名と札所番号を必要な場所だけ登録できます。")
                         .font(FavorecoTypography.caption)
@@ -979,7 +983,7 @@ private struct PlaceMasterMergeView: View {
                 }
             }
 
-            Section {
+            FavorecoSettingsCard {
                 DisclosureGroup("詳細オプション", isExpanded: $showsOptionalFields) {
                     TextField("カテゴリ・タグの直接編集", text: $draft.placeTagsRaw)
                     TextField("公式URL", text: $draft.officialURL)
@@ -993,7 +997,7 @@ private struct PlaceMasterMergeView: View {
                 }
             }
 
-            Section("同じ場所の可能性") {
+            FavorecoSettingsSection("同じ場所の可能性") {
                 if candidates.isEmpty {
                     Text("統合候補はありません。名称、住所、座標が近い候補をここに表示します。")
                         .font(FavorecoTypography.caption)
@@ -1015,9 +1019,11 @@ private struct PlaceMasterMergeView: View {
             }
 
             if !errorMessage.isEmpty {
-                Section { Text(errorMessage).foregroundStyle(.red) }
+                FavorecoSettingsCard { Text(errorMessage).foregroundStyle(.red) }
             }
         }
+        .favorecoSettingsListLayout()
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
         .navigationTitle(place.name)
         .onChange(of: draft.address) { _, address in
             let extractedPrefecture = JapanPrefecture.extract(from: address)
@@ -1226,7 +1232,7 @@ private struct PersonActivityTagEditor: View {
     }
 
     var body: some View {
-        Section {
+        FavorecoSettingsSectionWithFooter("活動タグ（複数選択可）") {
             LazyVGrid(
                 columns: [
                     GridItem(.flexible(), spacing: 8, alignment: .top),
@@ -1264,8 +1270,6 @@ private struct PersonActivityTagEditor: View {
                 .onChange(of: customText) { _, newValue in
                     updateRawValue(customText: newValue)
                 }
-        } header: {
-            Text("活動タグ（複数選択可）")
         } footer: {
             Text("人物・団体そのものの活動分野です。作品ごとの主演・出演・監督などの役割は、各記録との紐付け側へ保存されます。")
         }
@@ -1653,7 +1657,7 @@ private struct PlaceMasterCategoryEditor: View {
     @Binding var rawValue: String
 
     var body: some View {
-        Section("施設カテゴリ") {
+        FavorecoSettingsSection("施設カテゴリ") {
             ForEach(PlaceMasterCategory.allCases) { category in
                 Toggle(
                     category.title,

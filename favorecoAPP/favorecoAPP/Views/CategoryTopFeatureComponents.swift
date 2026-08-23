@@ -534,7 +534,7 @@ struct PerformanceTicketManagementPlanCard: View {
         }
         .sheet(isPresented: $isShowingEditPlan) {
             if let currentPlan = currentPlans.first {
-                AddTicketPlanView(plan: currentPlan, entryMode: .plan)
+                TheaterLifecycleEditorSheet(planned: currentPlan)
             } else {
                 FavorecoContentUnavailableView("予定が見つかりません", systemImage: "trash")
             }
@@ -1075,7 +1075,7 @@ private struct CategoryFeaturePlanCard: View {
         }
         .sheet(isPresented: $isShowingEditPlan) {
             if let currentPlan = currentPlans.first {
-                AddTicketPlanView(plan: currentPlan, entryMode: .plan)
+                TheaterLifecycleEditorSheet(planned: currentPlan)
             } else {
                 FavorecoContentUnavailableView("予定が見つかりません", systemImage: "trash")
             }

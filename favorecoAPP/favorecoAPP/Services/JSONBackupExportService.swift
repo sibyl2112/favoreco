@@ -10,7 +10,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum JSONBackupExportService {
-    nonisolated static let schemaVersion = 17
+    nonisolated static let schemaVersion = 18
 
     nonisolated static func makeBackupJSON(
         categories: [RecordCategory],
@@ -31,6 +31,7 @@ enum JSONBackupExportService {
         plans: [Plan],
         ticketAccounts: [TicketAccount],
         ticketAttempts: [TicketAttempt],
+        movieBestEntries: [MovieBestEntry] = [],
         includesPhotoBinaryData: Bool = false,
         isFullBackupManifest: Bool = false
     ) throws -> String {
@@ -73,7 +74,12 @@ enum JSONBackupExportService {
             places: places.sorted { $0.name < $1.name }.map(BackupPlace.init),
             plans: plans.sorted { $0.startsAt > $1.startsAt }.map(BackupPlan.init),
             ticketAccounts: ticketAccounts.sorted { $0.serviceName < $1.serviceName }.map(BackupTicketAccount.init),
-            ticketAttempts: ticketAttempts.sorted { $0.updatedAt > $1.updatedAt }.map(BackupTicketAttempt.init)
+            ticketAttempts: ticketAttempts.sorted { $0.updatedAt > $1.updatedAt }.map(BackupTicketAttempt.init),
+            movieBestEntries: movieBestEntries.sorted {
+                if $0.year != $1.year { return $0.year > $1.year }
+                if $0.month != $1.month { return $0.month > $1.month }
+                return $0.rank < $1.rank
+            }.map(BackupMovieBestEntry.init)
         )
 
         let encoder = JSONEncoder()
@@ -107,6 +113,29 @@ nonisolated struct FavorecoBackupEnvelope: Codable {
     var plans: [BackupPlan]
     var ticketAccounts: [BackupTicketAccount]
     var ticketAttempts: [BackupTicketAttempt]
+    var movieBestEntries: [BackupMovieBestEntry]?
+}
+
+nonisolated struct BackupMovieBestEntry: Codable {
+    var id: UUID
+    var periodKindRaw: String
+    var year: Int
+    var month: Int
+    var rank: Int
+    var visitID: UUID
+    var createdAt: Date
+    var updatedAt: Date
+
+    nonisolated init(_ entry: MovieBestEntry) {
+        id = entry.id
+        periodKindRaw = entry.periodKindRaw
+        year = entry.year
+        month = entry.month
+        rank = entry.rank
+        visitID = entry.visitID
+        createdAt = entry.createdAt
+        updatedAt = entry.updatedAt
+    }
 }
 
 nonisolated struct BackupBookShelf: Codable {

@@ -40,6 +40,7 @@ enum JSONBackupImportService {
         var socialAccounts = Dictionary(grouping: try context.fetch(FetchDescriptor<SocialAccount>()), by: \.id).compactMapValues(\.first)
         var plans = Dictionary(grouping: try context.fetch(FetchDescriptor<Plan>()), by: \.id).compactMapValues(\.first)
         var attempts = Dictionary(grouping: try context.fetch(FetchDescriptor<TicketAttempt>()), by: \.id).compactMapValues(\.first)
+        var movieBestEntries = Dictionary(grouping: try context.fetch(FetchDescriptor<MovieBestEntry>()), by: \.id).compactMapValues(\.first)
         var personLinks = Dictionary(grouping: try context.fetch(FetchDescriptor<EventPersonLink>()), by: \.id).compactMapValues(\.first)
         let sourcePhotos = Dictionary(grouping: try context.fetch(FetchDescriptor<PhotoBlob>()), by: \.id).compactMapValues(\.first)
         var collectibleItems = Dictionary(grouping: try context.fetch(FetchDescriptor<CollectibleItem>()), by: \.id).compactMapValues(\.first)
@@ -481,6 +482,36 @@ enum JSONBackupImportService {
             model.account = item.accountID.flatMap { ticketAccounts[$0] }
         }
 
+        for item in envelope.movieBestEntries ?? [] {
+            guard visits[item.visitID] != nil else { continue }
+            let periodKind = MovieBestPeriodKind(rawValue: item.periodKindRaw) ?? .yearly
+            let period = MovieBestPeriod(kind: periodKind, year: item.year, month: item.month)
+            let model: MovieBestEntry
+            if let existing = movieBestEntries[item.id] {
+                model = existing
+                updatedCount += 1
+            } else {
+                model = MovieBestEntry(
+                    id: item.id,
+                    period: period,
+                    rank: item.rank,
+                    visitID: item.visitID,
+                    createdAt: item.createdAt,
+                    updatedAt: item.updatedAt
+                )
+                context.insert(model)
+                movieBestEntries[item.id] = model
+                insertedCount += 1
+            }
+            model.periodKindRaw = period.kind.rawValue
+            model.year = period.year
+            model.month = period.month
+            model.rank = max(item.rank, 0)
+            model.visitID = item.visitID
+            model.createdAt = item.createdAt
+            model.updatedAt = item.updatedAt
+        }
+
         for item in envelope.personLinks {
             let model: EventPersonLink
             if let existing = personLinks[item.id] {
@@ -688,6 +719,7 @@ struct JSONBackupPreview {
     let planCount: Int
     let ticketAccountCount: Int
     let ticketAttemptCount: Int
+    let movieBestEntryCount: Int
 
     init(envelope: FavorecoBackupEnvelope) {
         schemaVersion = envelope.schemaVersion
@@ -711,6 +743,7 @@ struct JSONBackupPreview {
         planCount = envelope.plans.count
         ticketAccountCount = envelope.ticketAccounts.count
         ticketAttemptCount = envelope.ticketAttempts.count
+        movieBestEntryCount = envelope.movieBestEntries?.count ?? 0
     }
 
     var totalModelCount: Int {
@@ -731,6 +764,7 @@ struct JSONBackupPreview {
             + planCount
             + ticketAccountCount
             + ticketAttemptCount
+            + movieBestEntryCount
     }
 }
 

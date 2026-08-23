@@ -8,54 +8,75 @@ enum SimpleCategoryRegistrationPurpose: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// 映像作品／ミュージアムの登録は、目的選択と入力を1枚のシート内で完結させる。
+/// 3フォームを同じ階層に保持し、切替後も入力途中のStateを破棄しない。
 struct SimpleCategoryRegistrationView: View {
-    @Environment(\.dismiss) private var dismiss
-
     let category: RecordCategory
-    let onSelect: (SimpleCategoryRegistrationPurpose) -> Void
 
     @State private var purpose: SimpleCategoryRegistrationPurpose = .interested
 
     private var isMovie: Bool { category.templateKey == "movie" }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                FavorecoRegistrationSection("登録内容") {
-                    Picker("登録内容", selection: $purpose) {
-                        ForEach(SimpleCategoryRegistrationPurpose.allCases) { item in
-                            Text(title(for: item)).tag(item)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+        ZStack {
+            registrationForm(for: .interested)
+                .registrationPurposeVisibility(purpose == .interested)
 
-                    Label(description(for: purpose), systemImage: icon(for: purpose))
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                }
+            registrationForm(for: .plan)
+                .registrationPurposeVisibility(purpose == .plan)
 
-                Section {
-                    Button {
-                        onSelect(purpose)
-                    } label: {
-                        Text("入力へ進む")
-                            .font(FavorecoTypography.bodyStrong)
-                            .frame(maxWidth: .infinity)
-                    }
-                } footer: {
-                    if !isMovie {
-                        Text("作品・展示の基本情報を一度登録し、予定や鑑賞記録は同じ情報へ紐づけます。")
-                    }
+            registrationForm(for: .visited)
+                .registrationPurposeVisibility(purpose == .visited)
+        }
+    }
+
+    @ViewBuilder
+    private func registrationForm(for item: SimpleCategoryRegistrationPurpose) -> some View {
+        switch item {
+        case .interested:
+            QuickRegistrationView(
+                initialTemplateKey: category.templateKey,
+                screenTitle: isMovie ? "観たい作品を登録" : "気になる展示を登録",
+                locksCategory: true,
+                simpleRegistrationPurpose: $purpose
+            )
+        case .plan:
+            AddTicketPlanView(
+                entryMode: .plan,
+                initialCategoryID: category.id,
+                simpleRegistrationPurpose: $purpose
+            )
+        case .visited:
+            AddExperienceView(
+                category: category,
+                simpleRegistrationPurpose: $purpose
+            )
+        }
+    }
+}
+
+struct SimpleCategoryRegistrationPurposePicker: View {
+    @Binding var selection: SimpleCategoryRegistrationPurpose
+
+    let category: RecordCategory
+
+    private var isMovie: Bool { category.templateKey == "movie" }
+
+    var body: some View {
+        FavorecoRegistrationSection("登録内容") {
+            Picker("登録内容", selection: $selection) {
+                ForEach(SimpleCategoryRegistrationPurpose.allCases) { item in
+                    Text(title(for: item)).tag(item)
                 }
             }
-            .favorecoRegistrationFormCanvas()
-            .navigationTitle(isMovie ? "作品を登録する" : "展示・イベントを登録")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
+            .pickerStyle(.segmented)
+
+            Divider()
+
+            Label(description(for: selection), systemImage: icon(for: selection))
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -84,5 +105,14 @@ struct SimpleCategoryRegistrationView: View {
         case .plan: "calendar.badge.plus"
         case .visited: "square.and.pencil"
         }
+    }
+}
+
+private extension View {
+    func registrationPurposeVisibility(_ isVisible: Bool) -> some View {
+        opacity(isVisible ? 1 : 0)
+            .allowsHitTesting(isVisible)
+            .accessibilityHidden(!isVisible)
+            .zIndex(isVisible ? 1 : 0)
     }
 }

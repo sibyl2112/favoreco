@@ -142,40 +142,15 @@ struct BookYearStatusStrip: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            metric(title: "今年", value: "\(currentYearReadCount)", unit: "冊/年")
-            divider
-            metric(title: "気になる", value: "\(interestedCount)", unit: "冊")
-            divider
-            metric(title: "積読", value: "\(toReadCount)", unit: "冊")
-        }
-        .frame(maxWidth: .infinity, minHeight: 42)
-        .padding(.horizontal, 2)
-        .accessibilityElement(children: .combine)
+        CategoryTickerStrip(
+            metrics: [
+                CategoryTickerMetric(title: "今年", value: "\(currentYearReadCount)", unit: "冊/年"),
+                CategoryTickerMetric(title: "気になる", value: "\(interestedCount)", unit: "冊"),
+                CategoryTickerMetric(title: "積読", value: "\(toReadCount)", unit: "冊"),
+            ],
+            tint: tint
+        )
         .accessibilityLabel("今年の読了\(currentYearReadCount)冊、気になる\(interestedCount)冊、積読\(toReadCount)冊")
-    }
-
-    private func metric(title: String, value: String, unit: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 3) {
-            Text(title)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Text(value)
-                .font(FavorecoTypography.jpSerif(22, weight: .medium, relativeTo: .title3))
-                .foregroundStyle(tint.opacity(0.88))
-            Text(unit)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .minimumScaleFactor(0.82)
-    }
-
-    private var divider: some View {
-        Rectangle()
-            .fill(Color.secondary.opacity(0.20))
-            .frame(width: 0.6, height: 20)
     }
 }
 
@@ -1096,6 +1071,9 @@ struct BookSeriesDetailView: View {
                         .bookContentTypeKey,
                     initialBookAspectRatioKey: VisitUnitFields(rawValue: representativeEvent.unitFieldsRaw)
                         .eyecatchAspectRatioKey
+                )
+                .favorecoRegistrationTheme(
+                    categoryHex: representativeEvent.category?.colorHex
                 )
             }
         }

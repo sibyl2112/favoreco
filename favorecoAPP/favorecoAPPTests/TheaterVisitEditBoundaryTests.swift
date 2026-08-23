@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class TheaterVisitEditBoundaryTests: XCTestCase {
-    func testTheaterVisitEditDoesNotMutateTarget() {
+    func testTheaterVisitEditUpdatesOnlyEditableTargetNames() {
         let category = RecordCategory(name: "観劇", templateKey: "theater")
         let originalUpdatedAt = Date(timeIntervalSince1970: 1_000)
         let originalFields = VisitUnitFields(
@@ -29,21 +29,22 @@ final class TheaterVisitEditBoundaryTests: XCTestCase {
         draft.socialLinksText = "https://example.com/changed-social"
         draft.eventSubtitle = "変更後の副題"
 
+        let now = Date(timeIntervalSince1970: 2_000)
         applyTargetChangesFromExperienceEdit(
             to: event,
             draft: draft,
             categories: [category],
-            at: Date(timeIntervalSince1970: 2_000)
+            at: now
         )
 
-        XCTAssertEqual(event.title, "元の公演名")
-        XCTAssertEqual(event.seriesName, "元のシリーズ")
+        XCTAssertEqual(event.title, "変更後の公演名")
+        XCTAssertEqual(event.seriesName, "変更後のシリーズ")
         XCTAssertEqual(event.subTypeKey, "musical")
         XCTAssertEqual(event.organizerNameSnapshot, "元の主催")
         XCTAssertEqual(event.representativeEyecatchPath, "original.jpg")
         XCTAssertEqual(event.officialURL, "https://example.com/official")
         XCTAssertEqual(event.unitFieldsRaw, originalFields)
-        XCTAssertEqual(event.updatedAt, originalUpdatedAt)
+        XCTAssertEqual(event.updatedAt, now)
         XCTAssertEqual(event.category?.id, category.id)
     }
 

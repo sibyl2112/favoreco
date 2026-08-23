@@ -378,6 +378,8 @@ private struct FavoGalleryPhotoEditorView: View {
                 Section { Text(errorMessage).foregroundStyle(.red) }
             }
         }
+        .favorecoRegistrationFormCanvas()
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
         .navigationTitle("写真を編集")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

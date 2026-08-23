@@ -29,7 +29,7 @@ struct AutomaticBackupView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsSectionWithFooter("自動バックアップ") {
                 LabeledContent("保存先", value: usesICloudDrive ? "端末 + iCloud Drive" : "この端末")
                 LabeledContent("保持数", value: "最大\(effectiveRetentionCount)世代")
                 LabeledContent("写真容量", value: ByteCountFormatter.string(fromByteCount: totalPhotoBytes, countStyle: .file))
@@ -43,8 +43,6 @@ struct AutomaticBackupView: View {
                     Label("今すぐバックアップ", systemImage: "arrow.clockwise.icloud")
                 }
                 .disabled(isWorking)
-            } header: {
-                Text("自動バックアップ")
             } footer: {
                 Text("端末内へ先に保存し、設定時は同じパッケージをiCloud Driveにも複製します。写真が500MB以上では3世代、1GB以上では2世代へ自動調整します。")
             }
@@ -54,7 +52,7 @@ struct AutomaticBackupView: View {
             if usesICloudDrive {
                 snapshotSection(title: "iCloud Drive", snapshots: iCloudSnapshots)
                 if !iCloudError.isEmpty {
-                    Section("iCloud Drive") {
+                    FavorecoSettingsSection("iCloud Drive") {
                         Label(iCloudError, systemImage: "exclamationmark.icloud")
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.orange)
@@ -63,7 +61,7 @@ struct AutomaticBackupView: View {
             }
 
             if lastAttemptAt != .distantPast {
-                Section("最終実行結果") {
+                FavorecoSettingsSection("最終実行結果") {
                     LabeledContent("日時", value: createdText(lastAttemptAt))
                     LabeledContent("結果", value: lastResultStatus?.displayName ?? "不明")
                     if !lastResultMessage.isEmpty {
@@ -78,7 +76,7 @@ struct AutomaticBackupView: View {
             }
 
             if isWorking {
-                Section {
+                FavorecoSettingsCard {
                     HStack {
                         ProgressView()
                         Text("処理中です。")
@@ -87,13 +85,14 @@ struct AutomaticBackupView: View {
             }
 
             if !message.isEmpty {
-                Section("結果") {
+                FavorecoSettingsSection("結果") {
                     Text(message)
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(message.hasPrefix("失敗") ? .red : .secondary)
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("自動バックアップ")
         .navigationBarTitleDisplayMode(.inline)
         .task { reload() }
@@ -107,7 +106,7 @@ struct AutomaticBackupView: View {
 
     @ViewBuilder
     private func snapshotSection(title: String, snapshots: [AutomaticBackupSnapshot]) -> some View {
-        Section(title) {
+        FavorecoSettingsSection(title) {
             if snapshots.isEmpty {
                 Text("バックアップはまだありません。")
                     .foregroundStyle(.secondary)

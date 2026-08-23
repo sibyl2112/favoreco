@@ -1,6 +1,14 @@
 import Foundation
 import CoreGraphics
 
+enum TargetEyecatchPresentationPolicy {
+    /// 対象共通アイキャッチを編集できるジャンルでは、回別写真より対象画像を先に表示する。
+    /// 観劇・LIVEは回別アイキャッチ、書籍は読書回ではなく書影という既存責務を維持する。
+    static func prefersSharedEventEyecatch(templateKey: String, hasEventEyecatch: Bool) -> Bool {
+        hasEventEyecatch && !["theater", "live", "book"].contains(templateKey)
+    }
+}
+
 struct TheaterPerformanceScheduleItem: Identifiable, Equatable {
     let id: String
     let performanceLabel: String

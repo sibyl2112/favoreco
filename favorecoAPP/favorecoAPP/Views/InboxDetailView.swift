@@ -141,6 +141,7 @@ struct InboxDetailView: View {
                 ) {
                     markResolved(category: category)
                 }
+                .favorecoRegistrationTheme(categoryHex: category.colorHex)
             }
         }
         .sheet(item: $selectedEventForVisit) { event in
@@ -152,12 +153,14 @@ struct InboxDetailView: View {
                     markResolved(category: category)
                 }
             }
+            .favorecoRegistrationTheme(categoryHex: event.category?.colorHex)
         }
         .sheet(isPresented: $isShowingTicketPlanForm) {
             if let category = selectedCategory {
                 AddTicketPlanView(inboxItem: item, category: category) {
                     markResolved(category: category)
                 }
+                .favorecoRegistrationTheme(categoryHex: category.colorHex)
             }
         }
         .onChange(of: selectedTemplateKey) { _, _ in

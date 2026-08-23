@@ -201,13 +201,22 @@ struct PlanDetailView: View {
             }
         }
         .sheet(isPresented: $isShowingEditPlan) {
-            AddTicketPlanView(plan: plan, entryMode: .plan)
+            TheaterLifecycleEditorSheet(planned: plan)
+                .favorecoRegistrationTheme(
+                    categoryHex: plan.event?.category?.colorHex ?? plan.category?.colorHex
+                )
         }
         .sheet(isPresented: $isShowingAddAttempt) {
             EditTicketAttemptView(plan: plan)
+                .favorecoRegistrationTheme(
+                    categoryHex: plan.event?.category?.colorHex ?? plan.category?.colorHex
+                )
         }
         .sheet(item: $editingAttempt) { attempt in
             EditTicketAttemptView(plan: plan, attempt: attempt)
+                .favorecoRegistrationTheme(
+                    categoryHex: plan.event?.category?.colorHex ?? plan.category?.colorHex
+                )
         }
         .sheet(item: $quickActionAttempt) { attempt in
             TicketQuickActionSheet(attempt: attempt)
@@ -225,6 +234,7 @@ struct PlanDetailView: View {
                 initialDraft: VisitDraft(plan: plan),
                 sourcePlan: plan
             )
+            .favorecoRegistrationTheme(categoryHex: event.category?.colorHex)
         }
         .sheet(item: $calendarDraft) { draft in
             CalendarEventEditSheet(draft: draft) { identifier in

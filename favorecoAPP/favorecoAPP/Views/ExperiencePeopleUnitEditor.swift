@@ -12,10 +12,14 @@ import SwiftUI
 struct PendingPersonLink: Identifiable {
     let id = UUID()
     var name: String
+    var reading: String = ""
     var role: PersonRoleOption
+    var roleDetail: String = ""
+    var affiliationName: String = ""
     var entityKind: PersonEntityKind = .person
     var parentOrganizationID: UUID?
     var relationshipTagKeys: [String] = []
+    var isEventFocus = false
 
     func makeEventPersonLink(
         person: PersonMaster,
@@ -23,9 +27,10 @@ struct PendingPersonLink: Identifiable {
         visit: Visit?,
         sortOrder: Int
     ) -> EventPersonLink {
+        let trimmedRoleDetail = roleDetail.trimmingCharacters(in: .whitespacesAndNewlines)
         let link = EventPersonLink(
             roleKey: role.key,
-            displayRole: role.name,
+            displayRole: trimmedRoleDetail.isEmpty ? role.name : "\(role.name)｜\(trimmedRoleDetail)",
             sortOrder: sortOrder,
             nameSnapshot: name.trimmingCharacters(in: .whitespacesAndNewlines),
             person: person,
@@ -34,8 +39,18 @@ struct PendingPersonLink: Identifiable {
         )
         if role.key == PersonRoleOption.theaterFocus.key {
             link.memo = TheaterFocusLinkMetadata(reactionKeys: relationshipTagKeys).encodedMemo
+        } else if isEventFocus {
+            link.memo = TheaterEventCreditMetadata.highlightedMarker
         }
         return link
+    }
+}
+
+enum TheaterEventCreditMetadata {
+    static let highlightedMarker = "favoreco:event-credit-highlighted"
+
+    static func isHighlighted(_ link: EventPersonLink) -> Bool {
+        link.memo == highlightedMarker
     }
 }
 
@@ -468,6 +483,11 @@ func resolvePersonMaster(
         if pending.entityKind == .organization {
             person.parentOrganizationID = pending.parentOrganizationID
         }
+        let trimmedReading = pending.reading.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedReading.isEmpty {
+            person.reading = trimmedReading
+        }
+        applyAffiliation(from: pending, to: person, people: personMasters, in: modelContext)
         person.roleTagsRaw = PersonActivityTags.encode(
             PersonActivityTags.values(from: person.roleTagsRaw) + [activityTagValue(for: pending)]
         )
@@ -480,13 +500,50 @@ func resolvePersonMaster(
         displayName: pending.name.trimmingCharacters(in: .whitespacesAndNewlines),
         entityKindKey: pending.entityKind.rawValue,
         parentOrganizationIDRaw: pending.parentOrganizationID?.uuidString ?? "",
+        reading: pending.reading.trimmingCharacters(in: .whitespacesAndNewlines),
         roleTagsRaw: activityTagValue(for: pending),
         normalizedName: normalizedName,
         createdAt: now,
         updatedAt: now
     )
     modelContext.insert(person)
+    applyAffiliation(from: pending, to: person, people: personMasters, in: modelContext)
     return person
+}
+
+@MainActor
+private func applyAffiliation(
+    from pending: PendingPersonLink,
+    to person: PersonMaster,
+    people: [PersonMaster],
+    in modelContext: ModelContext
+) {
+    guard pending.entityKind == .person else { return }
+    let affiliation = pending.affiliationName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !affiliation.isEmpty else { return }
+
+    // 同じ保存操作で追加した所属も含めて探し、同名団体の重複作成を防ぐ。
+    let availablePeople = (try? modelContext.fetch(FetchDescriptor<PersonMaster>())) ?? people
+    let organization: PersonMaster
+    if let existing = PersonMasterSuggestion.exactMatch(
+        in: availablePeople,
+        query: affiliation,
+        entityKind: .organization
+    ) {
+        organization = existing
+    } else {
+        let now = Date()
+        organization = PersonMaster(
+            displayName: affiliation,
+            entityKindKey: PersonEntityKind.organization.rawValue,
+            roleTagsRaw: "organization",
+            normalizedName: normalizedPersonName(affiliation),
+            createdAt: now,
+            updatedAt: now
+        )
+        modelContext.insert(organization)
+    }
+    person.parentOrganizationID = organization.id
 }
 
 private func activityTagValue(for pending: PendingPersonLink) -> String {

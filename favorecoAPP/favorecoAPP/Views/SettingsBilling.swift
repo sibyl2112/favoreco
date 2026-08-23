@@ -57,7 +57,7 @@ struct BillingPlanSettingsView: View {
                 PlanFeatureRow(
                     title: "URL高度取込",
                     detail: "公式ページの構造化データから日時・会場候補を取得。",
-                    systemImage: "link.badge.plus"
+                    systemImage: "link"
                 )
                 PlanFeatureRow(
                     title: "ローカル写真無制限",
@@ -85,12 +85,12 @@ struct BillingPlanSettingsView: View {
                 PlanFeatureRow(
                     title: "自作ジャンル",
                     detail: "自分専用のジャンルを作成し、記録項目や表示を整えられます。",
-                    systemImage: "square.grid.2x2"
+                    systemImage: "chart.bar.xaxis"
                 )
                 PlanFeatureRow(
                     title: "自動思い出レポート",
                     detail: "月刊Favoreco、年間Favorecoを自動生成し、写真やジャンル傾向から思い出カードを提案する。",
-                    systemImage: "sparkles.rectangle.stack"
+                    systemImage: "sparkles"
                 )
                 PlanFeatureRow(
                     title: "継続更新される補助",
@@ -146,13 +146,17 @@ struct BillingPlanSettingsView: View {
                 Button {
                     Task { await purchaseManager.restore() }
                 } label: {
-                    Label("購入を復元", systemImage: "arrow.clockwise")
+                    FavorecoSettingsIconLabel(
+                        title: "購入を復元",
+                        systemImage: "arrow.clockwise"
+                    )
                 }
+                .buttonStyle(.plain)
                 .disabled(purchaseManager.isLoading)
             }
 
             if purchaseManager.isLoading {
-                Section {
+                FavorecoSettingsCard {
                     HStack {
                         ProgressView()
                         Text("App Storeを確認中です。")
@@ -172,13 +176,19 @@ struct BillingPlanSettingsView: View {
                 NavigationLink {
                     SettingsDocumentView(title: "創設メンバー特典", bodyText: "既存¥980ユーザーと発売締切までの新規購入者に同期永久無料を付与する案を保持しています。締切日は未定です。")
                 } label: {
-                    Label("創設メンバー特典", systemImage: "person.2.badge.gearshape")
+                    FavorecoSettingsIconLabel(
+                        title: "創設メンバー特典",
+                        systemImage: "person.2.badge.gearshape"
+                    )
                 }
 
                 NavigationLink {
                     SettingsDocumentView(title: "DBパック管理", bodyText: "DBパックは商品として未確定です。寺社、会場、劇場、施設、辞書プリセットなど、権利と更新コストを確認できるものだけ検討します。")
                 } label: {
-                    FavorecoIconLabel("DBパック管理", systemImage: "shippingbox")
+                    FavorecoSettingsIconLabel(
+                        title: "DBパック管理",
+                        systemImage: "shippingbox"
+                    )
                 }
             }
         }
@@ -248,9 +258,8 @@ private struct PlanFeatureRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            FavorecoIcon(systemName: systemImage, size: 17)
-                .foregroundStyle(.blue)
-                .frame(width: 24)
+            FavorecoSettingsRowIcon(systemImage: systemImage)
+                .padding(.top, 1)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(FavorecoTypography.bodyStrong)

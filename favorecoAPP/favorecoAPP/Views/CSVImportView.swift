@@ -30,7 +30,7 @@ struct CSVImportView: View {
 
     var body: some View {
         Form {
-            Section {
+            FavorecoSettingsCard {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("記録CSVを確認")
                         .font(FavorecoTypography.sectionTitle)
@@ -41,7 +41,7 @@ struct CSVImportView: View {
                 .padding(.vertical, 6)
             }
 
-            Section("ファイル") {
+            FavorecoSettingsSection("ファイル") {
                 Button {
                     isImporterPresented = true
                 } label: {
@@ -57,7 +57,7 @@ struct CSVImportView: View {
                 }
             }
 
-            Section("対応形式") {
+            FavorecoSettingsSection("対応形式") {
                 LabeledContent("必須列", value: "date, title")
                 Text("category, venue, note（またはmemo）などは任意です。dateはYYYY-MM-DD形式で入力してください。")
                     .font(FavorecoTypography.caption)
@@ -65,7 +65,7 @@ struct CSVImportView: View {
             }
 
             if let preview {
-                Section("検証結果") {
+                FavorecoSettingsSection("検証結果") {
                     LabeledContent("データ行", value: "\(preview.rows.count)件")
                     LabeledContent("取り込み可能", value: "\(preview.validRows.count)件")
                     LabeledContent("要修正", value: "\(preview.invalidRows.count)件")
@@ -75,7 +75,7 @@ struct CSVImportView: View {
                     }
                 }
 
-                Section("プレビュー") {
+                FavorecoSettingsSection("プレビュー") {
                     ForEach(preview.rows.prefix(20)) { row in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
@@ -104,7 +104,7 @@ struct CSVImportView: View {
                     }
                 }
 
-                Section("取り込み") {
+                FavorecoSettingsSection("取り込み") {
                     Picker("空欄時のジャンル", selection: Binding(
                         get: { defaultCategory?.id },
                         set: { defaultCategoryID = $0 }
@@ -128,7 +128,7 @@ struct CSVImportView: View {
                 }
 
                 if let restoreResult {
-                    Section("保存結果") {
+                    FavorecoSettingsSection("保存結果") {
                         Label("CSVの保存が完了しました", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                         LabeledContent("記録を追加", value: "\(restoreResult.insertedVisitCount)件")
@@ -141,6 +141,7 @@ struct CSVImportView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle("CSVインポート")
         .navigationBarTitleDisplayMode(.inline)
         .fileImporter(

@@ -80,6 +80,13 @@ struct EditTicketAttemptView: View {
         editingAttempt == nil ? "チケットを追加" : "チケットを編集"
     }
 
+    private var registrationPalette: FavorecoThemePalette {
+        guard let colorHex = plan.event?.category?.colorHex ?? plan.category?.colorHex else {
+            return themePalette
+        }
+        return themePalette.scopedForRegistration(categoryHex: colorHex)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -304,11 +311,11 @@ struct EditTicketAttemptView: View {
                         Text("保存")
                             .font(FavorecoTypography.bodyStrong)
                             .foregroundStyle(
-                                themePalette.prominentActionForeground(for: colorScheme)
+                                registrationPalette.prominentActionForeground(for: colorScheme)
                             )
                             .padding(.horizontal, 13)
                             .frame(height: 34)
-                            .background(themePalette.prominentAction, in: Capsule())
+                            .background(registrationPalette.prominentAction, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -354,6 +361,8 @@ struct EditTicketAttemptView: View {
                 Text(operationError)
             }
         }
+        .environment(\.favorecoThemePalette, registrationPalette)
+        .tint(registrationPalette.globalTint)
     }
 
     @ViewBuilder
@@ -362,23 +371,35 @@ struct EditTicketAttemptView: View {
             FavorecoRegistrationSection("工程日") {
                 TicketMilestoneDateGuidance()
                 if draft.showsSaleStart {
-                    DateToggleRow(title: draft.saleStartLabel, isOn: $draft.hasSaleStart, date: $draft.saleStartAt)
+                    TicketMilestoneDateField(
+                        title: draft.saleStartLabel,
+                        isOn: $draft.hasSaleStart,
+                        date: $draft.saleStartAt
+                    )
                 }
                 if draft.showsApplyDeadline {
-                    DateToggleRow(
+                    TicketMilestoneDateField(
                         title: "抽選申込締切",
                         isOn: $draft.hasApplyDeadline,
                         date: $draft.applyDeadlineAt
                     )
                 }
                 if draft.showsResultAnnounce {
-                    DateToggleRow(title: "当落発表", isOn: $draft.hasResultAnnounce, date: $draft.resultAnnounceAt)
+                    TicketMilestoneDateField(
+                        title: "当落発表",
+                        isOn: $draft.hasResultAnnounce,
+                        date: $draft.resultAnnounceAt
+                    )
                 }
                 if draft.showsPaymentDeadline {
-                    DateToggleRow(title: "支払締切", isOn: $draft.hasPaymentDeadline, date: $draft.paymentDeadlineAt)
+                    TicketMilestoneDateField(
+                        title: "支払締切",
+                        isOn: $draft.hasPaymentDeadline,
+                        date: $draft.paymentDeadlineAt
+                    )
                 }
                 if draft.showsIssueStart {
-                    DateToggleRow(
+                    TicketMilestoneDateField(
                         title: "チケット受取開始",
                         isOn: $draft.hasIssueStart,
                         date: $draft.issueStartAt

@@ -79,7 +79,7 @@ struct SettingsDocumentView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text(title)
                     .font(FavorecoTypography.heroLead)
                 Text(bodyText)
@@ -89,9 +89,19 @@ struct SettingsDocumentView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
+            .padding(16)
+            .background(
+                TheaterLifecycleFlatStyle.fieldBackground,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.20), lineWidth: 1)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(TheaterLifecycleFlatStyle.canvasBackground.ignoresSafeArea())
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }

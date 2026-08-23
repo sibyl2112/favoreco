@@ -57,6 +57,7 @@ struct ExperienceBasicUnitEditor: View {
     let datePrecision: ExperienceDatePrecision
     let usesSimpleScreenWorkLayout: Bool
     let categoryTemplateKey: String
+    let usesLifecycleEditLayout: Bool
     private let subTypeKey: Binding<String>?
     private let screenWorkSeasonNumber: Binding<Int>?
     private let performanceTypeCustomName: Binding<String>?
@@ -90,6 +91,7 @@ struct ExperienceBasicUnitEditor: View {
         datePrecision: ExperienceDatePrecision = .day,
         usesSimpleScreenWorkLayout: Bool = false,
         categoryTemplateKey: String = "",
+        usesLifecycleEditLayout: Bool = false,
         subTypeKey: Binding<String>? = nil,
         screenWorkSeasonNumber: Binding<Int>? = nil,
         performanceTypeCustomName: Binding<String>? = nil,
@@ -124,6 +126,7 @@ struct ExperienceBasicUnitEditor: View {
         self.datePrecision = datePrecision
         self.usesSimpleScreenWorkLayout = usesSimpleScreenWorkLayout
         self.categoryTemplateKey = categoryTemplateKey
+        self.usesLifecycleEditLayout = usesLifecycleEditLayout
         self.subTypeKey = subTypeKey
         self.screenWorkSeasonNumber = screenWorkSeasonNumber
         self.performanceTypeCustomName = performanceTypeCustomName
@@ -158,6 +161,7 @@ struct ExperienceBasicUnitEditor: View {
         datePrecision: ExperienceDatePrecision = .day,
         usesSimpleScreenWorkLayout: Bool = false,
         categoryTemplateKey: String = "",
+        usesLifecycleEditLayout: Bool = false,
         subTypeKey: Binding<String>? = nil,
         screenWorkSeasonNumber: Binding<Int>? = nil,
         performanceTypeCustomName: Binding<String>? = nil,
@@ -192,6 +196,7 @@ struct ExperienceBasicUnitEditor: View {
         self.datePrecision = datePrecision
         self.usesSimpleScreenWorkLayout = usesSimpleScreenWorkLayout
         self.categoryTemplateKey = categoryTemplateKey
+        self.usesLifecycleEditLayout = usesLifecycleEditLayout
         self.subTypeKey = subTypeKey
         self.screenWorkSeasonNumber = screenWorkSeasonNumber
         self.performanceTypeCustomName = performanceTypeCustomName
@@ -251,13 +256,14 @@ struct ExperienceBasicUnitEditor: View {
         if usesSimpleScreenWorkLayout, let editableTitle {
             VStack(alignment: .leading, spacing: 0) {
                 ExplicitFormTextField(
-                    title: "作品名（必須）",
+                    title: usesLifecycleEditLayout ? "イベント名（必須）" : "作品名（必須）",
                     prompt: template.titlePlaceholder,
                     text: editableTitle,
                     axis: .vertical,
                     minimumLines: 1,
-                    maximumLines: 2,
-                    labelStyle: .horizontal
+                    maximumLines: usesLifecycleEditLayout ? 3 : 2,
+                    labelStyle: usesLifecycleEditLayout ? .stacked : .horizontal,
+                    inputFontSize: usesLifecycleEditLayout ? 17 : ExplicitFormMetrics.inputFontSize
                 )
             }
         } else if usesSimpleScreenWorkLayout {
@@ -266,10 +272,14 @@ struct ExperienceBasicUnitEditor: View {
         } else if usesExplicitTheaterLayout, let editableTitle, let editableSeriesName {
             VStack(alignment: .leading, spacing: 0) {
                 ExplicitFormTextField(
-                    title: "公演名",
+                    title: usesLifecycleEditLayout ? "イベント名（必須）" : "公演名",
                     prompt: template.titlePlaceholder,
                     text: editableTitle,
-                    labelStyle: .horizontal
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: usesLifecycleEditLayout ? 3 : 1,
+                    labelStyle: usesLifecycleEditLayout ? .stacked : .horizontal,
+                    inputFontSize: usesLifecycleEditLayout ? 17 : ExplicitFormMetrics.inputFontSize
                 )
                 theaterDivider
                 ExplicitFormTextField(
@@ -281,9 +291,9 @@ struct ExperienceBasicUnitEditor: View {
             }
         } else if usesExplicitTheaterLayout {
             VStack(alignment: .leading, spacing: 0) {
-                ExplicitFormControlRow(title: "公演名") {
+                ExplicitFormControlRow(title: usesLifecycleEditLayout ? "イベント名" : "公演名") {
                     Text(existingTitle.isEmpty ? "未設定" : existingTitle)
-                        .lineLimit(1)
+                        .lineLimit(usesLifecycleEditLayout ? 3 : 1)
                         .minimumScaleFactor(0.72)
                 }
                 if !existingSeriesName.isEmpty {
@@ -298,13 +308,14 @@ struct ExperienceBasicUnitEditor: View {
         } else if let editableTitle, let editableSeriesName {
             VStack(alignment: .leading, spacing: 0) {
                 ExplicitFormTextField(
-                    title: "\(template.titlePlaceholder)（必須）",
+                    title: usesLifecycleEditLayout ? "イベント名（必須）" : "\(template.titlePlaceholder)（必須）",
                     prompt: "\(template.titlePlaceholder)を入力",
                     text: editableTitle,
                     axis: .vertical,
                     minimumLines: 1,
-                    maximumLines: 2,
-                    labelStyle: .horizontal
+                    maximumLines: usesLifecycleEditLayout ? 3 : 2,
+                    labelStyle: usesLifecycleEditLayout ? .stacked : .horizontal,
+                    inputFontSize: usesLifecycleEditLayout ? 17 : ExplicitFormMetrics.inputFontSize
                 )
                 theaterDivider
                 ExplicitFormTextField(
@@ -351,17 +362,40 @@ struct ExperienceBasicUnitEditor: View {
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 8)
             if datePrecision == .year {
-                YearOnlyPicker(selection: $visitedAt)
+                YearOnlyPicker(
+                    selection: $visitedAt,
+                    usesLifecycleEditLayout: usesLifecycleEditLayout
+                )
             } else if supportsExperienceDuration {
                 ExperienceDateTimeRangeEditor(
                     startsAt: $visitedAt,
                     endsAt: $endedAt,
                     dateLabel: template.dateLabel,
                     startTimeLabel: "開始時刻",
-                    endTimeLabel: "終了時刻"
+                    endTimeLabel: "終了時刻",
+                    usesHorizontalRows: usesLifecycleEditLayout,
+                    emphasizesHorizontalLabels: usesLifecycleEditLayout
                 )
             } else {
-                DatePicker(template.dateLabel, selection: $visitedAt, displayedComponents: .date)
+                if usesLifecycleEditLayout {
+                    ExplicitFormControlRow(
+                        title: template.dateLabel,
+                        layout: .horizontal,
+                        emphasizesHorizontalLabel: true
+                    ) {
+                        DatePicker(
+                            template.dateLabel,
+                            selection: $visitedAt,
+                            displayedComponents: .date
+                        )
+                        .labelsHidden()
+                        .environment(\.locale, Locale(identifier: "ja_JP"))
+                        .controlSize(.small)
+                        .fixedSize()
+                    }
+                } else {
+                    DatePicker(template.dateLabel, selection: $visitedAt, displayedComponents: .date)
+                }
             }
             if supportsPerformanceTime {
                 if let performanceOpensAt {
@@ -419,7 +453,10 @@ struct ExperienceBasicUnitEditor: View {
                 title: venueFieldTitle,
                 prompt: venueFieldPrompt,
                 text: $venueName,
-                labelStyle: .horizontal
+                labelStyle: usesLifecycleEditLayout && categoryTemplateKey == "museum" ? .stacked : .horizontal,
+                inputFontSize: usesLifecycleEditLayout && categoryTemplateKey == "museum"
+                    ? 17
+                    : ExplicitFormMetrics.inputFontSize
             )
             placeSuggestionList
             if usesMapSearchAssist {
@@ -431,7 +468,8 @@ struct ExperienceBasicUnitEditor: View {
                     axis: .vertical,
                     minimumLines: 1,
                     maximumLines: 2,
-                    labelStyle: .horizontal
+                    labelStyle: .horizontal,
+                    emphasizesHorizontalLabel: usesLifecycleEditLayout
                 )
                     .textContentType(.fullStreetAddress)
                 theaterDivider
@@ -464,9 +502,11 @@ struct ExperienceBasicUnitEditor: View {
                     longitude: longitude
                 )
             }
-            theaterDivider
-            ratingSlider
-                .padding(.vertical, 8)
+            if showsRating {
+                theaterDivider
+                ratingSlider
+                    .padding(.vertical, 8)
+            }
         }
         .onChange(of: visitedAt) { oldValue, newValue in
             guard supportsPerformanceTime else { return }
@@ -486,7 +526,11 @@ struct ExperienceBasicUnitEditor: View {
             if datePrecision == .year {
                 YearOnlyPicker(selection: $visitedAt)
             } else {
-                ExplicitFormControlRow(title: template.dateLabel) {
+                ExplicitFormControlRow(
+                    title: template.dateLabel,
+                    layout: usesLifecycleEditLayout ? .horizontal : .stacked,
+                    emphasizesHorizontalLabel: usesLifecycleEditLayout
+                ) {
                     DatePicker(
                         template.dateLabel,
                         selection: $visitedAt,
@@ -517,7 +561,11 @@ struct ExperienceBasicUnitEditor: View {
 
     private var theaterVisitFields: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ExplicitFormControlRow(title: template.dateLabel) {
+            ExplicitFormControlRow(
+                title: template.dateLabel,
+                layout: usesLifecycleEditLayout ? .horizontal : .stacked,
+                emphasizesHorizontalLabel: usesLifecycleEditLayout
+            ) {
                 DatePicker(
                     template.dateLabel,
                     selection: $visitedAt,
@@ -535,14 +583,22 @@ struct ExperienceBasicUnitEditor: View {
                     optionalOpeningTimeControl(binding: performanceOpensAt, usesExplicitLayout: true)
                 }
                 theaterDivider
-                ExplicitFormControlRow(title: "開演") {
+                ExplicitFormControlRow(
+                    title: "開演",
+                    layout: usesLifecycleEditLayout ? .horizontal : .stacked,
+                    emphasizesHorizontalLabel: usesLifecycleEditLayout
+                ) {
                     TheaterFiveMinuteTimeField(
                         selection: $visitedAt,
                         accessibilityLabel: "開演"
                     )
                 }
                 theaterDivider
-                ExplicitFormControlRow(title: "終演") {
+                ExplicitFormControlRow(
+                    title: "終演",
+                    layout: usesLifecycleEditLayout ? .horizontal : .stacked,
+                    emphasizesHorizontalLabel: usesLifecycleEditLayout
+                ) {
                     TheaterFiveMinuteTimeField(
                         selection: $endedAt,
                         accessibilityLabel: "終演",
@@ -572,7 +628,8 @@ struct ExperienceBasicUnitEditor: View {
                     title: "住所（任意）",
                     prompt: "例：東京都豊島区…",
                     text: $venueAddress,
-                    labelStyle: .horizontal
+                    labelStyle: .horizontal,
+                    emphasizesHorizontalLabel: usesLifecycleEditLayout
                 )
                 .textContentType(.fullStreetAddress)
 
@@ -629,7 +686,12 @@ struct ExperienceBasicUnitEditor: View {
         )
         if let _ = binding.wrappedValue {
             if usesExplicitLayout {
-                ExplicitFormControlRow(title: "開場", isOptional: true) {
+                ExplicitFormControlRow(
+                    title: "開場",
+                    isOptional: true,
+                    layout: usesLifecycleEditLayout ? .horizontal : .stacked,
+                    emphasizesHorizontalLabel: usesLifecycleEditLayout
+                ) {
                     HStack(spacing: 8) {
                         TheaterFiveMinuteTimeField(selection: value, accessibilityLabel: "開場")
                         Button {
@@ -926,19 +988,35 @@ struct ExperienceBasicUnitEditor: View {
 struct ExperienceRatingUnitEditor: View {
     @Binding var overallRating: Double
     let ratingText: String
-    var title = "満足度"
+    var title = "評価"
+    var showsHeading = false
 
+    @ViewBuilder
     var body: some View {
-        ExplicitFormControlRow(title: title, isOptional: true) {
-            HStack(spacing: 8) {
+        if showsHeading {
+            ExplicitFormControlRow(
+                title: title,
+                isOptional: true,
+                layout: .horizontal,
+                emphasizesHorizontalLabel: true
+            ) {
+                ratingControl
+            }
+        } else {
+            ratingControl
+                .frame(minHeight: 44)
+        }
+    }
+
+    private var ratingControl: some View {
+        HStack(spacing: 8) {
                 Slider(value: $overallRating, in: 0...5, step: 0.5)
                     .frame(maxWidth: 205)
                 Text(ratingText)
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 40, alignment: .trailing)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -994,10 +1072,16 @@ struct ExperienceDateTimeRangeEditor: View {
     let startTimeLabel: String
     let endTimeLabel: String
     var defaultDurationMinutes = 120
+    var usesHorizontalRows = false
+    var emphasizesHorizontalLabels = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ExplicitFormControlRow(title: dateLabel) {
+            ExplicitFormControlRow(
+                title: dateLabel,
+                layout: usesHorizontalRows ? .horizontal : .stacked,
+                emphasizesHorizontalLabel: emphasizesHorizontalLabels
+            ) {
                 DatePicker(
                     dateLabel,
                     selection: startBinding,
@@ -1011,7 +1095,11 @@ struct ExperienceDateTimeRangeEditor: View {
 
             Divider().overlay(ExplicitFormMetrics.rowSeparatorColor)
 
-            ExplicitFormControlRow(title: startTimeLabel) {
+            ExplicitFormControlRow(
+                title: startTimeLabel,
+                layout: usesHorizontalRows ? .horizontal : .stacked,
+                emphasizesHorizontalLabel: emphasizesHorizontalLabels
+            ) {
                 DatePicker(
                     startTimeLabel,
                     selection: startBinding,
@@ -1025,7 +1113,11 @@ struct ExperienceDateTimeRangeEditor: View {
 
             Divider().overlay(ExplicitFormMetrics.rowSeparatorColor)
 
-            ExplicitFormControlRow(title: endTimeRowLabel) {
+            ExplicitFormControlRow(
+                title: endTimeRowLabel,
+                layout: usesHorizontalRows ? .horizontal : .stacked,
+                emphasizesHorizontalLabel: emphasizesHorizontalLabels
+            ) {
                 DatePicker(
                     endTimeLabel,
                     selection: endTimeBinding,
@@ -1211,6 +1303,7 @@ private struct TheaterFiveMinuteWheelPicker: View {
 
 private struct YearOnlyPicker: View {
     @Binding var selection: Date
+    var usesLifecycleEditLayout = false
 
     private let calendar = Calendar.current
 
@@ -1239,12 +1332,19 @@ private struct YearOnlyPicker: View {
     }
 
     var body: some View {
-        Picker("鑑賞年", selection: selectedYear) {
-            ForEach(years, id: \.self) { year in
-                Text(verbatim: FavorecoDateText.year(year)).tag(year)
+        ExplicitFormControlRow(
+            title: "鑑賞年",
+            layout: usesLifecycleEditLayout ? .horizontal : .stacked,
+            emphasizesHorizontalLabel: usesLifecycleEditLayout
+        ) {
+            Picker("鑑賞年", selection: selectedYear) {
+                ForEach(years, id: \.self) { year in
+                    Text(verbatim: FavorecoDateText.year(year)).tag(year)
+                }
             }
+            .labelsHidden()
+            .pickerStyle(.menu)
         }
-        .pickerStyle(.menu)
     }
 }
 

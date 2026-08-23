@@ -456,9 +456,11 @@ struct CollectibleSeriesDashboard: View {
         }
         .sheet(isPresented: $isShowingItemEditor) {
             CollectibleItemEditorView(series: series)
+                .favorecoRegistrationTheme(categoryHex: series.category?.colorHex)
         }
         .sheet(isPresented: $isShowingTransactionEditor) {
             CollectibleTransactionEditorView(series: series)
+                .favorecoRegistrationTheme(categoryHex: series.category?.colorHex)
         }
     }
 
@@ -756,10 +758,16 @@ private struct CollectibleItemDetailView: View {
         .navigationTitle(item.displayName)
         .toolbar { Button("編集") { isShowingEditor = true } }
         .sheet(isPresented: $isShowingEditor) {
-            if let series = item.series { CollectibleItemEditorView(series: series, item: item) }
+            if let series = item.series {
+                CollectibleItemEditorView(series: series, item: item)
+                    .favorecoRegistrationTheme(categoryHex: series.category?.colorHex)
+            }
         }
         .sheet(isPresented: $isShowingTransaction) {
-            if let series = item.series { CollectibleTransactionEditorView(series: series, initialItem: item) }
+            if let series = item.series {
+                CollectibleTransactionEditorView(series: series, initialItem: item)
+                    .favorecoRegistrationTheme(categoryHex: series.category?.colorHex)
+            }
         }
     }
 }

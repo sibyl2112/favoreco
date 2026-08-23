@@ -44,7 +44,7 @@ struct GenreManagementView: View {
     var body: some View {
         List {
             if !warningMessage.isEmpty {
-                Section {
+                FavorecoSettingsCard {
                     FavorecoSettingsInfoCallout(
                         title: "変更できませんでした",
                         message: warningMessage
@@ -396,6 +396,7 @@ struct GenreDetailSettingsView: View {
                 }
             }
         }
+        .favorecoSettingsListLayout()
         .navigationTitle(category.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1164,6 +1165,7 @@ struct AddCustomGenreView: View {
                     }
                 }
             }
+            .favorecoSettingsListLayout()
             .navigationTitle("自作ジャンル")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

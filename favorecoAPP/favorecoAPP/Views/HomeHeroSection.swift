@@ -29,6 +29,7 @@ struct HomeHeroSection: View {
     let onSelectInterest: (HomePickupDetailTarget) -> Void
     let onSelectPlan: (UUID) -> Void
     let onSelectVisit: (UUID) -> Void
+    let onCreatePlan: () -> Void
 
     @State private var interestedIndex = 0
     @State private var upcomingIndex = 0
@@ -140,7 +141,7 @@ struct HomeHeroSection: View {
         case .upcoming:
             if upcomingItems.isEmpty {
                 Button {
-                    NotificationCenter.default.post(name: .openFavorecoPlanCreation, object: nil)
+                    onCreatePlan()
                 } label: {
                     HomePickupEmptyState(
                         icon: "calendar.badge.plus",
