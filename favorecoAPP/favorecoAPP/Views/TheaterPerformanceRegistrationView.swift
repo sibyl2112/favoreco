@@ -857,12 +857,15 @@ struct TheaterPerformanceRegistrationView: View {
         let venueName = analyses.lazy
             .compactMap { $0.venueCandidates.first }
             .first ?? ""
+        let venueAddress = analyses.lazy
+            .compactMap { $0.addressCandidates.first }
+            .first ?? ""
         let eventDateRange = analyses.lazy
             .compactMap(\.eventDateRange)
             .first
         let appliedVenue = applyImportedVenue(
             name: venueName,
-            address: "",
+            address: venueAddress,
             startsAt: eventDateRange?.startsAt,
             endsAt: eventDateRange?.endsAt
         )

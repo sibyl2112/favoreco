@@ -441,7 +441,8 @@ struct MainTabView: View {
                     AddVisitView(
                         event: event,
                         initialDraft: VisitDraft(plan: plan),
-                        sourcePlan: plan
+                        sourcePlan: plan,
+                        usesTheaterLifecycleLayout: event.category?.templateKey == "theater"
                     )
                     .favorecoRegistrationTheme(
                         categoryHex: event.category?.colorHex ?? themePalette.baseTheme.accentHex
@@ -996,12 +997,12 @@ private struct TheaterMemoryTargetSelectionView: View {
                     Text("事前に予定を登録していなかった公演も、ここから直接記録できます。")
                 }
 
-                Section("記録できる観劇予定") {
+                Section {
                     if unrecordedPlans.isEmpty {
                         FavorecoContentUnavailableView(
-                            "記録待ちの観劇予定はありません",
+                            "未記録の過去予定はありません",
                             systemImage: "calendar.badge.checkmark",
-                            description: "参加日を登録した公演がここに表示されます。"
+                            description: "参加日を過ぎ、まだ観劇記録になっていない予定がここに表示されます。"
                         )
                     } else {
                         ForEach(visibleUnrecordedPlans) { plan in
@@ -1020,6 +1021,10 @@ private struct TheaterMemoryTargetSelectionView: View {
                             )
                         }
                     }
+                } header: {
+                    Text("未記録の過去予定")
+                } footer: {
+                    Text("参加日を過ぎても観劇記録へ変換していない予定です。過去の日付のためComing Upには表示されません。")
                 }
 
                 if !recordedVisits.isEmpty {

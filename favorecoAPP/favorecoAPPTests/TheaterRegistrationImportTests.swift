@@ -53,6 +53,51 @@ final class TheaterRegistrationImportTests: XCTestCase {
         XCTAssertEqual(result.eventDateRange?.endsAt, date(2026, 8, 30))
     }
 
+    func testPosterOCRFindsUnlabeledEnglishVenueAddressAndExplicitYearRange() {
+        let result = QuickCaptureImageService.inferredFieldsForTesting(
+            lines: [
+                ("Dressers / Dressers Live Theater presents", 0.54, 0.025),
+                ("冬の結婚式", 0.52, 0.12),
+                ("2026年7月28日(火)〜8月2日(日) 8公演", 0.58, 0.034),
+                ("MONSTER THEATER ROPPONGI", 0.51, 0.032),
+                ("東京都港区六本木5-9-22 第2千陽ビル4階", 0.57, 0.025),
+            ],
+            referenceDate: date(2025, 12, 1)
+        )
+
+        XCTAssertEqual(result.titleCandidates.first, "冬の結婚式")
+        XCTAssertEqual(result.venueCandidates.first, "MONSTER THEATER ROPPONGI")
+        XCTAssertEqual(result.addressCandidates.first, "東京都港区六本木5-9-22 第2千陽ビル4階")
+        XCTAssertEqual(result.eventDateRange?.startsAt, date(2026, 7, 28))
+        XCTAssertEqual(result.eventDateRange?.endsAt, date(2026, 8, 2))
+    }
+
+    func testPosterOCRFindsMultilineScheduleAndRestaurantVenue() {
+        let result = QuickCaptureImageService.inferredFieldsForTesting(
+            lines: [
+                ("ESPACT × ビストロおむすび目黒", 0.43, 0.028),
+                ("おいしいアマーンプ", 0.76, 0.15),
+                ("極上のおいしいイマーシブをご提供させていただきます。", 0.68, 0.022),
+                ("2026年8月14日(金) 19:00", 0.43, 0.032),
+                ("15日(土) 17:00", 0.29, 0.032),
+                ("16日(日) 17:00", 0.29, 0.032),
+                ("ビストロおむすび目黒", 0.35, 0.034),
+                ("〒153-0064 東京都目黒区下目黒1丁目5-16", 0.58, 0.021),
+                ("目黒サンライズマンション2F 203", 0.38, 0.021),
+            ],
+            referenceDate: date(2026, 8, 1)
+        )
+
+        XCTAssertEqual(result.titleCandidates.first, "おいしいイマーシブ")
+        XCTAssertEqual(result.venueCandidates.first, "ビストロおむすび目黒")
+        XCTAssertEqual(
+            result.addressCandidates.first,
+            "東京都目黒区下目黒1丁目5-16 目黒サンライズマンション2F 203"
+        )
+        XCTAssertEqual(result.eventDateRange?.startsAt, date(2026, 8, 14))
+        XCTAssertEqual(result.eventDateRange?.endsAt, date(2026, 8, 16))
+    }
+
     func testOGPMetadataReadsTitleAndImageRegardlessOfAttributeOrder() {
         let html = """
         <html><head>

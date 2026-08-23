@@ -2152,6 +2152,7 @@ struct AddVisitView: View {
     let event: ExperienceEvent
     let sourcePlan: Plan?
     let onSave: (() -> Void)?
+    let usesTheaterLifecycleLayout: Bool
 
     @Query(sort: \PersonMaster.displayName) private var personMasters: [PersonMaster]
     @Query(sort: \PlaceMaster.name) private var placeMasters: [PlaceMaster]
@@ -2206,11 +2207,13 @@ struct AddVisitView: View {
         initialHeroBackgroundPresetKey: String = "",
         inheritedVisualSource: Visit? = nil,
         sourcePlan: Plan? = nil,
-        onSave: (() -> Void)? = nil
+        onSave: (() -> Void)? = nil,
+        usesTheaterLifecycleLayout: Bool = false
     ) {
         self.event = event
         self.sourcePlan = sourcePlan
         self.onSave = onSave
+        self.usesTheaterLifecycleLayout = usesTheaterLifecycleLayout
         var preparedDraft = initialDraft
         if event.category?.templateKey == "book", preparedDraft.eyecatchAspectRatioKey.isEmpty {
             preparedDraft.eyecatchAspectRatioKey = EyecatchAspectRatio.resolved(for: event).key
@@ -2307,104 +2310,19 @@ struct AddVisitView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                if event.category?.templateKey == "book" {
-                    addVisitBookRecordForm
-                } else if event.category?.templateKey == "theater" {
-                    Section {
-                        TheaterUnifiedFormIntroduction(entry: .visitCreation)
-                    }
-                    stagedTheaterForm(
-                        definitions: activeUnitDefinitions(for: event.category),
-                        status: visitStatus(for:),
-                        isExpanded: binding(for:),
-                        content: visitContent(for:)
-                    )
-                } else if event.category?.templateKey == "movie" {
-                    stagedScreenWorkForm(
-                        status: visitStatus(for:),
-                        isExpanded: binding(for:),
-                        content: visitContent(for:)
-                    )
-                } else if event.category?.templateKey == "live" {
-                    Section {
-                        TheaterUnifiedFormIntroduction(entry: .visitCreation, isLive: true)
-                    }
-                    stagedLiveForm(
-                        definitions: activeUnitDefinitions(for: event.category),
-                        status: visitStatus(for:),
-                        isExpanded: binding(for:),
-                        content: visitContent(for:)
-                    )
-                } else if event.category?.templateKey != "book",
-                          let category = event.category,
-                          isStagedOutingTemplate(category.templateKey) {
-                    stagedOutingForm(
-                        category: category,
-                        status: visitStatus(for:),
-                        isExpanded: binding(for:),
-                        content: visitContent(for:)
-                    )
-                } else if event.category?.templateKey != "book" {
-                    stagedGenericRecordForm(
-                        category: event.category,
-                        status: visitStatus(for:),
-                        isExpanded: binding(for:),
-                        content: visitContent(for:)
-                    )
-                }
-                if event.category?.templateKey == "goshuin" {
-                    GoshuinPriorVisitHistory(visits: priorGoshuinVisits)
-                }
-            }
-            .favorecoRegistrationFormCanvas()
-            .environment(\.defaultMinListRowHeight, 48)
-            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
-            .tint(themePalette.globalTint)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if ["theater", "live"].contains(event.category?.templateKey ?? "") {
-                    QuickRecordSaveBar(
-                        date: draft.visitedAt,
-                        isEnabled: true,
-                        isSaving: isSaving,
-                        isLive: event.category?.templateKey == "live",
-                        requiresTitle: false,
+            Group {
+                if usesTheaterLifecycleLayout, event.category?.templateKey == "theater" {
+                    TheaterLifecycleFlatScaffold(
+                        title: addVisitNavigationTitle,
+                        canSave: !isSaving,
+                        onClose: { dismiss() },
                         onSave: save
-                    )
-                }
-            }
-            .navigationTitle(
-                ["theater", "live"].contains(event.category?.templateKey ?? "")
-                    ? (event.category?.templateKey == "live" ? "参戦記録を追加" : TheaterUnifiedFormEntry.visitCreation.navigationTitle)
-                    : event.category?.templateKey == "book"
-                        ? "読書記録を追加"
-                    : ["movie", "museum"].contains(event.category?.templateKey ?? "")
-                        ? "鑑賞の記録をつける"
-                        : "記録を追加"
-            )
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        if ["theater", "live"].contains(event.category?.templateKey ?? "") {
-                            FavorecoIcon(systemName: "xmark", size: 18, fallbackWeight: .semibold)
-                        } else {
-                            Text("キャンセル")
-                        }
+                    ) {
+                        addVisitFormContent
                     }
-                    .accessibilityLabel("キャンセル")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        save()
-                    }
-                    .disabled(
-                        isSaving
-                            || (event.category?.templateKey == "book"
-                                && bookTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    )
+                    .tint(Color(hex: "#8B2F45"))
+                } else {
+                    standardAddVisitForm
                 }
             }
             .sheet(isPresented: $isShowingPlaceSearch) {
@@ -2438,6 +2356,120 @@ struct AddVisitView: View {
             } message: {
                 Text(saveErrorMessage ?? "")
             }
+        }
+    }
+
+    private var addVisitNavigationTitle: String {
+        ["theater", "live"].contains(event.category?.templateKey ?? "")
+            ? (event.category?.templateKey == "live"
+                ? "参戦記録を追加"
+                : TheaterUnifiedFormEntry.visitCreation.navigationTitle)
+            : event.category?.templateKey == "book"
+                ? "読書記録を追加"
+                : ["movie", "museum"].contains(event.category?.templateKey ?? "")
+                    ? "鑑賞の記録をつける"
+                    : "記録を追加"
+    }
+
+    private var standardAddVisitForm: some View {
+        Form {
+            addVisitFormContent
+        }
+        .favorecoRegistrationFormCanvas()
+        .environment(\.defaultMinListRowHeight, 48)
+        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+        .tint(themePalette.globalTint)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if ["theater", "live"].contains(event.category?.templateKey ?? "") {
+                QuickRecordSaveBar(
+                    date: draft.visitedAt,
+                    isEnabled: true,
+                    isSaving: isSaving,
+                    isLive: event.category?.templateKey == "live",
+                    requiresTitle: false,
+                    onSave: save
+                )
+            }
+        }
+        .navigationTitle(addVisitNavigationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    dismiss()
+                } label: {
+                    if ["theater", "live"].contains(event.category?.templateKey ?? "") {
+                        FavorecoIcon(systemName: "xmark", size: 18, fallbackWeight: .semibold)
+                    } else {
+                        Text("キャンセル")
+                    }
+                }
+                .accessibilityLabel("キャンセル")
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("保存") {
+                    save()
+                }
+                .disabled(
+                    isSaving
+                        || (event.category?.templateKey == "book"
+                            && bookTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var addVisitFormContent: some View {
+        if event.category?.templateKey == "book" {
+            addVisitBookRecordForm
+        } else if event.category?.templateKey == "theater" {
+            if !usesTheaterLifecycleLayout {
+                Section {
+                    TheaterUnifiedFormIntroduction(entry: .visitCreation)
+                }
+            }
+            stagedTheaterForm(
+                definitions: activeUnitDefinitions(for: event.category),
+                status: visitStatus(for:),
+                isExpanded: binding(for:),
+                content: visitContent(for:)
+            )
+        } else if event.category?.templateKey == "movie" {
+            stagedScreenWorkForm(
+                status: visitStatus(for:),
+                isExpanded: binding(for:),
+                content: visitContent(for:)
+            )
+        } else if event.category?.templateKey == "live" {
+            Section {
+                TheaterUnifiedFormIntroduction(entry: .visitCreation, isLive: true)
+            }
+            stagedLiveForm(
+                definitions: activeUnitDefinitions(for: event.category),
+                status: visitStatus(for:),
+                isExpanded: binding(for:),
+                content: visitContent(for:)
+            )
+        } else if event.category?.templateKey != "book",
+                  let category = event.category,
+                  isStagedOutingTemplate(category.templateKey) {
+            stagedOutingForm(
+                category: category,
+                status: visitStatus(for:),
+                isExpanded: binding(for:),
+                content: visitContent(for:)
+            )
+        } else if event.category?.templateKey != "book" {
+            stagedGenericRecordForm(
+                category: event.category,
+                status: visitStatus(for:),
+                isExpanded: binding(for:),
+                content: visitContent(for:)
+            )
+        }
+        if event.category?.templateKey == "goshuin" {
+            GoshuinPriorVisitHistory(visits: priorGoshuinVisits)
         }
     }
 

@@ -53,7 +53,7 @@ private struct EventHeroBackgroundPicker: View {
         if selection == HeroBackgroundPreset.eventEyecatchKey {
             return selection
         }
-        HeroBackgroundPreset.resolved(categoryKey: categoryKey, storedKey: selection)?.key ?? ""
+        return HeroBackgroundPreset.resolved(categoryKey: categoryKey, storedKey: selection)?.key ?? ""
     }
 
     var body: some View {
