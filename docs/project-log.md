@@ -32731,3 +32731,37 @@ Homeの見出しに4件とあるのにカードは3件しか表示されず、�
 ### 既知のリスク・残課題
 - TicketDive側が`__NEXT_DATA__`の構造を変更すると専用解析が使えなくなる可能性がある。その場合も汎用解析と手入力へフォールバックする。
 - 実機で対象URLを取り込み、公演ビジュアル、公式サイト／チケットサイト、全候補の保存再表示を確認する。
+
+## 2026-08-24: TicketDiveとカンフェティを既定購入先へ統合
+
+### 原因
+- カンフェティは既定プレイガイド候補に登録済みだったが、TicketDiveはURL専用解析だけが追加され、チケット申込の購入先Picker、設定検索、OCR候補へ接続されていなかった。
+- 既定購入先とURL販売サイト判定を別々に管理しており、ticket boardの実ドメイン`tickebo.jp`とStage Gateが販売サイト判定から漏れていた。
+
+### 変更概要・意図
+- `TicketGuideDefinition`へTicketDiveを`ライブ/イベント`の既定候補として追加し、正式名称、共通URL、日本語別名を定義した。カンフェティの既存定義も維持する。
+- 購入先Picker、設定のプレイガイド検索、保存済みURLからの購入先推定は共通定義から両サイトを選べる。
+- チケット画像OCRへTicketDive／チケットダイブの識別を追加した。
+- URL販売サイト判定へ`tickebo.jp`と`stagegate.jp`を加え、主要11販売ドメインが公演公式URLへ混ざらない回帰テストを追加した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Utilities/TicketDefinitions.swift`: TicketDiveの既定候補、検索別名、URL推定元を追加。
+- `favorecoAPP/favorecoAPP/Views/TicketImageImportComponents.swift`: TicketDiveのOCR識別別名を追加。
+- `favorecoAPP/favorecoAPP/Services/URLMetadataService.swift`: ticket board／Stage Gateを含む販売ホスト判定を補完。
+- `favorecoAPP/favorecoAPPTests/TicketWorkflowTests.swift`: TicketDive／カンフェティの既定候補、検索、URL推定を検証。
+- `favorecoAPP/favorecoAPPTests/TheaterRegistrationImportTests.swift`: 主要11販売ドメインと通常の公式サイトの分類を検証。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様、設計、確認状態を更新。
+
+### 影響する画面・機能
+- 観劇／ライブ等のチケット追加・編集にある購入先Picker。
+- 設定のFC・チケットサイト登録候補、購入先URLからの推定、チケット画像OCR。
+- 観劇公演URL取込の公式URL／チケットサイトURL分類。
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析と`git diff --check`に成功した。
+- `TicketWorkflowTests` 42件と`TheaterRegistrationImportTests` 13件、計55件に成功した。
+- Asset Catalogを含むiOS Simulator向けDebug全体ビルドに成功した。既存のMainActor分離警告だけで、今回の変更由来の警告・エラーはない。
+
+### 既知のリスク・残課題
+- 深い項目取得はTicketDive／カンフェティの専用解析、TIGET等の多層汎用解析、その他はサイト側が公開するJSON-LD／OGPの内容に依存する。販売サイト判定は全項目取得を保証しない。
+- 実機で購入先Picker、設定候補、TicketDive記載画像のOCR、公式／販売URL分離を確認する。

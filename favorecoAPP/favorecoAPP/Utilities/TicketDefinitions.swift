@@ -226,6 +226,7 @@ struct TicketGuideDefinition: Identifiable, Hashable {
         TicketGuideDefinition(key: "teket", name: "teket", urlString: "https://teket.jp/", category: "クラシック/公演"),
         TicketGuideDefinition(key: "livepocket", name: "LivePocket", urlString: "https://t.livepocket.jp/", category: "ライブ/イベント"),
         TicketGuideDefinition(key: "tiget", name: "TIGET", urlString: "https://tiget.net/", category: "ライブ/イベント"),
+        TicketGuideDefinition(key: "ticketdive", name: "TicketDive", urlString: "https://ticketdive.com/", category: "ライブ/イベント"),
         TicketGuideDefinition(key: "zaiko", name: "ZAIKO", urlString: "https://zaiko.io/", category: "配信"),
         TicketGuideDefinition(key: "streamingPlus", name: "Streaming+", urlString: "https://eplus.jp/sf/streamingplus", category: "配信"),
         TicketGuideDefinition(key: "lawsonStreaming", name: "ローチケ LIVE STREAMING", urlString: "https://l-tike.com/livestreaming/", category: "配信"),
@@ -277,6 +278,7 @@ struct TicketGuideDefinition: Identifiable, Hashable {
             "tixplus": ["チケプラ"],
             "confetti": ["カンフェティ", "confetti"],
             "livepocket": ["ライブポケット"],
+            "ticketdive": ["チケットダイブ", "ticket dive"],
             "passmarket": ["パスマーケット"],
             "mubic": ["ムビチケ"],
         ]

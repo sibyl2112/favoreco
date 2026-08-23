@@ -2,6 +2,33 @@ import XCTest
 @testable import favoreco
 
 final class TheaterRegistrationImportTests: XCTestCase {
+    func testMajorTicketHostsAreSeparatedFromOfficialSites() throws {
+        let ticketURLs = [
+            "https://tiget.net/events/514629",
+            "https://eplus.jp/sf/detail/0000000001",
+            "https://t.pia.jp/pia/event/event.do?eventCd=0001",
+            "https://l-tike.com/order/?gLcode=00001",
+            "https://t.livepocket.jp/e/sample",
+            "https://ticket.tickebo.jp/sn/sample/",
+            "https://www.confetti-web.com/events/17246",
+            "https://stagegate.jp/sample",
+            "https://ticketdive.com/event/ImaginaryLine",
+            "https://peatix.com/event/1234567",
+            "https://eventregist.com/e/sample",
+        ]
+
+        for rawURL in ticketURLs {
+            let url = try XCTUnwrap(URL(string: rawURL))
+            XCTAssertTrue(
+                URLMetadataService.isTicketingURLForTesting(url),
+                "Expected ticket site classification for \(rawURL)"
+            )
+        }
+
+        let officialURL = try XCTUnwrap(URL(string: "https://www.egopression.com/"))
+        XCTAssertFalse(URLMetadataService.isTicketingURLForTesting(officialURL))
+    }
+
     func testPosterOCRCombinesProminentTitleAndFindsVenueAndPeriod() {
         let referenceDate = date(2026, 7, 28)
         let result = QuickCaptureImageService.inferredFieldsForTesting(

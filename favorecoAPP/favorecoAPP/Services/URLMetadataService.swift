@@ -123,6 +123,10 @@ enum URLMetadataService {
         )
     }
 
+    nonisolated static func isTicketingURLForTesting(_ url: URL) -> Bool {
+        isTicketingURL(url)
+    }
+
     @MainActor
     static func fetch(from rawValue: String, includesStructuredData: Bool = false) async throws -> URLMetadataCandidate {
         guard let url = normalizedURL(from: rawValue) else {
@@ -863,7 +867,8 @@ enum URLMetadataService {
             "livepocket.jp", "teket.jp", "zaiko.io", "ticketbook.jp",
             "passmarket.yahoo.co.jp", "rakuten-ticket.com", "ticket.rakuten.co.jp",
             "confetti-web.com", "cnplayguide.com", "ticket-village.jp", "ticketme.io",
-            "peatix.com", "eventregist.com", "ticketboard.jp", "tixplus.jp",
+            "peatix.com", "eventregist.com", "ticketboard.jp", "tickebo.jp", "tixplus.jp",
+            "stagegate.jp",
             "ticketpay.jp", "gettiis.jp", "ticketdive.com",
         ]
         return ticketHosts.contains { host == $0 || host.hasSuffix(".\($0)") }

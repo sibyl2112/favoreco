@@ -252,6 +252,7 @@ enum TicketOCRImportParser {
             ("teket", ["teket"]),
             ("livepocket", ["livepocket"]),
             ("tiget", ["tiget"]),
+            ("ticketdive", ["ticketdive", "チケットダイブ"]),
             ("zaiko", ["zaiko"]),
             ("peatix", ["peatix"]),
             ("passmarket", ["passmarket"]),

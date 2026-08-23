@@ -16,6 +16,33 @@ final class TicketWorkflowTests: XCTestCase {
             TicketGuideDefinition.suggestions(matching: "パスマーケット").first?.key,
             "passmarket"
         )
+        XCTAssertEqual(
+            TicketGuideDefinition.suggestions(matching: "チケットダイブ").first?.key,
+            "ticketdive"
+        )
+        XCTAssertEqual(
+            TicketGuideDefinition.suggestions(matching: "カンフェティ").first?.key,
+            "confetti"
+        )
+    }
+
+    func testTicketDiveAndConfettiAreDefaultGuidesAndInferFromEventURL() {
+        XCTAssertEqual(TicketGuideDefinition.guide(for: "ticketdive")?.name, "TicketDive")
+        XCTAssertEqual(TicketGuideDefinition.guide(for: "confetti")?.name, "カンフェティ")
+        XCTAssertEqual(
+            TicketGuideDefinition.inferredKey(
+                siteName: "",
+                urlString: "https://ticketdive.com/event/ImaginaryLine"
+            ),
+            "ticketdive"
+        )
+        XCTAssertEqual(
+            TicketGuideDefinition.inferredKey(
+                siteName: "",
+                urlString: "https://www.confetti-web.com/events/17246"
+            ),
+            "confetti"
+        )
     }
 
     func testTicketGuideSuggestionsExcludeBlankShortAndCustomEntries() {
