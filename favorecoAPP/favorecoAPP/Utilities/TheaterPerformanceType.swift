@@ -837,16 +837,23 @@ struct ExplicitFormProminentInlineLabel: View {
 }
 
 struct TicketTagInputField: View {
+    @Environment(\.usesTheaterLifecycleFlatLayout) private var usesTheaterLifecycleFlatLayout
     @Binding var text: String
+    let usesFlatPresentation: Bool
     @State private var committedTags: [String]
     @State private var pendingTag = ""
     @FocusState private var isInputFocused: Bool
 
-    init(text: Binding<String>) {
+    init(text: Binding<String>, usesFlatPresentation: Bool = false) {
         _text = text
+        self.usesFlatPresentation = usesFlatPresentation
         _committedTags = State(
             initialValue: TicketAttemptUnitFields.normalizedTagNames(from: text.wrappedValue)
         )
+    }
+
+    private var displaysFlatPresentation: Bool {
+        usesFlatPresentation || usesTheaterLifecycleFlatLayout
     }
 
     private var tags: [String] {
@@ -859,11 +866,15 @@ struct TicketTagInputField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ExplicitFormProminentInlineLabel(
-                title: "タグ",
-                isOptional: true,
-                isRequired: false
-            )
+            if displaysFlatPresentation {
+                ExplicitFormFieldTitle(title: "タグ", isOptional: true, isRequired: false)
+            } else {
+                ExplicitFormProminentInlineLabel(
+                    title: "タグ",
+                    isOptional: true,
+                    isRequired: false
+                )
+            }
 
             if !tags.isEmpty {
                 TicketTagCapsuleLayout(horizontalSpacing: 6, verticalSpacing: 6) {
@@ -911,6 +922,28 @@ struct TicketTagInputField: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("タグを追加")
+                }
+            }
+            .padding(.horizontal, displaysFlatPresentation ? 12 : 0)
+            .frame(minHeight: displaysFlatPresentation ? 52 : 27, alignment: .leading)
+            .background {
+                if displaysFlatPresentation {
+                    TheaterLifecycleFlatStyle.fieldBackground
+                }
+            }
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: displaysFlatPresentation ? TheaterLifecycleFlatStyle.fieldCornerRadius : 0,
+                    style: .continuous
+                )
+            )
+            .overlay {
+                if displaysFlatPresentation {
+                    RoundedRectangle(
+                        cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                        style: .continuous
+                    )
+                    .stroke(Color.secondary.opacity(0.28), lineWidth: 1)
                 }
             }
         }

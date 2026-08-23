@@ -40,6 +40,26 @@ final class TheaterRegistrationImportTests: XCTestCase {
         XCTAssertEqual(metadata.imageURLString, "https://example.com/poster.jpg")
     }
 
+    func testTicketMetadataReadsItempropDatesAndEventVenueWithoutJSONLD() {
+        let html = """
+        <html><head>
+        <meta itemprop="startDate" content="2026-12-05T18:30:00+09:00">
+        <meta content="2026-12-05T21:00:00+09:00" itemprop="endDate">
+        <meta property="event:location" content="東京芸術劇場 プレイハウス">
+        </head></html>
+        """
+
+        let metadata = URLMetadataService.structuredMetadataForTesting(
+            in: html,
+            sourceURL: URL(string: "https://ticket.pia.jp/pia/event.ds?eventCd=sample")!
+        )
+
+        XCTAssertEqual(metadata.date, date(2026, 12, 5, 18, 30))
+        XCTAssertEqual(metadata.venueName, "東京芸術劇場 プレイハウス")
+        XCTAssertEqual(metadata.purchaseURL?.host, "ticket.pia.jp")
+        XCTAssertNil(metadata.officialURL)
+    }
+
     func testTicketSiteFallbackExtractsLabeledEventInformationFromDescription() {
         let html = """
         <html><head>
@@ -138,6 +158,50 @@ final class TheaterRegistrationImportTests: XCTestCase {
         })
     }
 
+    func testConfettiPublicEventResponseMapsPageFieldsWithoutHTMLAccess() throws {
+        let data = try XCTUnwrap(
+            """
+            {
+              "data": {
+                "eventForPublic": {
+                  "name": "舞台『アーク・レクイエム～黎明ノ章～』【一般先行】",
+                  "thumbnailUrl": "https://assets.confetti-web.com/uploads/events/17246/poster.png",
+                  "startDate": "2026-11-11T00:00:00.000Z",
+                  "endDate": "2026-11-15T00:00:00.000Z",
+                  "displayVenueName": null,
+                  "organization": null,
+                  "masterVenue": { "name": "六行会ホール", "masterVenue": null },
+                  "eventInformation": {
+                    "link": "https://actorsbattle-fc.com/",
+                    "cast": "新井將\\n佐藤弘樹",
+                    "staff": "脚本・演出：吉田武寛\\n企画製作：株式会社Beyond Zero Project"
+                  }
+                }
+              }
+            }
+            """.data(using: .utf8)
+        )
+        let sourceURL = try XCTUnwrap(
+            URL(string: "https://www.confetti-web.com/events/17246?utm_source=mail")
+        )
+
+        let metadata = try XCTUnwrap(
+            URLMetadataService.confettiMetadataForTesting(in: data, sourceURL: sourceURL)
+        )
+
+        XCTAssertEqual(metadata.title, "舞台『アーク・レクイエム～黎明ノ章～』【一般先行】")
+        XCTAssertEqual(metadata.resolvedURL.absoluteString, "https://www.confetti-web.com/events/17246")
+        XCTAssertEqual(metadata.purchaseURL?.absoluteString, "https://www.confetti-web.com/events/17246")
+        XCTAssertEqual(metadata.officialURL?.absoluteString, "https://actorsbattle-fc.com/")
+        XCTAssertEqual(metadata.venueName, "六行会ホール")
+        XCTAssertEqual(metadata.imageURL?.absoluteString, "https://assets.confetti-web.com/uploads/events/17246/poster.png")
+        XCTAssertTrue(metadata.contributors.contains {
+            $0.roleKey == "production" && $0.name == "株式会社Beyond Zero Project"
+        })
+        XCTAssertTrue(metadata.creditsText.contains("出演者：\n新井將\n佐藤弘樹"))
+        XCTAssertTrue(metadata.creditsText.contains("スタッフ："))
+    }
+
     func testEventTicketURLRoundTripsWithoutChangingLegacyData() {
         let fields = VisitUnitFields(eventTicketURL: "https://tiget.net/events/514629")
         let decoded = VisitUnitFields(rawValue: fields.encodedRawValue)
@@ -146,6 +210,49 @@ final class TheaterRegistrationImportTests: XCTestCase {
         XCTAssertEqual(decoded.eventTicketURL, "https://tiget.net/events/514629")
         XCTAssertEqual(legacy.eventTicketURL, "")
         XCTAssertEqual(legacy.eventCreditsText, "主催：月影劇団")
+    }
+
+    func testCreditOCRParsesCharacterAndStaffLinesIntoIndividualCandidates() {
+        let parsed = TheaterCreditTextParser.parse("""
+        出演
+        アベル：松原凛
+        ルドガー・ペンドラゴン：黒木文貴
+        照明：和田優也
+        音響：佐藤克幸
+        """)
+
+        XCTAssertEqual(parsed.count, 4)
+        XCTAssertEqual(parsed[0].name, "松原凛")
+        XCTAssertEqual(parsed[0].role.key, "cast")
+        XCTAssertEqual(parsed[0].roleDetail, "アベル")
+        XCTAssertEqual(parsed[2].name, "和田優也")
+        XCTAssertEqual(parsed[2].role.key, "lighting")
+        XCTAssertEqual(parsed[2].roleDetail, "")
+        XCTAssertEqual(parsed[3].role.key, "sound")
+    }
+
+    func testCreditOCRParsesStandaloneEnsembleNamesAndSkipsNotes() {
+        let parsed = TheaterCreditTextParser.parse("""
+        アンサンブルキャスト
+        佐野遥喜
+        竜崎新大
+        ※この役のみ、役名は初日まで非公開。
+        """)
+
+        XCTAssertEqual(parsed.map(\.name), ["佐野遥喜", "竜崎新大"])
+        XCTAssertTrue(parsed.allSatisfy { $0.role.key == "cast" })
+    }
+
+    func testCreditOCRJoinsWrappedParentheticalPersonName() {
+        let parsed = TheaterCreditTextParser.parse("""
+        衣装（クレイン、アンサンブル）：春奈
+        （心-Shin）
+        """)
+
+        XCTAssertEqual(parsed.count, 1)
+        XCTAssertEqual(parsed[0].name, "春奈（心-Shin）")
+        XCTAssertEqual(parsed[0].role.key, "costume")
+        XCTAssertEqual(parsed[0].roleDetail, "クレイン、アンサンブル")
     }
 
     private func date(

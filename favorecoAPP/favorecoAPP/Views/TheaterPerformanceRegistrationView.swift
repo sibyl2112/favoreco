@@ -114,6 +114,13 @@ struct TheaterPerformanceRegistrationView: View {
                             .frame(maxWidth: .infinity)
                         }
 
+                        Text("サイト側の制限やページ構造により、取得できない場合があります。その場合もURLを保存し、空欄を手入力できます。")
+                            .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 8)
+
                         Divider()
                             .overlay(ExplicitFormMetrics.rowSeparatorColor)
 
@@ -1007,7 +1014,7 @@ struct TheaterPerformanceRegistrationView: View {
             )
             importStatus = importResultMessage(source: "URL", fields: appliedFields)
         } catch {
-            importStatus = "URLから情報を取得できませんでした。URLと公演名は手入力できます。"
+            importStatus = "このサイトから情報を取得できませんでした。サイト側の制限により取得できない場合があります。URLを保存して空欄を手入力できます。"
         }
     }
 }

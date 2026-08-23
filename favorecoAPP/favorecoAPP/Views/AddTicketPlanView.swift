@@ -769,7 +769,7 @@ struct AddTicketPlanView: View {
         VStack(alignment: .leading, spacing: 15) {
             theaterFlatSectionHeader("タグ・メモ", isExpanded: nil)
             if draft.createsTicketAttempt {
-                TicketTagInputField(text: $draft.tagNamesText)
+                TicketTagInputField(text: $draft.tagNamesText, usesFlatPresentation: true)
             }
             ExperienceMemoUnitEditor(
                 text: $draft.memo,
@@ -946,7 +946,10 @@ struct AddTicketPlanView: View {
                     placeholder: "気になった理由、申込メモ、観劇後の感想など",
                     usesFlatToolbar: true
                 )
-                TicketTagInputField(text: usesPlanRegistration ? $draft.planTagNamesText : $draft.tagNamesText)
+                TicketTagInputField(
+                    text: usesPlanRegistration ? $draft.planTagNamesText : $draft.tagNamesText,
+                    usesFlatPresentation: true
+                )
             }
         }
         .theaterLifecycleDisclosureSurface(isExpanded: isUnifiedMemoExpanded)
@@ -2875,6 +2878,11 @@ struct AddTicketPlanView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                Text("サイト側の制限やページ構造により、情報を取得できない場合があります。その場合もURLを保存し、空欄を手入力できます。")
+                    .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 if !performanceImportStatus.isEmpty {
                     Text(performanceImportStatus)
                         .font(FavorecoTypography.jpSans(12, weight: .regular, relativeTo: .caption))
@@ -2941,7 +2949,7 @@ struct AddTicketPlanView: View {
 
             if draft.trimmedOrganizerName.isEmpty,
                let organizer = candidate.contributors.first(where: {
-                   ["organizer", "performing_organization"].contains($0.roleKey)
+                   ["organizer", "performing_organization", "production", "planning"].contains($0.roleKey)
                }) {
                 draft.organizerName = organizer.name
                 appliedFields.append("公演団体")
@@ -2982,7 +2990,7 @@ struct AddTicketPlanView: View {
             performanceImportStatus = "URLから\(appliedFields.joined(separator: "・"))を仮入力しました。"
             isShowingPerformanceURLImport = false
         } catch {
-            performanceImportStatus = "URLから情報を取得できませんでした。URLと公演名は手入力できます。"
+            performanceImportStatus = "このサイトから情報を取得できませんでした。サイト側の制限により取得できない場合があります。URLを保存して空欄を手入力できます。"
         }
     }
 

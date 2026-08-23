@@ -60,10 +60,66 @@ enum URLMetadataService {
         )
     }
 
+    nonisolated static func confettiMetadataForTesting(
+        in data: Data,
+        sourceURL: URL
+    ) -> (
+        title: String,
+        resolvedURL: URL,
+        eventDate: Date?,
+        eventEndDate: Date?,
+        venueName: String,
+        officialURL: URL?,
+        purchaseURL: URL?,
+        imageURL: URL?,
+        contributors: [URLContributorCandidate],
+        creditsText: String
+    )? {
+        guard let eventID = confettiEventID(from: sourceURL),
+              let metadata = confettiMetadata(in: data, eventID: eventID) else { return nil }
+        return (
+            metadata.title,
+            metadata.resolvedURL,
+            metadata.structuredData.date,
+            metadata.structuredData.endDate,
+            metadata.structuredData.venueName,
+            metadata.structuredData.officialURL,
+            metadata.structuredData.purchaseURL,
+            metadata.imageURL,
+            metadata.structuredData.contributors,
+            metadata.structuredData.creditsText
+        )
+    }
+
     @MainActor
     static func fetch(from rawValue: String, includesStructuredData: Bool = false) async throws -> URLMetadataCandidate {
         guard let url = normalizedURL(from: rawValue) else {
             throw URLMetadataError.invalidURL
+        }
+
+        if includesStructuredData,
+           let siteMetadata = try? await fetchSiteSpecificMetadata(from: url) {
+            let imageData: Data?
+            if let imageURL = siteMetadata.imageURL {
+                imageData = await downloadedImageData(from: imageURL)
+            } else {
+                imageData = nil
+            }
+            return URLMetadataCandidate(
+                title: siteMetadata.title,
+                resolvedURL: siteMetadata.resolvedURL,
+                officialURL: siteMetadata.structuredData.officialURL,
+                purchaseURL: siteMetadata.structuredData.purchaseURL,
+                eventDate: siteMetadata.structuredData.date,
+                eventEndDate: siteMetadata.structuredData.endDate,
+                venueName: siteMetadata.structuredData.venueName,
+                venueAddress: siteMetadata.structuredData.venueAddress,
+                imageData: imageData,
+                structuredType: siteMetadata.structuredData.typeName,
+                structuredDateLabel: dateLabel(for: siteMetadata.structuredData.typeName),
+                contributors: siteMetadata.structuredData.contributors,
+                creditsText: siteMetadata.structuredData.creditsText
+            )
         }
 
         let basicMetadata = try await fetchBasicMetadata(from: url)
@@ -86,6 +142,103 @@ enum URLMetadataService {
             structuredDateLabel: structuredData.map { dateLabel(for: $0.typeName) } ?? "",
             contributors: structuredData?.contributors ?? [],
             creditsText: structuredData?.creditsText ?? ""
+        )
+    }
+
+    private static func fetchSiteSpecificMetadata(from url: URL) async throws -> SiteSpecificMetadata? {
+        guard let eventID = confettiEventID(from: url) else { return nil }
+        guard let endpoint = URL(string: "https://api.confetti-web.com/graphql") else { return nil }
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Favoreco/1.0", forHTTPHeaderField: "User-Agent")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "query": """
+            query ($id: Int!) {
+              eventForPublic(id: $id) {
+                id name subtitle thumbnailUrl startDate endDate displayVenueName
+                organization { name }
+                masterVenue { name masterVenue { name } }
+                eventInformation { description link cast staff note }
+              }
+            }
+            """,
+            "variables": ["id": eventID],
+        ])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode),
+              data.count <= 5_000_000,
+              let metadata = confettiMetadata(in: data, eventID: eventID) else {
+            return nil
+        }
+        return metadata
+    }
+
+    nonisolated private static func confettiEventID(from url: URL) -> Int? {
+        let host = (url.host ?? "").lowercased()
+        guard host == "confetti-web.com" || host.hasSuffix(".confetti-web.com") else { return nil }
+        let components = url.pathComponents.filter { $0 != "/" }
+        guard let eventsIndex = components.firstIndex(of: "events"),
+              components.indices.contains(eventsIndex + 1) else { return nil }
+        return Int(components[eventsIndex + 1])
+    }
+
+    nonisolated private static func confettiMetadata(
+        in data: Data,
+        eventID: Int
+    ) -> SiteSpecificMetadata? {
+        guard let response = try? JSONDecoder().decode(ConfettiGraphQLResponse.self, from: data),
+              let event = response.data?.eventForPublic else { return nil }
+        let title = event.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty,
+              let resolvedURL = URL(string: "https://www.confetti-web.com/events/\(eventID)") else { return nil }
+
+        let staff = normalizedMultilineText(event.eventInformation?.staff ?? "")
+        let organizationName = event.organization?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let productionName = labeledValue(
+            labels: ["企画製作", "企画・製作", "企画制作"],
+            in: staff
+        )
+        var contributors = [URLContributorCandidate]()
+        if !organizationName.isEmpty {
+            contributors.append(
+                URLContributorCandidate(name: organizationName, roleKey: "organizer", roleName: "主催")
+            )
+        }
+        if !productionName.isEmpty {
+            contributors.append(
+                URLContributorCandidate(name: productionName, roleKey: "production", roleName: "企画製作")
+            )
+        }
+
+        let cast = normalizedMultilineText(event.eventInformation?.cast ?? "")
+        var creditBlocks = [String]()
+        if !cast.isEmpty { creditBlocks.append("出演者：\n\(cast)") }
+        if !staff.isEmpty { creditBlocks.append("スタッフ：\n\(staff)") }
+        let officialURL = normalizedURL(from: event.eventInformation?.link ?? "")
+        let venueName = firstNonempty(
+            event.displayVenueName ?? "",
+            event.masterVenue?.name ?? "",
+            event.masterVenue?.masterVenue?.name ?? ""
+        )
+
+        return SiteSpecificMetadata(
+            title: title,
+            resolvedURL: resolvedURL,
+            imageURL: normalizedURL(from: event.thumbnailURL ?? ""),
+            structuredData: StructuredPageData(
+                typeName: "Event",
+                date: parsedISODate(event.startDate),
+                endDate: parsedISODate(event.endDate),
+                venueName: sanitizedValue(venueName),
+                venueAddress: "",
+                officialURL: officialURL,
+                purchaseURL: resolvedURL,
+                contributors: mergedContributors(contributors),
+                creditsText: creditBlocks.joined(separator: "\n")
+            )
         )
     }
 
@@ -171,8 +324,8 @@ enum URLMetadataService {
     ) -> String? {
         let escapedProperty = NSRegularExpression.escapedPattern(for: property)
         let patterns = [
-            #"<meta[^>]+(?:property|name)\s*=\s*["']\#(escapedProperty)["'][^>]+content\s*=\s*["']([^"']+)["'][^>]*>"#,
-            #"<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+(?:property|name)\s*=\s*["']\#(escapedProperty)["'][^>]*>"#,
+            #"<meta[^>]+(?:property|name|itemprop)\s*=\s*["']\#(escapedProperty)["'][^>]+content\s*=\s*["']([^"']+)["'][^>]*>"#,
+            #"<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+(?:property|name|itemprop)\s*=\s*["']\#(escapedProperty)["'][^>]*>"#,
         ]
         for pattern in patterns {
             guard let expression = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
@@ -264,16 +417,25 @@ enum URLMetadataService {
 
         let date = structuredObject.flatMap { structuredDate(from: $0, typeName: typeName) }
             ?? firstJSONLDDate(key: "startDate", in: html)
+            ?? parsedISODate(htmlMetadataContent(property: "event:start_time", in: html))
+            ?? parsedISODate(htmlMetadataContent(property: "startDate", in: html))
             ?? labeledDate(in: description)
         let endDate = structuredObject.flatMap { parsedISODate($0["endDate"] as? String) }
             ?? firstJSONLDDate(key: "endDate", in: html)
+            ?? parsedISODate(htmlMetadataContent(property: "event:end_time", in: html))
+            ?? parsedISODate(htmlMetadataContent(property: "endDate", in: html))
 
         let structuredVenueName = structuredObject.map(venueName(from:)) ?? ""
         let fallbackVenueName = labeledValue(
             labels: ["会場", "開催場所", "場所", "劇場"],
             in: description
         )
-        let resolvedVenueName = firstNonempty(structuredVenueName, fallbackVenueName)
+        let metadataVenueName = firstNonempty(
+            htmlMetadataContent(property: "event:location", in: html) ?? "",
+            htmlMetadataContent(property: "venue", in: html) ?? "",
+            htmlMetadataContent(property: "location", in: html) ?? ""
+        )
+        let resolvedVenueName = firstNonempty(structuredVenueName, fallbackVenueName, metadataVenueName)
 
         let structuredVenueAddress = structuredObject.map(venueAddress(from:)) ?? ""
         let fallbackAddress = labeledValue(
@@ -351,10 +513,10 @@ enum URLMetadataService {
             .map(NSRegularExpression.escapedPattern(for:))
             .joined(separator: "|")
         let knownLabels = [
-            "開催日時", "開催日", "公演日", "日時", "会場住所", "開催地住所", "住所",
+            "開催日時", "開催日", "開催期間", "公演日", "公演期間", "日程", "日時", "会場住所", "開催地住所", "住所",
             "会場", "開催場所", "場所", "劇場", "出演者", "出演", "キャスト",
             "イベント公式サイト", "公演公式サイト", "公式サイト", "公式URL", "公式ページ",
-            "公演団体", "上演団体", "劇団", "主催", "主催者", "企画", "制作", "製作",
+            "公演団体", "上演団体", "劇団", "主催", "主催者", "企画製作", "企画・製作", "企画制作", "企画", "制作", "製作",
             "協力", "運営協力", "料金", "チケット", "販売期間", "当落発表",
         ]
         let stopAlternatives = knownLabels
@@ -393,6 +555,7 @@ enum URLMetadataService {
         let definitions: [(labels: [String], roleKey: String, roleName: String)] = [
             (["公演団体", "上演団体", "劇団"], "performing_organization", "公演団体"),
             (["主催", "主催者"], "organizer", "主催"),
+            (["企画製作", "企画・製作", "企画制作"], "production", "企画製作"),
             (["企画"], "planning", "企画"),
             (["制作", "製作"], "production", "制作"),
             (["協力", "運営協力"], "other", "協力"),
@@ -479,7 +642,10 @@ enum URLMetadataService {
     }
 
     nonisolated private static func labeledDate(in text: String) -> Date? {
-        let value = labeledValue(labels: ["開催日時", "開催日", "公演日", "日時"], in: text)
+        let value = labeledValue(
+            labels: ["開催日時", "開催日", "開催期間", "公演日", "公演期間", "日程", "日時"],
+            in: text
+        )
         return parsedISODate(value)
     }
 
@@ -537,7 +703,10 @@ enum URLMetadataService {
         let ticketHosts = [
             "tiget.net", "eplus.jp", "pia.jp", "ticket.pia.jp", "l-tike.com",
             "livepocket.jp", "teket.jp", "zaiko.io", "ticketbook.jp",
-            "passmarket.yahoo.co.jp", "rakuten-ticket.com",
+            "passmarket.yahoo.co.jp", "rakuten-ticket.com", "ticket.rakuten.co.jp",
+            "confetti-web.com", "cnplayguide.com", "ticket-village.jp", "ticketme.io",
+            "peatix.com", "eventregist.com", "ticketboard.jp", "tixplus.jp",
+            "ticketpay.jp", "gettiis.jp",
         ]
         return ticketHosts.contains { host == $0 || host.hasSuffix(".\($0)") }
     }
@@ -720,6 +889,58 @@ private struct StructuredPageData {
     let purchaseURL: URL?
     let contributors: [URLContributorCandidate]
     let creditsText: String
+}
+
+nonisolated private struct SiteSpecificMetadata {
+    let title: String
+    let resolvedURL: URL
+    let imageURL: URL?
+    let structuredData: StructuredPageData
+}
+
+nonisolated private struct ConfettiGraphQLResponse: Decodable {
+    let data: Payload?
+
+    struct Payload: Decodable {
+        let eventForPublic: Event?
+    }
+
+    struct Event: Decodable {
+        let name: String
+        let thumbnailURL: String?
+        let startDate: String?
+        let endDate: String?
+        let displayVenueName: String?
+        let organization: NamedValue?
+        let masterVenue: Venue?
+        let eventInformation: EventInformation?
+
+        enum CodingKeys: String, CodingKey {
+            case name
+            case thumbnailURL = "thumbnailUrl"
+            case startDate
+            case endDate
+            case displayVenueName
+            case organization
+            case masterVenue
+            case eventInformation
+        }
+    }
+
+    struct NamedValue: Decodable {
+        let name: String
+    }
+
+    struct Venue: Decodable {
+        let name: String?
+        let masterVenue: NamedValue?
+    }
+
+    struct EventInformation: Decodable {
+        let link: String?
+        let cast: String?
+        let staff: String?
+    }
 }
 
 enum URLMetadataError: LocalizedError {
