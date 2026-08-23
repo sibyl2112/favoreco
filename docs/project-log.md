@@ -32698,3 +32698,36 @@ Homeの見出しに4件とあるのにカードは3件しか表示されず、�
 ### 既知のリスク・残課題
 - 公開APIやサイト構造は運営側の変更で利用できなくなる可能性があり、全サイト・全項目の取得は保証しない。失敗時はURLを保持したまま手入力できる。
 - 実機でConfetti対象URLと、TIGET・e+・ぴあ・ローチケ等の代表URLを取り込み、候補内容と公式／販売URLの分離を確認する。
+
+## 2026-08-24: TicketDiveの販売URLと公演画像取込を修正
+
+### 原因
+- TicketDiveが販売サイトのホスト一覧になく、入力URLを公演公式URLへ分類していた。
+- ページの`og:image`がイベント固有画像ではなくTicketDive共通ロゴであるのに、汎用OGP解析がそのままアイキャッチへ採用していた。
+- 実際の公演画像、日時、会場、出演者はページ内`__NEXT_DATA__`にあり、汎用JSON-LD／OGP解析だけでは取得できなかった。
+
+### 変更概要・意図
+- TicketDiveイベントページを識別する専用アダプタを追加し、`__NEXT_DATA__`を構造解析する。
+- `event.topImage`を公演ビジュアル、公演名、全stage日時、会場、詳細内住所、出演者、問い合わせ名義の主催を候補へ反映する。
+- TicketDiveイベントURLは追跡クエリを除いて`チケットサイト`へ保存し、詳細内`【公式】 Web`だけを`公式URL`へ入れる。公式Webがなければ公式URLは空欄のままにする。
+- 既入力値を上書きしない規則と、取得できない欄を保存前に手入力できる動作は維持する。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Services/URLMetadataService.swift`: TicketDive判定、専用取得、埋込データ解析、公式／販売URL分離を追加。
+- `favorecoAPP/favorecoAPPTests/TheaterRegistrationImportTests.swift`: 共通OGP画像を除外し`topImage`を採用する専用fixtureテストを追加。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様、設計、確認状態を更新。
+
+### 影響する画面・機能
+- 観劇の気になる／予定／申込／取得済み登録と公演登録の`URLから`入力。
+- TicketDiveからの公演名、アイキャッチ、日時、会場、住所、出演者、主催、公演公式URL、チケットサイトURLの候補反映。
+- 他サイトの汎用解析、既存保存モデル、個別チケット購入URLには変更なし。
+
+### 確認結果（実機 / ビルド）
+- 実際のTicketDiveページをブラウザで確認し、共通`og:image`とイベント固有`event.topImage`、公式Web、stage、会場、出演者の格納位置を特定した。
+- `TheaterRegistrationImportTests` 12件に成功し、画像選択、URL分離、日時、会場、住所、出演者、主催のマッピングを検証した。
+- 変更Swiftの構文解析と`git diff --check`に成功した。
+- Asset Catalogを含むiOS Simulator向けDebug全体ビルドに成功した。既存のMainActor分離警告だけで、今回の変更由来の警告・エラーはない。
+
+### 既知のリスク・残課題
+- TicketDive側が`__NEXT_DATA__`の構造を変更すると専用解析が使えなくなる可能性がある。その場合も汎用解析と手入力へフォールバックする。
+- 実機で対象URLを取り込み、公演ビジュアル、公式サイト／チケットサイト、全候補の保存再表示を確認する。

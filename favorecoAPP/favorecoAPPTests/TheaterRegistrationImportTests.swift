@@ -202,6 +202,68 @@ final class TheaterRegistrationImportTests: XCTestCase {
         XCTAssertTrue(metadata.creditsText.contains("スタッフ："))
     }
 
+    func testTicketDiveUsesEmbeddedEventImageAndSeparatesOfficialFromTicketURL() throws {
+        let payload: [String: Any] = [
+            "props": [
+                "pageProps": [
+                    "__superjsonProps": [
+                        "json": [
+                            "eventDetail": [
+                                "event": [
+                                    "name": "ego:pression presents イマーシブシアター「イマジナリーライン」",
+                                    "detail": """
+                                    【会場】
+                                    pia 板橋工場（東京都板橋区本蓮沼町45-4）
+                                    【公式】
+                                    Web：https://www.egopression.com/
+                                    """,
+                                    "topImage": "https://storage.googleapis.com/playyte-ticket-prod_event/main.webp",
+                                    "inquiry": "株式会社ego:pression（egopression@gmail.com）",
+                                ],
+                                "stages": [
+                                    [
+                                        "startStage": "2026-11-14T03:00:00.000Z",
+                                        "venue": ["name": "pia 板橋工場"],
+                                        "artists": [["name": "秋吉朝子"], ["name": "eat_"]],
+                                    ],
+                                    [
+                                        "startStage": "2026-12-06T05:30:00.000Z",
+                                        "venue": ["name": "pia 板橋工場"],
+                                        "artists": [["name": "秋吉朝子"], ["name": "Mana"]],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]
+        let jsonData = try JSONSerialization.data(withJSONObject: payload)
+        let json = try XCTUnwrap(String(data: jsonData, encoding: .utf8))
+        let html = "<html><head><meta property=\"og:image\" content=\"https://ticketdive.com/generic-logo.webp\"><script id=\"__NEXT_DATA__\" type=\"application/json\">\(json)</script></head></html>"
+        let sourceURL = try XCTUnwrap(
+            URL(string: "https://ticketdive.com/event/ImaginaryLine?utm_source=share")
+        )
+
+        let metadata = try XCTUnwrap(
+            URLMetadataService.ticketDiveMetadataForTesting(in: html, sourceURL: sourceURL)
+        )
+
+        XCTAssertEqual(metadata.title, "ego:pression presents イマーシブシアター「イマジナリーライン」")
+        XCTAssertEqual(metadata.resolvedURL.absoluteString, "https://ticketdive.com/event/ImaginaryLine")
+        XCTAssertEqual(metadata.purchaseURL?.absoluteString, "https://ticketdive.com/event/ImaginaryLine")
+        XCTAssertEqual(metadata.officialURL?.absoluteString, "https://www.egopression.com/")
+        XCTAssertEqual(metadata.imageURL?.absoluteString, "https://storage.googleapis.com/playyte-ticket-prod_event/main.webp")
+        XCTAssertEqual(metadata.venueName, "pia 板橋工場")
+        XCTAssertEqual(metadata.venueAddress, "東京都板橋区本蓮沼町45-4")
+        XCTAssertEqual(metadata.eventDate, date(2026, 11, 14, 12))
+        XCTAssertEqual(metadata.eventEndDate, date(2026, 12, 6, 14, 30))
+        XCTAssertTrue(metadata.contributors.contains {
+            $0.roleKey == "organizer" && $0.name == "株式会社ego:pression"
+        })
+        XCTAssertTrue(metadata.creditsText.contains("秋吉朝子\neat_\nMana"))
+    }
+
     func testEventTicketURLRoundTripsWithoutChangingLegacyData() {
         let fields = VisitUnitFields(eventTicketURL: "https://tiget.net/events/514629")
         let decoded = VisitUnitFields(rawValue: fields.encodedRawValue)

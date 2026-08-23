@@ -91,6 +91,38 @@ enum URLMetadataService {
         )
     }
 
+    nonisolated static func ticketDiveMetadataForTesting(
+        in html: String,
+        sourceURL: URL
+    ) -> (
+        title: String,
+        resolvedURL: URL,
+        eventDate: Date?,
+        eventEndDate: Date?,
+        venueName: String,
+        venueAddress: String,
+        officialURL: URL?,
+        purchaseURL: URL?,
+        imageURL: URL?,
+        contributors: [URLContributorCandidate],
+        creditsText: String
+    )? {
+        guard let metadata = ticketDiveMetadata(in: html, sourceURL: sourceURL) else { return nil }
+        return (
+            metadata.title,
+            metadata.resolvedURL,
+            metadata.structuredData.date,
+            metadata.structuredData.endDate,
+            metadata.structuredData.venueName,
+            metadata.structuredData.venueAddress,
+            metadata.structuredData.officialURL,
+            metadata.structuredData.purchaseURL,
+            metadata.imageURL,
+            metadata.structuredData.contributors,
+            metadata.structuredData.creditsText
+        )
+    }
+
     @MainActor
     static func fetch(from rawValue: String, includesStructuredData: Bool = false) async throws -> URLMetadataCandidate {
         guard let url = normalizedURL(from: rawValue) else {
@@ -146,7 +178,16 @@ enum URLMetadataService {
     }
 
     private static func fetchSiteSpecificMetadata(from url: URL) async throws -> SiteSpecificMetadata? {
-        guard let eventID = confettiEventID(from: url) else { return nil }
+        if let eventID = confettiEventID(from: url) {
+            return try await fetchConfettiMetadata(eventID: eventID)
+        }
+        if isTicketDiveURL(url) {
+            return try await fetchTicketDiveMetadata(from: url)
+        }
+        return nil
+    }
+
+    private static func fetchConfettiMetadata(eventID: Int) async throws -> SiteSpecificMetadata? {
         guard let endpoint = URL(string: "https://api.confetti-web.com/graphql") else { return nil }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -174,6 +215,21 @@ enum URLMetadataService {
             return nil
         }
         return metadata
+    }
+
+    private static func fetchTicketDiveMetadata(from url: URL) async throws -> SiteSpecificMetadata? {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Favoreco/1.0",
+            forHTTPHeaderField: "User-Agent"
+        )
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<400).contains(httpResponse.statusCode),
+              data.count <= 5_000_000,
+              let html = String(data: data, encoding: .utf8) else { return nil }
+        return ticketDiveMetadata(in: html, sourceURL: httpResponse.url ?? url)
     }
 
     nonisolated private static func confettiEventID(from url: URL) -> Int? {
@@ -239,6 +295,108 @@ enum URLMetadataService {
                 contributors: mergedContributors(contributors),
                 creditsText: creditBlocks.joined(separator: "\n")
             )
+        )
+    }
+
+    nonisolated private static func isTicketDiveURL(_ url: URL) -> Bool {
+        let host = (url.host ?? "").lowercased()
+        return host == "ticketdive.com" || host.hasSuffix(".ticketdive.com")
+    }
+
+    nonisolated private static func ticketDiveMetadata(
+        in html: String,
+        sourceURL: URL
+    ) -> SiteSpecificMetadata? {
+        guard isTicketDiveURL(sourceURL),
+              let jsonText = firstRegexCapture(
+                  pattern: #"<script[^>]+id\s*=\s*["']__NEXT_DATA__["'][^>]*>([\s\S]*?)</script>"#,
+                  in: html
+              ),
+              let jsonData = jsonText.data(using: .utf8),
+              let nextData = try? JSONDecoder().decode(TicketDiveNextData.self, from: jsonData),
+              let detail = nextData.props.pageProps.superJSONProps?.json.eventDetail else { return nil }
+
+        let title = detail.event.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return nil }
+        let pathComponents = sourceURL.pathComponents.filter { $0 != "/" }
+        guard let eventIndex = pathComponents.firstIndex(of: "event"),
+              pathComponents.indices.contains(eventIndex + 1),
+              var canonicalComponents = URLComponents(string: "https://ticketdive.com") else { return nil }
+        canonicalComponents.path = "/event/\(pathComponents[eventIndex + 1])"
+        guard let resolvedURL = canonicalComponents.url else { return nil }
+
+        let dates = detail.stages
+            .compactMap { parsedISODate($0.startStage) }
+            .sorted()
+        let venueName = sanitizedValue(detail.stages.lazy.compactMap { $0.venue?.name }.first ?? "")
+        let venueAddress = ticketDiveVenueAddress(
+            in: detail.event.detail,
+            venueName: venueName
+        )
+        let officialURL = ticketDiveOfficialURL(in: detail.event.detail)
+        let performerNames = normalizedNames(detail.stages.flatMap { stage in
+            stage.artists?.map(\.name) ?? []
+        })
+        let uniquePerformerNames = Array(NSOrderedSet(array: performerNames)) as? [String] ?? performerNames
+        var contributors = uniquePerformerNames.map {
+            URLContributorCandidate(name: $0, roleKey: "cast", roleName: "出演")
+        }
+        let organizerName = detail.event.inquiry?
+            .components(separatedBy: "（")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !organizerName.isEmpty {
+            contributors.append(
+                URLContributorCandidate(name: organizerName, roleKey: "organizer", roleName: "主催")
+            )
+        }
+        var creditBlocks = [String]()
+        if !uniquePerformerNames.isEmpty {
+            creditBlocks.append("出演者：\n\(uniquePerformerNames.joined(separator: "\n"))")
+        }
+        if !organizerName.isEmpty {
+            creditBlocks.append("主催：\(organizerName)")
+        }
+
+        return SiteSpecificMetadata(
+            title: title,
+            resolvedURL: resolvedURL,
+            imageURL: normalizedURL(from: detail.event.topImage ?? ""),
+            structuredData: StructuredPageData(
+                typeName: "Event",
+                date: dates.first,
+                endDate: dates.last,
+                venueName: venueName,
+                venueAddress: venueAddress,
+                officialURL: officialURL,
+                purchaseURL: resolvedURL,
+                contributors: mergedContributors(contributors),
+                creditsText: creditBlocks.joined(separator: "\n")
+            )
+        )
+    }
+
+    nonisolated private static func ticketDiveOfficialURL(in detail: String) -> URL? {
+        guard let rawURL = firstRegexCapture(
+            pattern: #"【公式】[\s\S]{0,800}?Web\s*[：:]\s*(https?://[^\s]+)"#,
+            in: detail
+        ) else { return nil }
+        return normalizedURL(
+            from: rawURL.trimmingCharacters(in: CharacterSet(charactersIn: "。、,;；）)"))
+        )
+    }
+
+    nonisolated private static func ticketDiveVenueAddress(
+        in detail: String,
+        venueName: String
+    ) -> String {
+        guard !venueName.isEmpty else { return "" }
+        let escapedVenue = NSRegularExpression.escapedPattern(for: venueName)
+        return sanitizedAddress(
+            firstRegexCapture(
+                pattern: #"【会場】\s*(?:\r?\n)?\s*\#(escapedVenue)\s*（([^）]+)）"#,
+                in: detail
+            ) ?? ""
         )
     }
 
@@ -706,7 +864,7 @@ enum URLMetadataService {
             "passmarket.yahoo.co.jp", "rakuten-ticket.com", "ticket.rakuten.co.jp",
             "confetti-web.com", "cnplayguide.com", "ticket-village.jp", "ticketme.io",
             "peatix.com", "eventregist.com", "ticketboard.jp", "tixplus.jp",
-            "ticketpay.jp", "gettiis.jp",
+            "ticketpay.jp", "gettiis.jp", "ticketdive.com",
         ]
         return ticketHosts.contains { host == $0 || host.hasSuffix(".\($0)") }
     }
@@ -940,6 +1098,56 @@ nonisolated private struct ConfettiGraphQLResponse: Decodable {
         let link: String?
         let cast: String?
         let staff: String?
+    }
+}
+
+nonisolated private struct TicketDiveNextData: Decodable {
+    let props: Props
+
+    struct Props: Decodable {
+        let pageProps: PageProps
+    }
+
+    struct PageProps: Decodable {
+        let superJSONProps: SuperJSONProps?
+
+        enum CodingKeys: String, CodingKey {
+            case superJSONProps = "__superjsonProps"
+        }
+    }
+
+    struct SuperJSONProps: Decodable {
+        let json: JSONPayload
+    }
+
+    struct JSONPayload: Decodable {
+        let eventDetail: EventDetail?
+    }
+
+    struct EventDetail: Decodable {
+        let event: Event
+        let stages: [Stage]
+    }
+
+    struct Event: Decodable {
+        let name: String
+        let detail: String
+        let topImage: String?
+        let inquiry: String?
+    }
+
+    struct Stage: Decodable {
+        let startStage: String?
+        let venue: Venue?
+        let artists: [Artist]?
+    }
+
+    struct Venue: Decodable {
+        let name: String
+    }
+
+    struct Artist: Decodable {
+        let name: String
     }
 }
 
