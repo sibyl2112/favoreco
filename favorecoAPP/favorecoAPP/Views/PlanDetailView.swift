@@ -710,10 +710,12 @@ struct PlanDetailView: View {
     private var planHeroBackground: some View {
         GeometryReader { proxy in
             let fields = VisitUnitFields(rawValue: plan.event?.unitFieldsRaw ?? "")
-            let resourceName = HeroBackgroundPreset.resolved(
-                categoryKey: planTemplateKey,
-                storedKey: fields.heroBackgroundPresetKey
-            )?.resourceName ?? "\(planTemplateKey)-hero-default"
+            let resourceName = fields.heroBackgroundPresetKey == HeroBackgroundPreset.noneKey
+                ? ""
+                : HeroBackgroundPreset.resolved(
+                    categoryKey: planTemplateKey,
+                    storedKey: fields.heroBackgroundPresetKey
+                )?.resourceName ?? "\(planTemplateKey)-hero-default"
             let imageBandHeight = proxy.size.height
             let genreColor = isTheaterPlan ? theaterGenreColor : panelGenreColor
 

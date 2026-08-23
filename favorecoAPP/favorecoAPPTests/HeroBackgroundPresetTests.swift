@@ -29,6 +29,15 @@ final class HeroBackgroundPresetTests: XCTestCase {
         XCTAssertEqual(resolved?.resourceName, "movie-hero-default")
     }
 
+    func testExplicitNoneDoesNotResolveToDefaultBackground() {
+        XCTAssertNil(
+            HeroBackgroundPreset.resolved(
+                categoryKey: "theater",
+                storedKey: HeroBackgroundPreset.noneKey
+            )
+        )
+    }
+
     func testNaturePresetsRepresentPrimaryVisitTypes() {
         let presets = HeroBackgroundPreset.presets(for: "nature_living")
 

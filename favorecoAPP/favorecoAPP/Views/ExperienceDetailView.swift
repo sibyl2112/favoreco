@@ -1218,6 +1218,7 @@ struct ExperienceDetailView: View {
 
     private func defaultHeroBackgroundImage(categoryKey: String?, presetKey: String) -> UIImage? {
         guard let categoryKey else { return nil }
+        guard presetKey != HeroBackgroundPreset.noneKey else { return nil }
         let resourceName = HeroBackgroundPreset.resolved(
             categoryKey: categoryKey,
             storedKey: presetKey

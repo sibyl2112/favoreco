@@ -643,6 +643,36 @@ final class TicketWorkflowTests: XCTestCase {
         XCTAssertEqual(result.feeText, "1100")
     }
 
+    func testTicketOCRParsesLabeledEventInformationBeforeTicketPerformanceTime() throws {
+        let metadata = TicketOCRImportParser.parseEventMetadata(
+            text: """
+            ■申込内容
+            申込ID：bOvedHJBFLoeBiB0kb7S
+
+            ■公演内容
+            イベント名：世界線選択ゲーム『僕たちの映画
+            館』
+            会場：岩波神保町ビル10F
+            日程：2026年8月30日(日) 10:00
+            チケット：8月30日(日) 11:20 開始回
+            """,
+            referenceDate: date(2026, 8, 1)
+        )
+
+        XCTAssertEqual(metadata.title, "世界線選択ゲーム『僕たちの映画館』")
+        XCTAssertEqual(metadata.venue, "岩波神保町ビル10F")
+        let startsAt = try XCTUnwrap(metadata.eventDateRange?.startsAt)
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: startsAt
+        )
+        XCTAssertEqual(components.year, 2026)
+        XCTAssertEqual(components.month, 8)
+        XCTAssertEqual(components.day, 30)
+        XCTAssertEqual(components.hour, 10)
+        XCTAssertEqual(components.minute, 0)
+    }
+
     func testCurrentStageLabelsExplainWhatTheUserIsWaitingFor() {
         XCTAssertEqual(
             TicketProgressPresentation.currentStageLabel(

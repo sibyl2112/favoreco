@@ -955,31 +955,16 @@ struct AddTicketPlanView: View {
         .theaterLifecycleDisclosureSurface(isExpanded: isUnifiedMemoExpanded)
     }
 
+    @ViewBuilder
     private func theaterFlatSectionHeader(
         _ title: String,
         isExpanded: Binding<Bool>?,
         info: String? = nil
     ) -> some View {
-        HStack(spacing: 4) {
-            if let isExpanded {
-                Button {
-                    isExpanded.wrappedValue.toggle()
-                } label: {
-                    HStack(spacing: 10) {
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Color(hex: "#8B2F45"))
-                            .frame(width: 4, height: 24)
-                        Text(title)
-                            .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 8)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded.wrappedValue ? "\(title)を閉じる" : "\(title)を開く")
-            } else {
+        if let isExpanded, info == nil {
+            Button {
+                isExpanded.wrappedValue.toggle()
+            } label: {
                 HStack(spacing: 10) {
                     RoundedRectangle(cornerRadius: 1.5)
                         .fill(Color(hex: "#8B2F45"))
@@ -987,30 +972,70 @@ struct AddTicketPlanView: View {
                     Text(title)
                         .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
                         .foregroundStyle(.primary)
-                }
-                .frame(minHeight: 44)
-            }
-
-            if let info {
-                TheaterLifecycleInfoButton(text: info)
-            }
-
-            if let isExpanded {
-                Button {
-                    isExpanded.wrappedValue.toggle()
-                } label: {
+                    Spacer(minLength: 8)
                     Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded.wrappedValue ? "\(title)を閉じる" : "\(title)を開く")
-            } else {
-                Spacer(minLength: 8)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded.wrappedValue ? "\(title)を閉じる" : "\(title)を開く")
+        } else {
+            HStack(spacing: 4) {
+                if let isExpanded {
+                    Button {
+                        isExpanded.wrappedValue.toggle()
+                    } label: {
+                        HStack(spacing: 10) {
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(Color(hex: "#8B2F45"))
+                                .frame(width: 4, height: 24)
+                            Text(title)
+                                .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                                .foregroundStyle(.primary)
+                            Spacer(minLength: 8)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded.wrappedValue ? "\(title)を閉じる" : "\(title)を開く")
+                } else {
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(Color(hex: "#8B2F45"))
+                            .frame(width: 4, height: 24)
+                        Text(title)
+                            .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                            .foregroundStyle(.primary)
+                    }
+                    .frame(minHeight: 44)
+                }
+
+                if let info {
+                    TheaterLifecycleInfoButton(text: info)
+                }
+
+                if let isExpanded {
+                    Button {
+                        isExpanded.wrappedValue.toggle()
+                    } label: {
+                        Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded.wrappedValue ? "\(title)を閉じる" : "\(title)を開く")
+                } else {
+                    Spacer(minLength: 8)
+                }
+            }
+            .frame(minHeight: 44)
         }
-        .frame(minHeight: 44)
     }
 
     private func theaterFlatFieldLabel(
@@ -1547,75 +1572,157 @@ struct AddTicketPlanView: View {
     }
 
     private var unifiedVisualEditor: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 7) {
                 Text("アイキャッチ")
                     .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
-                Group {
-                    if let eventEyecatchData, let image = UIImage(data: eventEyecatchData) {
-                        Image(uiImage: image).resizable().scaledToFill()
-                    } else {
-                        ZStack {
-                            Color(.secondarySystemFill)
-                            Text("No Image")
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .frame(
-                    width: TheaterRegistrationVisualMetrics.previewWidth,
-                    height: TheaterRegistrationVisualMetrics.previewHeight
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .clipped()
+                unifiedEyecatchCard
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 7) {
                 Text("背景")
                     .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
-                PhotosPicker(selection: $selectedEventEyecatchItem, matching: .images) {
-                    FavorecoIconLabel("アイキャッチを選ぶ", systemImage: "photo", iconSize: 14)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(Color(hex: "#8B2F45"))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 9)
-                                .stroke(Color.secondary.opacity(0.24), lineWidth: 1)
-                        )
+                unifiedBackgroundCard
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var unifiedEyecatchCard: some View {
+        if let data = eventEyecatchData, let image = UIImage(data: data) {
+            visualSquareCard {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            }
+            .overlay(alignment: .topTrailing) {
+                HStack(spacing: 6) {
+                    PhotosPicker(selection: $selectedEventEyecatchItem, matching: .images) {
+                        visualEditControl("変更", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(role: .destructive) {
+                        eventEyecatchData = nil
+                        if eventHeroBackgroundPresetKey == HeroBackgroundPreset.eventEyecatchKey {
+                            eventHeroBackgroundPresetKey = HeroBackgroundPreset.noneKey
+                            eventHeroBackgroundPath = ""
+                        }
+                    } label: {
+                        visualDeleteControl
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("アイキャッチを削除")
                 }
+                .padding(8)
+            }
+        } else {
+            PhotosPicker(selection: $selectedEventEyecatchItem, matching: .images) {
+                visualSquarePlaceholder(
+                    title: "ライブラリから選ぶ",
+                    systemImage: "photo.on.rectangle"
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var unifiedBackgroundCard: some View {
+        visualSquareCard {
+            if let backgroundImage = selectedEventHeroBackgroundImage {
+                Image(uiImage: backgroundImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color(.secondarySystemFill)
+                    .overlay {
+                        VStack(spacing: 7) {
+                            Image(systemName: "rectangle.slash")
+                                .font(.system(size: 21, weight: .regular))
+                            Text("背景なし")
+                                .font(FavorecoTypography.caption)
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            HStack(spacing: 6) {
                 Button {
                     isShowingEventBackgroundPicker = true
                 } label: {
-                    FavorecoIconLabel("背景を選ぶ", systemImage: "paintbrush", iconSize: 14)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(Color(hex: "#8B2F45"))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 9)
-                                .stroke(Color.secondary.opacity(0.24), lineWidth: 1)
-                        )
+                    visualEditControl("編集", systemImage: "paintbrush")
                 }
                 .buttonStyle(.plain)
-                ZStack {
-                    Color(.secondarySystemFill)
-                    if let backgroundImage = selectedEventHeroBackgroundImage {
-                        Image(uiImage: backgroundImage)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Text("No Image")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
+                .accessibilityLabel("背景を編集")
+
+                if selectedEventHeroBackgroundImage != nil {
+                    Button(role: .destructive) {
+                        eventHeroBackgroundPath = ""
+                        eventHeroBackgroundPresetKey = HeroBackgroundPreset.noneKey
+                    } label: {
+                        visualDeleteControl
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("背景を削除")
                 }
-                .frame(
-                    width: TheaterRegistrationVisualMetrics.previewWidth,
-                    height: TheaterRegistrationVisualMetrics.previewHeight
-                )
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
+            .padding(8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func visualSquareCard<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ZStack { content() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .aspectRatio(1, contentMode: .fit)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+            }
+    }
+
+    private func visualSquarePlaceholder(title: String, systemImage: String) -> some View {
+        ZStack {
+            Color(.secondarySystemFill)
+            VStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 22, weight: .regular))
+                Text(title)
+                    .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+            }
+            .foregroundStyle(registrationPalette.globalTint)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+        }
+    }
+
+    private func visualEditControl(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(FavorecoTypography.jpSans(10.5, weight: .semibold, relativeTo: .caption))
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, 9)
+            .frame(minHeight: 32)
+            .background(.regularMaterial, in: Capsule())
+    }
+
+    private var visualDeleteControl: some View {
+        Image(systemName: "trash")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color.red)
+            .frame(width: 32, height: 32)
+            .background(.regularMaterial, in: Circle())
     }
 
     private var selectedEventHeroBackgroundImage: UIImage? {
@@ -3835,13 +3942,13 @@ struct AddTicketPlanView: View {
     private var unifiedPurposeDescription: String {
         switch unifiedPurpose {
         case .interested:
-            return "公演情報だけを保存します。日時やチケットは後から追加できます。"
+            return "公演名・種別・公式情報を保存します。日時やチケットは後から追加できます。"
         case .plan:
-            return "観に行く日時と会場を登録します。"
+            return "公演情報と、観に行く日時・会場を登録します。"
         case .application:
-            return "抽選または先着の申込から、当落・支払・受取まで管理します。"
+            return "公演情報、参加日時・会場、申込先とチケット工程を登録します。"
         case .acquired:
-            return "取得済みチケットの日時、金額、枚数、座席を記録します。"
+            return "公演情報、参加日時・会場、購入先・金額・枚数・座席を登録します。"
         }
     }
 
@@ -4049,7 +4156,7 @@ struct AddTicketPlanView: View {
 
     private func applyUnifiedPurpose(_ purpose: TheaterLifecycleRegistrationPurpose) {
         isApplicationDetailsExpanded = purpose == .application
-        isUnifiedWorkExpanded = purpose == .interested
+        isUnifiedWorkExpanded = true
         isUnifiedVisualExpanded = false
         isUnifiedParticipationExpanded = purpose == .plan
         isUnifiedTicketExpanded = purpose == .application || purpose == .acquired
@@ -4344,9 +4451,14 @@ struct AddTicketPlanView: View {
         canImportPlanInformation: Bool
     ) -> PendingTicketOCRImport? {
         guard !text.isEmpty else { return nil }
+        let referenceDate = selectedExistingPlan?.startsAt ?? Date()
         var result = TicketOCRImportParser.parse(
             text: text,
-            referenceDate: selectedExistingPlan?.startsAt ?? Date()
+            referenceDate: referenceDate
+        )
+        let eventMetadata = TicketOCRImportParser.parseEventMetadata(
+            text: text,
+            referenceDate: referenceDate
         )
         if !draft.showsSaleStart { result.saleStartAt = nil }
         if !draft.showsApplyDeadline { result.applyDeadlineAt = nil }
@@ -4362,12 +4474,18 @@ struct AddTicketPlanView: View {
         let pending = PendingTicketOCRImport(
             result: result,
             suggestedTitle: canImportPlanInformation
-                && analysis?.isTitleSuggestionReliable == true
-                && analysis?.suggestedTitle.isEmpty == false
-                ? analysis?.suggestedTitle
+                ? eventMetadata.title
+                    ?? (analysis?.isTitleSuggestionReliable == true
+                        && analysis?.suggestedTitle.isEmpty == false
+                        ? analysis?.suggestedTitle
+                        : nil)
                 : nil,
-            venue: canImportPlanInformation ? analysis?.venueCandidates.first : nil,
-            eventDateRange: canImportPlanInformation ? analysis?.eventDateRange : nil,
+            venue: canImportPlanInformation
+                ? eventMetadata.venue ?? analysis?.venueCandidates.first
+                : nil,
+            eventDateRange: canImportPlanInformation
+                ? eventMetadata.eventDateRange ?? analysis?.eventDateRange
+                : nil,
             isExistingDuplicate: false
         )
         return pending.hasSuggestions ? pending : nil
@@ -5538,11 +5656,6 @@ struct AddTicketPlanView: View {
     }
 }
 
-private enum TheaterRegistrationVisualMetrics {
-    static let previewWidth: CGFloat = 104
-    static let previewHeight: CGFloat = 146
-}
-
 private struct EventBackgroundSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -5575,7 +5688,7 @@ private struct EventBackgroundSelectionSheet: View {
                     }
                     backgroundButton(
                         key: HeroBackgroundPreset.eventEyecatchKey,
-                        title: "アイキャッチと同じ",
+                        title: "アイキャッチから",
                         image: eyecatchData.flatMap(UIImage.init(data:)),
                         isEnabled: eyecatchData != nil
                     )

@@ -15,6 +15,12 @@ struct TicketOCRImportResult {
     var quantity: Int?
 }
 
+struct TicketEventOCRMetadata {
+    let title: String?
+    let venue: String?
+    let eventDateRange: QuickCaptureDateRange?
+}
+
 struct PendingTicketOCRImport: Identifiable {
     let id = UUID()
     let result: TicketOCRImportResult
@@ -236,6 +242,69 @@ enum TicketOCRImportParser {
             seatText: inferredSeat(from: lines),
             quantity: inferredQuantity(from: lines)
         )
+    }
+
+    static func parseEventMetadata(
+        text: String,
+        referenceDate: Date
+    ) -> TicketEventOCRMetadata {
+        let lines = text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let title = labeledValue(
+            in: lines,
+            labels: ["イベント名", "公演名", "催事名", "タイトル"]
+        )
+        let venue = labeledValue(
+            in: lines,
+            labels: ["会場", "開催場所", "場所"]
+        )
+        let schedule = labeledValue(
+            in: lines,
+            labels: ["日程", "公演日時", "開催日時", "日時"]
+        )
+        let startsAt = schedule.flatMap {
+            parsedDate(in: $0, referenceDate: referenceDate)
+        }
+
+        return TicketEventOCRMetadata(
+            title: title,
+            venue: venue,
+            eventDateRange: startsAt.map {
+                QuickCaptureDateRange(startsAt: $0, endsAt: $0)
+            }
+        )
+    }
+
+    private static func labeledValue(
+        in lines: [String],
+        labels: [String]
+    ) -> String? {
+        for (index, line) in lines.enumerated() {
+            guard let separatorIndex = line.firstIndex(where: { $0 == ":" || $0 == "：" }) else {
+                continue
+            }
+            let rawLabel = line[..<separatorIndex]
+                .trimmingCharacters(in: CharacterSet(charactersIn: "■□●○・▪︎▫︎ "))
+            guard labels.contains(where: { normalized(rawLabel) == normalized($0) }) else {
+                continue
+            }
+
+            var value = String(line[line.index(after: separatorIndex)...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if index + 1 < lines.count {
+                let continuation = lines[index + 1]
+                let startsNewField = continuation.contains(":")
+                    || continuation.contains("：")
+                    || continuation.hasPrefix("■")
+                    || continuation.hasPrefix("※")
+                if !startsNewField {
+                    value += continuation
+                }
+            }
+            if !value.isEmpty { return value }
+        }
+        return nil
     }
 
     private static func inferredTicketGuideKey(from text: String) -> String? {

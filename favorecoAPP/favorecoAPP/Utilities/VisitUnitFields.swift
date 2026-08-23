@@ -660,6 +660,7 @@ enum BookSeriesRegistrationDefaults {
 
 struct HeroBackgroundPreset: Identifiable, Equatable {
     static let eventEyecatchKey = "eventEyecatch"
+    static let noneKey = "none"
 
     let key: String
     let title: String
@@ -728,6 +729,7 @@ struct HeroBackgroundPreset: Identifiable, Equatable {
     }
 
     static func resolved(categoryKey: String?, storedKey: String) -> HeroBackgroundPreset? {
+        if storedKey == noneKey { return nil }
         let options = presets(for: categoryKey)
         return options.first(where: { $0.key == storedKey }) ?? options.first
     }

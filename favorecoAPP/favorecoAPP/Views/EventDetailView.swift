@@ -605,11 +605,15 @@ struct EventDetailView: View {
     private func theaterHeroBackdropImage(
         fields: VisitUnitFields
     ) -> some View {
-        let resourceName = HeroBackgroundPreset.resolved(
-            categoryKey: "theater",
-            storedKey: fields.heroBackgroundPresetKey
-        )?.resourceName ?? "theater-hero-venue-v2"
-        if let image = bundledHeroBackgroundImage(resourceName: resourceName) {
+        let removesBackground = fields.heroBackgroundPresetKey == HeroBackgroundPreset.noneKey
+        let resourceName = removesBackground
+            ? ""
+            : HeroBackgroundPreset.resolved(
+                categoryKey: "theater",
+                storedKey: fields.heroBackgroundPresetKey
+            )?.resourceName ?? "theater-hero-venue-v2"
+        if !removesBackground,
+           let image = bundledHeroBackgroundImage(resourceName: resourceName) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
