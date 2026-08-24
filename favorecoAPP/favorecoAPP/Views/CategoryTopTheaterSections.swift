@@ -342,7 +342,7 @@ struct TheaterVisitCompactGrid: View {
     }
 }
 
-private struct TheaterVisitCompactCard: View {
+struct TheaterVisitCompactCard: View {
     let visit: Visit
 
     private let cardHeight: CGFloat = 112

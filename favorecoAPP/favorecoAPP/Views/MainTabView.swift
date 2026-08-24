@@ -436,18 +436,6 @@ struct MainTabView: View {
                             categoryHex: event.category?.colorHex ?? themePalette.baseTheme.accentHex
                         )
                 }
-            case .plan(let plan):
-                if let event = plan.event {
-                    AddVisitView(
-                        event: event,
-                        initialDraft: VisitDraft(plan: plan),
-                        sourcePlan: plan,
-                        usesTheaterLifecycleLayout: event.category?.templateKey == "theater"
-                    )
-                    .favorecoRegistrationTheme(
-                        categoryHex: event.category?.colorHex ?? themePalette.baseTheme.accentHex
-                    )
-                }
             case .edit(let visit):
                 TheaterLifecycleEditorSheet(recorded: visit)
                     .favorecoRegistrationTheme(
@@ -907,14 +895,12 @@ struct MainToolbarActions: View {
 private enum RecordEntryDestination: Identifiable {
     case new(RecordCategory)
     case existing(ExperienceEvent)
-    case plan(Plan)
     case edit(Visit)
 
     var id: String {
         switch self {
         case .new(let category): "new-\(category.id.uuidString)"
         case .existing(let event): "existing-\(event.id.uuidString)"
-        case .plan(let plan): "plan-\(plan.id.uuidString)"
         case .edit(let visit): "edit-\(visit.id.uuidString)"
         }
     }
@@ -923,43 +909,14 @@ private enum RecordEntryDestination: Identifiable {
 private struct TheaterMemoryTargetSelectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.favorecoThemePalette) private var themePalette
-    @Query(sort: \Plan.startsAt, order: .reverse) private var allPlans: [Plan]
     @Query(sort: \Visit.visitedAt, order: .reverse) private var allVisits: [Visit]
 
-    @State private var showsAllUnrecordedPlans = false
     @State private var showsAllRecordedVisits = false
 
     let category: RecordCategory
     let onSelect: (RecordEntryDestination) -> Void
 
     private let initialVisibleCount = 3
-
-    private var eligiblePlans: [Plan] {
-        let endOfToday = Calendar.current.date(
-            bySettingHour: 23,
-            minute: 59,
-            second: 59,
-            of: Date()
-        ) ?? Date()
-        return allPlans.filter {
-            !$0.isArchived
-                && $0.category?.id == category.id
-                && $0.hasConfirmedSchedule
-                && $0.startsAt <= endOfToday
-        }
-    }
-
-    private var unrecordedPlans: [Plan] {
-        eligiblePlans.filter { $0.visit == nil }
-    }
-
-    private var visibleUnrecordedPlans: [Plan] {
-        Array(
-            unrecordedPlans.prefix(
-                showsAllUnrecordedPlans ? unrecordedPlans.count : initialVisibleCount
-            )
-        )
-    }
 
     private var recordedVisits: [Visit] {
         allVisits.filter { visit in
@@ -997,36 +954,6 @@ private struct TheaterMemoryTargetSelectionView: View {
                     Text("事前に予定を登録していなかった公演も、ここから直接記録できます。")
                 }
 
-                Section {
-                    if unrecordedPlans.isEmpty {
-                        FavorecoContentUnavailableView(
-                            "未記録の過去予定はありません",
-                            systemImage: "calendar.badge.checkmark",
-                            description: "参加日を過ぎ、まだ観劇記録になっていない予定がここに表示されます。"
-                        )
-                    } else {
-                        ForEach(visibleUnrecordedPlans) { plan in
-                            Button {
-                                onSelect(.plan(plan))
-                            } label: {
-                                theaterMemoryPlanRow(plan)
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        if unrecordedPlans.count > initialVisibleCount {
-                            listExpansionButton(
-                                isExpanded: $showsAllUnrecordedPlans,
-                                hiddenCount: unrecordedPlans.count - initialVisibleCount
-                            )
-                        }
-                    }
-                } header: {
-                    Text("未記録の過去予定")
-                } footer: {
-                    Text("参加日を過ぎても観劇記録へ変換していない予定です。過去の日付のためComing Upには表示されません。")
-                }
-
                 if !recordedVisits.isEmpty {
                     Section("登録済みの観劇記録") {
                         ForEach(visibleRecordedVisits) { visit in
@@ -1057,34 +984,6 @@ private struct TheaterMemoryTargetSelectionView: View {
         }
         .favorecoAppAppearance()
         .tint(themePalette.globalTint)
-    }
-
-    private func theaterMemoryPlanRow(_ plan: Plan) -> some View {
-        HStack(spacing: 12) {
-            FavorecoIcon(systemName: "calendar", size: 19)
-                .foregroundStyle(themePalette.globalTint)
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(plan.event?.title.isEmpty == false ? plan.event?.title ?? plan.title : plan.title)
-                    .font(FavorecoTypography.bodyStrong)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-
-                Text(memoryPlanDescription(plan))
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 4)
-
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
     }
 
     private func theaterMemoryVisitRow(_ visit: Visit) -> some View {
@@ -1149,12 +1048,6 @@ private struct TheaterMemoryTargetSelectionView: View {
                 ? "表示を3件に戻す"
                 : "残り\(hiddenCount)件をさらに見る"
         )
-    }
-
-    private func memoryPlanDescription(_ plan: Plan) -> String {
-        let date = FavorecoDateText.compactDateTime(plan.startsAt)
-        let venue = plan.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
-        return venue.isEmpty ? date : "\(date)｜\(venue)"
     }
 
     private func memoryVisitTitle(_ visit: Visit) -> String {
