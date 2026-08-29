@@ -4,6 +4,119 @@
 
 <!-- 新しい変更を上に追記していく -->
 
+## 2026-08-27: 観劇詳細の見出しアイコンを公演情報基準へ統一
+
+### 原因
+- 同じ数値サイズでもPhosphor Lightの字形ごとに余白とストロークの見え方が異なり、会場・チケット・写真・作品情報等が`公演情報`より細い、または小さく見えていた。
+
+### 変更概要・意図
+- 観劇詳細専用の見出しアイコンをSF Symbols 19pt Medium・24×24pt固定枠へ統一した。
+- 主要な開閉見出しだけでなく、写真内の`思い出 / チケット・グッズ・特典`も同じラベル部品へ接続した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TheaterPosterFrame.swift`: 共通見出しアイコンとラベルを追加し、開閉見出しへ適用。
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 写真内の2つの小見出しを共通ラベルへ変更。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行規則と確認待ちを更新。
+
+### 影響する画面・機能
+- 観劇予定詳細、観劇記録詳細のSection見出し。保存・開閉ロジックへの影響はない。
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析、差分検査、iOS Simulator向けDebug全体ビルドに成功。
+- 実機で各字形の光学サイズと垂直位置を確認待ち。
+
+### 残課題
+- Dynamic Typeを含む実機目視で、24pt枠と見出し文字のベースラインを確認する。
+
+## 2026-08-27: 観劇記録の星評価・作品情報追加導線・写真情報UIを統一
+
+### 原因
+- 評価がSliderのため現在値と0.5刻みの入力位置を直感的に把握しにくかった。
+- 作品情報と鑑賞履歴の境界に、Section末尾とラベル付き区切りの罫線が重複していた。
+- 記録詳細から親公演のキャスト・スタッフを追加する直接導線がなく、写真情報は本文だけ旧Formの暗色表示が残っていた。
+
+### 変更概要・意図
+- 評価を5つ星へ置換し、各星の左右半分で0.5刻み入力、同値再選択で未評価、VoiceOver調整にも対応した。
+- 作品情報末尾の全幅罫線を抑制し、意味を持つラベル付き区切りだけを残した。
+- キャスト・スタッフ右上の`＋`から既存の親公演情報編集を開くようにした。
+- 写真情報を入力中／保存済み共通のライト基調shadcn風ScrollViewへ変更し、分類、キャプション、OCR、金額、削除を同じカード規則へ揃えた。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperienceBasicUnitEditor.swift`: 0.5刻みの星評価操作を追加。
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 公演編集への`＋`導線と写真編集のライト表示を追加。
+- `favorecoAPP/favorecoAPP/Views/ExperiencePhotoUnitEditor.swift`: 写真情報本文をフラットカードUIへ再構成。
+- `favorecoAPP/favorecoAPP/Views/TheaterPosterFrame.swift`: Section末尾罫線を用途別に抑制可能にした。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様と確認待ちを更新。
+
+### 影響する画面・機能
+- 観劇記録の追加・編集、観劇記録詳細、親公演情報編集、写真Viewerと写真情報編集。
+
+### 確認結果（実機 / ビルド）
+- `swiftc -parse`で変更Swift 4ファイルの構文解析に成功。
+- iOS Simulator向けDebug全体ビルド成功。
+- 実機で星の半分タップ、長いキャプション、OCR、金額、保存／削除、親公演追加後の再表示を確認待ち。
+
+### 残課題
+- 星の半分タップ領域と写真情報シートのキーボード表示を実機で目視・操作確認する。
+
+## 2026-08-25: 公演地名を任意化し、会場検索へ共有URLと手動ピンを追加
+
+### 原因
+- 公演地名は東京公演等の区別にだけ必要だが、必須相当に見え、小規模な単会場公演でも入力が必要に見えていた。
+- 会場候補がApple Mapsの先頭3件だけだったため、Apple側にPOIがない店舗・間借り会場はGoogle Mapsで見つかっても登録できなかった。
+
+### 変更概要・意図
+- `公演地名（任意）`と明示し、会場だけの登録を正式な入力として扱う。
+- 登録済み場所・全国場所カタログ・Apple Mapsを、名称と住所の複数クエリで横断し、候補元付きで最大8件を表示する。
+- 候補にない場所はGoogle／Apple Maps共有URLから名称・参照URLを取り込み、地図タップで正確な座標を保存できるようにした。
+- Google由来の住所・座標は複製せず、Apple検索または利用者の手動ピンだけを座標の正本にする。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Services/PlaceSearchService.swift`: 複数クエリ検索、候補元、共有Map URLのプレビュー解析を追加。
+- `favorecoAPP/favorecoAPP/Views/TheaterPerformanceScheduleSection.swift`: 横断候補、任意表示、共有URL・手動ピンSheetを追加。
+- `favorecoAPP/favorecoAPP/Utilities/VisitUnitFields.swift`: 公演地へ座標と参照Map URLの後方互換フィールドを追加。
+- `favorecoAPP/favorecoAPP/Views/DetailPresentationLogic.swift` / `TheaterTravelMapSection.swift`: 保存座標を公開公演Mapで優先。
+- `favorecoAPP/favorecoAPP/Views/TheaterPerformanceRegistrationView.swift` / `EventDetailView.swift`: 公演地の正規化時に座標と参照URLを保持。
+- `favorecoAPP/favorecoAPPTests/TheaterPerformanceScheduleTests.swift`: 旧JSONと座標・共有URLの保存互換テストを追加。
+
+### 影響する画面・機能
+- 観劇の気になる公演編集、公演情報編集、公演地入力、公開公演詳細の公演地Map。
+
+### 確認結果（実機 / ビルド）
+- `swiftc -parse`、`git diff --check`、iOS Simulator向けDebug全体ビルドに成功。
+- iPhone 16 Pro Simulatorで`PlaceSearchServiceTests` 4件と`TheaterPerformanceScheduleTests` 6件、計10件を実行し失敗0件。
+
+### 残課題
+- 実機でGoogle／Apple Maps共有URL、短縮URL展開、ピンタップ、保存後再編集、Apple Mapsにない店舗名、公開公演Mapへの座標反映を確認する。
+
+## 2026-08-25: 公開公演詳細の空状態アイコンを整理
+
+### 原因
+- 公開公演詳細ではカード見出しに黄色い意味アイコンがある一方、0件時の説明行にも同じ意味のグレーまたは黄色アイコンを個別に表示していた。
+- 各見出しが17pt・22pt幅と20pt・24pt幅に分かれ、アイコンと文字の開始位置が揃っていなかった。
+
+### 変更概要・意図
+- `キャスト・スタッフ / チケット管理 / 次の予定 / 参加した公演 / 金額総計`の空状態から、見出しと重複する補助アイコンを削除した。
+- `公演スケジュール`を含む黄色いカード見出しアイコンを、19pt描画・24×24pt固定枠の共通部品へ統一した。
+- 空状態の本文、件数、登録操作、開閉、保存内容、遷移は変更していない。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TheaterEventDetailComponents.swift`: 共通見出しアイコンを追加し、キャスト・参加履歴の空状態をテキストだけへ整理。
+- `favorecoAPP/favorecoAPP/Views/TheaterEventScheduleComponents.swift`: チケット・次の予定の空状態と見出しアイコンを統一。
+- `favorecoAPP/favorecoAPP/Views/TheaterEventExpenseComponents.swift`: 0円時の補助アイコンを削除し、金額見出しを統一。
+- `favorecoAPP/favorecoAPP/Views/TheaterPerformanceScheduleSection.swift`: 公演スケジュール見出しを共通サイズへ統一。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様と確認状態を更新。
+
+### 影響する画面・機能
+- 観劇の公開公演情報詳細にある上記6セクションの見出しと、5セクションの0件表示。
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`に成功。
+- 書き込み可能なDerivedDataを使った署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。
+
+### 残課題
+- 実機で0件／入力済み、長い説明文、各見出しの光学的なサイズ差と文字開始位置を確認する。
+
 ## 2026-08-24: 過去の観劇予定を観劇記録へ状態進行させる
 
 ### 原因
@@ -33035,3 +33148,200 @@ Homeの見出しに4件とあるのにカードは3件しか表示されず、�
 
 ### 既知のリスク・残課題
 - OCRは端末OS、撮影の傾き、反射、解像度で結果が変わるため、実機で同じ2枚と低照度／斜め撮影を確認する。
+
+## 2026-08-24: 写真の情報編集をshadcn風へ統一
+
+### 変更概要・意図
+- 写真編集は共通キャンバスだけ適用済みだったが、標準Sectionの境界が弱く、Navigation BarとBottom BarのLiquid Glass操作が写真内の入力面より強く見えていた。
+- 写真種別、キャプション、OCR、金額を、白い1pt薄枠・8pt角丸のカードへ整理し、説明はカード外へ分離した。
+- 標準Navigation Barを60ptのフラットヘッダーへ置換し、キャンセルを文字操作、保存／完了を8pt角丸の主要操作にした。削除は独立Bottom Barからカード列の末尾へ移した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperiencePhotoUnitEditor.swift`: 共通写真メタデータForm、ヘッダー、削除行を変更。
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 保存済み写真Viewerの編集入口を共通ヘッダーと削除行へ接続。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様、設計、確認状態を更新。
+
+### 影響する画面・機能
+- 新規記録、記録編集、既存対象への回追加から開く写真情報。
+- 保存済み記録詳細の写真Viewerから開く写真情報。
+- 写真分類、キャプション、OCR本文・候補、画像別金額、費用集計、保存・キャンセル、確認付き削除の処理は変更なし。
+
+### 確認結果（実機 / ビルド）
+- `ExperiencePhotoUnitEditor.swift`と`ExperienceDetailView.swift`のSwift構文解析、および`git diff --check`に成功した。
+- 署名ありgeneric iPhoneOS向けDebug全体ビルドに成功した。既存の`AddTicketPlanView`のMainActor分離警告だけで、今回の変更由来の警告・エラーはない。
+- iPhone 16はCoreDevice上で`unavailable`、CoreSimulatorService／simdiskimagedも停止していたため、端末へのインストールと画面目視は実施できなかった。
+
+### 既知のリスク・残課題
+- iPhone 16のライト／ダークで全分類、キャプション長文、OCR開閉・読取中、複数金額候補、キーボード表示、保存／キャンセル／削除を確認する。
+- Dynamic Type時の中央タイトルと左右操作の重なり、OCR展開時のカード境界を確認する。
+
+## 2026-08-24: 観劇記録の削除導線と親公演情報を再構成
+
+### 変更概要・意図
+- 観劇記録詳細の右上三点をゴミ箱へ変更し、編集は下部に限定した。ゴミ箱は既存の確認ダイアログを開き、即時削除しない。
+- 観劇記録編集の先頭に親Eventの`公演情報`を追加し、名称・種別・シリーズ・団体・サブタイトル・公式／チケットURL・SNS・アイキャッチ・背景を編集可能にした。入力はローカルDraftに留め、保存時だけ親へ反映する。
+- 東京公演・大阪公演等の公演地と期間は初期閉じの参照専用とした。Visit側の保存は公演地、期間、あらすじ、キャスト・スタッフを書き換えない。
+- 記録詳細はHero直下へ`公演情報`を移し、公演団体・主催、公式サイト、チケットサイト、SNSを集約した。下部は`作品情報`としてあらすじ・キャスト・スタッフを統合し、独立キャストSectionを外した。
+- 公演情報編集で、公演団体入力がキャスト原文へ混入していた既存の保存先を分離し、`organizerNameSnapshot`へ保存するよう修正した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 削除ボタン、公演情報、作品情報の配置を変更。
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 親公演Draft、読み取り専用公演地、親アイキャッチ・背景の保存を追加。
+- `favorecoAPP/favorecoAPP/Views/ExperienceBasicUnitEditor.swift`: 参加情報から親タイトル・種別を分離できる表示制御を追加。
+- `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`: 公演団体とキャスト原文のDraft／保存先を分離し、背景Pickerを共用可能にした。
+- `favorecoAPP/favorecoAPP/Views/TheaterPosterFrame.swift`: 観劇記録用の`公演情報 / 作品情報`セクション定義を追加。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様、情報階層、確認状態を更新。
+
+### 影響する画面・機能
+- 観劇記録詳細、観劇記録編集、公演情報編集、親公演を共用する他の予定／記録の表示。
+- 他ジャンルの記録詳細は従来の三点メニューを維持する。
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`に成功した。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。既存のMainActor分離警告だけで、今回の変更由来の警告・エラーはない。
+- iPhone 16 Pro Simulator向けDebug全体ビルドに成功し、インストール後に`com.nori.favoreco`の起動とHomeの初期描画を確認した。
+
+### 既知のリスク・残課題
+- 実機で0件／1件／複数公演地、長い公演名・URL・SNS、キーボード表示、アイキャッチ・背景の選択と除外、保存後の他記録への反映を確認する。
+- 親情報を変更後にキャンセルした場合、ゴミ箱から削除確認をキャンセルした場合、保存時に公演地・期間・あらすじ・キャストが保持されることを確認する。
+
+## 2026-08-24: 観劇編集の面と入力枠のコントラストを調整
+
+### 変更概要・意図
+- 外側キャンバスと白いSection／入力面がほぼ同じ明度だったため、共通の暖色グレーを一段濃くした。
+- 開閉Section外周と入力欄へ強度の異なる共通ニュートラル境界色を定義し、キャンバス・Section・入力欄の3層を識別しやすくした。
+- ジャンル色を面へ広げず、保存・選択等の既存の意味色は維持した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/RecordLifecycleSheetComponents.swift`: キャンバス色、Section境界、入力境界の共通トークンを調整。
+- `favorecoAPP/favorecoAPP/Utilities/TheaterPerformanceType.swift`: 共通テキスト・選択・全幅・タグ入力へ濃い入力境界を適用。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行の配色階層と確認状態を更新。
+
+### 影響する画面・機能
+- 観劇の新規4状態、気になる公演、公演情報、予定、観劇記録、チケットスケジュールのフラット編集外観。
+- 入力値、保存、削除、親子データ反映、ジャンル色の意味には変更なし。
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`に成功した。
+- 署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した。既存のMainActor分離警告だけで、今回の変更由来の警告・エラーはない。
+
+### 既知のリスク・残課題
+- ライト／ダーク、長いフォーム、未入力／入力済み、無効状態で、線が強すぎず3層を判別できるか実機確認する。
+## 2026-08-24 公開公演情報Heroのポスターを拡大
+
+- 変更概要: 公開公演情報Heroの公演ビジュアルを`148×209pt`から`164×232pt`へ拡大し、Hero上部余白を132ptから116ptへ調整した
+- 変更意図: B判比率と金枠を保ったまま公演ビジュアルの存在感を一段上げ、タイトル以下の情報位置への影響を抑えるため
+- 主な変更ファイル: `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`、`docs/00-開発状況と残課題.md`、`favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/project-log.md`
+- 確認結果: Swift構文解析と差分検査に成功。署名なしiOS Simulator向けDebug全体ビルドにも成功した
+- 残課題: iPhone実機で公開公演情報を開き、ポスターの大きさ、上部操作との非干渉、長い種別／シリーズ／公演名の縦収まりを確認する
+
+## 2026-08-25 公開公演情報Heroのポスターを再拡大
+
+- 変更概要: 公演ビジュアルを`164×232pt`から`176×249pt`へ拡大し、Hero上部余白を`116pt`から`99pt`へ変更した
+- 変更意図: 直前より存在感を上げつつ、増えた17ptを上側で全て吸収し、ポスター下端とタイトル以下を下げないため
+- 主な変更ファイル: `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`、`docs/00-開発状況と残課題.md`、`favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/project-log.md`
+- 確認結果: Swift構文解析と差分検査に成功。署名なしiOS Simulator向けDebug全体ビルドにも成功した
+- 残課題: iPhone実機でポスターの存在感、下端位置、戻る／三点操作との非干渉、長い種別／シリーズ／公演名の縦収まりを確認する
+
+## 2026-08-25 体験済み詳細のToDo遷移ループを修正
+
+- 変更概要: 体験済み詳細の`ToDoを追加／編集`と`遠征ToDo`を、予定詳細ではなく共通チェックリスト専用シートへ接続した
+- 変更意図: Visitへ紐づくPlanの予定詳細が同じ体験記録詳細へ戻り、同一画面を重ね続ける循環遷移をなくすため
+- 主な変更ファイル: `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`、`docs/00-開発状況と残課題.md`、`favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/project-log.md`
+- 影響範囲: 共通体験詳細から開く観劇／LIVE等の準備・遠征ToDo。未来予定履歴から予定詳細を開く導線は変更なし
+- 確認結果: `git diff --check`に成功。署名なしgeneric iPhoneOS向けDebug全体ビルドに成功した
+- 残課題: iPhone実機でToDo 0件／入力済み、追加・編集・保存・閉じる、観劇／LIVE、未来予定履歴の遷移を確認する
+
+## 2026-08-25 公開公演情報からの予定・記録追加をshadcn風へ統一
+
+- 変更概要: 公開公演情報詳細の`予定を立てる`から開く観劇予定追加と、`記録を追加`から開く観劇記録追加を、共通の`TheaterLifecycleFlatScaffold`へ接続した。予定追加は既存の公演・参加日時・メモ・キャストユニット、記録追加は既存の記録ユニットをそのまま載せる
+- 変更意図: この2入口だけ残っていた旧Navigation Bar、標準Form、状態カプセルをなくし、観劇の新規・編集全体で暖色グレー背景、白い薄枠カード、フラットヘッダー、共通入力境界を揃えるため
+- 主な変更ファイル: `favorecoAPP/favorecoAPP/Views/EventDetailView.swift`、`favorecoAPP/favorecoAPP/Views/AddTicketPlanView.swift`、`favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`、`docs/project-log.md`
+- 影響範囲: 観劇の公開公演情報詳細から追加する予定と記録。保存先、親公演の引継ぎ、既存の予定／記録編集、他ジャンルの追加画面は変更なし
+- 確認結果: `git diff --check`と署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存のMainActor分離警告だけで今回由来の警告・エラーはない
+- 残課題: iPhone実機で予定／記録の両入口、初期展開、長い公演名、キーボード、保存／閉じる、ライト／ダークを確認する
+
+## 2026-08-25 観劇の思い出選択画面をshadcn風へ統一
+
+- 変更概要: `観劇の思い出を記録`を標準NavigationStack／List／Sectionから、共通フラット×ヘッダー、暖色グレー背景、白い1pt枠・8pt角丸の直接記録カードと登録済みVisitカードへ変更した
+- 変更意図: 観劇の登録・編集画面を統一した後も、この中間選択画面だけ残っていたLiquid Glass操作、大きなカプセル、Inset Grouped外観を解消するため
+- 主な変更ファイル: `favorecoAPP/favorecoAPP/Views/MainTabView.swift`、`favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`、`docs/project-log.md`
+- 影響範囲: 観劇の下部追加メニューから開く思い出選択画面。予定なしの新規記録、登録済みVisitの再編集、先頭3件と`さらに見る`の条件は変更なし
+- 確認結果: `git diff --check`と署名なしgeneric iPhoneOS向けDebug全体ビルドに成功。既存のMainActor分離警告だけで今回由来の警告・エラーはない
+- 残課題: iPhone実機で0件／1件／3件／4件以上、展開／縮小、長い公演名・会場、閉じる、ライト／ダークを確認する
+
+## 2026-08-26 観劇の公演・予定・記録詳細をフラット一覧へ統一
+
+### 変更概要・意図
+- 観劇詳細の各情報を囲っていた角丸背景・外周線・影を共通部品から外し、細いジャンル色罫線で続く一覧へ変更した。
+- 観劇記録の会場から感想までを囲っていた親枠も撤去し、情報量を維持したまま視覚上の階層を簡潔にした。
+- `この公演の鑑賞履歴`は重複見出しをやめ、大区切り直下の角丸ボタンへ集約した。ボタンに記録・予定件数を表示し、タップで同画面内へ履歴を展開する。
+- 記録詳細にチケット・座席を再配置し、費用合計もフラット面へ揃えた。同行者入力はSection名との重複を避けて内側ラベルを`名前`へ変更した。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/TheaterPosterFrame.swift`: 観劇予定・記録詳細の共通Section面をフラット罫線へ変更。
+- `favorecoAPP/favorecoAPP/Views/TheaterEventDetailComponents.swift`: 公開公演情報詳細の共通Section面をフラット罫線へ変更。
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: 記録詳細の親枠撤去、鑑賞履歴ボタン、チケット・座席、費用面を再構成。
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 費用集計に観劇用フラット表示を追加。
+- `favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`: 観劇同行者の入力ラベルを`名前`へ変更。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様と確認状態を更新。
+
+### 影響する画面・機能
+- 観劇の気になる公演／公演情報詳細、予定詳細、観劇記録詳細、観劇記録追加・編集。
+- 保存モデル、履歴件数、履歴遷移、写真・人物・感想・タグ・ToDo・チケット・費用の保存規則は変更しない。
+
+### 確認結果（実機 / ビルド）
+- `git diff --check`に成功した。
+- iOS Simulator向けDebug全体ビルドに成功した。既存のMainActor分離警告だけで、今回の変更由来の警告・エラーはない。
+
+### 既知のリスク・残課題
+- 実機で情報0件／1件／最大量、長いURL・人物名・感想、写真多数、履歴展開、予定／公演／記録の各詳細を確認する。
+- Dynamic Typeと小さい端末で、履歴ボタンの件数が圧迫しないこと、最上部・最下部が固定操作へ隠れないことを確認する。
+
+## 2026-08-26 観劇記録のToDo操作・編集外観・費用名を統一
+
+### 変更概要・意図
+- 記録詳細の`ToDoを編集`から開くチェックリストと追加・編集フォームを、標準Navigation／Formから共通のshadcn風フラット面へ変更した。
+- 記録詳細に表示したToDo行をタップすると未完了／完了を直接切り替え、Plan保存と準備期限通知の再同期を行うようにした。
+- 種類Pickerの独自ラベルを標準`Label`へ変更し、メニュー内に現れていた不明なCDアイコン行を除去した。
+- 費用合計の遠征費は合計値を維持したまま、固定の`遠征`ではなく各ToDoの保存済みタイトルで内訳表示するようにした。
+
+### 主な変更ファイル
+- `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`: チェックリストシートのフラット化、ToDo行の完了切替と保存・通知再同期。
+- `favorecoAPP/favorecoAPP/Views/PlanPreparationChecklistView.swift`: 追加・編集フォームとチェックリスト面のフラット化、種類Pickerの標準Label化。
+- `favorecoAPP/favorecoAPP/Views/PlanDetailView.swift`: 遠征費をToDoタイトル単位で表示。
+- `favorecoAPP/favorecoAPP/Utilities/PlanPreparationFields.swift`: 費用表示用の遠征ToDo配列を集計結果へ保持。
+- `favorecoAPP/favorecoAPPTests/PlanPreparationKindTests.swift`: 遠征ToDoタイトルの集計回帰テストを追加。
+- `favoreco/CLAUDE.md` / `docs/15-画面情報設計.md` / `docs/00-開発状況と残課題.md`: 現行仕様と確認状態を更新。
+
+### 影響する画面・機能
+- 観劇／LIVE等の体験済み詳細から開く準備・遠征ToDo一覧と追加・編集。
+- 観劇記録詳細のToDo完了状態、準備期限通知、費用内訳。合計算定式と保存モデルは変更しない。
+
+### 確認結果（実機 / ビルド）
+- 変更Swiftの構文解析に成功した。
+- iOS Simulator向けDebug全体ビルドに成功した。
+- 差分検査に成功した。
+- iPhone 16 Pro Simulatorで`PlanPreparationKindTests` 8件を実行し、失敗0件だった。
+
+### 既知のリスク・残課題
+- 実機でToDo 0件／1件／複数件、行タップによる完了往復、保存失敗アラート、Picker全種類、長いToDo名を確認する。
+- 同じ種類の費用付きToDoを複数登録した時に、各タイトルが個別表示され合計が変わらないことを確認する。
+
+## 2026-08-26 観劇記録詳細の情報順と編集入力を再整理
+
+- 変更概要: 観劇記録詳細を`公演情報 / 会場 / チケット・座席 / 注目キャスト / 写真・コレクション / 同行者 / 感想 / 作品情報 / 公演履歴 / 次にやること / 合計金額 / OCR・取込情報`の順へ変更し、公演情報を初期閉じにした。Hero・Section間の余白を圧縮し、区切り線と下部操作の視認性を調整した。同行者と自由感情タグは`＋`またはReturnで個別カプセル化する入力へ統一した。
+- 変更意図: 記録を開いた時に当日の主要情報を自然な順序で追え、編集時も区切り文字を意識せず複数値を登録できるようにするため。
+- 主な変更ファイル: `favorecoAPP/favorecoAPP/Views/ExperienceDetailView.swift`、`favorecoAPP/favorecoAPP/Views/TheaterPosterFrame.swift`、`favorecoAPP/favorecoAPP/Views/AddExperienceView.swift`、`favorecoAPP/favorecoAPP/Views/ExperienceEmotionTagEditor.swift`、`favorecoAPP/favorecoAPP/Utilities/TheaterPerformanceType.swift`、`favorecoAPP/favorecoAPP/Views/RecordLifecycleSheetComponents.swift`、`favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`。
+- 影響範囲: 観劇記録詳細、観劇記録追加・編集、および共通入力寸法を使う観劇の公演情報・参加日時等の入力行。保存モデルと既存値は変更しない。
+- 確認結果: `git diff --check`とiOS Simulator向けDebug全体ビルドに成功した。既存のMainActor分離警告以外に今回由来のエラーはない。
+- 残課題: 実機で初期開閉、空の注目キャスト／同行者、長文、カプセル追加・削除、Return確定、キーボード表示時、下部固定操作を確認する。
+
+## 2026-08-28 ジャンルトップ上部の文字コントラストを統一
+
+- 変更概要: 全ジャンルトップの横ナビで選択中のジャンル名と、上部3分割ティッカーの名称・数字・単位を高コントラストアクセント100%表示へ統一した。観劇はTicket Managementの`0件`と同じ明るいローズ、LIVEはティール、その他は実効ジャンル色を使う。
+- 変更意図: 観劇の暗いワイン背景上で、保存済みジャンル色と`secondary`表示が沈み、選択中ジャンルと集計値を読み取りにくかったため。同じ表示構造を持つ他ジャンルにも共通ルールを適用して再発を防ぐ。
+- 主な変更ファイル: `favorecoAPP/favorecoAPP/Views/CategoryTopPolicies.swift`、`GenreNavigationStrip.swift`、`CategoryTopSummaryComponents.swift`、`CategoryTopView.swift`、`favoreco/CLAUDE.md`、`docs/15-画面情報設計.md`、`docs/00-開発状況と残課題.md`。
+- 影響範囲: Homeから開く全ジャンルトップの選択中ジャンル表示と上部ティッカー。非選択ジャンル、件数計算、遷移、下部Sectionの色、保存データは変更しない。
+- 確認結果: 変更Swift 4ファイルの構文解析、`git diff --check`、iOS Simulator向けDebug全体ビルドに成功。既存のMainActor分離警告以外に今回由来の警告・エラーはない。
+- 残課題: 実機で観劇／LIVE／明るい背景の各ジャンル、ライト／ダーク、0件／2〜3桁件数のコントラストと縮小表示を確認する。

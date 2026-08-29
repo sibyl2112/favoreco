@@ -74,6 +74,16 @@ enum CategoryTopPresentationPolicy {
         }
     }
 
+    /// ジャンル上部の選択名・集計値に使う、背景上で判読できるアクセント色。
+    /// 観劇は保存色のワインが背景へ沈むため、チケット件数と同じ明るい操作色を使う。
+    static func highContrastAccent(templateKey: String, categoryColor: Color) -> Color {
+        switch templateKey {
+        case "theater": TheaterCategoryStyle.ticketActionRose
+        case "live": LiveCategoryStyle.teal
+        default: categoryColor
+        }
+    }
+
     static func libraryPrimaryTextColor(templateKey: String) -> Color {
         switch templateKey {
         case "theater": TheaterCategoryStyle.ivory

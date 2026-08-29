@@ -79,6 +79,7 @@ final class PlanPreparationKindTests: XCTestCase {
         let summary = ExperienceExpenseSummary.make(visit: visit, plan: plan)
 
         XCTAssertEqual(summary.travelAmount, Decimal(20_000))
+        XCTAssertEqual(summary.travelTasks.map(\.title), ["宿泊を予約", "レンタカーを予約"])
         XCTAssertEqual(summary.recordEntryAmount, Decimal(12_000))
         XCTAssertEqual(summary.total, Decimal(32_000))
         XCTAssertFalse(summary.usesLegacyFallback)

@@ -551,14 +551,12 @@ struct AddExperienceView: View {
             )
         case "companions":
             VStack(alignment: .leading, spacing: 12) {
-                ExplicitFormTextField(
-                    title: "同行者（任意）",
-                    prompt: "名前を「、」区切りで入力",
+                TicketTagInputField(
                     text: $draft.companionNamesText,
-                    axis: .vertical,
-                    minimumLines: 1,
-                    maximumLines: 3,
-                    labelStyle: .stacked
+                    title: category.templateKey == "theater" ? "名前" : "同行者",
+                    prompt: "名前を入力",
+                    showsHashPrefix: false,
+                    maximumTagCount: 20
                 )
                 if category.templateKey != "theater" {
                     ExplicitFormTextField(
@@ -823,6 +821,8 @@ struct EditExperienceView: View {
     @State private var isLoadingHeroBackground = false
     @State private var isShowingTargetEyecatchCamera = false
     @State private var isShowingTargetEyecatchCameraUnavailable = false
+    @State private var isTheaterParentInformationExpanded = true
+    @State private var isTheaterScheduleReferenceExpanded = false
 
     private var event: ExperienceEvent? {
         visit?.event ?? plan?.event
@@ -1068,8 +1068,13 @@ struct EditExperienceView: View {
                     TheaterUnifiedFormIntroduction(entry: .visitEditing)
                 }
             }
+            if usesTheaterLifecycleLayout, visit != nil {
+                theaterParentEventEditor
+            }
             stagedTheaterForm(
-                definitions: activeUnitDefinitions(for: category),
+                definitions: activeUnitDefinitions(for: category).filter {
+                    visit == nil || $0.id != "officialInfo"
+                },
                 status: editStatus(for:),
                 isExpanded: binding(for:),
                 content: editContent(for:)
@@ -1110,6 +1115,266 @@ struct EditExperienceView: View {
 
         if category?.templateKey == "goshuin" {
             GoshuinPriorVisitHistory(visits: priorGoshuinVisits)
+        }
+    }
+
+    private var theaterParentEventEditor: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    isTheaterParentInformationExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(Color(hex: "#8B2F45"))
+                        .frame(width: 4, height: 24)
+                    Text("公演情報")
+                        .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                        .foregroundStyle(.primary)
+                    TheaterLifecycleInfoButton(
+                        text: "ここでの変更は親の公演情報へ保存されます。キャンセルした場合は反映されません。"
+                    )
+                    Spacer(minLength: 8)
+                    Image(systemName: isTheaterParentInformationExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isTheaterParentInformationExpanded {
+                ExplicitFormTextField(
+                    title: "公演名（必須）",
+                    prompt: "公演・イベント名を入力",
+                    text: $draft.title,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 3,
+                    labelStyle: .stacked,
+                    inputFontSize: 17
+                )
+
+                TheaterPerformanceTypePicker(
+                    selection: $draft.subTypeKey,
+                    customName: $draft.performanceTypeCustomName,
+                    usesCompactLabelStyle: true
+                )
+
+                ExplicitFormTextField(
+                    title: "シリーズ・ツアー名（任意）",
+                    prompt: "例：冬の庭 2026",
+                    text: $draft.seriesName,
+                    labelStyle: .stacked
+                )
+                ExplicitFormTextField(
+                    title: "公演団体・主催（任意）",
+                    prompt: "劇団・制作団体・主催者",
+                    text: $draft.organizerName,
+                    axis: .vertical,
+                    minimumLines: 1,
+                    maximumLines: 3,
+                    labelStyle: .stacked
+                )
+                ExplicitFormTextField(
+                    title: "サブタイトル（任意）",
+                    prompt: "例：東京公演限定版",
+                    text: $draft.eventSubtitle,
+                    labelStyle: .stacked
+                )
+                ExplicitFormTextField(
+                    title: "公式サイト（任意）",
+                    prompt: "https://",
+                    text: $draft.officialURL,
+                    labelStyle: .stacked
+                )
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+                ExplicitFormTextField(
+                    title: "チケットサイト（任意）",
+                    prompt: "https://",
+                    text: $draft.eventTicketURL,
+                    labelStyle: .stacked
+                )
+                .textInputAutocapitalization(.never)
+                .keyboardType(.URL)
+                ExplicitFormTextField(
+                    title: "SNS（任意）",
+                    prompt: "アカウント名・URLを1行1件",
+                    text: $draft.socialLinksText,
+                    axis: .vertical,
+                    minimumLines: 2,
+                    maximumLines: 5,
+                    labelStyle: .stacked
+                )
+                .textInputAutocapitalization(.never)
+
+                theaterParentEyecatchEditor
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.16)) {
+                            isTheaterScheduleReferenceExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("会場別公演・公演期間")
+                                .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                                .foregroundStyle(.primary)
+                            Text("公演情報から編集")
+                                .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption2))
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 8)
+                            Image(systemName: isTheaterScheduleReferenceExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if isTheaterScheduleReferenceExpanded {
+                        theaterScheduleReference
+                    }
+                }
+            }
+        }
+        .theaterLifecycleDisclosureSurface(isExpanded: isTheaterParentInformationExpanded)
+    }
+
+    private var theaterParentEyecatchEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ExplicitFormFieldTitle(
+                title: "公演アイキャッチ・背景",
+                isOptional: true,
+                isRequired: false
+            )
+            HStack(alignment: .top, spacing: 14) {
+                Group {
+                    if let eventEyecatchData, let image = UIImage(data: eventEyecatchData) {
+                        Button { presentTargetEyecatchCrop(image) } label: {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Color(.secondarySystemFill)
+                            .overlay {
+                                FavorecoIcon(systemName: "photo.on.rectangle.angled", size: 25)
+                                    .foregroundStyle(Color(hex: "#8B2F45"))
+                            }
+                    }
+                }
+                .frame(width: 104, height: 146)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(spacing: 10) {
+                    PhotosPicker(selection: $selectedTargetEyecatchItem, matching: .images) {
+                        FavorecoIconLabel(
+                            eventEyecatchData == nil ? "アイキャッチを選ぶ" : "アイキャッチを変更",
+                            systemImage: "photo",
+                            iconSize: 14
+                        )
+                        .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                        .foregroundStyle(Color(hex: "#8B2F45"))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.secondary.opacity(0.24), lineWidth: 1))
+                    }
+                    .disabled(isLoadingTargetEyecatch)
+
+                    if eventEyecatchData != nil {
+                        Button {
+                            eventEyecatchData = nil
+                        } label: {
+                            FavorecoIconLabel("アイキャッチを外す", systemImage: "trash", iconSize: 13)
+                                .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                                .foregroundStyle(Color(hex: "#8B2F45"))
+                                .frame(maxWidth: .infinity, minHeight: 40)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            EventHeroBackgroundPicker(
+                categoryKey: "theater",
+                selection: $draft.eventHeroBackgroundPresetKey,
+                eyecatchData: eventEyecatchData,
+                title: "背景"
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var theaterScheduleReference: some View {
+        let fields = VisitUnitFields(rawValue: event?.unitFieldsRaw ?? "")
+        if fields.eventVenues.isEmpty {
+            if fields.eventPeriodStartsAt == nil, fields.eventPeriodEndsAt == nil {
+                Text("会場別公演・公演期間は未登録です。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                theaterScheduleReferenceRow(
+                    title: "公演期間",
+                    startsAt: fields.eventPeriodStartsAt,
+                    endsAt: fields.eventPeriodEndsAt
+                )
+            }
+        } else {
+            ForEach(fields.eventVenues) { venue in
+                theaterScheduleReferenceRow(
+                    title: venue.trimmedPerformanceLabel.isEmpty
+                        ? (venue.trimmedName.isEmpty ? "会場別公演" : venue.trimmedName)
+                        : venue.trimmedPerformanceLabel,
+                    subtitle: venue.trimmedPerformanceLabel.isEmpty ? nil : venue.trimmedName,
+                    startsAt: venue.startsAt,
+                    endsAt: venue.endsAt
+                )
+            }
+        }
+        Text("東京公演・大阪公演などの公演地と期間は、親の公演情報画面で編集できます。")
+            .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func theaterScheduleReferenceRow(
+        title: String,
+        subtitle: String? = nil,
+        startsAt: Date?,
+        endsAt: Date?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(FavorecoTypography.bodyStrong)
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text(theaterSchedulePeriodText(startsAt: startsAt, endsAt: endsAt))
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func theaterSchedulePeriodText(startsAt: Date?, endsAt: Date?) -> String {
+        let startText = startsAt?.formatted(.dateTime.year().month().day())
+        let endText = endsAt?.formatted(.dateTime.year().month().day())
+        switch (startText, endText) {
+        case let (start?, end?) where start != end: return "\(start)〜\(end)"
+        case let (start?, _): return start
+        case let (_, end?): return end
+        default: return "期間未設定"
         }
     }
 
@@ -1605,6 +1870,7 @@ struct EditExperienceView: View {
                         showsRating: false,
                         categoryTemplateKey: category?.templateKey ?? "",
                         usesLifecycleEditLayout: true,
+                        showsTargetFields: !(usesTheaterLifecycleLayout && visit != nil),
                         subTypeKey: $draft.subTypeKey,
                         screenWorkSeasonNumber: $draft.screenWorkSeasonNumber,
                         performanceTypeCustomName: $draft.performanceTypeCustomName,
@@ -1659,7 +1925,7 @@ struct EditExperienceView: View {
                         categoryTemplateKey: categoryTemplateKey
                     )
                 }
-                if category?.templateKey == "theater" {
+                if category?.templateKey == "theater", !(usesTheaterLifecycleLayout && visit != nil) {
                     Divider()
                     PhotoUnitEditor(
                         existingPhotos: visibleExistingPhotos,
@@ -1763,14 +2029,12 @@ struct EditExperienceView: View {
             )
         case "companions":
             VStack(alignment: .leading, spacing: 12) {
-                ExplicitFormTextField(
-                    title: "同行者（任意）",
-                    prompt: "名前を「、」区切りで入力",
+                TicketTagInputField(
                     text: $draft.companionNamesText,
-                    axis: .vertical,
-                    minimumLines: 1,
-                    maximumLines: 3,
-                    labelStyle: .stacked
+                    title: isTheaterVisit ? "名前" : "同行者",
+                    prompt: "名前を入力",
+                    showsHashPrefix: false,
+                    maximumTagCount: 20
                 )
                 if !isTheaterVisit {
                     ExplicitFormTextField(
@@ -1882,7 +2146,8 @@ struct EditExperienceView: View {
             && visit.longitude == draft.longitude
         let existingUnitFields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
 
-        let didChangeEventEyecatch = !isPerformanceVisit && event?.eyecatchData != eventEyecatchData
+        let editsParentEyecatch = !isPerformanceVisit || isTheaterVisit
+        let didChangeEventEyecatch = editsParentEyecatch && event?.eyecatchData != eventEyecatchData
         if let event {
             applyTargetChangesFromExperienceEdit(
                 to: event,
@@ -1890,7 +2155,7 @@ struct EditExperienceView: View {
                 categories: categories,
                 at: now
             )
-            if !isPerformanceVisit {
+            if editsParentEyecatch {
                 event.eyecatchData = eventEyecatchData
             }
         }
@@ -3046,10 +3311,13 @@ struct AddExperienceDraft {
     var screenWorkSeasonNumber: Int = 0
     var performanceTypeCustomName: String = ""
     var officialURL: String = ""
+    var organizerName: String = ""
+    var eventTicketURL: String = ""
     var socialLinksText: String = ""
     var companionNamesText: String = ""
     var companionSocialLinksText: String = ""
     var eventSubtitle: String = ""
+    var eventHeroBackgroundPresetKey: String = ""
     var visitSubtitle: String = ""
     var theaterCreditsText: String = ""
     var visitedAt: Date = Date()
@@ -3086,7 +3354,9 @@ struct AddExperienceDraft {
         seriesName = visit.event?.seriesName ?? ""
         subTypeKey = visit.event?.subTypeKey ?? ""
         officialURL = visit.event?.officialURL ?? ""
+        organizerName = visit.event?.organizerNameSnapshot ?? ""
         let eventFields = VisitUnitFields(rawValue: visit.event?.unitFieldsRaw ?? "")
+        eventTicketURL = eventFields.eventTicketURL
         bookSeriesName = eventFields.bookSeriesName
         bookVolumeNumber = eventFields.bookVolumeNumber
         bookAuthorName = eventFields.bookAuthorName
@@ -3107,6 +3377,7 @@ struct AddExperienceDraft {
         performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
         socialLinksText = eventFields.socialLinks.joined(separator: "\n")
         eventSubtitle = eventFields.eventSubtitle
+        eventHeroBackgroundPresetKey = eventFields.heroBackgroundPresetKey
         theaterCreditsText = eventFields.eventCreditsText
         visitedAt = visit.visitedAt
         endedAt = visit.endedAt
@@ -3165,6 +3436,7 @@ struct AddExperienceDraft {
         seriesName = event?.seriesName ?? ""
         subTypeKey = event?.subTypeKey ?? ""
         officialURL = plan.officialURL.isEmpty ? event?.officialURL ?? "" : plan.officialURL
+        organizerName = event?.organizerNameSnapshot ?? ""
         bookSeriesName = eventFields.bookSeriesName
         bookVolumeNumber = eventFields.bookVolumeNumber
         bookAuthorName = eventFields.bookAuthorName
@@ -3179,7 +3451,9 @@ struct AddExperienceDraft {
         screenWorkSeasonNumber = eventFields.screenWorkSeasonNumber
         performanceTypeCustomName = eventFields.eventPerformanceTypeCustomName
         socialLinksText = eventFields.socialLinks.joined(separator: "\n")
+        eventTicketURL = eventFields.eventTicketURL
         eventSubtitle = eventFields.eventSubtitle
+        eventHeroBackgroundPresetKey = eventFields.heroBackgroundPresetKey
         visitSubtitle = plan.subtitle
         theaterCreditsText = eventFields.eventCreditsText
         visitedAt = plan.startsAt
@@ -3258,6 +3532,14 @@ struct AddExperienceDraft {
 
     var trimmedOfficialURL: String {
         officialURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedOrganizerName: String {
+        organizerName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedEventTicketURL: String {
+        eventTicketURL.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var trimmedEventSubtitle: String {
@@ -3507,8 +3789,28 @@ func applyTargetChangesFromExperienceEdit(
     categories: [RecordCategory],
     at now: Date
 ) {
-    if ["theater", "live"].contains(event.category?.templateKey ?? "") {
-        // 回別の記録編集から親へ反映するのは、画面で明示的に編集できる名称だけに限定する。
+    if event.category?.templateKey == "theater" {
+        // 観劇記録編集では親公演の公開情報をドラフトで保持し、保存時にだけまとめて反映する。
+        event.title = draft.trimmedTitle
+        event.seriesName = draft.trimmedSeriesName
+        event.subTypeKey = draft.subTypeKey
+        event.organizerNameSnapshot = draft.trimmedOrganizerName
+        event.officialURL = draft.trimmedOfficialURL
+        var eventFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        eventFields.socialLinks = draft.normalizedSocialLinks
+        eventFields.eventSubtitle = draft.trimmedEventSubtitle
+        eventFields.eventTicketURL = draft.trimmedEventTicketURL
+        eventFields.heroBackgroundPresetKey = draft.eventHeroBackgroundPresetKey
+        eventFields.eventPerformanceTypeCustomName = TheaterPerformanceType.customNameForStorage(
+            key: draft.subTypeKey,
+            input: draft.performanceTypeCustomName
+        )
+        event.unitFieldsRaw = eventFields.encodedRawValue
+        event.updatedAt = now
+        return
+    }
+
+    if event.category?.templateKey == "live" {
         event.title = draft.trimmedTitle
         event.seriesName = draft.trimmedSeriesName
         event.updatedAt = now

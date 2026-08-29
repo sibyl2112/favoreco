@@ -16,6 +16,27 @@ final class TheaterPerformanceScheduleTests: XCTestCase {
         XCTAssertNil(entry.performanceLabel)
         XCTAssertNil(entry.startsAt)
         XCTAssertNil(entry.endsAt)
+        XCTAssertNil(entry.latitude)
+        XCTAssertNil(entry.longitude)
+        XCTAssertNil(entry.externalMapURL)
+    }
+
+    func testVenueCoordinateAndSharedMapURLRoundTrip() throws {
+        let original = EventVenueEntry(
+            name: "ビストロおむすび目黒",
+            address: "東京都目黒区下目黒1丁目5-21",
+            latitude: 35.63431,
+            longitude: 139.71240,
+            externalMapURL: "https://maps.app.goo.gl/example"
+        )
+
+        let data = try JSONEncoder().encode(original)
+        let restored = try JSONDecoder().decode(EventVenueEntry.self, from: data)
+
+        XCTAssertEqual(restored.latitude, 35.63431)
+        XCTAssertEqual(restored.longitude, 139.71240)
+        XCTAssertEqual(restored.externalMapURL, "https://maps.app.goo.gl/example")
+        XCTAssertTrue(restored.hasCoordinate)
     }
 
     func testScheduleBuildsHeroSummaryAndOverallPeriodFromPerformancePlaces() {

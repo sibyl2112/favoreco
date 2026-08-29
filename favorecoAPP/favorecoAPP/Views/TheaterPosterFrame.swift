@@ -150,7 +150,11 @@ enum TheaterDetailSectionKind {
     case planMemo
     case expense
     case eventInformation
+    case performanceInformation
+    case workInformation
     case cast
+    case focusCast
+    case companions
     case review
     case photos
     case ocr
@@ -165,10 +169,14 @@ enum TheaterDetailSectionKind {
         case .planMemo: "予定メモ"
         case .expense: "費用"
         case .eventInformation: "作品・公演情報"
+        case .performanceInformation: "公演情報"
+        case .workInformation: "作品情報"
         case .cast: "キャスト・スタッフ"
+        case .focusCast: "注目キャスト"
+        case .companions: "同行者"
         case .review: "感想"
         case .photos: "写真・コレクション"
-        case .ocr: "OCR・取込結果"
+        case .ocr: "OCR・取込情報"
         }
     }
 
@@ -182,7 +190,11 @@ enum TheaterDetailSectionKind {
         case .planMemo: "note.text"
         case .expense: "yensign.circle"
         case .eventInformation: "theatermasks"
+        case .performanceInformation: "building.2"
+        case .workInformation: "theatermasks"
         case .cast: "person.3"
+        case .focusCast: "person.crop.circle.badge.checkmark"
+        case .companions: "person.2"
         case .review: "heart.text.square"
         case .photos: "photo.on.rectangle.angled"
         case .ocr: "doc.text.viewfinder"
@@ -195,9 +207,40 @@ enum TheaterDetailSectionStyle {
         FavorecoTypography.jpSans(16, weight: .semibold, relativeTo: .headline)
     }
 
-    static let iconSize: CGFloat = 20
+    static let iconSize: CGFloat = 19
+    static let iconFrameSize: CGFloat = 24
     static let contentPadding: CGFloat = 16
     static let cornerRadius: CGFloat = 12
+}
+
+/// 観劇詳細の見出しで、字形ごとの見かけの大きさと線幅を揃えるアイコン。
+/// 公演情報を基準にSF SymbolsのMediumと24pt固定枠を使う。
+struct TheaterDetailHeaderIcon: View {
+    let systemName: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: TheaterDetailSectionStyle.iconSize, weight: .medium))
+            .frame(
+                width: TheaterDetailSectionStyle.iconFrameSize,
+                height: TheaterDetailSectionStyle.iconFrameSize
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+struct TheaterDetailIconLabel: View {
+    let title: String
+    let systemImage: String
+    var spacing: CGFloat = 8
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            TheaterDetailHeaderIcon(systemName: systemImage)
+            Text(title)
+        }
+        .accessibilityElement(children: .combine)
+    }
 }
 
 /// 観劇予定・観劇記録で共有する開閉見出し。
@@ -226,10 +269,9 @@ struct TheaterDetailDisclosureHeader: View {
             }
         } label: {
             HStack(spacing: 8) {
-                FavorecoIconLabel(
-                    section.title,
-                    systemImage: section.systemImage,
-                    iconSize: TheaterDetailSectionStyle.iconSize
+                TheaterDetailIconLabel(
+                    title: section.title,
+                    systemImage: section.systemImage
                 )
                     .font(TheaterDetailSectionStyle.titleFont)
                 if let countText, !countText.isEmpty {
@@ -253,37 +295,30 @@ struct TheaterDetailDisclosureHeader: View {
 
 private struct TheaterDetailSectionCardModifier: ViewModifier {
     let tint: Color
+    let showsBottomDivider: Bool
 
     func body(content: Content) -> some View {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(TheaterDetailSectionStyle.contentPadding)
-            .background(
-                LinearGradient(
-                    colors: [Color.black.opacity(0.28), tint.opacity(0.055)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(
-                    cornerRadius: TheaterDetailSectionStyle.cornerRadius,
-                    style: .continuous
-                )
-            )
-            .overlay {
-                RoundedRectangle(
-                    cornerRadius: TheaterDetailSectionStyle.cornerRadius,
-                    style: .continuous
-                )
-                    .stroke(
-                        tint.opacity(0.42),
-                        lineWidth: CategoryDetailChrome.borderLineWidth
-                    )
+            .padding(.horizontal, 4)
+            .padding(.vertical, TheaterDetailSectionStyle.contentPadding)
+            .overlay(alignment: .bottom) {
+                if showsBottomDivider {
+                    Rectangle()
+                        .fill(tint.opacity(0.42))
+                        .frame(height: CategoryDetailChrome.borderLineWidth)
+                }
             }
     }
 }
 
 extension View {
-    func theaterDetailSectionCard(tint: Color) -> some View {
-        modifier(TheaterDetailSectionCardModifier(tint: tint))
+    func theaterDetailSectionCard(tint: Color, showsBottomDivider: Bool = true) -> some View {
+        modifier(
+            TheaterDetailSectionCardModifier(
+                tint: tint,
+                showsBottomDivider: showsBottomDivider
+            )
+        )
     }
 }

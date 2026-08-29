@@ -17,11 +17,25 @@ enum TheaterLifecycleFlatStyle {
     static let fieldCornerRadius: CGFloat = 6
     static let actionCornerRadius: CGFloat = 8
     static let fieldBackground = Color(uiColor: .systemBackground)
+    static let fieldBorder = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(white: 1, alpha: 0.30)
+                : UIColor(red: 0.63, green: 0.57, blue: 0.59, alpha: 0.42)
+        }
+    )
+    static let sectionBorder = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(white: 1, alpha: 0.22)
+                : UIColor(red: 0.63, green: 0.57, blue: 0.59, alpha: 0.34)
+        }
+    )
     static let canvasBackground = Color(
         uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark
                 ? UIColor.secondarySystemBackground
-                : UIColor(red: 0.975, green: 0.963, blue: 0.967, alpha: 1)
+                : UIColor(red: 0.949, green: 0.933, blue: 0.938, alpha: 1)
         }
     )
 }
@@ -79,7 +93,10 @@ private struct TheaterLifecycleDisclosureSurface: ViewModifier {
                     cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius,
                     style: .continuous
                 )
-                .stroke(Color.secondary.opacity(isExpanded ? 0.16 : 0.22), lineWidth: 1)
+                .stroke(
+                    TheaterLifecycleFlatStyle.sectionBorder.opacity(isExpanded ? 0.82 : 1),
+                    lineWidth: 1
+                )
             }
     }
 }
@@ -213,7 +230,7 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
             .background(TheaterLifecycleFlatStyle.fieldBackground)
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 22) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     content
                 }
                 .padding(.horizontal, 20)
@@ -358,7 +375,7 @@ struct StagedRecordBlock<Content: View>: View {
     var body: some View {
         Group {
             if usesFlatLayout {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     blockHeader
                     if isGroupExpanded {
                         expandedBlockContents
@@ -421,13 +438,13 @@ struct StagedRecordBlock<Content: View>: View {
     private var expandedBlockContents: some View {
         if isGroupExpanded {
             ForEach(Array(units.enumerated()), id: \.element.id) { index, unit in
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     if units.count > 1 {
                         unitHeading(unit)
                     }
 
                     content(unit)
-                        .padding(.bottom, 4)
+                        .padding(.bottom, 2)
 
                     if index < units.count - 1 {
                         Divider()

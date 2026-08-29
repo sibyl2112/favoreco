@@ -54,13 +54,13 @@ struct CategoryTickerStrip: View {
     private func metricText(_ metric: CategoryTickerMetric) -> Text {
         Text(metric.title + " ")
             .font(FavorecoTypography.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(tint)
         + Text(metric.value)
             .font(FavorecoTypography.latinDisplay(21, weight: .medium, relativeTo: .title3))
-            .foregroundStyle(tint.opacity(0.92))
+            .foregroundStyle(tint)
         + Text(" " + metric.unit)
             .font(FavorecoTypography.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(tint)
     }
 
     private var divider: some View {

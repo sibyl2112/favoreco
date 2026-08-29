@@ -58,6 +58,12 @@ struct EventVenueEntry: Codable, Identifiable, Equatable {
     var performanceLabel: String?
     var startsAt: Date?
     var endsAt: Date?
+    /// Appleのジオコード結果または利用者が地図上で指定した位置。
+    /// Optionalにして既存JSONを後方互換で読み込む。
+    var latitude: Double?
+    var longitude: Double?
+    /// Google Maps / Apple Mapsの利用者共有リンク。位置情報の参照元として保持する。
+    var externalMapURL: String?
 
     var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -73,6 +79,11 @@ struct EventVenueEntry: Codable, Identifiable, Equatable {
 
     var isEmpty: Bool {
         trimmedName.isEmpty && trimmedAddress.isEmpty
+    }
+
+    var hasCoordinate: Bool {
+        guard let latitude, let longitude else { return false }
+        return latitude != 0 || longitude != 0
     }
 }
 

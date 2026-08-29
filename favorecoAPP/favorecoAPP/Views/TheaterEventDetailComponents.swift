@@ -106,7 +106,6 @@ struct TheaterEventPeopleSection: View {
                 Group {
                     if creditsText.isEmpty && castLinks.isEmpty && staffLinks.isEmpty {
                         TheaterEventEmptyRow(
-                            systemImage: "person.3",
                             message: "キャスト・スタッフはまだ登録されていません。"
                         )
                     } else {
@@ -233,7 +232,6 @@ struct TheaterEventParticipationHistorySection: View {
 
             if visits.isEmpty {
                 TheaterEventEmptyRow(
-                    systemImage: "calendar.badge.plus",
                     message: "この公演の観劇記録はまだありません。"
                 )
             } else {
@@ -642,9 +640,7 @@ private struct TheaterEventSectionHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            FavorecoIcon(systemName: systemImage, size: 17, fallbackWeight: .medium)
-                .foregroundStyle(theaterSectionGold)
-                .frame(width: 22)
+            TheaterEventSectionIcon(systemName: systemImage, tint: theaterSectionGold)
             Text(title)
                 .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                 .foregroundStyle(Color(red: 0.96, green: 0.93, blue: 0.88))
@@ -676,9 +672,7 @@ private struct TheaterEventCollapsibleHeader: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                FavorecoIcon(systemName: systemImage, size: 17, fallbackWeight: .medium)
-                    .foregroundStyle(theaterSectionGold)
-                    .frame(width: 22)
+                TheaterEventSectionIcon(systemName: systemImage, tint: theaterSectionGold)
                 Text(title)
                     .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                     .foregroundStyle(Color(red: 0.96, green: 0.93, blue: 0.88))
@@ -710,20 +704,25 @@ private struct TheaterEventCollapsibleHeader: View {
 }
 
 private struct TheaterEventEmptyRow: View {
-    let systemImage: String
     let message: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            FavorecoIcon(systemName: systemImage, size: 20)
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
-            Text(message)
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Text(message)
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct TheaterEventSectionIcon: View {
+    let systemName: String
+    let tint: Color
+
+    var body: some View {
+        FavorecoIcon(systemName: systemName, size: 19, fallbackWeight: .medium)
+            .foregroundStyle(tint)
+            .frame(width: 24, height: 24)
     }
 }
 
@@ -737,25 +736,12 @@ private func personName(for link: EventPersonLink, fallback: String) -> String {
 extension View {
     func theaterEventCard(accentColor: Color) -> some View {
         self
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.16, green: 0.012, blue: 0.035).opacity(0.92),
-                        Color.black.opacity(0.76)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(
-                        accentColor.opacity(0.62),
-                        lineWidth: CategoryDetailChrome.borderLineWidth
-                    )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(accentColor.opacity(0.42))
+                    .frame(height: CategoryDetailChrome.borderLineWidth)
             }
-            .shadow(color: .black.opacity(0.22), radius: 6, y: 3)
     }
 }
 

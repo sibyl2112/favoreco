@@ -1,12 +1,12 @@
 import SwiftUI
 
 enum ExplicitFormMetrics {
-    static let rowMinimumHeight: CGFloat = 54
-    static let labelFontSize: CGFloat = 14
+    static let rowMinimumHeight: CGFloat = 50
+    static let labelFontSize: CGFloat = 15
     static let inputFontSize: CGFloat = 16
     static let dateControlScale: CGFloat = 15.0 / 17.0
-    static let rowTopPadding: CGFloat = 6
-    static let rowBottomPadding: CGFloat = 6
+    static let rowTopPadding: CGFloat = 4
+    static let rowBottomPadding: CGFloat = 4
     static let controlTrailingPadding: CGFloat = 4
     static let rowSeparatorColor = Color.secondary.opacity(0.18)
 
@@ -549,7 +549,7 @@ struct ExplicitFormTextField: View {
                             cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
                             style: .continuous
                         )
-                            .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                     }
             }
         }
@@ -678,7 +678,7 @@ struct ExplicitFormControlRow<Control: View>: View {
                         cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
                         style: .continuous
                     )
-                    .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                    .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                 }
             }
         }
@@ -725,7 +725,7 @@ struct ExplicitFormFullWidthControlRow<Control: View>: View {
                                 cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
                                 style: .continuous
                             )
-                            .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                         }
                     }
                 }
@@ -840,13 +840,31 @@ struct TicketTagInputField: View {
     @Environment(\.usesTheaterLifecycleFlatLayout) private var usesTheaterLifecycleFlatLayout
     @Binding var text: String
     let usesFlatPresentation: Bool
+    let title: String
+    let prompt: String
+    let showsHashPrefix: Bool
+    let hiddenTags: Set<String>
+    let maximumTagCount: Int
     @State private var committedTags: [String]
     @State private var pendingTag = ""
     @FocusState private var isInputFocused: Bool
 
-    init(text: Binding<String>, usesFlatPresentation: Bool = false) {
+    init(
+        text: Binding<String>,
+        usesFlatPresentation: Bool = false,
+        title: String = "タグ",
+        prompt: String = "タグを入力",
+        showsHashPrefix: Bool = true,
+        hiddenTags: Set<String> = [],
+        maximumTagCount: Int = 12
+    ) {
         _text = text
         self.usesFlatPresentation = usesFlatPresentation
+        self.title = title
+        self.prompt = prompt
+        self.showsHashPrefix = showsHashPrefix
+        self.hiddenTags = hiddenTags
+        self.maximumTagCount = maximumTagCount
         _committedTags = State(
             initialValue: TicketAttemptUnitFields.normalizedTagNames(from: text.wrappedValue)
         )
@@ -860,25 +878,29 @@ struct TicketTagInputField: View {
         committedTags
     }
 
+    private var visibleTags: [String] {
+        tags.filter { !hiddenTags.contains($0) }
+    }
+
     private var canAddAnotherTag: Bool {
-        tags.count < 12
+        tags.count < maximumTagCount
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if displaysFlatPresentation {
-                ExplicitFormFieldTitle(title: "タグ", isOptional: true, isRequired: false)
+                ExplicitFormFieldTitle(title: title, isOptional: true, isRequired: false)
             } else {
                 ExplicitFormProminentInlineLabel(
-                    title: "タグ",
+                    title: title,
                     isOptional: true,
                     isRequired: false
                 )
             }
 
-            if !tags.isEmpty {
+            if !visibleTags.isEmpty {
                 TicketTagCapsuleLayout(horizontalSpacing: 6, verticalSpacing: 6) {
-                    ForEach(tags, id: \.self) { tag in
+                    ForEach(visibleTags, id: \.self) { tag in
                         tagCapsule(tag)
                     }
                 }
@@ -887,9 +909,9 @@ struct TicketTagInputField: View {
 
             HStack(spacing: 8) {
                 TextField(
-                    "タグ",
+                    title,
                     text: $pendingTag,
-                    prompt: Text(canAddAnotherTag ? "タグを入力" : "最大12件まで")
+                    prompt: Text(canAddAnotherTag ? prompt : "最大\(maximumTagCount)件まで")
                         .foregroundStyle(Color.secondary.opacity(0.7))
                 )
                 .font(
@@ -943,7 +965,7 @@ struct TicketTagInputField: View {
                         cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
                         style: .continuous
                     )
-                    .stroke(Color.secondary.opacity(0.28), lineWidth: 1)
+                    .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                 }
             }
         }
@@ -969,7 +991,7 @@ struct TicketTagInputField: View {
 
     private func tagCapsule(_ tag: String) -> some View {
         HStack(spacing: 3) {
-            Text("#\(tag)")
+            Text(showsHashPrefix ? "#\(tag)" : tag)
                 .font(FavorecoTypography.jpSans(13, weight: .medium, relativeTo: .subheadline))
                 .lineLimit(1)
                 .truncationMode(.tail)

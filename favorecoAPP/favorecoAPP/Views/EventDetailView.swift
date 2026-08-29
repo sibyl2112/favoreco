@@ -39,7 +39,7 @@ struct TheaterPublicLink: Identifiable {
     let url: URL
 }
 
-private struct EventHeroBackgroundPicker: View {
+struct EventHeroBackgroundPicker: View {
     let categoryKey: String
     @Binding var selection: String
     var eyecatchData: Data? = nil
@@ -338,7 +338,10 @@ struct EventDetailView: View {
                 if category?.templateKey == "random_goods" {
                     CollectibleTransactionEditorView(series: event)
                 } else {
-                    AddVisitView(event: event)
+                    AddVisitView(
+                        event: event,
+                        usesTheaterLifecycleLayout: category?.templateKey == "theater"
+                    )
                 }
             }
             .favorecoRegistrationTheme(categoryHex: category?.colorHex)
@@ -566,7 +569,7 @@ struct EventDetailView: View {
     ) -> some View {
         let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
         return VStack(spacing: 9) {
-            Spacer().frame(height: 132)
+            Spacer().frame(height: 99)
 
             Text("公演情報")
                 .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
@@ -716,7 +719,7 @@ struct EventDetailView: View {
                     .frame(width: size.width, height: size.height)
             }
         }
-        .frame(width: 148, height: 209)
+        .frame(width: 176, height: 249)
         .theaterPosterFrame(tint: theaterGold)
         .id(event.updatedAt)
         .contentShape(Rectangle())
@@ -1538,7 +1541,7 @@ struct EditEventView: View {
                 text: $draft.seriesName,
                 info: "同じ作品の連続公演・再演・ツアーをまとめる名前です。"
             )
-            lifecycleTextField("公演団体", prompt: "劇団・制作団体・主催者", text: $draft.creditsText)
+            lifecycleTextField("公演団体・主催", prompt: "劇団・制作団体・主催者", text: $draft.organizerName)
             lifecycleTextField("サブタイトル", prompt: "東京公演限定版", text: $draft.eventSubtitle)
             lifecycleTextField("公式サイト", prompt: "https://", text: $draft.officialURL)
                 .textInputAutocapitalization(.never)
@@ -1986,7 +1989,7 @@ struct EditEventView: View {
                             ExplicitFormTextField(
                                 title: isLiveEvent ? "アーティスト（任意）" : "主催（任意）",
                                 prompt: isLiveEvent ? "出演アーティスト名" : "主催・制作団体",
-                                text: $draft.creditsText,
+                                text: $draft.organizerName,
                                 axis: .vertical,
                                 minimumLines: 1,
                                 maximumLines: 3,
@@ -2398,6 +2401,7 @@ struct EditEventView: View {
             event.subTypeKey = ScreenWorkType.resolved(from: draft.subTypeKey).rawValue
         }
         event.officialURL = draft.trimmedOfficialURL
+        event.organizerNameSnapshot = draft.trimmedOrganizerName
         var unitFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
         unitFields.socialLinks = draft.normalizedSocialLinks
         unitFields.eventSubtitle = draft.trimmedEventSubtitle
@@ -2518,6 +2522,7 @@ private struct EventDraft {
     var socialLinksText: String
     var usesPlatformSocialLinks: Bool
     var eventSubtitle: String
+    var organizerName: String
     var creditsText: String
     var memo: String
     var importMemo: String
@@ -2565,6 +2570,7 @@ private struct EventDraft {
         socialLinksText = fields.socialLinks.joined(separator: "\n")
         usesPlatformSocialLinks = ["theater", "live"].contains(event.category?.templateKey ?? "")
         eventSubtitle = fields.eventSubtitle
+        organizerName = event.organizerNameSnapshot
         creditsText = fields.eventCreditsText
         memo = event.memo
         importMemo = event.importMemo
@@ -2646,6 +2652,10 @@ private struct EventDraft {
         creditsText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var trimmedOrganizerName: String {
+        organizerName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var normalizedSocialLinks: [String] {
         let source = usesPlatformSocialLinks
             ? otherSocialLinks + [xURL, instagramURL, threadsURL]
@@ -2671,7 +2681,10 @@ private struct EventDraft {
                 address: entry.trimmedAddress,
                 performanceLabel: entry.trimmedPerformanceLabel.isEmpty ? nil : entry.trimmedPerformanceLabel,
                 startsAt: entry.startsAt,
-                endsAt: entry.startsAt.map { max(entry.endsAt ?? $0, $0) }
+                endsAt: entry.startsAt.map { max(entry.endsAt ?? $0, $0) },
+                latitude: entry.latitude,
+                longitude: entry.longitude,
+                externalMapURL: entry.externalMapURL
             )
             return normalized.isEmpty ? nil : normalized
         }

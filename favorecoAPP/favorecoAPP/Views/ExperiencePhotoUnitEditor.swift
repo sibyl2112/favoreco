@@ -177,22 +177,19 @@ struct PhotoUnitEditor: View {
         }
         .sheet(item: $editingTarget) { target in
             NavigationStack {
-                metadataEditor(for: target)
-                    .navigationTitle("写真の情報")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .bottomBar) {
-                            Button(role: .destructive) {
-                                deletionTarget = target
-                            } label: {
-                                FavorecoIconLabel("この写真を削除", systemImage: "trash", iconSize: 15)
-                            }
-                        }
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("完了") { editingTarget = nil }
-                        }
-                    }
+                VStack(spacing: 0) {
+                    PhotoMetadataSheetHeader(
+                        leadingTitle: nil,
+                        trailingTitle: "完了",
+                        onLeading: {},
+                        onTrailing: { editingTarget = nil }
+                    )
+
+                    metadataEditor(for: target)
+                }
+                .toolbar(.hidden, for: .navigationBar)
             }
+            .preferredColorScheme(.light)
             .confirmationDialog(
                 "この写真を削除しますか？",
                 isPresented: Binding(
@@ -916,7 +913,8 @@ struct PhotoUnitEditor: View {
                 PhotoMetadataEditor(
                     metadata: existingMetadataBinding(for: photo),
                     imageData: photo.data,
-                    allowsBenefits: allowsBenefitPhotos
+                    allowsBenefits: allowsBenefitPhotos,
+                    onDelete: { deletionTarget = target }
                 )
             } else {
                 FavorecoContentUnavailableView("写真が見つかりません", systemImage: "photo")
@@ -937,7 +935,8 @@ struct PhotoUnitEditor: View {
                         }
                     ),
                     imageData: pendingPhotos[index].data,
-                    allowsBenefits: allowsBenefitPhotos
+                    allowsBenefits: allowsBenefitPhotos,
+                    onDelete: { deletionTarget = target }
                 )
             } else {
                 FavorecoContentUnavailableView("写真が見つかりません", systemImage: "photo")
@@ -1092,107 +1091,191 @@ private struct PhotoGridItem: Identifiable {
 }
 
 struct PhotoMetadataEditor: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
     @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
     @Binding var metadata: PhotoMetadataDraft
     let imageData: Data
     let allowsBenefits: Bool
+    var onDelete: (() -> Void)? = nil
     @State private var isRecognizing = false
     @State private var isOCRSectionExpanded = false
     @State private var statusText = ""
     @State private var suggestions: [OCRImportSuggestion] = []
 
     var body: some View {
-        Form {
-            Section("分類") {
-                if allowsBenefits {
-                    Picker("写真の種類", selection: $metadata.purpose) {
-                        ForEach(ExperiencePhotoPurpose.allCases) { purpose in
-                            Text(purpose.title).tag(purpose)
-                        }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 18) {
+                metadataSection(title: "分類", footer: purposeDescription) {
+                    HStack(spacing: 12) {
+                        Text("写真の種類")
+                            .font(FavorecoTypography.bodyStrong)
+                        Spacer(minLength: 8)
+                        purposePicker
                     }
-                    .pickerStyle(.menu)
-                } else {
-                    Picker("写真の種類", selection: $metadata.purpose) {
-                        ForEach(ExperiencePhotoPurpose.allCases.filter { $0 != .benefit }) { purpose in
-                            Text(purpose.title).tag(purpose)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                    .frame(minHeight: 44)
                 }
 
-                Text(purposeDescription)
-                    .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
-                    .foregroundStyle(.secondary)
-            }
+                metadataSection(title: "キャプション") {
+                    TextField(
+                        "写真に写っているものや、その時のひとこと",
+                        text: $metadata.caption,
+                        axis: .vertical
+                    )
+                    .lineLimit(2...4)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(inputSurface)
+                }
 
-            Section("キャプション") {
-                TextField(
-                    "写真に写っているものや、その時のひとこと",
-                    text: $metadata.caption,
-                    axis: .vertical
-                )
-                .lineLimit(2...4)
-            }
+                if !metadata.purpose.isGalleryPhoto {
+                    metadataSection(title: "文字読み取り（任意）") {
+                        DisclosureGroup(isExpanded: $isOCRSectionExpanded) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Button {
+                                    recognizeText()
+                                } label: {
+                                    Label(
+                                        isRecognizing ? "読み取り中" : "この写真から文字を読み取る",
+                                        systemImage: "text.viewfinder"
+                                    )
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(themePalette.globalTint)
+                                .disabled(isRecognizing || !usesOCRImportAssist)
 
-            if !metadata.purpose.isGalleryPhoto {
-                Section {
-                    DisclosureGroup(isExpanded: $isOCRSectionExpanded) {
-                        Button {
-                            recognizeText()
-                        } label: {
-                            Label(
-                                isRecognizing ? "読み取り中" : "この写真から文字を読み取る",
-                                systemImage: "text.viewfinder"
-                            )
-                        }
-                        .disabled(isRecognizing || !usesOCRImportAssist)
+                                if !usesOCRImportAssist {
+                                    helperText("画像OCRは設定でOFFになっています。")
+                                }
 
-                        if !usesOCRImportAssist {
-                            Text("画像OCRは設定でOFFになっています。")
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                                if !statusText.isEmpty {
+                                    helperText(statusText)
+                                }
 
-                        if !statusText.isEmpty {
-                            Text(statusText)
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                                TextEditor(text: $metadata.ocrText)
+                                    .scrollContentBackground(.hidden)
+                                    .frame(minHeight: 120)
+                                    .padding(8)
+                                    .background(inputSurface)
 
-                        TextEditor(text: $metadata.ocrText)
-                            .frame(minHeight: 120)
-
-                        ForEach(amountSuggestions) { suggestion in
-                            Button {
-                                metadata.amountText = suggestion.value
-                                statusText = "金額候補を反映しました。"
-                            } label: {
-                                Text("金額候補 \(suggestion.displayValue)を使う")
+                                ForEach(amountSuggestions) { suggestion in
+                                    Button {
+                                        metadata.amountText = suggestion.value
+                                        statusText = "金額候補を反映しました。"
+                                    } label: {
+                                        Text("金額候補 \(suggestion.displayValue)を使う")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(themePalette.globalTint)
+                                }
                             }
+                            .padding(.top, 12)
+                        } label: {
+                            Label("読み取り内容", systemImage: "text.viewfinder")
+                                .font(FavorecoTypography.bodyStrong)
+                                .foregroundStyle(.primary)
                         }
-                    } label: {
-                        Label("文字読み取り（任意）", systemImage: "text.viewfinder")
+                        .tint(themePalette.globalTint)
                     }
                 }
 
-            }
+                if metadata.purpose.supportsAmount {
+                    metadataSection(
+                        title: amountSectionTitle,
+                        footer: "入力した金額は費用集計に反映します。"
+                    ) {
+                        TextField("0", text: $metadata.amountText)
+                            .keyboardType(.decimalPad)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 48)
+                            .background(inputSurface)
+                    }
+                }
 
-            if metadata.purpose.supportsAmount {
-                Section(amountSectionTitle) {
-                    TextField("0", text: $metadata.amountText)
-                        .keyboardType(.decimalPad)
-                    Text("入力した金額は費用集計に反映します。")
-                        .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption))
-                        .foregroundStyle(.secondary)
+                if let onDelete {
+                    Button(role: .destructive, action: onDelete) {
+                        Label("この写真を削除", systemImage: "trash")
+                            .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.red)
+                    .background(inputSurface)
                 }
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 44)
         }
-        .favorecoRegistrationFormCanvas()
+        .scrollDismissesKeyboard(.interactively)
+        .background(TheaterLifecycleFlatStyle.canvasBackground)
         .onAppear {
             refreshSuggestions()
             isOCRSectionExpanded = !metadata.ocrText.isEmpty
         }
         .onChange(of: metadata.ocrText) { _, _ in refreshSuggestions() }
+    }
+
+    @ViewBuilder
+    private var purposePicker: some View {
+        Picker("写真の種類", selection: $metadata.purpose) {
+            ForEach(
+                allowsBenefits
+                    ? ExperiencePhotoPurpose.allCases
+                    : ExperiencePhotoPurpose.allCases.filter { $0 != .benefit }
+            ) { purpose in
+                Text(purpose.title).tag(purpose)
+            }
+        }
+        .pickerStyle(.menu)
+        .tint(themePalette.globalTint)
+    }
+
+    private var inputSurface: some View {
+        RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius, style: .continuous)
+            .fill(TheaterLifecycleFlatStyle.fieldBackground)
+            .overlay {
+                RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius, style: .continuous)
+                    .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
+            }
+    }
+
+    @ViewBuilder
+    private func metadataSection<Content: View>(
+        title: String,
+        footer: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(title)
+                .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                .foregroundStyle(themePalette.globalTint)
+
+            VStack(alignment: .leading, spacing: 0) {
+                content()
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(TheaterLifecycleFlatStyle.fieldBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(TheaterLifecycleFlatStyle.sectionBorder, lineWidth: 1)
+            }
+
+            if let footer {
+                helperText(footer)
+                    .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    private func helperText(_ text: String) -> some View {
+        Text(text)
+            .font(FavorecoTypography.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var purposeDescription: String {
@@ -1249,6 +1332,54 @@ struct PhotoMetadataEditor: View {
                 metadata.ocrText = recognizedText
                 statusText = "読み取り結果を保存候補へ反映しました。"
             }
+        }
+    }
+}
+
+struct PhotoMetadataSheetHeader: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    let leadingTitle: String?
+    let trailingTitle: String
+    let onLeading: () -> Void
+    let onTrailing: () -> Void
+
+    var body: some View {
+        ZStack {
+            Text("写真の情報")
+                .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+
+            HStack(spacing: 12) {
+                if let leadingTitle {
+                    Button(leadingTitle, action: onLeading)
+                        .font(FavorecoTypography.jpSans(15, weight: .medium, relativeTo: .body))
+                        .foregroundStyle(themePalette.globalTint)
+                        .frame(minWidth: 72, minHeight: 44, alignment: .leading)
+                } else {
+                    Color.clear
+                        .frame(width: 72, height: 44)
+                }
+
+                Spacer(minLength: 80)
+
+                Button(trailingTitle, action: onTrailing)
+                    .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 36)
+                    .background(
+                        themePalette.globalTint,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .frame(minWidth: 72, minHeight: 44, alignment: .trailing)
+            }
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 60)
+        .background(TheaterLifecycleFlatStyle.canvasBackground)
+        .overlay(alignment: .bottom) {
+            Divider()
+                .overlay(ExplicitFormMetrics.rowSeparatorColor)
         }
     }
 }

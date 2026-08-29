@@ -350,6 +350,14 @@ struct AddTicketPlanView: View {
         entryMode == .ticketSchedule && !editsPlanOnly
     }
 
+    /// 公演詳細から既存の観劇公演へ予定を足す入口も、
+    /// 新規統合フォームと同じフラットな視覚階層へ載せる。
+    private var usesFlatTheaterPlanCreation: Bool {
+        entryMode == .plan
+            && editingPlan == nil
+            && targetEvent?.category?.templateKey == "theater"
+    }
+
     private var selectedEntryRouteName: String {
         draft.entryRouteOptions.first(where: { $0.key == draft.entryRouteKey })?.name ?? "未設定"
     }
@@ -493,6 +501,21 @@ struct AddTicketPlanView: View {
         .dynamicTypeSize(.xSmall ... .large)
     }
 
+    private var theaterPlanCreationFlatScreen: some View {
+        TheaterLifecycleFlatScaffold(
+            title: navigationTitle,
+            canSave: draft.canSave,
+            onClose: { dismiss() },
+            onSave: save
+        ) {
+            unifiedWorkUnit
+            unifiedParticipationUnit
+            unifiedMemoUnit
+            unifiedCastUnit
+        }
+        .tint(Color(hex: "#8B2F45"))
+    }
+
     private func flatNavigationHeader(title: String) -> some View {
         HStack(spacing: 12) {
             Button { dismiss() } label: {
@@ -571,7 +594,7 @@ struct AddTicketPlanView: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
-                            .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                     )
             } else if let event = resolvedTargetEvent {
                 theaterFlatReadOnlyField("公演", value: event.title)
@@ -802,7 +825,7 @@ struct AddTicketPlanView: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
-                            .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                     )
                 theaterFlatTextField("公演名", required: true, prompt: "公演・イベント名を入力", text: $draft.title)
                 theaterFlatMenuField(
@@ -1075,7 +1098,7 @@ struct AddTicketPlanView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
-                        .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                        .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                 )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1095,7 +1118,7 @@ struct AddTicketPlanView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
-                        .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                        .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                 )
         }
     }
@@ -1172,7 +1195,7 @@ struct AddTicketPlanView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
-                        .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                        .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
@@ -1209,7 +1232,7 @@ struct AddTicketPlanView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
-                        .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                        .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                 )
         }
     }
@@ -1237,7 +1260,7 @@ struct AddTicketPlanView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
-                        .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                        .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                 )
         }
         .frame(maxWidth: .infinity)
@@ -1276,7 +1299,7 @@ struct AddTicketPlanView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
-                    .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                    .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
             )
         }
         .frame(maxWidth: .infinity)
@@ -1516,7 +1539,7 @@ struct AddTicketPlanView: View {
                             cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
                             style: .continuous
                         )
-                            .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                     }
             )
         }
@@ -1684,7 +1707,7 @@ struct AddTicketPlanView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                    .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
             }
     }
 
@@ -1704,7 +1727,7 @@ struct AddTicketPlanView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
         }
     }
 
@@ -2033,6 +2056,9 @@ struct AddTicketPlanView: View {
         if isUnifiedRegistration && !editsPlanOnly {
             return AnyView(unifiedRegistrationScreen)
         }
+        if usesFlatTheaterPlanCreation {
+            return AnyView(theaterPlanCreationFlatScreen)
+        }
         if usesFlatTicketSchedule {
             return AnyView(ticketScheduleFlatScreen)
         }
@@ -2162,6 +2188,10 @@ struct AddTicketPlanView: View {
         configurePlanLifecycleExpansionIfNeeded()
         if editingPlan == nil {
             restoreInitialCategoryIfNeeded()
+        }
+        if usesFlatTheaterPlanCreation {
+            unifiedPurpose = .plan
+            applyUnifiedPurpose(.plan)
         }
         if isUnifiedRegistration {
             applyUnifiedPurpose(unifiedPurpose)
@@ -2977,7 +3007,7 @@ struct AddTicketPlanView: View {
                     )
                     .overlay {
                         RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
-                            .stroke(Color.secondary.opacity(0.22), lineWidth: 1)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                     }
 
                 Text("公演名・公式URL・公演画像を取得し、空いている項目へ仮入力します。保存前に修正できます。")
@@ -5742,7 +5772,7 @@ private struct EventBackgroundSelectionSheet: View {
                 .overlay {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .stroke(
-                            isSelected ? Color.accentColor : Color.secondary.opacity(0.22),
+                            isSelected ? Color.accentColor : TheaterLifecycleFlatStyle.fieldBorder,
                             lineWidth: isSelected ? 2 : 1
                         )
                 }

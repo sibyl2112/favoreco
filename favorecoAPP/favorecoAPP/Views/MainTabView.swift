@@ -938,52 +938,145 @@ private struct TheaterMemoryTargetSelectionView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Button {
-                        onSelect(.new(category))
-                    } label: {
-                        FavorecoIconLabel(
-                            "予定なしで過去の観劇を記録",
-                            systemImage: "plus.circle"
-                        )
-                        .font(FavorecoTypography.bodyStrong)
-                    }
-                } footer: {
-                    Text("事前に予定を登録していなかった公演も、ここから直接記録できます。")
-                }
+        VStack(spacing: 0) {
+            flatHeader
 
-                if !recordedVisits.isEmpty {
-                    Section("登録済みの観劇記録") {
-                        ForEach(visibleRecordedVisits) { visit in
-                            Button {
-                                onSelect(.edit(visit))
-                            } label: {
-                                theaterMemoryVisitRow(visit)
-                            }
-                            .buttonStyle(.plain)
-                        }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 22) {
+                    directRecordSection
 
-                        if recordedVisits.count > initialVisibleCount {
-                            listExpansionButton(
-                                isExpanded: $showsAllRecordedVisits,
-                                hiddenCount: recordedVisits.count - initialVisibleCount
-                            )
-                        }
+                    if !recordedVisits.isEmpty {
+                        recordedVisitsSection
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 44)
             }
-            .navigationTitle("観劇の思い出を記録")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
+        }
+        .background {
+            TheaterLifecycleFlatStyle.canvasBackground
+                .ignoresSafeArea()
         }
         .favorecoAppAppearance()
         .tint(themePalette.globalTint)
+        .dynamicTypeSize(.xSmall ... .large)
+    }
+
+    private var flatHeader: some View {
+        HStack(spacing: 12) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 23, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("閉じる")
+
+            Spacer(minLength: 0)
+
+            Text("観劇の思い出を記録")
+                .font(FavorecoTypography.jpSans(18, weight: .semibold, relativeTo: .headline))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+
+            Spacer(minLength: 0)
+
+            Color.clear
+                .frame(width: 44, height: 44)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(TheaterLifecycleFlatStyle.fieldBackground)
+    }
+
+    private var directRecordSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                onSelect(.new(category))
+            } label: {
+                HStack(spacing: 12) {
+                    FavorecoIcon(systemName: "plus.circle", size: 19)
+                        .foregroundStyle(themePalette.globalTint)
+                        .frame(width: 28)
+
+                    Text("予定なしで過去の観劇を記録")
+                        .font(FavorecoTypography.bodyStrong)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 64)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(
+                TheaterLifecycleFlatStyle.fieldBackground,
+                in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius)
+                    .stroke(TheaterLifecycleFlatStyle.sectionBorder, lineWidth: 1)
+            }
+
+            Text("事前に予定を登録していなかった公演も、ここから直接記録できます。")
+                .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 2)
+        }
+    }
+
+    private var recordedVisitsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Color(hex: "#8B2F45"))
+                    .frame(width: 4, height: 24)
+                Text("登録済みの観劇記録")
+                    .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                    .foregroundStyle(.primary)
+            }
+            .frame(minHeight: 44)
+
+            VStack(spacing: 0) {
+                ForEach(Array(visibleRecordedVisits.enumerated()), id: \.element.id) { index, visit in
+                    Button {
+                        onSelect(.edit(visit))
+                    } label: {
+                        theaterMemoryVisitRow(visit)
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < visibleRecordedVisits.count - 1
+                        || recordedVisits.count > initialVisibleCount {
+                        Divider()
+                            .padding(.leading, 56)
+                    }
+                }
+
+                if recordedVisits.count > initialVisibleCount {
+                    listExpansionButton(
+                        isExpanded: $showsAllRecordedVisits,
+                        hiddenCount: recordedVisits.count - initialVisibleCount
+                    )
+                }
+            }
+            .padding(.horizontal, 14)
+            .background(
+                TheaterLifecycleFlatStyle.fieldBackground,
+                in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius)
+                    .stroke(TheaterLifecycleFlatStyle.sectionBorder, lineWidth: 1)
+            }
+        }
     }
 
     private func theaterMemoryVisitRow(_ visit: Visit) -> some View {
@@ -1010,7 +1103,8 @@ private struct TheaterMemoryTargetSelectionView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 10)
+        .frame(minHeight: 72)
         .contentShape(Rectangle())
     }
 
@@ -1039,7 +1133,7 @@ private struct TheaterMemoryTargetSelectionView: View {
                     .font(.caption.weight(.semibold))
             }
             .foregroundStyle(themePalette.globalTint)
-            .padding(.vertical, 6)
+            .frame(minHeight: 52)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

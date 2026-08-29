@@ -470,15 +470,20 @@ struct CategoryTopView: View {
         category: RecordCategory,
         snapshot: CategoryTopSnapshot
     ) -> some View {
+        let readableAccent = CategoryTopPresentationPolicy.highContrastAccent(
+            templateKey: category.templateKey,
+            categoryColor: categoryAccent(category)
+        )
+
         if category.templateKey == "book" {
             BookYearStatusStrip(
                 items: categoryLibraryItems(category: category, snapshot: snapshot),
-                tint: categoryAccent(category)
+                tint: readableAccent
             )
         } else {
             CategoryTopStatusStrip(
                 items: categoryStatisticsItems(category: category, snapshot: snapshot),
-                tint: categoryAccent(category)
+                tint: readableAccent
             )
         }
     }

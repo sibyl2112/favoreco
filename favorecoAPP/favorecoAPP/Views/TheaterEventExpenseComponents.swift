@@ -7,9 +7,7 @@ struct TheaterEventExpenseSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 10) {
-                FavorecoIcon(systemName: "yensign.circle", size: 17, fallbackWeight: .medium)
-                    .foregroundStyle(accentColor)
-                    .frame(width: 22)
+                TheaterEventSectionIcon(systemName: "yensign.circle", tint: accentColor)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("金額総計")
@@ -29,14 +27,9 @@ struct TheaterEventExpenseSection: View {
             }
 
             if snapshot.total == 0 {
-                HStack(alignment: .top, spacing: 10) {
-                    FavorecoIcon(systemName: "yensign.circle", size: 20)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28)
-                    Text("チケット、グッズ、フード、遠征費を登録すると、この作品・公演全体の金額がまとまります。")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("チケット、グッズ、フード、遠征費を登録すると、この作品・公演全体の金額がまとまります。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
             } else {
                 LazyVGrid(
                     columns: [GridItem(.flexible()), GridItem(.flexible())],

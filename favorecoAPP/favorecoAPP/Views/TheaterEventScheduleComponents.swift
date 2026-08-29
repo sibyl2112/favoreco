@@ -18,9 +18,7 @@ struct TheaterEventUpcomingPlansSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
-                FavorecoIcon(systemName: "calendar.badge.clock", size: 17, fallbackWeight: .medium)
-                    .foregroundStyle(accentColor)
-                    .frame(width: 22)
+                TheaterEventSectionIcon(systemName: "calendar.badge.clock", tint: accentColor)
                 Text("次の予定")
                     .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                 Spacer(minLength: 8)
@@ -32,10 +30,6 @@ struct TheaterEventUpcomingPlansSection: View {
             if plans.isEmpty {
                 Button(action: onAddPlan) {
                     HStack(spacing: 10) {
-                        FavorecoIcon(systemName: "calendar.badge.plus", size: 20)
-                            .foregroundStyle(accentColor)
-                            .frame(width: 34, height: 34)
-                            .background(accentColor.opacity(0.10), in: Circle())
                         Text("次の観劇予定はまだありません")
                             .font(FavorecoTypography.bodyStrong)
                             .foregroundStyle(.secondary)
@@ -126,9 +120,7 @@ struct TheaterEventTicketProgressSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
-                FavorecoIcon(systemName: "ticket", size: 17, fallbackWeight: .medium)
-                    .foregroundStyle(accentColor)
-                    .frame(width: 22)
+                TheaterEventSectionIcon(systemName: "ticket", tint: accentColor)
                 Text("チケット管理")
                     .font(FavorecoTypography.jpSerif(18, weight: .semibold, relativeTo: .headline))
                 Spacer(minLength: 8)
@@ -149,14 +141,9 @@ struct TheaterEventTicketProgressSection: View {
             }
 
             if references.isEmpty {
-                HStack(alignment: .top, spacing: 10) {
-                    FavorecoIcon(systemName: "ticket", size: 20)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28)
-                    Text("この公演のチケット情報はまだ登録されていません。")
-                        .font(FavorecoTypography.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("この公演のチケット情報はまだ登録されていません。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
                 .background(Color.white.opacity(0.032), in: RoundedRectangle(cornerRadius: 8, style: .continuous))

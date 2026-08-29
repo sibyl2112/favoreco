@@ -78,9 +78,10 @@ struct GenreNavigationStrip: View {
     }
 
     private func genreLabel(category: RecordCategory, isSelected: Bool, showsLeadingDivider: Bool) -> some View {
-        let tint = category.templateKey == "live"
-            ? LiveCategoryStyle.teal
-            : themePalette.categoryColor(hex: category.colorHex)
+        let tint = CategoryTopPresentationPolicy.highContrastAccent(
+            templateKey: category.templateKey,
+            categoryColor: themePalette.categoryColor(hex: category.colorHex)
+        )
         let displayName = category.templateKey == "live"
             ? "LIVE"
             : category.name.isEmpty ? "無題" : category.name

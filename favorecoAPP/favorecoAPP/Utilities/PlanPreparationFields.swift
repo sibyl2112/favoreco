@@ -476,6 +476,7 @@ struct ExperienceExpenseSummary {
     let goodsAmount: Decimal
     let foodAmount: Decimal
     let travelAmount: Decimal
+    let travelTasks: [PlanPreparationTask]
     let recordEntryAmount: Decimal
     let legacyAmount: Decimal
     let legacyEntries: [VisitExpenseEntry]
@@ -496,6 +497,8 @@ struct ExperienceExpenseSummary {
         let foodAmount = ExperienceExpenseCalculator.photoAmount(for: visit, purpose: .food)
         let ticketAttemptAmount = ExperienceExpenseCalculator.securedTicketAmount(for: plan)
         let travelAmount = ExperienceExpenseCalculator.travelAmount(for: plan)
+        let travelTasks = (plan?.preparationFields.orderedTasks ?? [])
+            .filter { $0.kind.isTravel && $0.amount > 0 }
         let ticketAmount = ticketAttemptAmount > 0 ? ticketAttemptAmount : ticketPhotoAmount
         let legacyAmount = max(visit?.amount ?? Decimal(0), Decimal(0))
         let legacyEntries = VisitUnitFields(rawValue: visit?.unitFieldsRaw ?? "")
@@ -513,6 +516,7 @@ struct ExperienceExpenseSummary {
             goodsAmount: goodsAmount,
             foodAmount: foodAmount,
             travelAmount: travelAmount,
+            travelTasks: travelTasks,
             recordEntryAmount: recordEntryAmount,
             legacyAmount: legacyAmount,
             legacyEntries: legacyEntries,

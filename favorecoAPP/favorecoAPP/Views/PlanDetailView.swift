@@ -2174,6 +2174,7 @@ struct ExperienceExpenseSummaryCard: View {
     var title = "費用合計"
     var isExpanded: Binding<Bool>? = nil
     var titleFont: Font = FavorecoTypography.sectionTitle
+    var usesFlatSurface = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2208,8 +2209,12 @@ struct ExperienceExpenseSummaryCard: View {
                     if summary.foodAmount > 0 {
                         expenseRow(icon: "fork.knife", title: "フード", amount: summary.foodAmount)
                     }
-                    if summary.travelAmount > 0 {
-                        expenseRow(icon: "suitcase.rolling", title: "遠征", amount: summary.travelAmount)
+                    ForEach(summary.travelTasks) { task in
+                        expenseRow(
+                            icon: task.kind.systemImage,
+                            title: task.trimmedTitle.isEmpty ? task.kind.title : task.trimmedTitle,
+                            amount: task.amount
+                        )
                     }
                     ForEach(summary.legacyEntries) { entry in
                         expenseRow(
@@ -2238,9 +2243,7 @@ struct ExperienceExpenseSummaryCard: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .modifier(ExperienceExpenseSummarySurface(tint: tint, usesFlatSurface: usesFlatSurface))
     }
 
     @ViewBuilder
@@ -2291,6 +2294,31 @@ struct ExperienceExpenseSummaryCard: View {
     private func currencyText(_ amount: Decimal) -> String {
         NumberFormatter.planCurrency.string(from: NSDecimalNumber(decimal: amount))
             ?? "¥\(NSDecimalNumber(decimal: amount).intValue)"
+    }
+}
+
+private struct ExperienceExpenseSummarySurface: ViewModifier {
+    let tint: Color
+    let usesFlatSurface: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if usesFlatSurface {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 16)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(tint.opacity(0.42))
+                        .frame(height: CategoryDetailChrome.borderLineWidth)
+                }
+        } else {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
     }
 }
 

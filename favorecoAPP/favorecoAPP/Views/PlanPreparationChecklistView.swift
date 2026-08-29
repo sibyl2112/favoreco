@@ -498,27 +498,50 @@ private struct PlanPreparationTaskEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("準備すること") {
+            TheaterLifecycleFlatScaffold(
+                title: task == nil ? "準備項目を追加" : "準備項目を編集",
+                canSave: !trimmedTitle.isEmpty,
+                onClose: { dismiss() },
+                onSave: saveAndDismiss
+            ) {
+                flatSection("準備すること") {
                     TextField("例：宿泊を予約", text: $title)
                         .textInputAutocapitalization(.never)
-
-                    Picker("種類", selection: $kind) {
-                        ForEach(PlanPreparationKind.allCases) { kind in
-                            FavorecoIconLabel(kind.title, systemImage: kind.systemImage)
-                                .tag(kind)
+                        .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 54)
+                        .background(TheaterLifecycleFlatStyle.fieldBackground)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                                .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
                         }
+
+                    HStack(spacing: 12) {
+                        Text("種類")
+                            .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .subheadline))
+                        Spacer(minLength: 8)
+                        Picker("種類", selection: $kind) {
+                            ForEach(PlanPreparationKind.allCases) { kind in
+                                Label(kind.title, systemImage: kind.systemImage)
+                                    .tag(kind)
+                            }
+                        }
+                        .labelsHidden()
+                        .tint(tint)
                     }
                 }
 
-                Section("遠征スケジュール") {
+                flatSection("遠征スケジュール") {
                     Toggle("日時を設定", isOn: $hasSchedule)
                     if hasSchedule {
+                        Divider()
                         FiveMinuteDateTimeRow(title: "開始", selection: scheduleStartBinding)
+                        Divider()
                         FiveMinuteDateTimeRow(title: "終了", selection: scheduleEndBinding)
                     }
 
                     if kind.isTravel {
+                        Divider()
                         HStack {
                             Text("費用")
                             Spacer()
@@ -539,14 +562,15 @@ private struct PlanPreparationTaskEditor: View {
                     }
                 }
 
-                Section("期限") {
+                flatSection("期限") {
                     Toggle("期限を設定", isOn: $hasDueDate)
                     if hasDueDate {
+                        Divider()
                         FiveMinuteDateTimeRow(title: "日時", selection: dueAtBinding)
                     }
                 }
 
-                Section("画像OCR") {
+                flatSection("画像OCR") {
                     OCRUnitEditor(
                         ocrText: $ocrText,
                         selectedItems: $ocrItems,
@@ -571,34 +595,48 @@ private struct PlanPreparationTaskEditor: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .favorecoRegistrationFormCanvas()
-            .navigationTitle(task == nil ? "準備項目を追加" : "準備項目を編集")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        let now = Date()
-                        var value = task ?? PlanPreparationTask(createdAt: now)
-                        value.title = trimmedTitle
-                        value.kindKey = kind.rawValue
-                        value.startsAt = hasSchedule ? startsAt : nil
-                        value.endsAt = hasSchedule ? max(endsAt, startsAt) : nil
-                        value.dueAt = hasDueDate ? dueAt : nil
-                        value.amount = kind.isTravel ? parsedAmount : Decimal(0)
-                        value.ocrText = ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        value.updatedAt = now
-                        onSave(value)
-                        dismiss()
-                    }
-                    .disabled(trimmedTitle.isEmpty)
-                    .tint(tint)
-                }
-            }
+            .tint(tint)
         }
         .presentationDetents([.large])
+    }
+
+    private func flatSection<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                content()
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                TheaterLifecycleFlatStyle.fieldBackground,
+                in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius)
+                    .stroke(TheaterLifecycleFlatStyle.sectionBorder, lineWidth: 1)
+            }
+        }
+    }
+
+    private func saveAndDismiss() {
+        let now = Date()
+        var value = task ?? PlanPreparationTask(createdAt: now)
+        value.title = trimmedTitle
+        value.kindKey = kind.rawValue
+        value.startsAt = hasSchedule ? startsAt : nil
+        value.endsAt = hasSchedule ? max(endsAt, startsAt) : nil
+        value.dueAt = hasDueDate ? dueAt : nil
+        value.amount = kind.isTravel ? parsedAmount : Decimal(0)
+        value.ocrText = ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
+        value.updatedAt = now
+        onSave(value)
+        dismiss()
     }
 
     private var trimmedTitle: String {
@@ -668,6 +706,13 @@ private extension View {
         self
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
-            .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(
+                TheaterLifecycleFlatStyle.fieldBackground,
+                in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius, style: .continuous)
+                    .stroke(TheaterLifecycleFlatStyle.sectionBorder, lineWidth: 1)
+            }
     }
 }

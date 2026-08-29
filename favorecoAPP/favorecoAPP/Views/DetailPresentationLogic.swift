@@ -16,6 +16,33 @@ struct TheaterPerformanceScheduleItem: Identifiable, Equatable {
     let endsAt: Date?
     let venueName: String
     let address: String
+    let latitude: Double?
+    let longitude: Double?
+
+    init(
+        id: String,
+        performanceLabel: String,
+        startsAt: Date?,
+        endsAt: Date?,
+        venueName: String,
+        address: String,
+        latitude: Double? = nil,
+        longitude: Double? = nil
+    ) {
+        self.id = id
+        self.performanceLabel = performanceLabel
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.venueName = venueName
+        self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+
+    var hasCoordinate: Bool {
+        guard let latitude, let longitude else { return false }
+        return latitude != 0 || longitude != 0
+    }
 }
 
 enum DetailBackSwipePolicy {
@@ -82,7 +109,9 @@ enum EventDetailPresentation {
                 startsAt: entry.startsAt ?? (usesLegacySharedPeriod ? fields.eventPeriodStartsAt : nil),
                 endsAt: entry.endsAt ?? (usesLegacySharedPeriod ? fields.eventPeriodEndsAt : nil),
                 venueName: entry.trimmedName,
-                address: entry.trimmedAddress
+                address: entry.trimmedAddress,
+                latitude: entry.latitude,
+                longitude: entry.longitude
             )
         }
         if !explicit.isEmpty { return sortedSchedules(explicit) }
@@ -256,7 +285,9 @@ enum EventDetailPresentation {
                     startsAt: grouped.compactMap(\.startsAt).min(),
                     endsAt: grouped.compactMap { $0.endsAt ?? $0.startsAt }.max(),
                     venueName: first.venueName,
-                    address: grouped.first(where: { !$0.address.isEmpty })?.address ?? ""
+                    address: grouped.first(where: { !$0.address.isEmpty })?.address ?? "",
+                    latitude: grouped.first(where: \.hasCoordinate)?.latitude,
+                    longitude: grouped.first(where: \.hasCoordinate)?.longitude
                 )
             }
             .sorted { lhs, rhs in

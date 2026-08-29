@@ -1,16 +1,102 @@
 import Foundation
 import MapKit
 import Contacts
+import LinkPresentation
 
 struct PlaceSearchCandidate: Identifiable, Sendable {
+    enum Source: String, Sendable {
+        case registered = "登録済み"
+        case publicCatalog = "全国カタログ"
+        case appleMaps = "Apple Maps"
+        case sharedLink = "共有URL"
+        case manualPin = "地図指定"
+    }
+
     let id: String
     let name: String
     let address: String
     let latitude: Double
     let longitude: Double
+    let source: Source
+
+    init(
+        id: String,
+        name: String,
+        address: String,
+        latitude: Double,
+        longitude: Double,
+        source: Source = .appleMaps
+    ) {
+        self.id = id
+        self.name = name
+        self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+        self.source = source
+    }
+}
+
+struct SharedMapLinkPreview: Sendable {
+    let url: URL
+    let name: String
+    let latitude: Double?
+    let longitude: Double?
+}
+
+enum SharedMapLinkError: LocalizedError {
+    case invalidURL
+    case unsupportedLink
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            "Google MapsまたはApple Mapsの共有URLを貼り付けてください。"
+        case .unsupportedLink:
+            "このURLから場所名を確認できませんでした。会場名と住所を入力し、地図で位置を指定してください。"
+        }
+    }
 }
 
 enum PlaceSearchService {
+    /// 利用者が共有した地図URLから、保存可能な最小情報を得る。
+    /// Google URLは参照URLとOGP名称だけを扱い、Placesデータの住所・座標は永続化しない。
+    /// Apple Maps URLは公開クエリの名称・座標をそのまま利用できる。
+    @MainActor
+    static func sharedMapLinkPreview(from rawValue: String) async throws -> SharedMapLinkPreview {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme) else {
+            throw SharedMapLinkError.invalidURL
+        }
+
+        let host = url.host?.lowercased() ?? ""
+        guard host.contains("google") || host.contains("goo.gl") || host.contains("apple.com") else {
+            throw SharedMapLinkError.invalidURL
+        }
+
+        if host.contains("maps.apple.com") {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let name = components?.queryItems?.first(where: { ["q", "name"].contains($0.name) })?.value ?? ""
+            let coordinateText = components?.queryItems?.first(where: { ["ll", "sll"].contains($0.name) })?.value
+            let coordinate = coordinateText.flatMap(coordinatePair(from:))
+            guard !name.isEmpty || coordinate != nil else { throw SharedMapLinkError.unsupportedLink }
+            return SharedMapLinkPreview(
+                url: url,
+                name: name,
+                latitude: coordinate?.latitude,
+                longitude: coordinate?.longitude
+            )
+        }
+
+        let provider = LPMetadataProvider()
+        provider.timeout = 12
+        let metadata = try await provider.startFetchingMetadata(for: url)
+        let name = cleanedSharedPlaceTitle(metadata.title ?? "")
+        guard !name.isEmpty else { throw SharedMapLinkError.unsupportedLink }
+        return SharedMapLinkPreview(url: url, name: name, latitude: nil, longitude: nil)
+    }
+
     @MainActor
     static func search(query: String) async throws -> [PlaceSearchCandidate] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -37,6 +123,35 @@ enum PlaceSearchService {
         .filter { !$0.name.isEmpty }
 
         return prioritizedCandidates(candidates, for: trimmedQuery)
+    }
+
+    /// 名称だけで見つからない小規模会場向けに、名称＋住所、名称、住所を順に横断する。
+    /// 同じ座標・名称・住所は1候補へまとめ、各入力画面で同じ検索結果を使う。
+    @MainActor
+    static func search(queries: [String]) async throws -> [PlaceSearchCandidate] {
+        let normalizedQueries = queries.reduce(into: [String]()) { result, value in
+            let query = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty, !result.contains(query) else { return }
+            result.append(query)
+        }
+        guard !normalizedQueries.isEmpty else { return [] }
+
+        var merged: [PlaceSearchCandidate] = []
+        var seen = Set<String>()
+        var lastError: Error?
+        for query in normalizedQueries {
+            guard !Task.isCancelled else { return [] }
+            do {
+                for candidate in try await search(query: query) {
+                    let key = candidateDeduplicationKey(candidate)
+                    if seen.insert(key).inserted { merged.append(candidate) }
+                }
+            } catch {
+                lastError = error
+            }
+        }
+        if merged.isEmpty, let lastError { throw lastError }
+        return merged
     }
 
     /// Map previewで使う座標解決。Apple MapsのPOI検索で見つからない住所は
@@ -105,7 +220,7 @@ enum PlaceSearchService {
         return 3
     }
 
-    nonisolated private static func normalizedSearchText(_ value: String) -> String {
+    nonisolated static func normalizedSearchText(_ value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .folding(
@@ -114,6 +229,36 @@ enum PlaceSearchService {
             )
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "　", with: "")
+    }
+
+    nonisolated static func candidateDeduplicationKey(_ candidate: PlaceSearchCandidate) -> String {
+        let name = normalizedSearchText(candidate.name)
+        let address = normalizedSearchText(candidate.address)
+        if candidate.latitude != 0 || candidate.longitude != 0 {
+            return String(format: "%.5f|%.5f|%@", candidate.latitude, candidate.longitude, name)
+        }
+        return "\(name)|\(address)"
+    }
+
+    nonisolated private static func coordinatePair(from value: String) -> (latitude: Double, longitude: Double)? {
+        let components = value.split(separator: ",", maxSplits: 2).map(String.init)
+        guard components.count >= 2,
+              let latitude = Double(components[0]),
+              let longitude = Double(components[1]),
+              (-90...90).contains(latitude),
+              (-180...180).contains(longitude) else { return nil }
+        return (latitude, longitude)
+    }
+
+    nonisolated private static func cleanedSharedPlaceTitle(_ value: String) -> String {
+        let title = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return "" }
+        let genericTitles = ["Google Maps", "Google マップ", "Maps"]
+        guard !genericTitles.contains(title) else { return "" }
+        return title
+            .components(separatedBy: " · ").first?
+            .components(separatedBy: " - Google Maps").first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
     private static func coordinate(for item: MKMapItem) -> CLLocationCoordinate2D {

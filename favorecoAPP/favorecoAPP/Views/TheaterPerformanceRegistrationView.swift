@@ -781,7 +781,10 @@ struct TheaterPerformanceRegistrationView: View {
                     ? nil
                     : entry.trimmedPerformanceLabel,
                 startsAt: entry.startsAt,
-                endsAt: entry.startsAt.map { max(entry.endsAt ?? $0, $0) }
+                endsAt: entry.startsAt.map { max(entry.endsAt ?? $0, $0) },
+                latitude: entry.latitude,
+                longitude: entry.longitude,
+                externalMapURL: entry.externalMapURL
             )
             let hasAnyValue = !normalized.isEmpty
                 || !normalized.trimmedPerformanceLabel.isEmpty

@@ -67,11 +67,12 @@ struct ExperienceEmotionTagEditor: View {
                 }
             }
 
-            ExplicitFormTextField(
-                title: "その他のタグ（任意）",
-                prompt: "カンマ区切りで入力",
+            TicketTagInputField(
                 text: $tagNamesText,
-                labelStyle: .horizontal
+                title: "その他の感情",
+                prompt: "感情を入力",
+                showsHashPrefix: false,
+                hiddenTags: Set(TheaterEmotionTags.presets)
             )
             Text("この回で感じたことを選びます。タグは他の記録でも使えます。")
                 .font(FavorecoTypography.caption)

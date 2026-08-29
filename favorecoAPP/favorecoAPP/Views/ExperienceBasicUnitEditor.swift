@@ -58,6 +58,7 @@ struct ExperienceBasicUnitEditor: View {
     let usesSimpleScreenWorkLayout: Bool
     let categoryTemplateKey: String
     let usesLifecycleEditLayout: Bool
+    let showsTargetFields: Bool
     private let subTypeKey: Binding<String>?
     private let screenWorkSeasonNumber: Binding<Int>?
     private let performanceTypeCustomName: Binding<String>?
@@ -92,6 +93,7 @@ struct ExperienceBasicUnitEditor: View {
         usesSimpleScreenWorkLayout: Bool = false,
         categoryTemplateKey: String = "",
         usesLifecycleEditLayout: Bool = false,
+        showsTargetFields: Bool = true,
         subTypeKey: Binding<String>? = nil,
         screenWorkSeasonNumber: Binding<Int>? = nil,
         performanceTypeCustomName: Binding<String>? = nil,
@@ -127,6 +129,7 @@ struct ExperienceBasicUnitEditor: View {
         self.usesSimpleScreenWorkLayout = usesSimpleScreenWorkLayout
         self.categoryTemplateKey = categoryTemplateKey
         self.usesLifecycleEditLayout = usesLifecycleEditLayout
+        self.showsTargetFields = showsTargetFields
         self.subTypeKey = subTypeKey
         self.screenWorkSeasonNumber = screenWorkSeasonNumber
         self.performanceTypeCustomName = performanceTypeCustomName
@@ -162,6 +165,7 @@ struct ExperienceBasicUnitEditor: View {
         usesSimpleScreenWorkLayout: Bool = false,
         categoryTemplateKey: String = "",
         usesLifecycleEditLayout: Bool = false,
+        showsTargetFields: Bool = true,
         subTypeKey: Binding<String>? = nil,
         screenWorkSeasonNumber: Binding<Int>? = nil,
         performanceTypeCustomName: Binding<String>? = nil,
@@ -197,6 +201,7 @@ struct ExperienceBasicUnitEditor: View {
         self.usesSimpleScreenWorkLayout = usesSimpleScreenWorkLayout
         self.categoryTemplateKey = categoryTemplateKey
         self.usesLifecycleEditLayout = usesLifecycleEditLayout
+        self.showsTargetFields = showsTargetFields
         self.subTypeKey = subTypeKey
         self.screenWorkSeasonNumber = screenWorkSeasonNumber
         self.performanceTypeCustomName = performanceTypeCustomName
@@ -208,12 +213,16 @@ struct ExperienceBasicUnitEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            targetFields
-            if showsSubtypeEditor {
+            if showsTargetFields {
+                targetFields
+            }
+            if showsTargetFields, showsSubtypeEditor {
                 theaterDivider
                 subtypeEditor
             }
-            theaterDivider
+            if showsTargetFields {
+                theaterDivider
+            }
             visitFields
         }
         .task { await publicPlaceStore.prepare() }
@@ -1010,13 +1019,63 @@ struct ExperienceRatingUnitEditor: View {
 
     private var ratingControl: some View {
         HStack(spacing: 8) {
-                Slider(value: $overallRating, in: 0...5, step: 0.5)
-                    .frame(maxWidth: 205)
-                Text(ratingText)
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 40, alignment: .trailing)
+            HalfStepStarRatingControl(rating: $overallRating)
+            Text(ratingText)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 40, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct HalfStepStarRatingControl: View {
+    @Binding var rating: Double
+
+    private let starWidth: CGFloat = 34
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<5, id: \.self) { index in
+                Image(systemName: symbolName(for: index))
+                    .font(.system(size: 25, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: starWidth, height: 44)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        SpatialTapGesture()
+                            .onEnded { value in
+                                let base = Double(index)
+                                let selectedRating = base + (value.location.x < starWidth / 2 ? 0.5 : 1)
+                                rating = rating == selectedRating ? 0 : selectedRating
+                            }
+                    )
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("評価")
+        .accessibilityValue(rating > 0 ? String(format: "%.1f", rating) : "未評価")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                rating = min(5, rating + 0.5)
+            case .decrement:
+                rating = max(0, rating - 0.5)
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private func symbolName(for index: Int) -> String {
+        let fullValue = Double(index + 1)
+        let halfValue = Double(index) + 0.5
+        if rating >= fullValue {
+            return "star.fill"
+        }
+        if rating >= halfValue {
+            return "star.leadinghalf.filled"
+        }
+        return "star"
     }
 }
 

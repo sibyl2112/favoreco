@@ -165,7 +165,7 @@ struct TheaterEventTravelMapSection: View {
 
     private var venueResolutionKey: String {
         schedules
-            .map { "\($0.id)|\($0.venueName)|\($0.address)" }
+            .map { "\($0.id)|\($0.venueName)|\($0.address)|\($0.latitude ?? 0)|\($0.longitude ?? 0)" }
             .joined(separator: "||")
     }
 
@@ -179,6 +179,19 @@ struct TheaterEventTravelMapSection: View {
             guard !Task.isCancelled else { return }
             let name = schedule.venueName.trimmingCharacters(in: .whitespacesAndNewlines)
             let address = schedule.address.trimmingCharacters(in: .whitespacesAndNewlines)
+            if schedule.hasCoordinate,
+               let latitude = schedule.latitude,
+               let longitude = schedule.longitude {
+                venues.append(
+                    TheaterTravelMapVenue(
+                        id: schedule.id,
+                        name: name.isEmpty ? "公演会場" : name,
+                        latitude: latitude,
+                        longitude: longitude
+                    )
+                )
+                continue
+            }
             let query = [name, address].filter { !$0.isEmpty }.joined(separator: " ")
             guard !query.isEmpty else {
                 missingCount += 1
