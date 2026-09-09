@@ -242,7 +242,7 @@ enum CategoryTopVocabulary {
     static func featureCarouselJapaneseTitle(templateKey: String) -> String {
         switch templateKey {
         case "museum": "観覧予定 / 気になる"
-        case "live": "ライブ予定 / 気になる"
+        case "live": "参戦予定 / 気になる"
         case "movie": "鑑賞予定 / 気になる"
         case "theme_park", "nature_living": "来園予定 / 気になる"
         default: "予定 / 気になる"
@@ -259,7 +259,7 @@ enum CategoryTopVocabulary {
         case ("theater", "Performance Log"): "観劇記録"
         case ("theater", "Productions"): "公演情報"
         case ("theater", "Ticket Management"): "チケット管理"
-        case ("live", "Coming Up"): "ライブ予定"
+        case ("live", "Coming Up"): "参戦予定"
         case ("live", "Interests"): "気になる"
         case ("live", "Live History"): "ライブ記録"
         case ("live", "Live Information"): "ライブ情報"

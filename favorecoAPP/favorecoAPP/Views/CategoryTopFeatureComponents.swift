@@ -395,7 +395,7 @@ struct PerformanceTicketManagementPlanCard: View {
                                     .lineLimit(1)
                             } else {
                                 FavorecoIconLabel(
-                                    "参加日未定",
+                                    GenreVocabulary.undatedSchedule(for: category.templateKey),
                                     systemImage: "calendar.badge.exclamationmark",
                                     iconSize: 15
                                 )

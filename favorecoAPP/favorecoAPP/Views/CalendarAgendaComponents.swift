@@ -428,18 +428,377 @@ private struct CalendarPlanTimelineDay: View {
     }
 }
 
-struct CalendarAgendaSection: View {
+struct CalendarSelectedDayBar: View {
+    let selectedDate: Date
+    let summary: String
+    let bottomClearance: CGFloat
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(FavorecoDateText.fullDate(selectedDate))
+                        .font(FavorecoTypography.bodyStrong)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(summary)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 4) {
+                    Text("この日の流れ")
+                        .font(FavorecoTypography.captionStrong)
+                    Image(systemName: "chevron.up")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(Color.accentColor)
+            }
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity)
+            .frame(height: 72)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, bottomClearance)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color(.separator).opacity(0.55))
+                .frame(height: 0.5)
+        }
+        .accessibilityLabel("\(FavorecoDateText.fullDate(selectedDate))、\(summary)")
+        .accessibilityHint("この日のタイムラインを開きます")
+    }
+}
+
+private enum CalendarDayTimelineEntry: Identifiable {
+    case nextAction(CalendarNextActionItem)
+    case plan(Plan)
+    case visit(Visit)
+    case external(ExternalCalendarEvent)
+
+    var id: String {
+        switch self {
+        case .nextAction(let item): return "action-\(item.id)"
+        case .plan(let plan): return "plan-\(plan.id.uuidString)"
+        case .visit(let visit): return "visit-\(visit.id.uuidString)"
+        case .external(let event): return "external-\(event.id)"
+        }
+    }
+
+    var date: Date {
+        switch self {
+        case .nextAction(let item): return item.date
+        case .plan(let plan): return plan.startsAt
+        case .visit(let visit): return visit.visitedAt
+        case .external(let event): return event.startDate
+        }
+    }
+
+    var sortPriority: Int {
+        switch self {
+        case .nextAction: return 0
+        case .plan: return 1
+        case .external: return 2
+        case .visit: return 3
+        }
+    }
+}
+
+struct CalendarDayTimelinePanel: View {
+    let selectedDate: Date
+    let nextActionItems: [CalendarNextActionItem]
+    let plans: [Plan]
+    let visits: [Visit]
+    let externalEvents: [ExternalCalendarEvent]
+    let bottomClearance: CGFloat
+    let onClose: () -> Void
+
+    private var entries: [CalendarDayTimelineEntry] {
+        (
+            nextActionItems.map(CalendarDayTimelineEntry.nextAction)
+                + plans.map(CalendarDayTimelineEntry.plan)
+                + visits.map(CalendarDayTimelineEntry.visit)
+                + externalEvents.map(CalendarDayTimelineEntry.external)
+        )
+        .sorted {
+            if $0.date != $1.date { return $0.date < $1.date }
+            return $0.sortPriority < $1.sortPriority
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(FavorecoDateText.fullDate(selectedDate))
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                    Text("この日の流れ")
+                        .font(FavorecoTypography.sectionTitle)
+                }
+
+                Spacer(minLength: 8)
+
+                Button(action: onClose) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                        .background(Color.secondary.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("この日のタイムラインを閉じる")
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+
+            Rectangle()
+                .fill(Color(.separator).opacity(0.55))
+                .frame(height: 0.5)
+
+            ScrollView(.vertical) {
+                if entries.isEmpty {
+                    PlaceholderRow(
+                        icon: "calendar.badge.checkmark",
+                        title: "予定・やることはありません",
+                        message: "この日に予定や記録、期限が入ると時刻順に表示されます。"
+                    )
+                    .padding(14)
+                    .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                } else {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                            timelineDestination(
+                                for: entry,
+                                isLast: index == entries.count - 1
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                }
+            }
+            .contentMargins(.bottom, bottomClearance + 24, for: .scrollContent)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color(.systemGroupedBackground))
+        .clipShape(.rect(topLeadingRadius: 20, topTrailingRadius: 20))
+        .shadow(color: Color.black.opacity(0.16), radius: 12, y: -4)
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private func timelineDestination(
+        for entry: CalendarDayTimelineEntry,
+        isLast: Bool
+    ) -> some View {
+        switch entry {
+        case .nextAction(let item):
+            NavigationLink {
+                PlanDetailView(plan: item.plan)
+            } label: {
+                CalendarDayTimelineRow(entry: entry, isLast: isLast)
+            }
+            .buttonStyle(.plain)
+        case .plan(let plan):
+            NavigationLink {
+                PlanDetailView(plan: plan)
+            } label: {
+                CalendarDayTimelineRow(entry: entry, isLast: isLast)
+            }
+            .buttonStyle(.plain)
+        case .visit(let visit):
+            NavigationLink {
+                ExperienceDetailView(visit: visit)
+            } label: {
+                CalendarDayTimelineRow(entry: entry, isLast: isLast)
+            }
+            .buttonStyle(.plain)
+        case .external:
+            CalendarDayTimelineRow(entry: entry, isLast: isLast)
+        }
+    }
+}
+
+private struct CalendarDayTimelineRow: View {
+    let entry: CalendarDayTimelineEntry
+    let isLast: Bool
+
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    private var tint: Color {
+        switch entry {
+        case .nextAction(let item):
+            if let stage = item.ticketVisualStage {
+                return TicketProgressColorPalette.color(for: stage)
+            }
+            return themePalette.categoryColor(hex: item.plan.category?.colorHex ?? "#147C88")
+        case .plan(let plan):
+            return themePalette.categoryColor(
+                hex: plan.category?.colorHex ?? plan.event?.category?.colorHex ?? "#147C88"
+            )
+        case .visit(let visit):
+            return themePalette.categoryColor(hex: visit.event?.category?.colorHex ?? "#147C88")
+        case .external(let event):
+            return Color(uiColor: event.color)
+        }
+    }
+
+    private var iconName: String {
+        switch entry {
+        case .nextAction(let item): return item.systemImage
+        case .plan(let plan): return plan.category?.iconSymbol ?? "calendar"
+        case .visit(let visit): return visit.event?.category?.iconSymbol ?? "checkmark"
+        case .external: return "calendar.badge.clock"
+        }
+    }
+
+    private var kindLabel: String {
+        switch entry {
+        case .nextAction: return "やること"
+        case .plan: return "予定"
+        case .visit: return "記録"
+        case .external: return "外部カレンダー"
+        }
+    }
+
+    private var title: String {
+        switch entry {
+        case .nextAction(let item): return item.title
+        case .plan(let plan): return nonEmpty(plan.title, fallback: "予定")
+        case .visit(let visit): return nonEmpty(visit.event?.title ?? "", fallback: "記録")
+        case .external(let event): return nonEmpty(event.title, fallback: "外部予定")
+        }
+    }
+
+    private var detail: String {
+        switch entry {
+        case .nextAction(let item):
+            return nonEmpty(item.plan.title, fallback: item.plan.event?.title ?? "予定")
+        case .plan(let plan):
+            return joinedDetail(
+                timeRange(start: plan.startsAt, end: plan.endsAt),
+                plan.venueNameSnapshot
+            )
+        case .visit(let visit):
+            return joinedDetail(
+                timeRange(start: visit.visitedAt, end: visit.endedAt),
+                visit.venueNameSnapshot
+            )
+        case .external(let event):
+            let time = event.isAllDay
+                ? "終日"
+                : timeRange(start: event.startDate, end: event.endDate)
+            return joinedDetail(time, event.calendarTitle)
+        }
+    }
+
+    private var timeLabel: String {
+        switch entry {
+        case .external(let event) where event.isAllDay:
+            return "終日"
+        default:
+            return FavorecoDateText.time(entry.date)
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(timeLabel)
+                .font(FavorecoTypography.captionStrong)
+                .foregroundStyle(.secondary)
+                .frame(width: 46, alignment: .leading)
+                .padding(.top, 5)
+
+            ZStack(alignment: .top) {
+                if !isLast {
+                    Rectangle()
+                        .fill(Color(.separator).opacity(0.65))
+                        .frame(width: 1)
+                        .padding(.top, 27)
+                }
+
+                Circle()
+                    .fill(tint)
+                    .frame(width: 27, height: 27)
+                    .overlay {
+                        FavorecoIcon(systemName: iconName, size: 13)
+                            .foregroundStyle(.white)
+                    }
+            }
+            .frame(width: 30)
+            .frame(minHeight: 74)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(kindLabel)
+                    .font(FavorecoTypography.captionStrong)
+                    .foregroundStyle(tint)
+
+                Text(title)
+                    .font(FavorecoTypography.bodyStrong)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                if !detail.isEmpty {
+                    Text(detail)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
+            .padding(.bottom, 12)
+
+            if isNavigable {
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 20)
+            }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    private var isNavigable: Bool {
+        if case .external = entry { return false }
+        return true
+    }
+
+    private func nonEmpty(_ value: String, fallback: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        let fallbackTrimmed = fallback.trimmingCharacters(in: .whitespacesAndNewlines)
+        return fallbackTrimmed.isEmpty ? "予定" : fallbackTrimmed
+    }
+
+    private func joinedDetail(_ values: String...) -> String {
+        values
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "・")
+    }
+
+    private func timeRange(start: Date, end: Date) -> String {
+        guard end > start else { return FavorecoDateText.time(start) }
+        return "\(FavorecoDateText.time(start))〜\(FavorecoDateText.time(end))"
+    }
+}
+
+struct CalendarPlanOverviewSection: View {
     let ticketProgressItems: [CategoryTicketProgressItem]
     let nextActionItems: [CalendarNextActionItem]
-    let selectedDate: Date
-    let selectedDayVisits: [Visit]
-    let selectedDayPlans: [Plan]
-    let selectedDayExternalEvents: [ExternalCalendarEvent]
-    let showsExternalCalendarEvents: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            selectedDaySection
             nextActionSection
             ticketScheduleSection
         }
@@ -516,78 +875,4 @@ struct CalendarAgendaSection: View {
         }
     }
 
-    private var selectedDaySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(FavorecoDateText.fullDate(selectedDate))
-                .font(FavorecoTypography.sectionTitle)
-
-            if selectedDayVisits.isEmpty
-                && selectedDayPlans.isEmpty
-                && (!showsExternalCalendarEvents || selectedDayExternalEvents.isEmpty) {
-                PlaceholderRow(
-                    icon: "calendar.badge.exclamationmark",
-                    title: "この日の記録はありません",
-                    message: "予定や訪問記録を追加するとここに表示されます。"
-                )
-                .padding(14)
-                .background(.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            } else {
-                selectedDayRows
-            }
-        }
-    }
-
-    private var selectedDayRows: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !selectedDayPlans.isEmpty {
-                Text("予定・チケット")
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.secondary)
-
-                ForEach(selectedDayPlans) { plan in
-                    planLink(plan)
-                }
-            }
-
-            if !selectedDayVisits.isEmpty {
-                Text("記録")
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, selectedDayPlans.isEmpty ? 0 : 4)
-
-                ForEach(selectedDayVisits) { visit in
-                    visitLink(visit)
-                }
-            }
-
-            if showsExternalCalendarEvents && !selectedDayExternalEvents.isEmpty {
-                Text("外部カレンダー")
-                    .font(FavorecoTypography.captionStrong)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, selectedDayVisits.isEmpty && selectedDayPlans.isEmpty ? 0 : 4)
-
-                ForEach(selectedDayExternalEvents) { event in
-                    ExternalCalendarEventRow(event: event)
-                }
-            }
-        }
-    }
-
-    private func planLink(_ plan: Plan) -> some View {
-        NavigationLink {
-            PlanDetailView(plan: plan)
-        } label: {
-            CalendarPlanSummaryRow(plan: plan)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func visitLink(_ visit: Visit) -> some View {
-        NavigationLink {
-            ExperienceDetailView(visit: visit)
-        } label: {
-            VisitSummaryRow(visit: visit)
-        }
-        .buttonStyle(.plain)
-    }
 }

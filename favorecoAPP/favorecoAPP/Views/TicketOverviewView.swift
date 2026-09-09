@@ -1165,7 +1165,7 @@ private struct TicketOverviewSearchField: View {
 }
 
 private enum TicketOverviewCardGeometry {
-    static let cornerCut: CGFloat = 18
+    nonisolated static let cornerCut: CGFloat = 18
 }
 
 private struct TicketOverviewCardShape: Shape {

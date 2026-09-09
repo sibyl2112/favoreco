@@ -73,6 +73,8 @@ struct FavorecoRegistrationSectionHeader: View {
 }
 
 struct FavorecoRegistrationSection<Content: View>: View {
+    @Environment(\.usesTheaterLifecycleFlatLayout) private var usesFlatLayout
+    @Environment(\.favorecoThemePalette) private var themePalette
     let title: String
     @ViewBuilder let content: Content
 
@@ -82,13 +84,31 @@ struct FavorecoRegistrationSection<Content: View>: View {
     }
 
     var body: some View {
-        Section {
-            content
-        } header: {
-            FavorecoRegistrationSectionHeader(title)
+        Group {
+            if usesFlatLayout {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(themePalette.registrationSectionHeaderTint)
+                            .frame(width: 4, height: 24)
+                        Text(title)
+                            .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 0)
+                    }
+                    content
+                }
+                .theaterLifecycleDisclosureSurface(isExpanded: true)
+            } else {
+                Section {
+                    content
+                } header: {
+                    FavorecoRegistrationSectionHeader(title)
+                }
+                .listRowBackground(Color(uiColor: .systemBackground))
+                .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
+            }
         }
-        .listRowBackground(Color(uiColor: .systemBackground))
-        .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
     }
 }
 
@@ -207,6 +227,11 @@ enum LivePerformanceType: String, CaseIterable, Identifiable {
         guard key == LivePerformanceType.other.rawValue else { return "" }
         return input.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    static func isValidSelection(key: String, customName: String) -> Bool {
+        key != LivePerformanceType.other.rawValue
+            || !customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 struct LivePerformanceTypePicker: View {
@@ -215,7 +240,7 @@ struct LivePerformanceTypePicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            ExplicitFormControlRow(title: "公演種別", isOptional: true) {
+            ExplicitFormControlRow(title: "ライブ種別", isOptional: true) {
                 Menu {
                     selectionButton(title: "未設定", key: "")
                     ForEach(LivePerformanceType.allCases) { type in
@@ -763,10 +788,16 @@ struct ExplicitFormFieldTitle: View {
                 Text("任意")
                     .font(FavorecoTypography.jpSans(10, weight: .regular, relativeTo: .caption2))
                     .foregroundStyle(Color.secondary.opacity(0.72))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
             } else if isRequired {
                 Text("必須")
                     .font(FavorecoTypography.jpSans(9.5, weight: .bold, relativeTo: .caption2))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color.red.opacity(0.88), in: Capsule())
@@ -817,10 +848,16 @@ struct ExplicitFormProminentInlineLabel: View {
                     Text("任意")
                         .font(FavorecoTypography.jpSans(9, weight: .regular, relativeTo: .caption2))
                         .opacity(0.78)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(1)
                 } else if isRequired {
                     Text("必須")
                         .font(FavorecoTypography.jpSans(9, weight: .bold, relativeTo: .caption2))
                         .opacity(0.9)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .layoutPriority(1)
                 }
             }
             .foregroundStyle(cream)

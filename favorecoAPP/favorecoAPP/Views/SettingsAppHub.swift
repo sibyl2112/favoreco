@@ -235,7 +235,7 @@ struct DeveloperSettingsView: View {
                 debugMessage = summary.insertedMessage
             } catch {
                 debugMessage = "ダミーデータの更新に失敗しました。"
-                assertionFailure("Failed to insert debug data: \(error)")
+                debugPrint("Failed to insert debug data: \(error)")
             }
         }
     }
@@ -252,7 +252,7 @@ struct DeveloperSettingsView: View {
                 debugMessage = summary.message
             } catch {
                 debugMessage = "体験データの再作成に失敗しました。"
-                assertionFailure("Failed to rebuild debug data: \(error)")
+                debugPrint("Failed to rebuild debug data: \(error)")
             }
         }
     }
@@ -271,7 +271,7 @@ struct DeveloperSettingsView: View {
                 debugMessage = summary.deletedMessage
             } catch {
                 debugMessage = "仮データの削除に失敗しました。"
-                assertionFailure("Failed to delete debug data: \(error)")
+                debugPrint("Failed to delete debug data: \(error)")
             }
         }
     }

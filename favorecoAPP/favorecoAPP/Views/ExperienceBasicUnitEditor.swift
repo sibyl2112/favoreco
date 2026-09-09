@@ -59,6 +59,7 @@ struct ExperienceBasicUnitEditor: View {
     let categoryTemplateKey: String
     let usesLifecycleEditLayout: Bool
     let showsTargetFields: Bool
+    let showsVisitFields: Bool
     private let subTypeKey: Binding<String>?
     private let screenWorkSeasonNumber: Binding<Int>?
     private let performanceTypeCustomName: Binding<String>?
@@ -94,6 +95,7 @@ struct ExperienceBasicUnitEditor: View {
         categoryTemplateKey: String = "",
         usesLifecycleEditLayout: Bool = false,
         showsTargetFields: Bool = true,
+        showsVisitFields: Bool = true,
         subTypeKey: Binding<String>? = nil,
         screenWorkSeasonNumber: Binding<Int>? = nil,
         performanceTypeCustomName: Binding<String>? = nil,
@@ -130,6 +132,7 @@ struct ExperienceBasicUnitEditor: View {
         self.categoryTemplateKey = categoryTemplateKey
         self.usesLifecycleEditLayout = usesLifecycleEditLayout
         self.showsTargetFields = showsTargetFields
+        self.showsVisitFields = showsVisitFields
         self.subTypeKey = subTypeKey
         self.screenWorkSeasonNumber = screenWorkSeasonNumber
         self.performanceTypeCustomName = performanceTypeCustomName
@@ -166,6 +169,7 @@ struct ExperienceBasicUnitEditor: View {
         categoryTemplateKey: String = "",
         usesLifecycleEditLayout: Bool = false,
         showsTargetFields: Bool = true,
+        showsVisitFields: Bool = true,
         subTypeKey: Binding<String>? = nil,
         screenWorkSeasonNumber: Binding<Int>? = nil,
         performanceTypeCustomName: Binding<String>? = nil,
@@ -202,6 +206,7 @@ struct ExperienceBasicUnitEditor: View {
         self.categoryTemplateKey = categoryTemplateKey
         self.usesLifecycleEditLayout = usesLifecycleEditLayout
         self.showsTargetFields = showsTargetFields
+        self.showsVisitFields = showsVisitFields
         self.subTypeKey = subTypeKey
         self.screenWorkSeasonNumber = screenWorkSeasonNumber
         self.performanceTypeCustomName = performanceTypeCustomName
@@ -220,10 +225,12 @@ struct ExperienceBasicUnitEditor: View {
                 theaterDivider
                 subtypeEditor
             }
-            if showsTargetFields {
+            if showsTargetFields, showsVisitFields {
                 theaterDivider
             }
-            visitFields
+            if showsVisitFields {
+                visitFields
+            }
         }
         .task { await publicPlaceStore.prepare() }
     }
@@ -234,6 +241,22 @@ struct ExperienceBasicUnitEditor: View {
             || categoryTemplateKey == "movie"
             || categoryTemplateKey == "theme_park"
             || categoryTemplateKey == "nature_living"
+    }
+
+    private var targetTitleName: String {
+        switch categoryTemplateKey {
+        case "theater": "公演名"
+        case "live": "ライブ名"
+        case "movie": "作品名"
+        case "museum": "展示・イベント名"
+        case "sake": "銘柄・商品名"
+        case "theme_park", "outing_facility": "施設名"
+        case "nature_living": "スポット名"
+        case "goshuin": "参拝先"
+        case "book": "書名"
+        case "random_goods": "シリーズ名"
+        default: template.titlePlaceholder
+        }
     }
 
     @ViewBuilder
@@ -265,7 +288,7 @@ struct ExperienceBasicUnitEditor: View {
         if usesSimpleScreenWorkLayout, let editableTitle {
             VStack(alignment: .leading, spacing: 0) {
                 ExplicitFormTextField(
-                    title: usesLifecycleEditLayout ? "イベント名（必須）" : "作品名（必須）",
+                    title: "\(targetTitleName)（必須）",
                     prompt: template.titlePlaceholder,
                     text: editableTitle,
                     axis: .vertical,
@@ -281,7 +304,7 @@ struct ExperienceBasicUnitEditor: View {
         } else if usesExplicitTheaterLayout, let editableTitle, let editableSeriesName {
             VStack(alignment: .leading, spacing: 0) {
                 ExplicitFormTextField(
-                    title: usesLifecycleEditLayout ? "イベント名（必須）" : "公演名",
+                    title: "\(targetTitleName)（必須）",
                     prompt: template.titlePlaceholder,
                     text: editableTitle,
                     axis: .vertical,
@@ -300,7 +323,7 @@ struct ExperienceBasicUnitEditor: View {
             }
         } else if usesExplicitTheaterLayout {
             VStack(alignment: .leading, spacing: 0) {
-                ExplicitFormControlRow(title: usesLifecycleEditLayout ? "イベント名" : "公演名") {
+                ExplicitFormControlRow(title: targetTitleName) {
                     Text(existingTitle.isEmpty ? "未設定" : existingTitle)
                         .lineLimit(usesLifecycleEditLayout ? 3 : 1)
                         .minimumScaleFactor(0.72)
@@ -317,7 +340,7 @@ struct ExperienceBasicUnitEditor: View {
         } else if let editableTitle, let editableSeriesName {
             VStack(alignment: .leading, spacing: 0) {
                 ExplicitFormTextField(
-                    title: usesLifecycleEditLayout ? "イベント名（必須）" : "\(template.titlePlaceholder)（必須）",
+                    title: "\(targetTitleName)（必須）",
                     prompt: "\(template.titlePlaceholder)を入力",
                     text: editableTitle,
                     axis: .vertical,

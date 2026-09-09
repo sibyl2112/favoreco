@@ -8,6 +8,15 @@ struct AdmissionPreparationConfirmationSheet: View {
     let plan: Plan
 
     @State private var saveError = ""
+    @State private var isSaving = false
+
+    private var isLive: Bool {
+        plan.event?.category?.templateKey == "live"
+    }
+
+    private var performanceNoun: String {
+        isLive ? "ライブ" : "公演"
+    }
 
     private var planDisplayTitle: String {
         let planTitle = plan.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -42,7 +51,7 @@ struct AdmissionPreparationConfirmationSheet: View {
         let opening = daysUntilPerformance == 0
             ? "チケットや持ち物を確認し、時間に余裕を持って向かいましょう。"
             : "チケットや持ち物、移動予定など、当日の準備を確認しましょう。"
-        return "\(opening) 電子チケットの表示、紙チケットの発券、招待情報、チケット不要の公演も含め、入場できる状態か確認してください。"
+        return "\(opening) 電子チケットの表示、紙チケットの発券、招待情報、チケット不要の\(performanceNoun)も含め、入場できる状態か確認してください。"
     }
 
     var body: some View {
@@ -67,10 +76,20 @@ struct AdmissionPreparationConfirmationSheet: View {
                 Button {
                     confirm()
                 } label: {
-                    Label("準備できている", systemImage: "checkmark.circle.fill")
+                    HStack(spacing: 8) {
+                        if isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                        }
+                        Text(isSaving ? "保存中" : "準備できている")
+                    }
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(isSaving)
 
                 Button {
                     snooze()
@@ -79,11 +98,12 @@ struct AdmissionPreparationConfirmationSheet: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+                .disabled(isSaving)
 
                 Spacer(minLength: 0)
             }
             .padding(24)
-            .navigationTitle("公演前チェック")
+            .navigationTitle("\(performanceNoun)前チェック")
             .navigationBarTitleDisplayMode(.inline)
             .alert("確認状態を保存できませんでした", isPresented: Binding(
                 get: { !saveError.isEmpty },
@@ -98,6 +118,7 @@ struct AdmissionPreparationConfirmationSheet: View {
     }
 
     private func confirm() {
+        guard !isSaving else { return }
         var fields = plan.preparationFields
         fields.admissionPreparationConfirmedAt = Date()
         fields.admissionPreparationSnoozedUntil = nil
@@ -105,12 +126,23 @@ struct AdmissionPreparationConfirmationSheet: View {
     }
 
     private func snooze() {
+        guard !isSaving else { return }
         var fields = plan.preparationFields
         fields.admissionPreparationSnoozedUntil = plan.nextAdmissionPreparationPromptDate()
         save(fields)
     }
 
     private func save(_ fields: PlanPreparationFields) {
+        guard !isSaving else { return }
+        isSaving = true
+        saveError = ""
+        Task { @MainActor in
+            await Task.yield()
+            persist(fields)
+        }
+    }
+
+    private func persist(_ fields: PlanPreparationFields) {
         plan.unitFieldsRaw = fields.encodedRawValue
         plan.updatedAt = Date()
         do {
@@ -118,7 +150,9 @@ struct AdmissionPreparationConfirmationSheet: View {
             dismiss()
         } catch {
             modelContext.rollback()
-            saveError = error.localizedDescription
+            isSaving = false
+            saveError = "確認状態を保存できませんでした。もう一度お試しください。"
+            debugPrint("Failed to save admission preparation state: \(error)")
         }
     }
 }

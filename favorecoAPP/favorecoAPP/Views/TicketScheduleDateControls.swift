@@ -259,6 +259,67 @@ struct OptionalTenMinuteTimeRow: View {
     }
 }
 
+struct FiveMinuteTimeRow: View {
+    let title: String
+    @Binding var selection: Date
+    var usesHorizontalLayout = false
+    var emphasizesHorizontalLabel = false
+
+    var body: some View {
+        ExplicitFormControlRow(
+            title: title,
+            density: .compactSchedule,
+            layout: usesHorizontalLayout ? .horizontal : .stacked,
+            emphasizesHorizontalLabel: emphasizesHorizontalLabel
+        ) {
+            FiveMinuteTimeField(
+                selection: $selection,
+                accessibilityLabel: "\(title)時刻"
+            )
+        }
+    }
+}
+
+struct OptionalFiveMinuteTimeRow: View {
+    let title: String
+    @Binding var selection: Date
+    @Binding var isSet: Bool
+    let defaultValue: Date
+    var usesHorizontalLayout = false
+    var emphasizesHorizontalLabel = false
+
+    var body: some View {
+        ExplicitFormControlRow(
+            title: title,
+            isOptional: true,
+            density: .compactSchedule,
+            layout: usesHorizontalLayout ? .horizontal : .stacked,
+            emphasizesHorizontalLabel: emphasizesHorizontalLabel
+        ) {
+            HStack(spacing: 6) {
+                FiveMinuteTimeField(
+                    selection: $selection,
+                    isSet: $isSet,
+                    defaultValue: defaultValue,
+                    accessibilityLabel: "\(title)時刻"
+                )
+
+                if isSet {
+                    Button {
+                        isSet = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(title)時刻を未設定に戻す")
+                }
+            }
+        }
+    }
+}
+
 private struct TenMinuteTimeField: View {
     @Binding var selection: Date
     var isSet: Binding<Bool>?
@@ -375,15 +436,22 @@ private struct TenMinuteWheelTimePicker: View {
     }
 }
 
-private struct FiveMinuteTimeField: View {
+struct FiveMinuteTimeField: View {
     @Binding var selection: Date
+    var isSet: Binding<Bool>?
+    var defaultValue: Date?
     let accessibilityLabel: String
 
     @State private var isShowingPicker = false
     @State private var pendingSelection = Date()
 
+    private var isTimeSet: Bool {
+        isSet?.wrappedValue ?? true
+    }
+
     private var displayText: String {
-        selection
+        guard isTimeSet else { return "--:--" }
+        return selection
             .roundedToNearestFiveMinutes()
             .formatted(
                 Date.FormatStyle()
@@ -395,13 +463,14 @@ private struct FiveMinuteTimeField: View {
 
     var body: some View {
         Button {
-            pendingSelection = selection.roundedToNearestFiveMinutes()
+            pendingSelection = (isTimeSet ? selection : (defaultValue ?? selection))
+                .roundedToNearestFiveMinutes()
             isShowingPicker = true
         } label: {
             Text(displayText)
                 .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
                 .monospacedDigit()
-                .foregroundStyle(Color.primary)
+                .foregroundStyle(isTimeSet ? Color.primary : Color.secondary)
                 .frame(minWidth: 68)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 5)
@@ -409,7 +478,7 @@ private struct FiveMinuteTimeField: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(displayText)
+        .accessibilityValue(isTimeSet ? displayText : "未設定")
         .onAppear {
             normalizeSelectionIfNeeded()
         }
@@ -426,6 +495,7 @@ private struct FiveMinuteTimeField: View {
                     accessibilityLabel: accessibilityLabel
                 ) { newValue in
                     selection = newValue.roundedToNearestFiveMinutes()
+                    isSet?.wrappedValue = true
                 }
                 .frame(width: 180, height: 170)
 

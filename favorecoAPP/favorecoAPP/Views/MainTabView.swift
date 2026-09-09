@@ -137,7 +137,6 @@ struct MainTabView: View {
     @State private var isShowingTheaterPlanChoice = false
     @State private var isShowingQuickRegistration = false
     @State private var isShowingPublicPlaceCatalog = false
-    @State private var theaterRegistrationCategory: RecordCategory?
     @State private var pendingCreateAction: CreateAction?
     @State private var pendingRecordDestination: RecordEntryDestination?
     @State private var recordDestination: RecordEntryDestination?
@@ -318,6 +317,8 @@ struct MainTabView: View {
                         canCreateRecord: !visibleCategories.isEmpty,
                         definition: definition,
                         onSelect: { action in
+                            guard presentedCreateMenuRequest?.id == request.id,
+                                  pendingCreateAction == nil else { return }
                             presentedCreateContextCategoryID = request.categoryID
                             presentedCreateContextTemplateKey = category?.templateKey
                             pendingCreateAction = action
@@ -500,10 +501,6 @@ struct MainTabView: View {
                     .favorecoRegistrationTheme(categoryHex: category.colorHex)
             }
         }
-        .sheet(item: $theaterRegistrationCategory) { category in
-            TheaterPerformanceRegistrationView(category: category)
-                .favorecoRegistrationTheme(categoryHex: category.colorHex)
-        }
         .confirmationDialog(
             "予定の登録方法",
             isPresented: $isShowingTheaterPlanChoice,
@@ -517,7 +514,7 @@ struct MainTabView: View {
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("チケット取得から始める場合は、参加日が未定のまま抽選・発売スケジュールを登録できます。")
+            Text("チケット取得から始める場合は、公演日時が未定のまま抽選・発売スケジュールを登録できます。")
         }
     }
 
@@ -539,8 +536,6 @@ struct MainTabView: View {
         case .theaterRegistration:
             unifiedTheaterInitialPurpose = .interested
             isShowingUnifiedTheaterRegistration = true
-        case .performanceRegistration:
-            theaterRegistrationCategory = presentedCreateContextCategory
         case .simpleCategoryRegistration:
             isShowingSimpleCategoryRegistration = true
         case .ticketSchedule:
@@ -548,23 +543,34 @@ struct MainTabView: View {
         }
     }
 
-    /// The add menu and its destination are sibling sheets on this view.
-    /// Wait until SwiftUI has fully removed the menu host before presenting the destination.
+    /// The add menu is a custom overlay, while every destination is presented as a sheet.
+    /// Move the sheet request to the next main-queue turn so SwiftUI can commit removal of
+    /// the overlay before it starts materializing the destination view hierarchy.
     private func schedulePendingCreateAction() {
         guard pendingCreateAction != nil else { return }
-        Task { @MainActor in
-            await Task.yield()
-            guard presentedCreateMenuRequest == nil else { return }
+        DispatchQueue.main.async {
+            guard presentedCreateMenuRequest == nil else {
+                // A newly opened menu superseded this request. Clear the stale gate so
+                // the replacement menu remains operable instead of becoming locked.
+                pendingCreateAction = nil
+                return
+            }
             openPendingCreateAction()
         }
     }
 
     private func dismissCreateMenu(opensPendingAction: Bool = false) {
+        if opensPendingAction {
+            // Do not overlap the 0.22-second slide-out animation with construction of a
+            // large destination sheet. An immediate state handoff is both faster and
+            // avoids the physical-device SwiftUI metadata deadlock seen on this route.
+            presentedCreateMenuRequest = nil
+            schedulePendingCreateAction()
+            return
+        }
+
         withAnimation(.easeOut(duration: 0.22)) {
             presentedCreateMenuRequest = nil
-        }
-        if opensPendingAction {
-            schedulePendingCreateAction()
         }
     }
 
@@ -624,7 +630,7 @@ struct MainTabView: View {
     }
 
     private var viewingRecordScreenTitle: String {
-        isScopedViewingRecordFlow ? "鑑賞の記録をつける" : "体験済みを記録"
+        isScopedViewingRecordFlow ? "鑑賞記録を追加" : "体験記録を追加"
     }
 
     private func scheduleAutomaticBackupAfterInitialDisplay() async {
@@ -892,7 +898,7 @@ struct MainToolbarActions: View {
     }
 }
 
-private enum RecordEntryDestination: Identifiable {
+enum RecordEntryDestination: Identifiable {
     case new(RecordCategory)
     case existing(ExperienceEvent)
     case edit(Visit)
@@ -906,7 +912,7 @@ private enum RecordEntryDestination: Identifiable {
     }
 }
 
-private struct TheaterMemoryTargetSelectionView: View {
+struct TheaterMemoryTargetSelectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \Visit.visitedAt, order: .reverse) private var allVisits: [Visit]
@@ -1173,7 +1179,7 @@ private struct TheaterMemoryTargetSelectionView: View {
     }
 }
 
-private struct RecordTargetSelectionView: View {
+struct RecordTargetSelectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var allEvents: [ExperienceEvent]
 
@@ -1370,21 +1376,20 @@ private struct RecordTargetSelectionView: View {
     }
 }
 
-private enum CreateAction: String, Identifiable {
+enum CreateAction: String, Identifiable {
     case plan
     case record
     case theaterMemory
     case quick
     case placeCatalog
     case theaterRegistration
-    case performanceRegistration
     case simpleCategoryRegistration
     case ticketSchedule
 
     var id: String { rawValue }
 }
 
-private struct CreateEntryMenuItem: Identifiable {
+struct CreateEntryMenuItem: Identifiable {
     let action: CreateAction
     let title: String
     let detail: String
@@ -1395,7 +1400,7 @@ private struct CreateEntryMenuItem: Identifiable {
     var id: CreateAction { action }
 }
 
-private struct CreateEntryMenuDefinition {
+struct CreateEntryMenuDefinition {
     let templateKey: String?
     let items: [CreateEntryMenuItem]
 
@@ -1414,7 +1419,7 @@ private struct CreateEntryMenuDefinition {
                     CreateEntryMenuItem(
                         action: .theaterMemory,
                         title: "観劇の思い出を記録",
-                        detail: "参加した公演を選んで記録を残す",
+                        detail: "観劇した公演を選んで思い出を残す",
                         systemImage: "square.and.pencil"
                     ),
                 ]
@@ -1424,14 +1429,14 @@ private struct CreateEntryMenuDefinition {
                 templateKey: templateKey,
                 items: [
                     CreateEntryMenuItem(
-                        action: .performanceRegistration,
+                        action: .theaterRegistration,
                         title: "ライブを登録",
-                        detail: "公演情報を登録して予定・チケットへ進む",
+                        detail: "ライブ情報を登録して参戦予定・チケットへ進む",
                         systemImage: "music.mic"
                     ),
                     CreateEntryMenuItem(
                         action: .record,
-                        title: "参戦の記録をつける",
+                        title: "参戦記録を追加",
                         detail: "登録済みライブへ今回の記録を追加",
                         systemImage: "square.and.pencil",
                         requiresExistingRecord: true
@@ -1462,7 +1467,7 @@ private struct CreateEntryMenuDefinition {
                     ),
                     CreateEntryMenuItem(
                         action: .record,
-                        title: "鑑賞の記録をつける",
+                        title: "鑑賞記録を追加",
                         detail: "登録済み作品へ今回の記録を追加",
                         systemImage: "square.and.pencil",
                         requiresExistingRecord: true
@@ -1481,7 +1486,7 @@ private struct CreateEntryMenuDefinition {
                     ),
                     CreateEntryMenuItem(
                         action: .record,
-                        title: "鑑賞の記録をつける",
+                        title: "鑑賞記録を追加",
                         detail: "登録済み展示へ今回の記録を追加",
                         systemImage: "square.and.pencil",
                         requiresExistingRecord: true
@@ -1507,7 +1512,7 @@ private struct CreateEntryMenuDefinition {
                     ),
                     CreateEntryMenuItem(
                         action: .record,
-                        title: "来園の記録をつける",
+                        title: "来園記録を追加",
                         detail: "登録済み施設へ今回の記録を追加",
                         systemImage: "square.and.pencil",
                         requiresExistingRecord: true
@@ -1533,7 +1538,7 @@ private struct CreateEntryMenuDefinition {
                     ),
                     CreateEntryMenuItem(
                         action: .record,
-                        title: "訪問の記録をつける",
+                        title: "訪問記録を追加",
                         detail: "登録済みスポットへ今回の記録を追加",
                         systemImage: "square.and.pencil",
                         requiresExistingRecord: true
@@ -1559,7 +1564,7 @@ private struct CreateEntryMenuDefinition {
                     ),
                     CreateEntryMenuItem(
                         action: .record,
-                        title: "訪問の記録をつける",
+                        title: "訪問記録を追加",
                         detail: "登録済み施設へ今回の記録を追加",
                         systemImage: "square.and.pencil",
                         requiresExistingRecord: true
@@ -1585,7 +1590,7 @@ private struct CreateEntryMenuDefinition {
                     ),
                     CreateEntryMenuItem(
                         action: .record,
-                        title: "体験済みを記録",
+                        title: "体験記録を追加",
                         detail: "観た・行った・体験した思い出を残す",
                         systemImage: "square.and.pencil",
                         requiresExistingRecord: true

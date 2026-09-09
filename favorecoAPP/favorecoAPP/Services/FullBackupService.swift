@@ -6,7 +6,7 @@ extension UTType {
     static let favorecoBackup = UTType(exportedAs: "com.ranoviqo.favoreco.backup", conformingTo: .package)
 }
 
-struct FullBackupPreview {
+nonisolated struct FullBackupPreview: Sendable {
     let jsonPreview: JSONBackupPreview
     let availablePhotoCount: Int
     let totalPhotoBytes: Int64
@@ -61,7 +61,7 @@ enum FullBackupService {
         }
     }
 
-    @MainActor
+    nonisolated
     static func inspect(packageURL: URL) throws -> FullBackupPreview {
         let manifestData = try Data(contentsOf: packageURL.appendingPathComponent(manifestFilename))
         let jsonPreview = try JSONBackupImportService.inspect(data: manifestData)
@@ -162,7 +162,102 @@ enum FullBackupService {
     }
 
     @MainActor
-    private static func decodeEnvelope(_ data: Data) throws -> FavorecoBackupEnvelope {
+    static func restoreResponsively(
+        packageURL: URL,
+        in context: ModelContext
+    ) async throws -> FullBackupRestoreResult {
+        let envelope = try await Task.detached(priority: .userInitiated) {
+            try loadEnvelope(packageURL: packageURL)
+        }.value
+
+        let wasAutosaveEnabled = context.autosaveEnabled
+        context.autosaveEnabled = false
+        defer { context.autosaveEnabled = wasAutosaveEnabled }
+
+        let modelResult = try JSONBackupImportService.restore(
+            envelope: envelope,
+            in: context,
+            savesChanges: false
+        )
+        let mediaDirectory = packageURL.appendingPathComponent(mediaDirectoryName, isDirectory: true)
+
+        let visits = Dictionary(grouping: try context.fetch(FetchDescriptor<Visit>()), by: \.id)
+            .compactMapValues(\.first)
+        let plans = Dictionary(grouping: try context.fetch(FetchDescriptor<Plan>()), by: \.id)
+            .compactMapValues(\.first)
+        var photos = Dictionary(grouping: try context.fetch(FetchDescriptor<PhotoBlob>()), by: \.id)
+            .compactMapValues(\.first)
+        var insertedPhotoCount = 0
+        var updatedPhotoCount = 0
+        var missingPhotoCount = 0
+
+        for item in envelope.photos {
+            try Task.checkCancellation()
+            let sourceURL = mediaDirectory.appendingPathComponent("\(item.id.uuidString).bin")
+            let data = await Task.detached(priority: .userInitiated) {
+                try? Data(contentsOf: sourceURL)
+            }.value
+            guard let data, !data.isEmpty else {
+                missingPhotoCount += 1
+                continue
+            }
+
+            let model: PhotoBlob
+            if let existing = photos[item.id] {
+                model = existing
+                updatedPhotoCount += 1
+            } else {
+                model = PhotoBlob(id: item.id)
+                context.insert(model)
+                photos[item.id] = model
+                insertedPhotoCount += 1
+            }
+            model.relativePath = item.relativePath
+            model.originalFilename = item.originalFilename
+            model.mediaKind = item.mediaKind
+            model.purpose = item.purpose
+            model.caption = item.caption ?? ""
+            model.ocrText = item.ocrText ?? ""
+            model.amount = item.amount ?? Decimal(0)
+            model.byteCount = data.count
+            model.width = item.width
+            model.height = item.height
+            model.createdAt = item.createdAt
+            model.data = data
+            model.visit = item.visitID.flatMap { visits[$0] }
+            model.plan = item.planID.flatMap { plans[$0] }
+        }
+
+        let galleryPhotos = Dictionary(
+            grouping: try context.fetch(FetchDescriptor<FavoGalleryPhoto>()),
+            by: \.id
+        ).compactMapValues(\.first)
+        for item in envelope.favoGalleryPhotos ?? [] {
+            guard let galleryPhoto = galleryPhotos[item.id],
+                  let sourcePhotoID = item.sourcePhotoID,
+                  let sourcePhoto = photos[sourcePhotoID] else { continue }
+            galleryPhoto.sourcePhoto = sourcePhoto
+            galleryPhoto.data = Data()
+            galleryPhoto.byteCount = sourcePhoto.byteCount
+            galleryPhoto.width = sourcePhoto.width
+            galleryPhoto.height = sourcePhoto.height
+        }
+
+        try context.save()
+        return FullBackupRestoreResult(
+            modelResult: modelResult,
+            insertedPhotoCount: insertedPhotoCount,
+            updatedPhotoCount: updatedPhotoCount,
+            missingPhotoCount: missingPhotoCount
+        )
+    }
+
+    nonisolated private static func loadEnvelope(packageURL: URL) throws -> FavorecoBackupEnvelope {
+        let manifestData = try Data(contentsOf: packageURL.appendingPathComponent(manifestFilename))
+        return try decodeEnvelope(manifestData)
+    }
+
+    nonisolated private static func decodeEnvelope(_ data: Data) throws -> FavorecoBackupEnvelope {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(FavorecoBackupEnvelope.self, from: data)

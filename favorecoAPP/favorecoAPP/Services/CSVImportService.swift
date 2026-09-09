@@ -299,7 +299,7 @@ enum CSVImportService {
     }
 }
 
-struct CSVImportPreview {
+nonisolated struct CSVImportPreview: Sendable {
     let headers: [String]
     let rows: [CSVImportRow]
 
@@ -307,7 +307,7 @@ struct CSVImportPreview {
     var invalidRows: [CSVImportRow] { rows.filter { !$0.isValid } }
 }
 
-struct CSVImportRow: Identifiable {
+nonisolated struct CSVImportRow: Identifiable, Sendable {
     let lineNumber: Int
     let dateText: String
     let category: String

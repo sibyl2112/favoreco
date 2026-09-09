@@ -187,6 +187,61 @@ final class DetailPresentationLogicTests: XCTestCase {
         XCTAssertEqual(venues.first?.address, "東京都")
     }
 
+    func testDetailVenueAddressSkipsBlankMasterAndUsesVisitSnapshot() {
+        let address = ExperienceDetailSnapshot.resolvedVenueAddress(
+            venueName: "有明四季劇場",
+            masterAddress: "  ",
+            visitAddress: "東京都江東区有明2-1-29",
+            planAddresses: [],
+            eventVenues: []
+        )
+
+        XCTAssertEqual(address, "東京都江東区有明2-1-29")
+    }
+
+    func testDetailVenueAddressUsesMatchingEventVenueWithoutMixingVenues() {
+        let address = ExperienceDetailSnapshot.resolvedVenueAddress(
+            venueName: " 有明四季劇場 ",
+            masterAddress: nil,
+            visitAddress: "",
+            planAddresses: [],
+            eventVenues: [
+                EventVenueEntry(name: "別会場", address: "別住所"),
+                EventVenueEntry(name: "有明四季劇場", address: "東京都江東区有明2-1-29"),
+            ]
+        )
+
+        XCTAssertEqual(address, "東京都江東区有明2-1-29")
+    }
+
+    func testMapAddressResolutionPrefersCandidateNearestStoredCoordinate() {
+        let candidates = [
+            PlaceSearchCandidate(
+                id: "far",
+                name: "同名会場",
+                address: "遠い住所",
+                latitude: 34.0,
+                longitude: 135.0
+            ),
+            PlaceSearchCandidate(
+                id: "near",
+                name: "同名会場",
+                address: "近い住所",
+                latitude: 35.634,
+                longitude: 139.792
+            ),
+        ]
+
+        XCTAssertEqual(
+            PlaceSearchService.preferredAddressCandidate(
+                candidates,
+                nearLatitude: 35.6339,
+                longitude: 139.7917
+            )?.id,
+            "near"
+        )
+    }
+
     private func backSwipe(
         startX: CGFloat = 20,
         translation: CGSize = CGSize(width: 90, height: 0),

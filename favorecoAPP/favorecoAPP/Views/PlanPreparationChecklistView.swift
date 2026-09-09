@@ -19,7 +19,7 @@ struct PlanPreparationChecklistView: View {
 
     @Bindable var plan: Plan
     let tint: Color
-    var title = "公演の準備・遠征"
+    var title = "予定の準備・遠征"
     var highlightedTaskID: UUID? = nil
     var presentation: PlanPreparationPresentation = .planning
     var showsHeader = true
@@ -30,6 +30,14 @@ struct PlanPreparationChecklistView: View {
 
     private var fields: PlanPreparationFields {
         plan.preparationFields
+    }
+
+    private var planTemplateKey: String? {
+        (plan.event?.category ?? plan.category)?.templateKey
+    }
+
+    private var targetNoun: String {
+        GenreVocabulary.targetNoun(for: planTemplateKey)
     }
 
     private var isActive: Bool {
@@ -90,6 +98,7 @@ struct PlanPreparationChecklistView: View {
                 task: request.task,
                 defaultDueDate: defaultDueDate,
                 defaultScheduleDate: plan.startsAt,
+                targetNoun: targetNoun,
                 tint: tint
             ) { task in
                 save(task)
@@ -113,7 +122,7 @@ struct PlanPreparationChecklistView: View {
                         Text(title)
                             .font(FavorecoTypography.sectionTitle)
                         if !plan.hasConfirmedSchedule {
-                            Text("参加日未定でも入力できます")
+                            Text("\(GenreVocabulary.undatedSchedule(for: planTemplateKey))でも入力できます")
                                 .font(FavorecoTypography.caption)
                                 .foregroundStyle(.secondary)
                         } else if presentation == .record {
@@ -132,14 +141,14 @@ struct PlanPreparationChecklistView: View {
                     if presentation == .planning {
                         Toggle("準備リストを使う", isOn: activeBinding)
                             .labelsHidden()
-                            .accessibilityLabel("公演の準備リストを使う")
+                            .accessibilityLabel("予定の準備リストを使う")
                     }
                 }
             }
 
             if !canEditTasks {
                 FavorecoIconLabel(
-                    "参加日を確定すると、遠征ToDoを入力できます。",
+                    "\(GenreVocabulary.actionNoun(for: planTemplateKey))日を確定すると、遠征ToDoを入力できます。",
                     systemImage: "calendar.badge.exclamationmark"
                 )
                     .font(FavorecoTypography.body)
@@ -389,7 +398,8 @@ struct PlanPreparationChecklistView: View {
         }
     }
 
-    private func save(_ task: PlanPreparationTask) {
+    @discardableResult
+    private func save(_ task: PlanPreparationTask) -> Bool {
         updateFields { fields in
             if let index = fields.tasks.firstIndex(where: { $0.id == task.id }) {
                 fields.tasks[index] = task
@@ -416,8 +426,9 @@ struct PlanPreparationChecklistView: View {
         }
     }
 
-    private func updateFields(_ update: (inout PlanPreparationFields) -> Void) {
-        guard canEditTasks else { return }
+    @discardableResult
+    private func updateFields(_ update: (inout PlanPreparationFields) -> Void) -> Bool {
+        guard canEditTasks else { return false }
         let previousValue = plan.unitFieldsRaw
         var fields = plan.preparationFields
         update(&fields)
@@ -428,10 +439,13 @@ struct PlanPreparationChecklistView: View {
             Task {
                 await TicketNotificationScheduler.reschedulePreparation(plan: plan)
             }
+            return true
         } catch {
             modelContext.rollback()
             plan.unitFieldsRaw = previousValue
-            errorMessage = "公演の準備を保存できませんでした。もう一度お試しください。"
+            errorMessage = "\(targetNoun)の準備を保存できませんでした。変更前の状態へ戻しました。もう一度お試しください。"
+            debugPrint("Failed to save preparation checklist: \(error)")
+            return false
         }
     }
 
@@ -459,8 +473,9 @@ private struct PlanPreparationTaskEditor: View {
     let task: PlanPreparationTask?
     let defaultDueDate: Date
     let defaultScheduleDate: Date
+    let targetNoun: String
     let tint: Color
-    let onSave: (PlanPreparationTask) -> Void
+    let onSave: (PlanPreparationTask) -> Bool
 
     @State private var title: String
     @State private var kind: PlanPreparationKind
@@ -472,17 +487,21 @@ private struct PlanPreparationTaskEditor: View {
     @State private var amountText: String
     @State private var ocrText: String
     @State private var ocrItems: [PhotosPickerItem] = []
+    @State private var isSaving = false
+    @State private var saveError = ""
 
     init(
         task: PlanPreparationTask?,
         defaultDueDate: Date,
         defaultScheduleDate: Date,
+        targetNoun: String,
         tint: Color,
-        onSave: @escaping (PlanPreparationTask) -> Void
+        onSave: @escaping (PlanPreparationTask) -> Bool
     ) {
         self.task = task
         self.defaultDueDate = defaultDueDate
         self.defaultScheduleDate = defaultScheduleDate
+        self.targetNoun = targetNoun
         self.tint = tint
         self.onSave = onSave
         _title = State(initialValue: task?.title ?? "")
@@ -501,6 +520,8 @@ private struct PlanPreparationTaskEditor: View {
             TheaterLifecycleFlatScaffold(
                 title: task == nil ? "準備項目を追加" : "準備項目を編集",
                 canSave: !trimmedTitle.isEmpty,
+                saveButtonTitle: isSaving ? "保存中" : "保存",
+                isSaving: isSaving,
                 onClose: { dismiss() },
                 onSave: saveAndDismiss
             ) {
@@ -552,7 +573,7 @@ private struct PlanPreparationTaskEditor: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        Text("入力した費用は、チケット・グッズと一緒に公演の費用合計へ反映されます。")
+                        Text("入力した費用は、チケット・グッズと一緒に\(targetNoun)の費用合計へ反映されます。")
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -596,6 +617,14 @@ private struct PlanPreparationTaskEditor: View {
                 }
             }
             .tint(tint)
+            .alert("保存できませんでした", isPresented: Binding(
+                get: { !saveError.isEmpty },
+                set: { if !$0 { saveError = "" } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(saveError)
+            }
         }
         .presentationDetents([.large])
     }
@@ -625,6 +654,16 @@ private struct PlanPreparationTaskEditor: View {
     }
 
     private func saveAndDismiss() {
+        guard !isSaving, !trimmedTitle.isEmpty else { return }
+        isSaving = true
+        saveError = ""
+        Task { @MainActor in
+            await Task.yield()
+            persistAndDismiss()
+        }
+    }
+
+    private func persistAndDismiss() {
         let now = Date()
         var value = task ?? PlanPreparationTask(createdAt: now)
         value.title = trimmedTitle
@@ -635,8 +674,12 @@ private struct PlanPreparationTaskEditor: View {
         value.amount = kind.isTravel ? parsedAmount : Decimal(0)
         value.ocrText = ocrText.trimmingCharacters(in: .whitespacesAndNewlines)
         value.updatedAt = now
-        onSave(value)
-        dismiss()
+        if onSave(value) {
+            dismiss()
+        } else {
+            isSaving = false
+            saveError = "準備項目を保存できませんでした。入力内容は保持されています。もう一度お試しください。"
+        }
     }
 
     private var trimmedTitle: String {

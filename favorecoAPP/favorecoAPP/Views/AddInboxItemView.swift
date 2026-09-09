@@ -19,8 +19,14 @@ struct QuickRegistrationView: View {
     @State private var eyecatchData: Data?
     @State private var selectedEyecatchItem: PhotosPickerItem?
     @State private var selectedOCRItem: PhotosPickerItem?
+    @State private var isShowingInformationImageSource = false
+    @State private var isShowingInformationImagePicker = false
+    @State private var isShowingTextImport = false
+    @State private var isShowingURLImport = false
+    @State private var pastedImportText = ""
     @State private var selectedBookImportImageItem: PhotosPickerItem?
     @State private var isShowingOCRCamera = false
+    @State private var isShowingEyecatchCamera = false
     @State private var isShowingBookImageSource = false
     @State private var isShowingBookImagePicker = false
     @State private var isShowingBookImportCamera = false
@@ -34,6 +40,8 @@ struct QuickRegistrationView: View {
     @State private var isShowingCameraUnavailableAlert = false
     @State private var isProcessingImage = false
     @State private var isFetchingURL = false
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
     @State private var inputStatus = ""
     @State private var titleCandidate = ""
     @State private var recognizedOCRLines: [String] = []
@@ -116,7 +124,14 @@ struct QuickRegistrationView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            RecordLifecycleFlatScaffold(
+                title: screenTitle,
+                canSave: draft.canSave && !isSaving,
+                saveButtonTitle: isSaving ? "保存中" : "保存",
+                isSaving: isSaving,
+                onClose: { dismiss() },
+                onSave: save
+            ) {
                 if let simpleRegistrationPurpose, let selectedCategory {
                     SimpleCategoryRegistrationPurposePicker(
                         selection: simpleRegistrationPurpose,
@@ -173,12 +188,34 @@ struct QuickRegistrationView: View {
                 }
 
                 FavorecoRegistrationSection(basicSectionTitle) {
+                    if !isBookRegistration {
+                        RecordSourceImportActions(
+                            isImportingImage: isProcessingImage,
+                            isImageImportEnabled: usesOCRImportAssist,
+                            onImage: { isShowingInformationImageSource = true },
+                            onText: { isShowingTextImport = true },
+                            onURL: { isShowingURLImport = true }
+                        )
+
+                        Text("写真・案内文・公式ページから候補を取り込み、保存前に修正できます。")
+                            .font(FavorecoTypography.caption)
+                            .foregroundStyle(.secondary)
+
+                        Divider()
+                    }
+
                     if !locksCategory {
                         Picker("ジャンル", selection: $draft.targetTemplateKey) {
                             ForEach(visibleCategories) { category in
                                 Text(category.name).tag(category.templateKey)
                             }
                         }
+                    }
+
+                    if !isBookRegistration {
+                        Divider()
+                        quickTargetMediaContent
+                        Divider()
                     }
 
                     ExplicitFormTextField(
@@ -305,123 +342,9 @@ struct QuickRegistrationView: View {
                     }
                 }
 
-                FavorecoRegistrationSection(mediaSectionTitle) {
-                    let photoActionTitle = eyecatchData == nil ? "写真を選ぶ" : "写真を変更"
-                    if let eyecatchData, let image = UIImage(data: eyecatchData) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 160)
-                            .background(.secondary.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                        Button("画像を外す", role: .destructive) {
-                            self.eyecatchData = nil
-                        }
-                    }
-
-                    PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
-                        FavorecoIconLabel(photoActionTitle, systemImage: "photo")
-                    }
-                    .disabled(isProcessingImage)
-                    .onChange(of: selectedEyecatchItem) { _, item in
-                        guard let item else { return }
-                        Task { await loadEyecatch(from: item) }
-                    }
-
-                    Divider()
-
-                    TextField("URL（任意）", text: $draft.sourceURL)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-
-                    Button {
-                        Task { await fetchURLCandidate() }
-                    } label: {
-                        FavorecoIconLabel(
-                            isFetchingURL ? "取得中" : "URLからタイトル候補を取得",
-                            systemImage: "link"
-                        )
-                    }
-                    .disabled(draft.trimmedSourceURL.isEmpty || isFetchingURL)
-
-                    if usesOCRImportAssist && !isBookRegistration {
-                        PhotosPicker(selection: $selectedOCRItem, matching: .images) {
-                            Label("写真から読み取る", systemImage: "text.viewfinder")
-                        }
-                        .disabled(isProcessingImage)
-                        .onChange(of: selectedOCRItem) { _, item in
-                            guard let item else { return }
-                            Task { await readText(from: item) }
-                        }
-
-                        Button {
-                            openOCRCamera()
-                        } label: {
-                            FavorecoIconLabel("カメラで読み取る", systemImage: "camera")
-                        }
-                        .disabled(isProcessingImage)
-                    } else if !isBookRegistration {
-                        Label("OCR取込は設定でOFFになっています", systemImage: "text.viewfinder")
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if !isBookRegistration, !titleCandidate.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(
-                                isTitleCandidateFromOCR
-                                    ? "大きな文字からのタイトル候補"
-                                    : "タイトル候補"
-                            )
-                                .font(FavorecoTypography.captionStrong)
-                            Text(titleCandidate)
-                                .font(FavorecoTypography.body)
-                                .lineLimit(3)
-                            Button("タイトルに使う") {
-                                draft.title = titleCandidate
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    }
-
-                    if !isBookRegistration, !recognizedOCRLines.isEmpty {
-                        DisclosureGroup("読み取り候補からタイトルを選ぶ") {
-                            VStack(alignment: .leading, spacing: 8) {
-                                ForEach(Array(recognizedOCRLines.enumerated()), id: \.offset) { _, line in
-                                    Button {
-                                        draft.title = line
-                                    } label: {
-                                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                            Text(line)
-                                                .multilineTextAlignment(.leading)
-                                                .lineLimit(3)
-                                            Spacer(minLength: 8)
-                                            Image(systemName: "arrow.up.left")
-                                                .accessibilityHidden(true)
-                                        }
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .buttonStyle(.borderless)
-                                }
-                            }
-                            .padding(.top, 8)
-                        }
-
-                        DisclosureGroup("OCR全文を確認") {
-                            Text(draft.ocrText)
-                                .font(FavorecoTypography.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                                .padding(.top, 8)
-                        }
-                    }
-
-                    if !isBookRegistration, !inputStatus.isEmpty {
-                        Text(inputStatus)
-                            .font(FavorecoTypography.caption)
-                            .foregroundStyle(.secondary)
+                if isBookRegistration {
+                    FavorecoRegistrationSection(mediaSectionTitle) {
+                        quickTargetMediaContent
                     }
                 }
 
@@ -438,22 +361,6 @@ struct QuickRegistrationView: View {
                     }
                 }
             }
-            .favorecoRegistrationFormCanvas()
-            .navigationTitle(screenTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        save()
-                    }
-                    .disabled(!draft.canSave)
-                }
-            }
             .onAppear {
                 if let initialTemplateKey,
                    visibleCategories.contains(where: { $0.templateKey == initialTemplateKey }) {
@@ -467,9 +374,33 @@ struct QuickRegistrationView: View {
                 selection: $selectedBookImportImageItem,
                 matching: .images
             )
+            .photosPicker(
+                isPresented: $isShowingInformationImagePicker,
+                selection: $selectedOCRItem,
+                matching: .images
+            )
+            .confirmationDialog(
+                "写真・カメラから情報入力",
+                isPresented: $isShowingInformationImageSource,
+                titleVisibility: .visible
+            ) {
+                Button("写真ライブラリから選ぶ") {
+                    isShowingInformationImagePicker = true
+                }
+                Button("カメラで撮影") {
+                    openOCRCamera()
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("タイトルなど、読み取れた候補を確認してから保存できます。")
+            }
             .onChange(of: selectedBookImportImageItem) { _, item in
                 guard let item else { return }
                 Task { await readBookInformation(from: item) }
+            }
+            .onChange(of: selectedOCRItem) { _, item in
+                guard let item else { return }
+                Task { await readText(from: item) }
             }
             .confirmationDialog(
                 "画像から入力",
@@ -494,10 +425,28 @@ struct QuickRegistrationView: View {
             CameraImagePicker(
                 onCapture: { image in
                     isShowingOCRCamera = false
-                    guard let data = image.jpegData(compressionQuality: 1) else { return }
-                    Task { await processOCRImage(data) }
+                    Task {
+                        guard let data = await CameraImageEncoder.jpegData(
+                            from: image,
+                            compressionQuality: 1
+                        ) else {
+                            inputStatus = "撮影した画像を読み込めませんでした。もう一度お試しください。"
+                            return
+                        }
+                        await processOCRImage(data)
+                    }
                 },
                 onCancel: { isShowingOCRCamera = false }
+            )
+            .ignoresSafeArea()
+        }
+        .fullScreenCover(isPresented: $isShowingEyecatchCamera) {
+            CameraImagePicker(
+                onCapture: { image in
+                    isShowingEyecatchCamera = false
+                    Task { await setEyecatch(from: image) }
+                },
+                onCancel: { isShowingEyecatchCamera = false }
             )
             .ignoresSafeArea()
         }
@@ -505,8 +454,16 @@ struct QuickRegistrationView: View {
             CameraImagePicker(
                 onCapture: { image in
                     isShowingBookImportCamera = false
-                    guard let data = image.jpegData(compressionQuality: 1) else { return }
-                    Task { await readBookInformation(from: data) }
+                    Task {
+                        guard let data = await CameraImageEncoder.jpegData(
+                            from: image,
+                            compressionQuality: 1
+                        ) else {
+                            inputStatus = "撮影した画像を読み込めませんでした。もう一度お試しください。"
+                            return
+                        }
+                        await readBookInformation(from: data)
+                    }
                 },
                 onCancel: { isShowingBookImportCamera = false }
             )
@@ -524,15 +481,41 @@ struct QuickRegistrationView: View {
                 Task { await applyBookMetadata(candidate) }
             }
         }
+        .sheet(isPresented: $isShowingTextImport) {
+            quickTextImportSheet
+        }
+        .sheet(isPresented: $isShowingURLImport) {
+            quickURLImportSheet
+        }
         .alert("カメラを使用できません", isPresented: $isShowingCameraUnavailableAlert) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("写真ライブラリから読み取ってください。")
         }
+        .alert("保存できませんでした", isPresented: Binding(
+            get: { saveErrorMessage != nil },
+            set: { if !$0 { saveErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { saveErrorMessage = nil }
+        } message: {
+            Text(saveErrorMessage ?? "")
+        }
     }
 
     private func save() {
-        guard let selectedCategory else { return }
+        guard !isSaving else { return }
+        guard let selectedCategory else {
+            saveErrorMessage = "登録先のジャンルを選んでください。"
+            return
+        }
+        isSaving = true
+        Task { @MainActor in
+            await Task.yield()
+            persistQuickRegistration(in: selectedCategory)
+        }
+    }
+
+    private func persistQuickRegistration(in selectedCategory: RecordCategory) {
         let now = Date()
         let event = ExperienceEvent(
             title: draft.trimmedTitle,
@@ -571,7 +554,10 @@ struct QuickRegistrationView: View {
             try modelContext.save()
             dismiss()
         } catch {
-            assertionFailure("Failed to save quick registration: \(error)")
+            modelContext.rollback()
+            isSaving = false
+            saveErrorMessage = "入力内容を保持したまま保存をやり直せます。もう一度お試しください。"
+            debugPrint("Failed to save quick registration: \(error)")
         }
     }
 
@@ -580,6 +566,142 @@ struct QuickRegistrationView: View {
         case "book": "表紙・公式情報（任意）"
         case "movie": "ポスター・公式情報（任意）"
         default: "画像・公式情報（任意）"
+        }
+    }
+
+    @ViewBuilder
+    private var quickTargetMediaContent: some View {
+        let photoActionTitle = eyecatchData == nil ? "写真を選ぶ" : "写真を変更"
+        if isBookRegistration {
+            if let eyecatchData, let image = UIImage(data: eyecatchData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 160)
+                    .background(.secondary.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                Button("画像を外す", role: .destructive) {
+                    self.eyecatchData = nil
+                    selectedEyecatchItem = nil
+                }
+            }
+
+            PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
+                FavorecoIconLabel(photoActionTitle, systemImage: "photo.on.rectangle", iconSize: 13)
+            }
+            .disabled(isProcessingImage)
+            .onChange(of: selectedEyecatchItem) { _, item in
+                guard let item else { return }
+                Task { await loadEyecatch(from: item) }
+            }
+        } else {
+            RegistrationEyecatchEditor(
+                imageData: eyecatchData,
+                tint: selectedCategory.map { Color(hex: $0.colorHex) } ?? .accentColor,
+                onCapture: openEyecatchCamera,
+                onRemove: {
+                    eyecatchData = nil
+                    selectedEyecatchItem = nil
+                }
+            ) {
+                PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
+                    FavorecoIconLabel(photoActionTitle, systemImage: "photo.on.rectangle", iconSize: 13)
+                }
+                .buttonStyle(.plain)
+                .disabled(isProcessingImage)
+                .onChange(of: selectedEyecatchItem) { _, item in
+                    guard let item else { return }
+                    Task { await loadEyecatch(from: item) }
+                }
+            }
+        }
+
+        Divider()
+
+        ExplicitFormTextField(
+            title: isBookRegistration ? "公式・書誌URL（任意）" : "公式・案内URL（任意）",
+            prompt: "https://",
+            text: $draft.sourceURL,
+            axis: .vertical,
+            minimumLines: 1,
+            maximumLines: 2,
+            labelStyle: .horizontal
+        )
+        .textInputAutocapitalization(.never)
+        .keyboardType(.URL)
+
+        if isBookRegistration {
+            Button {
+                Task { await fetchURLCandidate() }
+            } label: {
+                FavorecoIconLabel(
+                    isFetchingURL ? "取得中" : "URLからタイトル候補を取得",
+                    systemImage: "link"
+                )
+            }
+            .disabled(draft.trimmedSourceURL.isEmpty || isFetchingURL)
+        } else if !usesOCRImportAssist {
+            Label("画像からの情報入力は設定でOFFになっています", systemImage: "text.viewfinder")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        if !isBookRegistration, !titleCandidate.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(
+                    isTitleCandidateFromOCR
+                        ? "大きな文字からのタイトル候補"
+                        : "タイトル候補"
+                )
+                    .font(FavorecoTypography.captionStrong)
+                Text(titleCandidate)
+                    .font(FavorecoTypography.body)
+                    .lineLimit(3)
+                Button("タイトルに使う") {
+                    draft.title = titleCandidate
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+
+        if !isBookRegistration, !recognizedOCRLines.isEmpty {
+            DisclosureGroup("読み取り候補からタイトルを選ぶ") {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(recognizedOCRLines.enumerated()), id: \.offset) { _, line in
+                        Button {
+                            draft.title = line
+                        } label: {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(line)
+                                    .multilineTextAlignment(.leading)
+                                    .lineLimit(3)
+                                Spacer(minLength: 8)
+                                Image(systemName: "arrow.up.left")
+                                    .accessibilityHidden(true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(.top, 8)
+            }
+
+            DisclosureGroup("OCR全文を確認") {
+                Text(draft.ocrText)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .padding(.top, 8)
+            }
+        }
+
+        if !isBookRegistration, !inputStatus.isEmpty {
+            Text(inputStatus)
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -860,14 +982,145 @@ struct QuickRegistrationView: View {
         inputStatus = ""
         defer { isFetchingURL = false }
         do {
-            let candidate = try await URLMetadataService.fetch(from: draft.trimmedSourceURL)
+            let candidate = try await URLMetadataService.fetch(
+                from: draft.trimmedSourceURL,
+                includesStructuredData: true
+            )
             titleCandidate = candidate.title
             isTitleCandidateFromOCR = false
-            draft.sourceURL = candidate.resolvedURL.absoluteString
-            inputStatus = "URLから候補を取得しました。"
+            if draft.trimmedTitle.isEmpty, !candidate.title.isEmpty {
+                draft.title = candidate.title
+            }
+            draft.sourceURL = candidate.officialURL?.absoluteString
+                ?? candidate.resolvedURL.absoluteString
+            if eyecatchData == nil, let imageData = candidate.imageData {
+                eyecatchData = await Task.detached(priority: .userInitiated) {
+                    QuickCaptureImageService.compressedJPEG(from: imageData)
+                }.value
+            }
+            inputStatus = "URLから取得できた情報を仮入力しました。内容を確認して保存してください。"
+            isShowingURLImport = false
         } catch {
-            inputStatus = "タイトル候補を取得できませんでした。URLはそのまま保存できます。"
+            inputStatus = "このサイトから情報を取得できませんでした。URLはそのまま保存し、空欄を手入力できます。"
         }
+    }
+
+    private var quickTextImportSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("案内文・メールのテキスト")
+                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                TextEditor(text: $pastedImportText)
+                    .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+                    .frame(minHeight: 210)
+                    .padding(10)
+                    .background(
+                        TheaterLifecycleFlatStyle.fieldBackground,
+                        in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
+                    }
+                Text("タイトル候補を仮入力します。原文は備考情報として保存され、あとから確認できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .background(TheaterLifecycleFlatStyle.canvasBackground.ignoresSafeArea())
+            .navigationTitle("テキストから入力")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { isShowingTextImport = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("反映") { applyPastedImportText() }
+                        .disabled(pastedImportText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var quickURLImportSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("公式ページ・案内ページ")
+                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                TextField("https://", text: $draft.sourceURL)
+                    .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 54)
+                    .background(
+                        TheaterLifecycleFlatStyle.fieldBackground,
+                        in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
+                    }
+                Text("タイトル・公式URL・画像を取得できた範囲で仮入力します。保存前に修正できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                Text("サイト側の制限やページ構造により取得できない場合があります。その場合もURLは保存できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.tertiary)
+                if !inputStatus.isEmpty {
+                    Text(inputStatus)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .background(TheaterLifecycleFlatStyle.canvasBackground.ignoresSafeArea())
+            .navigationTitle("URLから入力")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { isShowingURLImport = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isFetchingURL ? "取得中" : "取得") {
+                        Task { await fetchURLCandidate() }
+                    }
+                    .disabled(draft.trimmedSourceURL.isEmpty || isFetchingURL)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func applyPastedImportText() {
+        let text = pastedImportText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let metadata = TicketOCRImportParser.parseEventMetadata(
+            text: text,
+            referenceDate: Date()
+        )
+        let fallbackTitle = text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { line in
+                !line.isEmpty
+                    && !line.hasPrefix("http")
+                    && !line.hasPrefix("■")
+                    && !line.hasPrefix("※")
+            }
+        if draft.trimmedTitle.isEmpty {
+            draft.title = metadata.title ?? fallbackTitle ?? ""
+        }
+        draft.ocrText = text
+        titleCandidate = metadata.title ?? fallbackTitle ?? ""
+        isTitleCandidateFromOCR = false
+        inputStatus = draft.trimmedTitle.isEmpty
+            ? "タイトル候補を特定できませんでした。手入力して保存できます。"
+            : "テキストからタイトル候補を仮入力しました。"
+        pastedImportText = ""
+        isShowingTextImport = false
     }
 
     private func resetOCRResult() {
@@ -884,6 +1137,29 @@ struct QuickRegistrationView: View {
             return
         }
         isShowingOCRCamera = true
+    }
+
+    private func openEyecatchCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            isShowingCameraUnavailableAlert = true
+            return
+        }
+        isShowingEyecatchCamera = true
+    }
+
+    @MainActor
+    private func setEyecatch(from image: UIImage) async {
+        guard let data = await CameraImageEncoder.jpegData(
+            from: image,
+            compressionQuality: 0.9
+        ) else {
+            inputStatus = "撮影した画像を読み込めませんでした。"
+            return
+        }
+        eyecatchData = await Task.detached(priority: .userInitiated) {
+            QuickCaptureImageService.compressedJPEG(from: data)
+        }.value
+        inputStatus = eyecatchData == nil ? "画像を読み込めませんでした。" : "アイキャッチを追加しました。"
     }
 
     private func bookImportActionLabel(
@@ -1303,8 +1579,16 @@ private struct BookISBNImportSheet: View {
             CameraImagePicker(
                 onCapture: { image in
                     isShowingCamera = false
-                    guard let data = image.jpegData(compressionQuality: 1) else { return }
-                    Task { await readBarcode(from: data) }
+                    Task {
+                        guard let data = await CameraImageEncoder.jpegData(
+                            from: image,
+                            compressionQuality: 1
+                        ) else {
+                            statusText = "撮影した画像を読み込めませんでした。もう一度お試しください。"
+                            return
+                        }
+                        await readBarcode(from: data)
+                    }
                 },
                 onCancel: { isShowingCamera = false }
             )

@@ -231,6 +231,7 @@ private struct FavoAnniversaryEditorView: View {
     @State private var title: String
     @State private var date: Date
     @State private var errorMessage = ""
+    @State private var isSaving = false
 
     init(profile: FavoriteProfile, anniversary: FavoAnniversary?, nextSortOrder: Int) {
         self.profile = profile
@@ -262,10 +263,19 @@ private struct FavoAnniversaryEditorView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("キャンセル") { dismiss() }
+                    .disabled(isSaving)
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存", action: save)
-                    .disabled(trimmedTitle.isEmpty)
+                Button(action: save) {
+                    if isSaving {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("保存")
+                    }
+                }
+                .accessibilityLabel(isSaving ? "保存中" : "保存")
+                .disabled(trimmedTitle.isEmpty || isSaving)
             }
         }
     }
@@ -275,6 +285,7 @@ private struct FavoAnniversaryEditorView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
         if anniversary == nil,
            !FavoAnniversaryAccess.canAdd(
                plan: purchaseManager.currentPlan,
@@ -283,6 +294,15 @@ private struct FavoAnniversaryEditorView: View {
             errorMessage = "複数の記念日を追加するにはPro以上が必要です。"
             return
         }
+        isSaving = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            persistChanges()
+        }
+    }
+
+    private func persistChanges() {
         let now = Date()
         let model = anniversary ?? FavoAnniversary(
             sortOrder: nextSortOrder,
@@ -299,7 +319,9 @@ private struct FavoAnniversaryEditorView: View {
             dismiss()
         } catch {
             modelContext.rollback()
-            errorMessage = "保存できませんでした: \(error.localizedDescription)"
+            isSaving = false
+            errorMessage = "記念日を保存できませんでした。入力内容は保持されています。もう一度お試しください。"
+            debugPrint("Failed to save FAVO anniversary: \(error)")
         }
     }
 }

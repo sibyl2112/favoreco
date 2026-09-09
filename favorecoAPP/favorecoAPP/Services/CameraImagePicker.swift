@@ -1,6 +1,23 @@
 import SwiftUI
 import UIKit
 
+/// UIKit のカメラ画像をメインスレッドで再圧縮して操作を止めないための共通入口。
+enum CameraImageEncoder {
+    private struct Transfer: @unchecked Sendable {
+        let image: UIImage
+    }
+
+    nonisolated static func jpegData(
+        from image: UIImage,
+        compressionQuality: CGFloat
+    ) async -> Data? {
+        let transfer = Transfer(image: image)
+        return await Task.detached(priority: .userInitiated) {
+            transfer.image.jpegData(compressionQuality: compressionQuality)
+        }.value
+    }
+}
+
 struct CameraImagePicker: UIViewControllerRepresentable {
     let onCapture: (UIImage) -> Void
     let onCancel: () -> Void

@@ -27,15 +27,15 @@ enum TheaterUnifiedFormEntry: String, CaseIterable, Identifiable {
         case .performanceRegistration:
             "まずタイトルだけでも保存できます。必要な情報は後から追加できます。"
         case .planCreation:
-            "公演情報を引き継ぎ、参加する日時と会場を登録します。"
+            "公演情報を引き継ぎ、観劇する日時と会場を登録します。"
         case .visitCreation:
-            "公演情報を引き継ぎ、体験日程・座席・写真・感想・金額を記録できます。"
+            "公演情報を引き継ぎ、観劇日時・座席・写真・感想・金額を記録できます。"
         case .visitEditing:
             "予定を引き継ぎ、座席・写真・感想・金額を記録できます。"
         case .performanceEditing:
             "公演そのものの公式情報を編集します。観劇ごとの情報は変更しません。"
         case .planEditing:
-            "公演情報はそのまま、参加する日時と会場を更新します。"
+            "公演情報はそのまま、観劇する日時と会場を更新します。"
         }
     }
 
@@ -108,7 +108,7 @@ enum TheaterUnifiedFormSection: String, CaseIterable, Identifiable {
         case .venueSchedule: "会期・会場"
         case .performanceDetails: "公演詳細情報"
         case .importDetails: "読み取り情報"
-        case .participation: "体験日程"
+        case .participation: "観劇日時・会場"
         case .tasks: "やる事リスト"
         case .viewing: "鑑賞記録"
         case .photos: "写真・アイキャッチ"
@@ -202,6 +202,7 @@ struct TheaterUnifiedSectionLabel: View {
     private var sectionTitle: String {
         guard isLive else { return section.title }
         return switch section {
+        case .participation: "参戦日時・会場"
         case .viewing: "参戦記録"
         case .impressions: "感想・タグ"
         default: section.title

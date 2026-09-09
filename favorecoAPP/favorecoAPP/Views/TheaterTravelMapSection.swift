@@ -119,7 +119,7 @@ struct TheaterEventTravelMapSection: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(
                         point.visitCount > 0
-                            ? "\(point.name)、参加\(point.visitCount)回"
+                            ? "\(point.name)、観劇\(point.visitCount)回"
                             : "\(point.name)、公演会場"
                     )
                     .accessibilityHint("タップすると外部地図を選べます")
@@ -148,7 +148,7 @@ struct TheaterEventTravelMapSection: View {
                                 Text("会場の位置を登録するとMapに表示されます")
                                     .font(FavorecoTypography.captionStrong)
                                 if snapshot.totalVisitCount > 0 || !schedules.isEmpty {
-                                    Text("公演情報の会場・住所を確認するか、参加記録の場所をApple Mapsから選んでください。")
+                                    Text("公演情報の会場・住所を確認するか、観劇記録の場所をApple Mapsから選んでください。")
                                         .font(FavorecoTypography.caption)
                                         .multilineTextAlignment(.center)
                                 }

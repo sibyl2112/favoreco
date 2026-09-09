@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum ScreenWorkType: String, CaseIterable, Identifiable {
+nonisolated enum ScreenWorkType: String, CaseIterable, Identifiable {
     case movie
     case drama
     case anime
@@ -29,7 +29,7 @@ enum ScreenWorkType: String, CaseIterable, Identifiable {
     }
 }
 
-enum ScreenWorkFilter: String, CaseIterable, Identifiable {
+nonisolated enum ScreenWorkFilter: String, CaseIterable, Identifiable {
     case all
     case movie
     case drama
@@ -51,7 +51,7 @@ enum ScreenWorkFilter: String, CaseIterable, Identifiable {
     }
 }
 
-struct EventVenueEntry: Codable, Identifiable, Equatable {
+nonisolated struct EventVenueEntry: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var name: String = ""
     var address: String = ""
@@ -128,7 +128,7 @@ nonisolated struct VisitMomentEntry: Codable, Identifiable, Equatable {
     }
 }
 
-struct VisitUnitFields: Codable {
+nonisolated struct VisitUnitFields: Codable {
     var ocrText: String = ""
     var styleNames: [String] = []
     var socialLinks: [String] = []

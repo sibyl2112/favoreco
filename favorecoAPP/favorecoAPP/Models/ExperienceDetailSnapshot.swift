@@ -15,6 +15,7 @@ struct ExperienceDetailSnapshot {
     let weatherAttributionURL: URL?
     let ticketStatusText: String
     let formattedAmount: String
+    let venueAddress: String
     let mapURL: URL?
     let preferredLocationText: String
 
@@ -53,9 +54,23 @@ struct ExperienceDetailSnapshot {
         } else {
             weatherTemperatureText = "記録済み"
         }
-        let ticketStatusText = Self.ticketStatusText(for: visit.outcomeKey)
+        let ticketStatusText = Self.ticketStatusText(
+            for: visit.outcomeKey,
+            templateKey: category?.templateKey
+        )
         let formattedAmount = Self.formattedAmount(visit.amount)
-        let address = visit.placeMaster?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let eventFields = VisitUnitFields(rawValue: event?.unitFieldsRaw ?? "")
+        let planAddresses = (visit.plans ?? [])
+            .filter { !$0.isArchived }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .compactMap { $0.placeMaster?.address }
+        let address = Self.resolvedVenueAddress(
+            venueName: visit.venueNameSnapshot,
+            masterAddress: visit.placeMaster?.address,
+            visitAddress: unitFields.venueAddressSnapshot,
+            planAddresses: planAddresses,
+            eventVenues: eventFields.eventVenues
+        )
         let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
         let latitude = hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0)
         let longitude = hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
@@ -66,7 +81,7 @@ struct ExperienceDetailSnapshot {
             photos: photos,
             linkedPeople: linkedPeople,
             unitFields: unitFields,
-            eventCreditsText: VisitUnitFields(rawValue: event?.unitFieldsRaw ?? "").eventCreditsText,
+            eventCreditsText: eventFields.eventCreditsText,
             eyecatchAspectRatio: EyecatchAspectRatio.option(
                 for: unitFields.eyecatchAspectRatioKey,
                 category: category
@@ -78,9 +93,10 @@ struct ExperienceDetailSnapshot {
             weatherAttributionURL: URL(string: unitFields.weatherAttributionURL),
             ticketStatusText: ticketStatusText,
             formattedAmount: formattedAmount,
+            venueAddress: address,
             mapURL: PlaceSearchService.appleMapsURL(
                 name: visit.venueNameSnapshot,
-                address: visit.placeMaster?.address ?? "",
+                address: address,
                 latitude: latitude,
                 longitude: longitude
             ),
@@ -88,14 +104,46 @@ struct ExperienceDetailSnapshot {
         )
     }
 
-    private static func ticketStatusText(for key: String) -> String {
+    /// 記録詳細の住所は保存場所が世代ごとに異なるため、空文字を値として扱わず
+    /// Visit固有値、紐づく予定、公演の会場一覧まで順に補完する。
+    static func resolvedVenueAddress(
+        venueName: String,
+        masterAddress: String?,
+        visitAddress: String,
+        planAddresses: [String],
+        eventVenues: [EventVenueEntry]
+    ) -> String {
+        let directCandidates = [masterAddress ?? "", visitAddress] + planAddresses
+        if let address = directCandidates.lazy
+            .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            .first(where: { !$0.isEmpty }) {
+            return address
+        }
+
+        let normalizedVenueName = PlaceSearchService.normalizedSearchText(venueName)
+        if !normalizedVenueName.isEmpty,
+           let matchingAddress = eventVenues.lazy
+            .filter({ PlaceSearchService.normalizedSearchText($0.trimmedName) == normalizedVenueName })
+            .map(\.trimmedAddress)
+            .first(where: { !$0.isEmpty }) {
+            return matchingAddress
+        }
+
+        let populatedEventVenues = eventVenues.filter { !$0.trimmedAddress.isEmpty }
+        if populatedEventVenues.count == 1 {
+            return populatedEventVenues[0].trimmedAddress
+        }
+        return ""
+    }
+
+    private static func ticketStatusText(for key: String, templateKey: String?) -> String {
         switch key {
         case "planned": return "予定"
         case "applied": return "申込中"
         case "won": return "当選"
         case "paid": return "支払済み"
         case "ticketed": return "発券済み"
-        case "attended": return "参加済み"
+        case "attended": return GenreVocabulary.completedStatus(for: templateKey)
         case "canceled": return "中止・キャンセル"
         default: return key
         }

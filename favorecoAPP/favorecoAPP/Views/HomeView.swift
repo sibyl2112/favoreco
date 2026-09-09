@@ -140,11 +140,16 @@ struct HomeView: View {
         if ["waitingIssue", "issued"].contains(attempt.statusKey),
            let plan,
            !plan.hasConfirmedSchedule {
+            let scheduleTerm = switch plan.event?.category?.templateKey ?? plan.category?.templateKey {
+            case "theater": "観劇日"
+            case "live": "参戦日"
+            default: "予定日"
+            }
             return HomeAttentionItem(
                 id: "ticket-\(attempt.id.uuidString)-schedule",
                 icon: "calendar.badge.plus",
-                title: "参加日を設定",
-                subtitle: "\(planTitle)・参加日未定",
+                title: "\(scheduleTerm)を設定",
+                subtitle: "\(planTitle)・\(scheduleTerm)未定",
                 contextTitle: planTitle,
                 dueDate: attempt.updatedAt,
                 plan: plan,
@@ -343,7 +348,7 @@ struct HomeView: View {
                         _ = try SampleDataSeeder.deleteSamples(in: modelContext)
                     } catch {
                         sampleDeletionError = "サンプルデータを削除できませんでした。"
-                        assertionFailure("Failed to delete sample data: \(error)")
+                        debugPrint("Failed to delete sample data: \(error)")
                     }
                 }
                 Button("キャンセル", role: .cancel) {}
@@ -1275,20 +1280,20 @@ struct HomeUpcomingVisitCard: View {
 }
 
 enum HomeUpcomingHeroMetrics {
-    static let contentHeight: CGFloat = 224
-    static let cardHeight: CGFloat = contentHeight + 24
-    static let posterWidth: CGFloat = 132
-    static let posterHeight: CGFloat = 196
-    static let spacing: CGFloat = 12
-    static let actionHeight: CGFloat = 30
-    static let embeddedPadding: CGFloat = 2
-    static let embeddedTrailingInset: CGFloat = 4
-    static let embeddedBottomRowOffset: CGFloat = 6
-    static let embeddedContentHeight: CGFloat = 210
-    static let embeddedPosterHeight: CGFloat = 174
-    static let embeddedCardHeight: CGFloat = embeddedContentHeight + (embeddedPadding * 2)
-    static let embeddedPageMaskWidth: CGFloat = embeddedPadding + posterWidth + spacing
-    static let embeddedPageMaskHeight: CGFloat = embeddedPadding + embeddedBottomRowOffset + actionHeight
+    nonisolated static let contentHeight: CGFloat = 224
+    nonisolated static let cardHeight: CGFloat = contentHeight + 24
+    nonisolated static let posterWidth: CGFloat = 132
+    nonisolated static let posterHeight: CGFloat = 196
+    nonisolated static let spacing: CGFloat = 12
+    nonisolated static let actionHeight: CGFloat = 30
+    nonisolated static let embeddedPadding: CGFloat = 2
+    nonisolated static let embeddedTrailingInset: CGFloat = 4
+    nonisolated static let embeddedBottomRowOffset: CGFloat = 6
+    nonisolated static let embeddedContentHeight: CGFloat = 210
+    nonisolated static let embeddedPosterHeight: CGFloat = 174
+    nonisolated static let embeddedCardHeight: CGFloat = embeddedContentHeight + (embeddedPadding * 2)
+    nonisolated static let embeddedPageMaskWidth: CGFloat = embeddedPadding + posterWidth + spacing
+    nonisolated static let embeddedPageMaskHeight: CGFloat = embeddedPadding + embeddedBottomRowOffset + actionHeight
 }
 
 struct HomeUpcomingHeroLayout: Layout {
@@ -1720,7 +1725,7 @@ struct HomeTicketScheduleCard: View {
     }
 
     private var deadlineLabel: String {
-        if isAttendanceScheduleAction { return "参加日" }
+        if isAttendanceScheduleAction { return scheduleTerm }
         return TicketProgressPresentation.deadlineLabel(
             forActionTitle: item.title,
             attempt: attempt
@@ -1728,12 +1733,22 @@ struct HomeTicketScheduleCard: View {
     }
 
     private var isAttendanceScheduleAction: Bool {
-        item.title == "参加日を設定"
+        guard let attempt else { return false }
+        return ["waitingIssue", "issued"].contains(attempt.statusKey)
+            && plan?.hasConfirmedSchedule == false
     }
 
     private var scheduleText: String {
-        guard let plan, plan.hasConfirmedSchedule else { return "参加日未定" }
+        guard let plan, plan.hasConfirmedSchedule else { return "\(scheduleTerm)未定" }
         return FavorecoDateText.compactDateTime(plan.startsAt)
+    }
+
+    private var scheduleTerm: String {
+        switch plan?.event?.category?.templateKey ?? plan?.category?.templateKey {
+        case "theater": "観劇日"
+        case "live": "参戦日"
+        default: "予定日"
+        }
     }
 
     private var thumbnailReference: ThumbnailReference? {
@@ -2479,7 +2494,7 @@ private struct ExperienceGalleryCard: View {
     }
 
     private var statusText: String? {
-        visitTicketStatusText(visit.outcomeKey)
+        visitTicketStatusText(visit.outcomeKey, templateKey: visit.categoryTemplateKey)
     }
 
     private var unitFields: VisitUnitFields {
@@ -2595,7 +2610,10 @@ private struct HomeVisitSummaryRow: View {
 
                     Spacer(minLength: 8)
 
-                    if let statusText = visitTicketStatusText(visit.outcomeKey) {
+                    if let statusText = visitTicketStatusText(
+                        visit.outcomeKey,
+                        templateKey: visit.categoryTemplateKey
+                    ) {
                         Text(statusText)
                             .font(FavorecoTypography.captionStrong)
                             .foregroundStyle(categoryColor)
@@ -2892,14 +2910,14 @@ private struct HomeVisitBadge: View {
     }
 }
 
-private func visitTicketStatusText(_ key: String) -> String? {
+private func visitTicketStatusText(_ key: String, templateKey: String?) -> String? {
     switch key {
     case "planned": return "予定"
     case "applied": return "申込中"
     case "won": return "当選"
     case "paid": return "支払済み"
     case "ticketed": return "発券済み"
-    case "attended": return "参加済み"
+    case "attended": return GenreVocabulary.completedStatus(for: templateKey)
     case "canceled": return "中止"
     default: return nil
     }

@@ -14,6 +14,7 @@ struct GenreOnboardingView: View {
     @State private var step: OnboardingStep = .genres
     @State private var preparationTask: Task<Void, Never>?
     @State private var saveErrorMessage = ""
+    @State private var isSavingSelection = false
 
     private var builtInCategories: [RecordCategory] {
         categories.filter {
@@ -61,6 +62,7 @@ struct GenreOnboardingView: View {
         .onDisappear {
             preparationTask?.cancel()
         }
+        .disabled(isSavingSelection)
     }
 
     @ViewBuilder
@@ -314,11 +316,19 @@ struct GenreOnboardingView: View {
                     .buttonStyle(.bordered)
                 }
 
-                Button(primaryButtonTitle) {
+                Button {
                     advance()
+                } label: {
+                    if isSavingSelection {
+                        ProgressView()
+                            .controlSize(.small)
+                            .accessibilityLabel("保存中")
+                    } else {
+                        Text(primaryButtonTitle)
+                    }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(step == .genres && !hasSelection)
+                .disabled(isSavingSelection || (step == .genres && !hasSelection))
                 .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
@@ -335,6 +345,7 @@ struct GenreOnboardingView: View {
     }
 
     private func advance() {
+        guard !isSavingSelection else { return }
         switch step {
         case .genres:
             startPreparation()
@@ -356,19 +367,28 @@ struct GenreOnboardingView: View {
 
     private func startPreparation() {
         guard hasSelection else { return }
-        do {
-            try saveGenreSelection()
-        } catch {
-            saveErrorMessage = "ジャンルを保存できませんでした。もう一度お試しください。"
-            return
-        }
+        isSavingSelection = true
+        saveErrorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            do {
+                try saveGenreSelection()
+            } catch {
+                modelContext.rollback()
+                saveErrorMessage = "ジャンルを保存できませんでした。選択内容は変更されていません。もう一度お試しください。"
+                debugPrint("Failed to save onboarding genres: \(error)")
+                isSavingSelection = false
+                return
+            }
 
-        step = .preparing
-        preparationTask?.cancel()
-        preparationTask = Task { @MainActor in
-            await prepareSelectedCatalogs()
-            guard !Task.isCancelled, step == .preparing else { return }
-            step = .intro
+            isSavingSelection = false
+            step = .preparing
+            preparationTask?.cancel()
+            preparationTask = Task { @MainActor in
+                await prepareSelectedCatalogs()
+                guard !Task.isCancelled, step == .preparing else { return }
+                step = .intro
+            }
         }
     }
 
@@ -402,13 +422,22 @@ struct GenreOnboardingView: View {
     }
 
     private func complete() {
-        do {
-            try saveGenreSelection()
-            hasCompletedGenreOnboarding = true
-            showsGenreOnboarding = false
-        } catch {
-            saveErrorMessage = "初期設定を保存できませんでした。もう一度お試しください。"
-            step = .genres
+        guard !isSavingSelection else { return }
+        isSavingSelection = true
+        saveErrorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            do {
+                try saveGenreSelection()
+                hasCompletedGenreOnboarding = true
+                showsGenreOnboarding = false
+            } catch {
+                modelContext.rollback()
+                saveErrorMessage = "初期設定を保存できませんでした。選択内容は変更されていません。もう一度お試しください。"
+                step = .genres
+                debugPrint("Failed to complete genre onboarding: \(error)")
+            }
+            isSavingSelection = false
         }
     }
 

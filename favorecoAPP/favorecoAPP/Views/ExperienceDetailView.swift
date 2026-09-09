@@ -338,6 +338,7 @@ struct ExperienceDetailView: View {
     @State private var isBookReadingExpanded = false
     @State private var isBookPhotosExpanded = true
     @State private var eventEyecatchRefreshVersion = 0
+    @State private var resolvedVenueAddress = ""
     @State private var isBookMemoExpanded = true
     @State private var isPlaceOfficialInfoExpanded = false
     @State private var isPlaceVenueExpanded = true
@@ -356,6 +357,9 @@ struct ExperienceDetailView: View {
     @State private var goodsPhotoItems: [PhotosPickerItem] = []
     @State private var benefitPhotoItems: [PhotosPickerItem] = []
     @State private var photoAddErrorMessage: String?
+    @State private var isAddingDetailPhotos = false
+    @State private var isCreatingPreparationPlan = false
+    @State private var isDeletingVisit = false
     @State private var pendingPhotoPurpose: ExperiencePhotoPurpose?
     @State private var isShowingPhotoSourceChoice = false
     @State private var queuedPhotoSourceAction: DetailPhotoSourceAction?
@@ -431,7 +435,7 @@ struct ExperienceDetailView: View {
                         memoSection(template: template, accentColor: accentColor, isTheater: true)
                         theaterWorkInformationSection(snapshot: snapshot, accentColor: accentColor)
                     }
-                    detailStoryDivider(label: "公演の鑑賞記録", accentColor: accentColor)
+                    detailStoryDivider(label: "公演の観劇記録", accentColor: accentColor)
                     experienceHistorySection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                     detailStoryDivider(label: "その他の情報", accentColor: accentColor)
                     nextActionsSection(snapshot: snapshot, plan: activePlan, accentColor: accentColor)
@@ -439,7 +443,8 @@ struct ExperienceDetailView: View {
                         summary: ExperienceExpenseSummary.make(visit: visit, plan: activePlan),
                         tint: accentColor,
                         title: "合計金額",
-                        usesFlatSurface: true
+                        usesFlatSurface: true,
+                        showsBottomDivider: false
                     )
                     ocrSection(snapshot: snapshot, accentColor: accentColor, isTheater: true)
                 }
@@ -635,11 +640,12 @@ struct ExperienceDetailView: View {
         .fullScreenCover(isPresented: $isShowingDetailCamera) {
             CameraImagePicker(
                 onCapture: { image in
-                    if let purpose = pendingPhotoPurpose {
-                        addCapturedDetailPhoto(image, purpose: purpose)
-                    }
+                    let purpose = pendingPhotoPurpose
                     isShowingDetailCamera = false
                     pendingPhotoPurpose = nil
+                    if let purpose {
+                        Task { await addCapturedDetailPhoto(image, purpose: purpose) }
+                    }
                 },
                 onCancel: {
                     isShowingDetailCamera = false
@@ -739,15 +745,35 @@ struct ExperienceDetailView: View {
         .task(id: snapshot.weatherTaskID) {
             await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext)
         }
+        .disabled(isAddingDetailPhotos || isCreatingPreparationPlan || isDeletingVisit)
+        .overlay {
+            if isAddingDetailPhotos || isCreatingPreparationPlan || isDeletingVisit {
+                ProgressView(
+                    isAddingDetailPhotos
+                        ? "写真を処理中です。"
+                        : (isDeletingVisit ? "削除中です。" : "準備中です。")
+                )
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
     }
 
     private func deleteThisVisit() {
-        do {
-            try RecordDeletionService.deleteVisit(visit, in: modelContext)
-            dismiss()
-        } catch {
-            deletionErrorMessage = "この記録を削除できませんでした。もう一度お試しください。"
-            assertionFailure("Failed to delete visit: \(error)")
+        guard !isDeletingVisit else { return }
+        isDeletingVisit = true
+        Task { @MainActor in
+            await Task.yield()
+            do {
+                try RecordDeletionService.deleteVisit(visit, in: modelContext)
+                dismiss()
+            } catch {
+                modelContext.rollback()
+                isDeletingVisit = false
+                deletionErrorMessage = "この記録は削除されていません。もう一度お試しください。"
+                debugPrint("Failed to delete visit: \(error)")
+            }
         }
     }
 
@@ -2047,9 +2073,10 @@ struct ExperienceDetailView: View {
         isTheater: Bool
     ) -> some View {
         let venueName = visit.venueNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines)
-        let storedAddress = visit.placeMaster?.address
-            ?? snapshot.unitFields.venueAddressSnapshot
-        let address = storedAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedAddress = snapshot.venueAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        let address = storedAddress.isEmpty
+            ? resolvedVenueAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+            : storedAddress
         let hasVisitCoordinate = visit.latitude != 0 || visit.longitude != 0
         let latitude = hasVisitCoordinate ? visit.latitude : (visit.placeMaster?.latitude ?? 0)
         let longitude = hasVisitCoordinate ? visit.longitude : (visit.placeMaster?.longitude ?? 0)
@@ -2092,7 +2119,7 @@ struct ExperienceDetailView: View {
                             .allowsHitTesting(false)
                     }
                 }
-                .frame(height: 180)
+                .frame(height: 170)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .accessibilityLabel(venueName.isEmpty ? "会場を地図で開く" : "\(venueName)を地図で開く")
                 .accessibilityHint("AppleマップまたはGoogleマップを選びます")
@@ -2117,6 +2144,17 @@ struct ExperienceDetailView: View {
             tint: accentColor,
             emphasizesGenericCard: isGenericExperienceDetail
         ))
+        .task(id: "\(visit.id)|\(venueName)|\(storedAddress)|\(latitude)|\(longitude)") {
+            guard storedAddress.isEmpty, hasMapSource else {
+                resolvedVenueAddress = ""
+                return
+            }
+            resolvedVenueAddress = await PlaceSearchService.resolveAddress(
+                queries: [venueName],
+                nearLatitude: latitude,
+                longitude: longitude
+            ) ?? ""
+        }
     }
 
     private func museumVisitHistorySection(accentColor: Color) -> some View {
@@ -2209,8 +2247,8 @@ struct ExperienceDetailView: View {
     private func historySectionTitle(snapshot: ExperienceDetailSnapshot) -> String {
         switch snapshot.category?.templateKey {
         case "museum": return "この展示の鑑賞履歴"
-        case "theater": return "この公演の鑑賞履歴"
-        case "live": return "このライブの参加履歴"
+        case "theater": return "この公演の観劇履歴"
+        case "live": return "このライブの参戦履歴"
         case "movie": return "この作品の鑑賞履歴"
         default: return "この体験の過去・未来"
         }
@@ -2279,7 +2317,7 @@ struct ExperienceDetailView: View {
                     .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint(isTheaterHistoryExpanded ? "鑑賞履歴を閉じます" : "この公演の鑑賞履歴を表示します")
+                .accessibilityHint(isTheaterHistoryExpanded ? "観劇履歴を閉じます" : "この公演の観劇履歴を表示します")
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     sectionTitle(historySectionTitle(snapshot: snapshot))
@@ -2609,13 +2647,23 @@ struct ExperienceDetailView: View {
         }
     }
 
-    private func addCapturedDetailPhoto(_ image: UIImage, purpose: ExperiencePhotoPurpose) {
-        guard let sourceData = image.jpegData(compressionQuality: 0.9),
-              var pending = PendingPhoto.make(
+    @MainActor
+    private func addCapturedDetailPhoto(_ image: UIImage, purpose: ExperiencePhotoPurpose) async {
+        guard !isAddingDetailPhotos else { return }
+        isAddingDetailPhotos = true
+        defer { isAddingDetailPhotos = false }
+        await Task.yield()
+        guard let sourceData = await CameraImageEncoder.jpegData(
+            from: image,
+            compressionQuality: 0.9
+        ),
+              var pending = await Task.detached(priority: .userInitiated, operation: {
+            PendingPhoto.make(
                 from: sourceData,
                 filename: "detail-camera.jpg",
                 compressionQuality: 0.82
-              ) else {
+            )
+        }).value else {
             photoAddErrorMessage = "撮影した画像を読み込めませんでした。もう一度お試しください。"
             return
         }
@@ -2645,7 +2693,11 @@ struct ExperienceDetailView: View {
 
     @MainActor
     private func addDetailPhotos(_ items: [PhotosPickerItem], purpose: ExperiencePhotoPurpose) async {
+        guard !isAddingDetailPhotos else { return }
         guard !items.isEmpty else { return }
+        isAddingDetailPhotos = true
+        defer { isAddingDetailPhotos = false }
+        await Task.yield()
         var inserted = 0
         for item in items {
             guard let sourceData = try? await item.loadTransferable(type: Data.self),
@@ -2718,13 +2770,19 @@ struct ExperienceDetailView: View {
                         .foregroundStyle(.secondary)
 
                     Button {
-                        recordPreparationPlan = ensureTicketPlan(snapshot: snapshot)
+                        beginPreparingTicketPlan(snapshot: snapshot)
                     } label: {
-                        FavorecoIconLabel("遠征・準備の記録を追加", systemImage: "plus")
-                            .frame(maxWidth: .infinity)
+                        if isCreatingPreparationPlan {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            FavorecoIconLabel("遠征・準備の記録を追加", systemImage: "plus")
+                                .frame(maxWidth: .infinity)
+                        }
                     }
                     .buttonStyle(.bordered)
                     .tint(accentColor)
+                    .disabled(isCreatingPreparationPlan)
                 }
             }
         }
@@ -3143,6 +3201,16 @@ struct ExperienceDetailView: View {
             modelContext.rollback()
             planCreationErrorMessage = "チケット・遠征管理を開始できませんでした。もう一度お試しください。"
             return nil
+        }
+    }
+
+    private func beginPreparingTicketPlan(snapshot: ExperienceDetailSnapshot) {
+        guard !isCreatingPreparationPlan else { return }
+        isCreatingPreparationPlan = true
+        Task { @MainActor in
+            await Task.yield()
+            _ = ensureTicketPlan(snapshot: snapshot)
+            isCreatingPreparationPlan = false
         }
     }
 

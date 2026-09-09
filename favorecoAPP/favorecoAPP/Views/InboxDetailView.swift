@@ -22,6 +22,7 @@ struct InboxDetailView: View {
     @State private var selectedEventForVisit: ExperienceEvent?
     @State private var isShowingTicketPlanForm = false
     @State private var operationErrorMessage: String?
+    @State private var isPerformingOperation = false
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -73,8 +74,8 @@ struct InboxDetailView: View {
                 }
             }
 
-            Section("変換先") {
-                Picker("カテゴリ", selection: $selectedTemplateKey) {
+            Section("登録先") {
+                Picker("ジャンル", selection: $selectedTemplateKey) {
                     Text("未分類").tag("")
                     ForEach(visibleCategories) { category in
                         Text(category.name).tag(category.templateKey)
@@ -86,13 +87,13 @@ struct InboxDetailView: View {
                 Button {
                     isShowingConvertForm = true
                 } label: {
-                    Label("新しい対象として体験済みを記録", systemImage: "rectangle.stack.badge.plus")
+                    Label("新しい対象と体験記録を追加", systemImage: "rectangle.stack.badge.plus")
                 }
                 .disabled(selectedCategory == nil || item.state == "resolved")
 
                 if selectedCategory != nil {
                     if existingEvents.isEmpty {
-                        Text("このカテゴリには追加先の対象がありません。")
+                        Text("このジャンルには登録済みの対象がありません。")
                             .font(FavorecoTypography.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -108,7 +109,7 @@ struct InboxDetailView: View {
                             selectedEventForVisit = selectedExistingEvent
                         } label: {
                             FavorecoIconLabel(
-                                "登録済み対象に体験済みを記録",
+                                "登録済み対象に体験記録を追加",
                                 systemImage: "plus.square.on.square"
                             )
                         }
@@ -126,8 +127,9 @@ struct InboxDetailView: View {
                 Button(role: .destructive) {
                     deleteItem()
                 } label: {
-                    FavorecoIconLabel("Inboxから削除", systemImage: "trash")
+                    FavorecoIconLabel("この気になる項目を削除", systemImage: "trash")
                 }
+                .disabled(isPerformingOperation)
             }
         }
         .favorecoRegistrationFormCanvas()
@@ -180,9 +182,19 @@ struct InboxDetailView: View {
         item.targetTemplateKey = category.templateKey
         item.state = "resolved"
         item.updatedAt = Date()
+
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            operationErrorMessage = "記録は保存されましたが、「気になる」を整理済みにできませんでした。画面を開き直して確認してください。"
+            debugPrint("Failed to mark quick registration as resolved: \(error)")
+        }
     }
 
     private func deleteItem() {
+        guard !isPerformingOperation else { return }
+        isPerformingOperation = true
         modelContext.delete(item)
 
         do {
@@ -190,8 +202,9 @@ struct InboxDetailView: View {
             dismiss()
         } catch {
             modelContext.rollback()
-            operationErrorMessage = "Inbox項目を削除できませんでした。"
-            assertionFailure("Failed to delete inbox item: \(error)")
+            isPerformingOperation = false
+            operationErrorMessage = "気になる項目を削除できませんでした。もう一度お試しください。"
+            debugPrint("Failed to delete quick registration item: \(error)")
         }
     }
 }

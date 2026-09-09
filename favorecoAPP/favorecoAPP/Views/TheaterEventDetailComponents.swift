@@ -15,7 +15,7 @@ struct TheaterEventOverviewSection: View {
                 spacing: 10
             ) {
                 TheaterEventMetricTile(
-                    title: "参加回数",
+                    title: "観劇回数",
                     value: "\(snapshot.visitCount)回",
                     systemImage: "theatermasks"
                 )
@@ -228,7 +228,7 @@ struct TheaterEventParticipationHistorySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TheaterEventSectionHeader(title: "参加した公演", count: visits.count)
+            TheaterEventSectionHeader(title: "観劇した公演", count: visits.count)
 
             if visits.isEmpty {
                 TheaterEventEmptyRow(
@@ -251,7 +251,7 @@ struct TheaterEventParticipationHistorySection: View {
                         }
                     } label: {
                         HStack(spacing: 5) {
-                            Text(showsAll ? "履歴を閉じる" : "すべての参加履歴を見る")
+                            Text(showsAll ? "履歴を閉じる" : "すべての観劇履歴を見る")
                             Image(systemName: showsAll ? "chevron.up" : "chevron.down")
                         }
                         .font(FavorecoTypography.captionStrong)
@@ -656,7 +656,7 @@ private struct TheaterEventSectionHeader: View {
     private var systemImage: String {
         switch title {
         case "公演サマリー": "theatermasks"
-        case "参加した公演": "calendar.badge.checkmark"
+        case "観劇した公演": "calendar.badge.checkmark"
         case "思い出ギャラリー": "photo.on.rectangle.angled"
         default: "sparkles"
         }

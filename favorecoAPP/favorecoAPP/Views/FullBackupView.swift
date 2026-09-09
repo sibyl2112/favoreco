@@ -33,6 +33,7 @@ struct FullBackupView: View {
     @State private var restoreResult: FullBackupRestoreResult?
     @State private var isConfirmingRestore = false
     @State private var isWorking = false
+    @State private var workingMessage = ""
     @State private var message = ""
 
     private var totalModelCount: Int {
@@ -79,6 +80,7 @@ struct FullBackupView: View {
                     Button("既存データへ追加・更新") {
                         isConfirmingRestore = true
                     }
+                    .disabled(isWorking)
                 }
             }
 
@@ -86,7 +88,7 @@ struct FullBackupView: View {
                 FavorecoSettingsCard {
                     HStack {
                         ProgressView()
-                        Text("処理中です。画面を閉じずにお待ちください。")
+                        Text(workingMessage.isEmpty ? "処理中です…" : workingMessage)
                     }
                 }
             }
@@ -95,7 +97,7 @@ struct FullBackupView: View {
                 FavorecoSettingsSection("結果") {
                     Text(message)
                         .font(FavorecoTypography.caption)
-                        .foregroundStyle(message.hasPrefix("失敗") ? .red : .secondary)
+                        .foregroundStyle(message.contains("失敗") ? .red : .secondary)
                 }
             }
         }
@@ -126,81 +128,119 @@ struct FullBackupView: View {
     }
 
     private func createBackup() {
+        guard !isWorking else { return }
         isWorking = true
+        workingMessage = "写真付きバックアップを作成中…"
         message = ""
-        do {
-            removeTemporaryPackage(exportURL)
-            let json = try JSONBackupExportService.makeBackupJSON(
-                categories: categories,
-                events: events,
-                bookShelves: bookShelves,
-                visits: visits,
-                inboxItems: inboxItems,
-                photos: photos,
-                socialAccounts: socialAccounts,
-                people: people,
-                companions: companions,
-                favoriteProfiles: favoriteProfiles,
-                favoGalleryPhotos: favoGalleryPhotos,
-                favoAnniversaries: favoAnniversaries,
-                favoPins: favoPins,
-                personLinks: personLinks,
-                places: places,
-                plans: plans,
-                ticketAccounts: ticketAccounts,
-                ticketAttempts: ticketAttempts,
-                movieBestEntries: movieBestEntries,
-                includesPhotoBinaryData: false,
-                isFullBackupManifest: true
-            )
-            exportURL = try FullBackupService.makePackage(json: json, photos: photos)
-            isShowingExporter = true
-            message = "バックアップを作成しました。保存先を選んでください。"
-        } catch {
-            message = "失敗: \(error.localizedDescription)"
+        let previousExportURL = exportURL
+        exportURL = nil
+        let modelContainer = modelContext.container
+
+        Task { @MainActor in
+            await Task.yield()
+            defer {
+                isWorking = false
+                workingMessage = ""
+            }
+            do {
+                if let previousExportURL {
+                    await Task.detached(priority: .utility) {
+                        AutomaticBackupService.removeTemporaryPackageIfPresent(at: previousExportURL)
+                    }.value
+                }
+                let worker = AutomaticBackupModelActor(modelContainer: modelContainer)
+                exportURL = try await worker.makeTemporaryExportPackage()
+                isShowingExporter = true
+                message = "バックアップを作成しました。保存先を選んでください。"
+            } catch {
+                exportURL = nil
+                message = "バックアップの作成に失敗しました。もう一度お試しください。\n\(error.localizedDescription)"
+            }
         }
-        isWorking = false
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
-        var copiedPackageURL: URL?
         do {
             guard let sourceURL = try result.get().first else { return }
-            let hasAccess = sourceURL.startAccessingSecurityScopedResource()
-            defer { if hasAccess { sourceURL.stopAccessingSecurityScopedResource() } }
-            removeTemporaryPackage(importedPackageURL)
-            let localURL = try FullBackupService.copyPackageToTemporaryLocation(from: sourceURL)
-            copiedPackageURL = localURL
-            importPreview = try FullBackupService.inspect(packageURL: localURL)
-            importedPackageURL = localURL
-            restoreResult = nil
-            message = "バックアップを確認しました。"
-        } catch {
-            removeTemporaryPackage(copiedPackageURL)
+            guard !isWorking else { return }
+            isWorking = true
+            workingMessage = "バックアップを確認中…"
+            message = ""
+            let previousPackageURL = importedPackageURL
             importedPackageURL = nil
             importPreview = nil
-            message = "失敗: \(error.localizedDescription)"
+            restoreResult = nil
+
+            Task { @MainActor in
+                await Task.yield()
+                defer {
+                    isWorking = false
+                    workingMessage = ""
+                }
+                do {
+                    let inspection = try await Task.detached(priority: .userInitiated) {
+                        if let previousPackageURL {
+                            AutomaticBackupService.removeTemporaryPackageIfPresent(at: previousPackageURL)
+                        }
+                        let hasAccess = sourceURL.startAccessingSecurityScopedResource()
+                        defer { if hasAccess { sourceURL.stopAccessingSecurityScopedResource() } }
+                        let localURL = try FullBackupService.copyPackageToTemporaryLocation(from: sourceURL)
+                        do {
+                            return (localURL, try FullBackupService.inspect(packageURL: localURL))
+                        } catch {
+                            AutomaticBackupService.removeTemporaryPackageIfPresent(at: localURL)
+                            throw error
+                        }
+                    }.value
+                    importedPackageURL = inspection.0
+                    importPreview = inspection.1
+                    message = "バックアップを確認しました。内容を確認してから復元してください。"
+                } catch {
+                    importedPackageURL = nil
+                    importPreview = nil
+                    message = "バックアップの確認に失敗しました。ファイルを選び直してください。\n\(error.localizedDescription)"
+                }
+            }
+        } catch {
+            importedPackageURL = nil
+            importPreview = nil
+            message = "バックアップを選択できませんでした。\n\(error.localizedDescription)"
         }
     }
 
     private func restoreBackup() {
-        guard let importedPackageURL else { return }
+        guard let importedPackageURL, !isWorking else { return }
         isWorking = true
-        do {
-            let result = try FullBackupService.restore(packageURL: importedPackageURL, in: modelContext)
-            restoreResult = result
-            message = "復元完了: データ\(result.modelResult.totalRestoredCount)件、写真追加\(result.insertedPhotoCount)枚、写真更新\(result.updatedPhotoCount)枚、写真不足\(result.missingPhotoCount)枚"
-        } catch {
-            modelContext.rollback()
-            restoreResult = nil
-            message = "失敗: \(error.localizedDescription)"
+        workingMessage = "バックアップを復元中…"
+        restoreResult = nil
+        message = ""
+
+        Task { @MainActor in
+            await Task.yield()
+            defer {
+                isWorking = false
+                workingMessage = ""
+            }
+            do {
+                let result = try await FullBackupService.restoreResponsively(
+                    packageURL: importedPackageURL,
+                    in: modelContext
+                )
+                restoreResult = result
+                message = "復元が完了しました。データ\(result.modelResult.totalRestoredCount)件、写真追加\(result.insertedPhotoCount)枚、写真更新\(result.updatedPhotoCount)枚、写真不足\(result.missingPhotoCount)枚"
+            } catch {
+                modelContext.rollback()
+                restoreResult = nil
+                message = "復元に失敗しました。データは変更されていません。もう一度お試しください。\n\(error.localizedDescription)"
+            }
         }
-        isWorking = false
     }
 
     private func removeTemporaryPackage(_ url: URL?) {
         guard let url else { return }
-        try? FileManager.default.removeItem(at: url)
+        Task.detached(priority: .utility) {
+            AutomaticBackupService.removeTemporaryPackageIfPresent(at: url)
+        }
     }
 }
 

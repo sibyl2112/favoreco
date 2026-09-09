@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-enum AppFontStyle: String, CaseIterable, Identifiable {
+nonisolated enum AppFontStyle: String, CaseIterable, Identifiable {
     case standard
     case sans
     case serif
@@ -31,7 +31,7 @@ enum AppFontStyle: String, CaseIterable, Identifiable {
     }
 }
 
-enum AppFontWeight: String, CaseIterable, Identifiable {
+nonisolated enum AppFontWeight: String, CaseIterable, Identifiable {
     case light
     case standard
     case bold
@@ -47,7 +47,7 @@ enum AppFontWeight: String, CaseIterable, Identifiable {
     }
 }
 
-enum FavorecoTypography {
+nonisolated enum FavorecoTypography {
     private static let jpSansName = "Noto Sans JP"
     private static let jpSerifName = "Noto Serif JP"
     private static let latinDisplayName = "Cormorant Garamond"
@@ -164,7 +164,7 @@ enum FavorecoTypography {
     }
 }
 
-enum AppTextSize: String, CaseIterable, Identifiable {
+nonisolated enum AppTextSize: String, CaseIterable, Identifiable {
     case small
     case standard
     case large

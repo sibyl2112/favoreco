@@ -13,7 +13,7 @@ enum AutomaticBackupStorage: String, Sendable {
     }
 }
 
-struct AutomaticBackupSnapshot: Identifiable {
+struct AutomaticBackupSnapshot: Identifiable, Sendable {
     let url: URL
     let createdAt: Date
     let byteCount: Int64
@@ -192,6 +192,103 @@ actor AutomaticBackupCoordinator {
 
 @ModelActor
 actor AutomaticBackupModelActor {
+    func makeCSVExport() throws -> String {
+        modelContext.autosaveEnabled = false
+        let visits = try modelContext.fetch(FetchDescriptor<Visit>())
+        return CSVExportService.makeVisitsCSV(visits: visits)
+    }
+
+    func makeManualJSONBackup() throws -> String {
+        modelContext.autosaveEnabled = false
+        let categories = try modelContext.fetch(FetchDescriptor<RecordCategory>())
+        let events = try modelContext.fetch(FetchDescriptor<ExperienceEvent>())
+        let bookShelves = try modelContext.fetch(FetchDescriptor<BookShelf>())
+        let visits = try modelContext.fetch(FetchDescriptor<Visit>())
+        let inboxItems = try modelContext.fetch(FetchDescriptor<InboxItem>())
+        let photos = try modelContext.fetch(FetchDescriptor<PhotoBlob>())
+        let socialAccounts = try modelContext.fetch(FetchDescriptor<SocialAccount>())
+        let people = try modelContext.fetch(FetchDescriptor<PersonMaster>())
+        let companions = try modelContext.fetch(FetchDescriptor<CompanionMaster>())
+        let favoriteProfiles = try modelContext.fetch(FetchDescriptor<FavoriteProfile>())
+        let favoGalleryPhotos = try modelContext.fetch(FetchDescriptor<FavoGalleryPhoto>())
+        let favoAnniversaries = try modelContext.fetch(FetchDescriptor<FavoAnniversary>())
+        let favoPins = try modelContext.fetch(FetchDescriptor<FavoPin>())
+        let personLinks = try modelContext.fetch(FetchDescriptor<EventPersonLink>())
+        let places = try modelContext.fetch(FetchDescriptor<PlaceMaster>())
+        let plans = try modelContext.fetch(FetchDescriptor<Plan>())
+        let ticketAccounts = try modelContext.fetch(FetchDescriptor<TicketAccount>())
+        let ticketAttempts = try modelContext.fetch(FetchDescriptor<TicketAttempt>())
+        let movieBestEntries = try modelContext.fetch(FetchDescriptor<MovieBestEntry>())
+        return try JSONBackupExportService.makeBackupJSON(
+            categories: categories,
+            events: events,
+            bookShelves: bookShelves,
+            visits: visits,
+            inboxItems: inboxItems,
+            photos: photos,
+            socialAccounts: socialAccounts,
+            people: people,
+            companions: companions,
+            favoriteProfiles: favoriteProfiles,
+            favoGalleryPhotos: favoGalleryPhotos,
+            favoAnniversaries: favoAnniversaries,
+            favoPins: favoPins,
+            personLinks: personLinks,
+            places: places,
+            plans: plans,
+            ticketAccounts: ticketAccounts,
+            ticketAttempts: ticketAttempts,
+            movieBestEntries: movieBestEntries
+        )
+    }
+
+    func makeTemporaryExportPackage() throws -> URL {
+        modelContext.autosaveEnabled = false
+        let categories = try modelContext.fetch(FetchDescriptor<RecordCategory>())
+        let events = try modelContext.fetch(FetchDescriptor<ExperienceEvent>())
+        let bookShelves = try modelContext.fetch(FetchDescriptor<BookShelf>())
+        let visits = try modelContext.fetch(FetchDescriptor<Visit>())
+        let inboxItems = try modelContext.fetch(FetchDescriptor<InboxItem>())
+        let photos = try modelContext.fetch(FetchDescriptor<PhotoBlob>())
+        let socialAccounts = try modelContext.fetch(FetchDescriptor<SocialAccount>())
+        let people = try modelContext.fetch(FetchDescriptor<PersonMaster>())
+        let companions = try modelContext.fetch(FetchDescriptor<CompanionMaster>())
+        let favoriteProfiles = try modelContext.fetch(FetchDescriptor<FavoriteProfile>())
+        let favoGalleryPhotos = try modelContext.fetch(FetchDescriptor<FavoGalleryPhoto>())
+        let favoAnniversaries = try modelContext.fetch(FetchDescriptor<FavoAnniversary>())
+        let favoPins = try modelContext.fetch(FetchDescriptor<FavoPin>())
+        let personLinks = try modelContext.fetch(FetchDescriptor<EventPersonLink>())
+        let places = try modelContext.fetch(FetchDescriptor<PlaceMaster>())
+        let plans = try modelContext.fetch(FetchDescriptor<Plan>())
+        let ticketAccounts = try modelContext.fetch(FetchDescriptor<TicketAccount>())
+        let ticketAttempts = try modelContext.fetch(FetchDescriptor<TicketAttempt>())
+        let movieBestEntries = try modelContext.fetch(FetchDescriptor<MovieBestEntry>())
+        let json = try JSONBackupExportService.makeBackupJSON(
+            categories: categories,
+            events: events,
+            bookShelves: bookShelves,
+            visits: visits,
+            inboxItems: inboxItems,
+            photos: photos,
+            socialAccounts: socialAccounts,
+            people: people,
+            companions: companions,
+            favoriteProfiles: favoriteProfiles,
+            favoGalleryPhotos: favoGalleryPhotos,
+            favoAnniversaries: favoAnniversaries,
+            favoPins: favoPins,
+            personLinks: personLinks,
+            places: places,
+            plans: plans,
+            ticketAccounts: ticketAccounts,
+            ticketAttempts: ticketAttempts,
+            movieBestEntries: movieBestEntries,
+            includesPhotoBinaryData: false,
+            isFullBackupManifest: true
+        )
+        return try FullBackupService.makePackage(json: json, photos: photos)
+    }
+
     func create(request: AutomaticBackupRequest) throws -> AutomaticBackupRunResult {
         modelContext.autosaveEnabled = false
         let categories = try modelContext.fetch(FetchDescriptor<RecordCategory>())
@@ -421,7 +518,7 @@ enum AutomaticBackupService {
         do {
             try FileManager.default.removeItem(at: url)
         } catch {
-            assertionFailure("Failed to remove temporary backup package: \(error)")
+            debugPrint("Failed to remove temporary backup package: \(error)")
         }
     }
 }

@@ -100,18 +100,21 @@ private struct CompactPhotoThumbnail: View {
                             .padding(.vertical, 3)
                             .background(.black.opacity(0.66), in: Capsule())
                         Spacer(minLength: 0)
-                        if isCover {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.yellow)
-                                .frame(width: 18, height: 18)
-                                .background(.black.opacity(0.58), in: Circle())
-                        }
                     }
                     Spacer(minLength: 0)
-                    if isHeroBackground {
-                        HStack {
-                            Spacer(minLength: 0)
+                    HStack(spacing: 3) {
+                        if isCover {
+                            Text("アイキャッチ")
+                                .font(.system(size: 6.5, weight: .bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 3)
+                                .background(.black.opacity(0.66), in: Capsule())
+                        }
+                        Spacer(minLength: 0)
+                        if isHeroBackground {
                             Image(systemName: "rectangle.landscape.fill")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.yellow)

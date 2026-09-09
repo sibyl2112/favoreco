@@ -7,15 +7,25 @@ struct CategoryTicketProgressItem: Identifiable {
 
     var id: UUID { attempt.id }
 
+    var templateKey: String? {
+        (plan.category ?? plan.event?.category)?.templateKey
+    }
+
+    var undatedScheduleText: String {
+        GenreVocabulary.undatedSchedule(for: templateKey)
+    }
+
     var title: String {
         if !plan.title.isEmpty { return plan.title }
         if let eventTitle = plan.event?.title, !eventTitle.isEmpty { return eventTitle }
-        return "公演"
+        return GenreVocabulary.targetNoun(for: templateKey)
     }
 
     var selectorTitle: String {
         guard plan.hasConfirmedSchedule else {
-            return plan.venueNameSnapshot.isEmpty ? "参加日未定" : "参加日未定 \(plan.venueNameSnapshot)"
+            return plan.venueNameSnapshot.isEmpty
+                ? undatedScheduleText
+                : "\(undatedScheduleText) \(plan.venueNameSnapshot)"
         }
         let date = FavorecoDateText.monthDay(plan.startsAt)
         return plan.venueNameSnapshot.isEmpty ? date : "\(date) \(plan.venueNameSnapshot)"
@@ -33,7 +43,7 @@ struct CategoryTicketProgressItem: Identifiable {
     var metadataChips: [String] {
         var values = plan.hasConfirmedSchedule
             ? [FavorecoDateText.compactDateTime(plan.startsAt)]
-            : ["参加日未定"]
+            : [undatedScheduleText]
         if !plan.venueNameSnapshot.isEmpty {
             values.append(plan.venueNameSnapshot)
         }
@@ -247,7 +257,7 @@ struct CategoryTicketProgressSection: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(
                             usesTheaterStyle
-                                ? "参加日未定のチケットはありません"
+                                ? "観劇日未定のチケットはありません"
                                 : "対応が必要なチケットはありません"
                         )
                             .font(FavorecoTypography.bodyStrong)
@@ -373,7 +383,7 @@ struct CategoryTicketProgressCard: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 5) {
                     ForEach(item.metadataChips, id: \.self) { chip in
-                        let isAttention = isTheater && chip == "参加日未定"
+                        let isAttention = (isTheater || isLive) && chip == item.undatedScheduleText
                         let chipTint = isTheater ? TheaterCategoryStyle.ticketMetadataRose : tint
                         Text(chip)
                             .font(FavorecoTypography.jpSans(10, weight: .semibold, relativeTo: .caption2))

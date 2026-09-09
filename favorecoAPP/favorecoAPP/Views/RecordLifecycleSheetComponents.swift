@@ -40,11 +40,156 @@ enum TheaterLifecycleFlatStyle {
     )
 }
 
+/// 登録状態Pickerの直下で、現在選んでいる保存内容を短く説明する。
+/// ジャンルごとの文言は呼び出し側で渡し、外観と読み上げを全登録画面で揃える。
+struct RegistrationPurposeGuidance: View {
+    let text: String
+    let systemImage: String
+
+    var body: some View {
+        Label {
+            Text(text)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            FavorecoIcon(systemName: systemImage, size: 13)
+                .frame(width: 18)
+        }
+        .font(FavorecoTypography.jpSans(12, weight: .regular, relativeTo: .caption))
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("選択中の登録内容。\(text)")
+    }
+}
+
+/// 状態を選んで登録する画面の先頭カード。
+/// 見出し・Picker・区切り線・選択連動説明を一体化し、ジャンルや入口による直置きを防ぐ。
+struct RegistrationPurposeSelectionSection<SelectionControl: View>: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    let title: String
+    let guidanceText: String
+    let systemImage: String
+    private let selectionControl: SelectionControl
+
+    init(
+        title: String = "登録内容",
+        guidanceText: String,
+        systemImage: String,
+        @ViewBuilder selectionControl: () -> SelectionControl
+    ) {
+        self.title = title
+        self.guidanceText = guidanceText
+        self.systemImage = systemImage
+        self.selectionControl = selectionControl()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(themePalette.registrationSectionHeaderTint)
+                    .frame(width: 4, height: 24)
+                Text(title)
+                    .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+            }
+
+            selectionControl
+
+            Divider()
+                .overlay(ExplicitFormMetrics.rowSeparatorColor)
+
+            RegistrationPurposeGuidance(
+                text: guidanceText,
+                systemImage: systemImage
+            )
+            .padding(.horizontal, 2)
+        }
+        .theaterLifecycleDisclosureSurface(isExpanded: true)
+    }
+}
+
+/// 登録ルートに依存せず、対象アイキャッチを同じ密度・操作順で編集する。
+/// 写真選択自体は PhotosPicker を保持する各画面から注入する。
+struct RegistrationEyecatchEditor<PhotoPickerContent: View>: View {
+    let imageData: Data?
+    let tint: Color
+    let showsTitle: Bool
+    let onCapture: () -> Void
+    let onRemove: () -> Void
+    private let photoPickerContent: PhotoPickerContent
+
+    init(
+        imageData: Data?,
+        tint: Color,
+        showsTitle: Bool = true,
+        onCapture: @escaping () -> Void,
+        onRemove: @escaping () -> Void,
+        @ViewBuilder photoPickerContent: () -> PhotoPickerContent
+    ) {
+        self.imageData = imageData
+        self.tint = tint
+        self.showsTitle = showsTitle
+        self.onCapture = onCapture
+        self.onRemove = onRemove
+        self.photoPickerContent = photoPickerContent()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Group {
+                if let imageData, let image = UIImage(data: imageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        Color(uiColor: .secondarySystemFill)
+                        FavorecoIcon(systemName: "photo", size: 24)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(width: 96, height: 96)
+            .clipShape(RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius))
+            .clipped()
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 8) {
+                if showsTitle {
+                    Text("アイキャッチ（任意）")
+                        .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                        .foregroundStyle(.primary)
+                }
+
+                photoPickerContent
+
+                Button(action: onCapture) {
+                    FavorecoIconLabel("撮影する", systemImage: "camera", iconSize: 13)
+                }
+                .buttonStyle(.plain)
+
+                Button(role: .destructive, action: onRemove) {
+                    FavorecoIconLabel("画像を外す", systemImage: "trash", iconSize: 13)
+                }
+                .buttonStyle(.plain)
+                .disabled(imageData == nil)
+            }
+            .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+            .tint(tint)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 /// 長い補足文を画面に常設せず、必要な時だけ表示する。
 struct TheaterLifecycleInfoButton: View {
     let text: String
-    var tint = Color(hex: "#8B2F45")
+    var tint: Color? = nil
 
+    @Environment(\.favorecoThemePalette) private var themePalette
     @State private var isPresented = false
 
     var body: some View {
@@ -53,21 +198,26 @@ struct TheaterLifecycleInfoButton: View {
         } label: {
             Image(systemName: "info.circle")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(tint)
+                .foregroundStyle(tint ?? themePalette.globalTint)
                 .frame(width: 30, height: 30)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("説明を表示")
         .accessibilityHint(text)
-        .popover(isPresented: $isPresented, arrowEdge: .top) {
-            Text(text)
-                .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(16)
-                .frame(idealWidth: 280, maxWidth: 310, alignment: .leading)
-                .presentationCompactAdaptation(.popover)
+        .popover(isPresented: $isPresented) {
+            ScrollView {
+                Text(text)
+                    .font(FavorecoTypography.jpSans(13, weight: .regular, relativeTo: .body))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(idealWidth: 300, maxWidth: 340, idealHeight: 180, maxHeight: 320)
+            .presentationDetents([.height(220), .medium])
+            .presentationDragIndicator(.visible)
+            .presentationCompactAdaptation(.sheet)
         }
     }
 }
@@ -143,21 +293,23 @@ struct TheaterLifecycleEditorSheet: View {
             .favorecoRegistrationTheme(categoryHex: categoryHex)
     }
 
-    @ViewBuilder
-    private var lifecycleEditor: some View {
+    /// Keep the four lifecycle editors behind one erased boundary. Without this boundary,
+    /// SwiftUI recursively expands the generic types of every unselected editor while a
+    /// new registration sheet is being presented on physical arm64 devices.
+    private var lifecycleEditor: AnyView {
         switch source {
         case .newRegistration(let purpose, let categoryID):
-            AddTicketPlanView(
+            AnyView(AddTicketPlanView(
                 entryMode: .unified,
                 initialCategoryID: categoryID,
                 initialUnifiedPurpose: purpose
-            )
+            ))
         case .interested(let event):
-            EditEventView(event: event, usesTheaterLifecycleLayout: true)
+            AnyView(EditEventView(event: event, usesTheaterLifecycleLayout: true))
         case .planned(let plan):
-            EditExperienceView(plan: plan, usesTheaterLifecycleLayout: true)
+            AnyView(EditExperienceView(plan: plan, usesTheaterLifecycleLayout: true))
         case .recorded(let visit):
-            EditExperienceView(visit: visit, usesTheaterLifecycleLayout: true)
+            AnyView(EditExperienceView(visit: visit, usesTheaterLifecycleLayout: true))
         }
     }
 
@@ -176,10 +328,14 @@ struct TheaterLifecycleEditorSheet: View {
     }
 }
 
-/// iPhone 16原寸を基準にした観劇編集の共通外枠。
+/// iPhone 16原寸を基準にした全ジャンル共通の入力・編集外枠。
+/// 型名は既存呼び出しとの互換性のため残しているが、観劇専用ではない。
 struct TheaterLifecycleFlatScaffold<Content: View>: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
     let title: String
     let canSave: Bool
+    let saveButtonTitle: String
+    let isSaving: Bool
     let onClose: () -> Void
     let onSave: () -> Void
     let content: Content
@@ -187,12 +343,16 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
     init(
         title: String,
         canSave: Bool,
+        saveButtonTitle: String = "保存",
+        isSaving: Bool = false,
         onClose: @escaping () -> Void,
         onSave: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.canSave = canSave
+        self.saveButtonTitle = saveButtonTitle
+        self.isSaving = isSaving
         self.onClose = onClose
         self.onSave = onSave
         self.content = content()
@@ -208,6 +368,7 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
+                .disabled(isSaving)
                 .accessibilityLabel("閉じる")
 
                 Spacer(minLength: 0)
@@ -217,13 +378,25 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
                     .minimumScaleFactor(0.82)
                 Spacer(minLength: 0)
 
-                Button("保存", action: onSave)
+                Button(action: onSave) {
+                    HStack(spacing: 5) {
+                        if isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                        }
+                        Text(saveButtonTitle)
+                    }
                     .font(FavorecoTypography.jpSans(16, weight: .semibold, relativeTo: .body))
                     .foregroundStyle(.white)
-                    .frame(width: 62, height: 44)
-                    .background(Color(hex: "#8B2F45"), in: RoundedRectangle(cornerRadius: 11))
-                    .opacity(canSave ? 1 : 0.38)
-                    .disabled(!canSave)
+                    .frame(minWidth: 62, minHeight: 44)
+                    .padding(.horizontal, saveButtonTitle == "保存" ? 0 : 8)
+                    .background(themePalette.globalTint, in: RoundedRectangle(cornerRadius: 11))
+                }
+                .buttonStyle(.plain)
+                .opacity(canSave && !isSaving ? 1 : 0.38)
+                .disabled(!canSave || isSaving)
+                .accessibilityLabel(saveButtonTitle)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
@@ -238,11 +411,101 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
                 .padding(.bottom, 44)
             }
             .scrollDismissesKeyboard(.interactively)
+            .disabled(isSaving)
         }
         .background(TheaterLifecycleFlatStyle.canvasBackground)
         .toolbar(.hidden, for: .navigationBar)
         .environment(\.usesTheaterLifecycleFlatLayout, true)
         .dynamicTypeSize(.xSmall ... .large)
+        .interactiveDismissDisabled(isSaving)
+    }
+}
+
+/// 新規コードでは用途が明確な共通名を使う。
+typealias RecordLifecycleFlatScaffold<Content: View> = TheaterLifecycleFlatScaffold<Content>
+
+/// 登録状態やジャンルが変わっても、情報取込の入口を同じ順序・同じ見た目で提示する。
+/// 実際の解析と保存先は各フォームへ委譲し、対象情報と1回分の記録を混同しない。
+struct RecordSourceImportActions: View {
+    @Environment(\.favorecoThemePalette) private var themePalette
+
+    let isImportingImage: Bool
+    let isImageImportEnabled: Bool
+    let onImage: () -> Void
+    let onText: () -> Void
+    let onURL: () -> Void
+
+    init(
+        isImportingImage: Bool = false,
+        isImageImportEnabled: Bool = true,
+        onImage: @escaping () -> Void,
+        onText: @escaping () -> Void,
+        onURL: @escaping () -> Void
+    ) {
+        self.isImportingImage = isImportingImage
+        self.isImageImportEnabled = isImageImportEnabled
+        self.onImage = onImage
+        self.onText = onText
+        self.onURL = onURL
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            actionButton(
+                title: isImportingImage ? "読取中" : "写真・カメラ",
+                systemImage: "camera",
+                isEnabled: isImageImportEnabled && !isImportingImage,
+                action: onImage
+            )
+            actionButton(
+                title: "テキストから",
+                systemImage: "doc.text",
+                action: onText
+            )
+            actionButton(
+                title: "URLから",
+                systemImage: "link",
+                action: onURL
+            )
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func actionButton(
+        title: String,
+        systemImage: String,
+        isEnabled: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                FavorecoIcon(systemName: systemImage, size: 14)
+                    .foregroundStyle(isEnabled ? themePalette.globalTint : Color.secondary)
+                Text(title)
+                    .font(FavorecoTypography.jpSans(11.5, weight: .semibold, relativeTo: .body))
+                    .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(
+                TheaterLifecycleFlatStyle.fieldBackground,
+                in: RoundedRectangle(
+                    cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                    style: .continuous
+                )
+            )
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius,
+                    style: .continuous
+                )
+                .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
     }
 }
 
@@ -251,6 +514,8 @@ struct TheaterLifecycleEditorCanvas<Content: View>: View {
     let usesFlatLayout: Bool
     let title: String
     let canSave: Bool
+    let saveButtonTitle: String
+    let isSaving: Bool
     let onClose: () -> Void
     let onSave: () -> Void
     let content: Content
@@ -259,6 +524,8 @@ struct TheaterLifecycleEditorCanvas<Content: View>: View {
         usesFlatLayout: Bool,
         title: String,
         canSave: Bool,
+        saveButtonTitle: String = "保存",
+        isSaving: Bool = false,
         onClose: @escaping () -> Void,
         onSave: @escaping () -> Void,
         @ViewBuilder content: () -> Content
@@ -266,6 +533,8 @@ struct TheaterLifecycleEditorCanvas<Content: View>: View {
         self.usesFlatLayout = usesFlatLayout
         self.title = title
         self.canSave = canSave
+        self.saveButtonTitle = saveButtonTitle
+        self.isSaving = isSaving
         self.onClose = onClose
         self.onSave = onSave
         self.content = content()
@@ -276,6 +545,8 @@ struct TheaterLifecycleEditorCanvas<Content: View>: View {
             TheaterLifecycleFlatScaffold(
                 title: title,
                 canSave: canSave,
+                saveButtonTitle: saveButtonTitle,
+                isSaving: isSaving,
                 onClose: onClose,
                 onSave: onSave
             ) {
@@ -350,6 +621,7 @@ struct StagedRecordBlock<Content: View>: View {
     let isExpanded: (String) -> Binding<Bool>
     let content: (RecordUnitDefinition) -> Content
     @Environment(\.usesTheaterLifecycleFlatLayout) private var usesFlatLayout
+    @Environment(\.favorecoThemePalette) private var themePalette
 
     init(
         title: String,
@@ -397,7 +669,7 @@ struct StagedRecordBlock<Content: View>: View {
                 HStack(alignment: .center, spacing: 10) {
                     if usesFlatLayout {
                         RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Color(hex: "#8B2F45"))
+                            .fill(themePalette.registrationSectionHeaderTint)
                             .frame(width: 4, height: 24)
                     }
                     Text(displayTitle)
@@ -464,7 +736,7 @@ struct StagedRecordBlock<Content: View>: View {
     private var displayTitle: String {
         guard usesFlatLayout else { return title }
         return switch title {
-        case "鑑賞記録": "参加日時・会場"
+        case "鑑賞記録": "観劇日時・会場"
         case "思い出": "評価・写真・同行者・感想"
         case "備考記録": "ToDo・費用・その他"
         default: title

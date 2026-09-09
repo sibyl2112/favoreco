@@ -40,4 +40,19 @@ final class TheaterPerformanceTypeTests: XCTestCase {
 
         XCTAssertEqual(restored.eventPerformanceTypeCustomName, "能")
     }
+
+    func testLiveOtherRequiresConcreteCustomName() {
+        let key = LivePerformanceType.other.rawValue
+
+        XCTAssertFalse(LivePerformanceType.isValidSelection(key: key, customName: "  "))
+        XCTAssertTrue(LivePerformanceType.isValidSelection(key: key, customName: "トーク＆ライブ"))
+        XCTAssertEqual(
+            LivePerformanceType.customNameForStorage(key: key, input: "  トーク＆ライブ  "),
+            "トーク＆ライブ"
+        )
+        XCTAssertEqual(
+            LivePerformanceType.displayName(for: key, customName: "トーク＆ライブ"),
+            "トーク＆ライブ"
+        )
+    }
 }

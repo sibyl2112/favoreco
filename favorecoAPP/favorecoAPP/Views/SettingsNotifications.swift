@@ -72,8 +72,8 @@ struct NotificationSettingsView: View {
                 Toggle("当落発表", isOn: $lotteryResultEnabled)
                 Toggle("支払締切", isOn: $paymentDeadlineEnabled)
                 Toggle("チケット受取開始", isOn: $ticketIssueEnabled)
-                Toggle("公演前日/当日", isOn: $performanceReminderEnabled)
-                Toggle("公演準備の期限", isOn: $preparationDeadlineEnabled)
+                Toggle("予定の前日/当日", isOn: $performanceReminderEnabled)
+                Toggle("予定の準備期限", isOn: $preparationDeadlineEnabled)
 
                 DisclosureGroup("通知時刻を変更", isExpanded: $isShowingTicketTiming) {
                     if applicationStartEnabled {
@@ -92,7 +92,7 @@ struct NotificationSettingsView: View {
                         pointTimingPicker("チケット受取開始", selection: $ticketIssueTiming)
                     }
                     if performanceReminderEnabled {
-                        Picker("公演", selection: $performanceTiming) {
+                        Picker("予定", selection: $performanceTiming) {
                             ForEach(PerformanceNotificationTiming.allCases) { timing in
                                 Text(timing.displayName).tag(timing.rawValue)
                             }
@@ -100,7 +100,7 @@ struct NotificationSettingsView: View {
                         .pickerStyle(.menu)
                     }
                     if preparationDeadlineEnabled {
-                        Picker("公演準備", selection: $preparationTiming) {
+                        Picker("予定の準備", selection: $preparationTiming) {
                             ForEach(PreparationNotificationTiming.allCases) { timing in
                                 Text(timing.displayName).tag(timing.rawValue)
                             }
@@ -157,7 +157,7 @@ struct NotificationSettingsView: View {
             FavorecoSettingsSection("通知について") {
                 FavorecoSettingsInfoCallout(
                     title: "通知される内容",
-                    message: "予定・申込・公演準備・FC／会員期限と、Premiumの月刊・年間Favorecoを通知できます。"
+                    message: "予定・申込・予定の準備・FC／会員期限と、Premiumの月刊・年間Favorecoを通知できます。"
                 )
             }
         }
@@ -349,9 +349,9 @@ private enum TicketNotificationPreset: String, CaseIterable, Identifiable {
     var summary: String {
         switch self {
         case .minimal:
-            "申込締切・支払締切・公演前日/当日"
+            "申込締切・支払締切・予定の前日/当日"
         case .recommended:
-            "締切・当落・支払・チケット受取・公演・公演準備"
+            "締切・当落・支払・チケット受取・予定・予定の準備"
         case .thorough:
             "申込開始を含む予定・チケット通知をすべて使用"
         }

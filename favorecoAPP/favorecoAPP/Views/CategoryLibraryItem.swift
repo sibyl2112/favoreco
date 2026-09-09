@@ -245,18 +245,16 @@ struct CategoryLibraryItem: Identifiable {
             }
 
             switch category.templateKey {
-            case "theater": return "観劇予定"
-            case "movie": return "鑑賞予定"
-            case "live": return "参加予定"
+            case "theater", "movie", "live":
+                return GenreVocabulary.plannedStatus(for: category.templateKey)
             default: return "予定"
             }
         }
 
         if latestVisit != nil {
             switch category.templateKey {
-            case "theater": return "観劇済み"
-            case "movie": return "鑑賞済み"
-            case "live": return "参加済み"
+            case "theater", "movie", "live":
+                return GenreVocabulary.completedStatus(for: category.templateKey)
             default: return "体験済み"
             }
         }

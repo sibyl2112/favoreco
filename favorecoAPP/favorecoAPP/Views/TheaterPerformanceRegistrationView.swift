@@ -59,6 +59,10 @@ struct TheaterPerformanceRegistrationView: View {
     private var isLive: Bool { category.templateKey == "live" }
 
     var body: some View {
+        let pickerTint = categoryTint
+        let pickerBodyFont = FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body)
+        let pickerCompactFont = FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body)
+        let hasEyecatch = eyecatchData != nil
         NavigationStack {
             Form {
                 Section {
@@ -131,11 +135,11 @@ struct TheaterPerformanceRegistrationView: View {
                         ) {
                             HStack(spacing: 8) {
                                 FavorecoIcon(systemName: "photo.badge.plus", size: 16)
-                                    .foregroundStyle(categoryTint)
-                                Text(eyecatchData == nil
+                                    .foregroundStyle(pickerTint)
+                                Text(!hasEyecatch
                                      ? "画像を追加（最大2枚）"
                                      : "画像・OCRを変更（最大2枚）")
-                                    .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
+                                    .font(pickerBodyFont)
                                 Spacer(minLength: 8)
                                 Image(systemName: "chevron.right")
                                     .font(.caption.weight(.semibold))
@@ -158,13 +162,13 @@ struct TheaterPerformanceRegistrationView: View {
 
                         if !recognizedTitleCandidates.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("読み取った公演名候補")
+                                Text("読み取った\(performanceNoun)名候補")
                                     .font(FavorecoTypography.captionStrong)
                                 ForEach(recognizedTitleCandidates.prefix(4), id: \.self) { candidate in
                                     Button {
                                         title = candidate
                                         recognizedTitleCandidates = []
-                                        importStatus = "公演名へ反映しました。"
+                                        importStatus = "\(performanceNoun)名へ反映しました。"
                                     } label: {
                                         HStack {
                                             Text(candidate)
@@ -202,8 +206,8 @@ struct TheaterPerformanceRegistrationView: View {
                 Section {
                     DisclosureGroup(isExpanded: $showingPerformanceBasic) {
                         ExplicitFormTextField(
-                            title: "公演名",
-                            prompt: "月影のアトリエ（必須）",
+                            title: "\(performanceNoun)名",
+                            prompt: isLive ? "SPRING TOUR 2026（必須）" : "月影のアトリエ（必須）",
                             text: $title,
                             axis: .horizontal,
                             minimumLines: 1,
@@ -257,7 +261,7 @@ struct TheaterPerformanceRegistrationView: View {
                             )
                             ExplicitFormTextField(
                                 title: "サブタイトル（任意）",
-                                prompt: "例：東京公演限定版",
+                                prompt: isLive ? "例：東京公演 / DAY 2" : "例：東京公演限定版",
                                 text: $eventSubtitle,
                                 labelStyle: .horizontal
                             )
@@ -274,7 +278,7 @@ struct TheaterPerformanceRegistrationView: View {
 
                         VStack(alignment: .leading, spacing: 8) {
                             ExplicitFormFieldTitle(
-                                title: "公演ビジュアル",
+                                title: "\(performanceNoun)ビジュアル",
                                 isOptional: true,
                                 isRequired: false
                             )
@@ -302,14 +306,18 @@ struct TheaterPerformanceRegistrationView: View {
                                     }
                                     .buttonStyle(.plain)
                                     .padding(7)
-                                    .accessibilityLabel("公演ビジュアルを外す")
+                                    .accessibilityLabel("\(performanceNoun)ビジュアルを外す")
                                 }
 
                                 PhotosPicker(
                                     selection: $selectedLocalEyecatchItem,
                                     matching: .images
                                 ) {
-                                    localEyecatchPickerLabel("ローカル画像を変更")
+                                    localEyecatchPickerLabel(
+                                        "ローカル画像を変更",
+                                        tint: pickerTint,
+                                        font: pickerCompactFont
+                                    )
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(isProcessingImage)
@@ -325,15 +333,9 @@ struct TheaterPerformanceRegistrationView: View {
                                             fallbackWeight: .medium
                                         )
                                         Text("ローカルから画像を選ぶ")
-                                            .font(
-                                                FavorecoTypography.jpSans(
-                                                    13,
-                                                    weight: .semibold,
-                                                    relativeTo: .body
-                                                )
-                                            )
+                                            .font(pickerBodyFont)
                                     }
-                                    .foregroundStyle(categoryTint)
+                                    .foregroundStyle(pickerTint)
                                     .frame(maxWidth: .infinity, minHeight: 96)
                                     .background(Color.secondary.opacity(0.06))
                                     .overlay {
@@ -382,11 +384,11 @@ struct TheaterPerformanceRegistrationView: View {
                     Button {
                         venueEntries.append(EventVenueEntry())
                     } label: {
-                        FavorecoIconLabel("公演地を追加", systemImage: "plus.circle.fill")
+                        FavorecoIconLabel(isLive ? "ライブ会場を追加" : "公演会場を追加", systemImage: "plus.circle.fill")
                     }
                     .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
                     ExplicitFormTextField(
-                        title: "公演メモ（任意）",
+                        title: "\(performanceNoun)メモ（任意）",
                         prompt: isLive ? "チケットサイト、注意事項など" : "会期、チケットサイト、注意事項など",
                         text: $performanceMemo,
                         axis: .vertical,
@@ -424,8 +426,10 @@ struct TheaterPerformanceRegistrationView: View {
                             .clearRegistrationCardRow()
                     } else {
                         registrationButton(
-                            title: "公演を保存",
-                            detail: "保存後に、観劇予定またはチケット手配へ進めます",
+                            title: "\(performanceNoun)を保存",
+                            detail: isLive
+                                ? "保存後に、参戦予定またはチケット手配へ進めます"
+                                : "保存後に、観劇予定またはチケット手配へ進めます",
                             systemImage: "checkmark.circle.fill",
                             tint: categoryTint
                         ) {
@@ -467,7 +471,7 @@ struct TheaterPerformanceRegistrationView: View {
                 AddTicketPlanView(event: event, entryMode: nextEntryMode)
             }
             .confirmationDialog(
-                "公演ビジュアルを外しますか？",
+                "\(performanceNoun)ビジュアルを外しますか？",
                 isPresented: $showingEyecatchRemovalConfirmation,
                 titleVisibility: .visible
             ) {
@@ -476,9 +480,9 @@ struct TheaterPerformanceRegistrationView: View {
                 }
                 Button("キャンセル", role: .cancel) {}
             } message: {
-                Text("公演登録を保存するまでは、選び直すこともできます。")
+                Text("\(performanceNoun)を保存するまでは、選び直すこともできます。")
             }
-            .alert("公演を登録できませんでした", isPresented: Binding(
+            .alert("\(performanceNoun)を登録できませんでした", isPresented: Binding(
                 get: { !errorMessage.isEmpty },
                 set: { if !$0 { errorMessage = "" } }
             )) {
@@ -496,7 +500,7 @@ struct TheaterPerformanceRegistrationView: View {
                     .foregroundStyle(categoryTint)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("公演を保存しました")
+                    Text("\(performanceNoun)を保存しました")
                         .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -585,7 +589,7 @@ struct TheaterPerformanceRegistrationView: View {
         let isEnabled = !trimmedTitle.isEmpty && !isSaving
         return Button(action: action) {
             registrationCardLabel(
-                title: title,
+                title: isSaving ? "保存中…" : title,
                 detail: detail,
                 systemImage: systemImage,
                 tint: tint,
@@ -598,6 +602,10 @@ struct TheaterPerformanceRegistrationView: View {
 
     private var categoryTint: Color {
         themePalette.globalTint
+    }
+
+    private var performanceNoun: String {
+        isLive ? "ライブ" : "公演"
     }
 
     private func registrationCardLabel(
@@ -650,28 +658,41 @@ struct TheaterPerformanceRegistrationView: View {
         .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func localEyecatchPickerLabel(_ title: String) -> some View {
+    nonisolated private func localEyecatchPickerLabel(
+        _ title: String,
+        tint: Color,
+        font: Font
+    ) -> some View {
         HStack(spacing: 7) {
             FavorecoIcon(systemName: "photo.badge.plus", size: 15, fallbackWeight: .medium)
             Text(title)
-                .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                .font(font)
             Spacer(minLength: 8)
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
         }
-        .foregroundStyle(categoryTint)
+        .foregroundStyle(tint)
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, minHeight: 42)
-        .background(categoryTint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
         .contentShape(Rectangle())
     }
 
     private func save(nextStep: TheaterPerformanceRegistrationNextStep) {
         guard !trimmedTitle.isEmpty else {
-            errorMessage = "公演名を入力してください。"
+            errorMessage = "\(performanceNoun)名を入力してください。"
             return
         }
+        guard !isSaving else { return }
         isSaving = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            performSave(nextStep: nextStep)
+        }
+    }
+
+    private func performSave(nextStep: TheaterPerformanceRegistrationNextStep) {
         let now = Date()
         let existingEvent = ExperienceEvent.matchingProduction(
             title: trimmedTitle,
@@ -766,7 +787,7 @@ struct TheaterPerformanceRegistrationView: View {
             }
         } catch {
             modelContext.rollback()
-            errorMessage = error.localizedDescription
+            errorMessage = "\(isLive ? "ライブ" : "公演")を保存できませんでした。データは変更されていません。もう一度お試しください。\n\(error.localizedDescription)"
         }
         isSaving = false
     }
@@ -888,18 +909,18 @@ struct TheaterPerformanceRegistrationView: View {
             recognizedTitleCandidates = []
             importStatus = importResultMessage(
                 source: "画像",
-                fields: ["公演名", "公演ビジュアル"] + appliedVenue
+                fields: ["\(performanceNoun)名", "\(performanceNoun)ビジュアル"] + appliedVenue
             )
         } else if !titleCandidates.isEmpty {
             recognizedTitleCandidates = titleCandidates
             importStatus = importResultMessage(
                 source: "画像",
-                fields: ["公演ビジュアル", "公演名候補"] + appliedVenue
+                fields: ["\(performanceNoun)ビジュアル", "\(performanceNoun)名候補"] + appliedVenue
             )
         } else {
             importStatus = importResultMessage(
                 source: "画像",
-                fields: ["公演ビジュアル"] + appliedVenue
+                fields: ["\(performanceNoun)ビジュアル"] + appliedVenue
             )
         }
     }
@@ -997,17 +1018,19 @@ struct TheaterPerformanceRegistrationView: View {
                 creditsText = candidate.creditsText
             }
             importURL = candidate.resolvedURL.absoluteString
-            var appliedFields = ["公演名"]
+            var appliedFields = ["\(performanceNoun)名"]
             if !officialURL.isEmpty { appliedFields.append("公式URL") }
             if !ticketURL.isEmpty { appliedFields.append("チケットURL") }
-            if !creditsText.isEmpty { appliedFields.append("公演団体・クレジット") }
+            if !creditsText.isEmpty {
+                appliedFields.append(isLive ? "出演者・クレジット" : "公演団体・クレジット")
+            }
             if eyecatchData == nil, let sourceImageData = candidate.imageData {
                 let compressed = await Task.detached(priority: .userInitiated) {
                     QuickCaptureImageService.compressedJPEG(from: sourceImageData)
                 }.value
                 if let compressed {
                     eyecatchData = compressed
-                    appliedFields.append("公演ビジュアル")
+                    appliedFields.append("\(performanceNoun)ビジュアル")
                 }
             }
             appliedFields.append(

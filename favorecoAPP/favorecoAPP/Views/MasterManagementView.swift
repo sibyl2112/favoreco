@@ -91,6 +91,7 @@ struct PersonMasterCreateView: View {
     @State private var memo = ""
     @State private var showsOptionalFields = false
     @State private var errorMessage = ""
+    @State private var isSaving = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var selectedPhotoData: Data?
     @State private var photoErrorMessage = ""
@@ -199,10 +200,11 @@ struct PersonMasterCreateView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }
-                        .disabled(trimmedName.isEmpty || hasExactMatch)
+                    Button(isSaving ? "保存中…" : "保存") { save() }
+                        .disabled(trimmedName.isEmpty || hasExactMatch || isSaving)
                 }
             }
             .task(id: selectedPhoto) {
@@ -212,10 +214,13 @@ struct PersonMasterCreateView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
         if let existing = PersonMasterSuggestion.exactMatch(in: people, query: trimmedName) {
             errorMessage = "「\(existing.displayName)」が登録済みです。候補から開いてください。"
             return
         }
+        isSaving = true
+        errorMessage = ""
         let now = Date()
         let person = PersonMaster(
             displayName: trimmedName,
@@ -239,6 +244,7 @@ struct PersonMasterCreateView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isSaving = false
             errorMessage = "保存できませんでした: \(error.localizedDescription)"
         }
     }
@@ -247,7 +253,9 @@ struct PersonMasterCreateView: View {
     private func loadSelectedPersonPhoto() async {
         guard let selectedPhoto else { return }
         guard let data = try? await selectedPhoto.loadTransferable(type: Data.self),
-              let processed = PersonImageStore.processedAvatarData(from: data) else {
+              let processed = await Task.detached(priority: .userInitiated, operation: {
+                  PersonImageStore.processedAvatarData(from: data)
+              }).value else {
             photoErrorMessage = "写真を読み込めませんでした。別の写真を選んでください。"
             return
         }
@@ -506,6 +514,7 @@ private struct PersonMasterMergeView: View {
     @State private var showsOptionalFields = false
     @State private var selectedDestination: PersonMaster?
     @State private var errorMessage = ""
+    @State private var isPerformingAction = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var selectedPhotoData: Data?
     @State private var removesStoredPhoto = false
@@ -663,11 +672,12 @@ private struct PersonMasterMergeView: View {
             if showsCancelButton {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }
+                        .disabled(isPerformingAction)
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存") { save() }
-                    .disabled(!draft.canSave)
+                Button(isPerformingAction ? "処理中…" : "保存") { save() }
+                    .disabled(!draft.canSave || isPerformingAction)
             }
         }
         .confirmationDialog(
@@ -705,16 +715,23 @@ private struct PersonMasterMergeView: View {
     }
 
     private func merge(into destination: PersonMaster) {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        errorMessage = ""
         do {
             try MasterMergeService.merge(person: person, into: destination, in: modelContext)
             dismiss()
         } catch {
             modelContext.rollback()
+            isPerformingAction = false
             errorMessage = "統合できませんでした: \(error.localizedDescription)"
         }
     }
 
     private func save() {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        errorMessage = ""
         let previousImagePath = person.imagePath
         person.displayName = draft.trimmedDisplayName
         person.entityKind = draft.entityKind
@@ -748,6 +765,7 @@ private struct PersonMasterMergeView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isPerformingAction = false
             draft = PersonMasterDraft(person: person)
             favoriteDraft = FavoriteProfileDraft(profile: person.favoriteProfile)
             errorMessage = "保存できませんでした: \(error.localizedDescription)"
@@ -758,7 +776,9 @@ private struct PersonMasterMergeView: View {
     private func loadSelectedPersonPhoto() async {
         guard let selectedPhoto else { return }
         guard let data = try? await selectedPhoto.loadTransferable(type: Data.self),
-              let processed = PersonImageStore.processedAvatarData(from: data) else {
+              let processed = await Task.detached(priority: .userInitiated, operation: {
+                  PersonImageStore.processedAvatarData(from: data)
+              }).value else {
             photoErrorMessage = "写真を読み込めませんでした。別の写真を選んでください。"
             return
         }
@@ -811,6 +831,7 @@ private struct PlaceMasterMergeView: View {
     @State private var showsOptionalFields = false
     @State private var selectedDestination: PlaceMaster?
     @State private var errorMessage = ""
+    @State private var isPerformingAction = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var selectedPhotoData: Data?
     @State private var removesStoredPhoto = false
@@ -826,6 +847,9 @@ private struct PlaceMasterMergeView: View {
     }
 
     var body: some View {
+        let photoActionTitle = selectedPhotoData == nil && place.imageData == nil
+            ? "写真を選ぶ"
+            : "写真を変更"
         Form {
             FavorecoSettingsSection("施設アイキャッチ") {
                 PlaceMasterEyecatch(
@@ -837,7 +861,7 @@ private struct PlaceMasterMergeView: View {
                 VStack(alignment: .trailing, spacing: 8) {
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         FavorecoIconLabel(
-                            selectedPhotoData == nil && place.imageData == nil ? "写真を選ぶ" : "写真を変更",
+                            photoActionTitle,
                             systemImage: "photo.badge.plus",
                             iconSize: 18
                         )
@@ -1036,8 +1060,8 @@ private struct PlaceMasterMergeView: View {
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存") { save() }
-                    .disabled(!draft.canSave)
+                Button(isPerformingAction ? "処理中…" : "保存") { save() }
+                    .disabled(!draft.canSave || isPerformingAction)
             }
         }
         .confirmationDialog(
@@ -1057,16 +1081,23 @@ private struct PlaceMasterMergeView: View {
     }
 
     private func merge(into destination: PlaceMaster) {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        errorMessage = ""
         do {
             try MasterMergeService.merge(place: place, into: destination, in: modelContext)
             dismiss()
         } catch {
             modelContext.rollback()
+            isPerformingAction = false
             errorMessage = "統合できませんでした: \(error.localizedDescription)"
         }
     }
 
     private func save() {
+        guard !isPerformingAction else { return }
+        isPerformingAction = true
+        errorMessage = ""
         place.name = draft.trimmedName
         place.reading = draft.trimmedReading
         place.prefecture = draft.trimmedPrefecture
@@ -1097,6 +1128,7 @@ private struct PlaceMasterMergeView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isPerformingAction = false
             draft = PlaceMasterDraft(place: place)
             errorMessage = "保存できませんでした: \(error.localizedDescription)"
         }
@@ -1106,7 +1138,9 @@ private struct PlaceMasterMergeView: View {
     private func loadSelectedPlacePhoto() async {
         guard let selectedPhoto else { return }
         guard let data = try? await selectedPhoto.loadTransferable(type: Data.self),
-              let processed = PlaceMasterEyecatch.processedLandscapeData(from: data) else {
+              let processed = await Task.detached(priority: .userInitiated, operation: {
+                  PlaceMasterEyecatch.processedLandscapeData(from: data)
+              }).value else {
             photoErrorMessage = "写真を読み込めませんでした。別の写真を選んでください。"
             return
         }
@@ -1137,7 +1171,7 @@ struct PlaceMasterEyecatch: View {
         .accessibilityHidden(true)
     }
 
-    static func processedLandscapeData(from sourceData: Data) -> Data? {
+    nonisolated static func processedLandscapeData(from sourceData: Data) -> Data? {
         guard let sourceImage = UIImage(data: sourceData),
               sourceImage.size.width > 0, sourceImage.size.height > 0 else { return nil }
         let outputSize = CGSize(width: 1280, height: 720)
@@ -1417,7 +1451,7 @@ struct PersonAvatar: View {
 enum PersonImageStore {
     private static let directoryName = "PersonImages"
 
-    static func processedAvatarData(from sourceData: Data) -> Data? {
+    nonisolated static func processedAvatarData(from sourceData: Data) -> Data? {
         guard let sourceImage = UIImage(data: sourceData), sourceImage.size.width > 0, sourceImage.size.height > 0 else {
             return nil
         }

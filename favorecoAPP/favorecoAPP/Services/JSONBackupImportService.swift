@@ -9,9 +9,13 @@ import Foundation
 import SwiftData
 
 enum JSONBackupImportService {
-    @MainActor
+    nonisolated
     static func inspect(data: Data) throws -> JSONBackupPreview {
         JSONBackupPreview(envelope: try decode(data: data))
+    }
+
+    nonisolated static func decodedBackup(data: Data) throws -> FavorecoBackupEnvelope {
+        try decode(data: data)
     }
 
     @MainActor
@@ -20,7 +24,19 @@ enum JSONBackupImportService {
         in context: ModelContext,
         savesChanges: Bool = true
     ) throws -> JSONBackupRestoreResult {
-        let envelope = try decode(data: data)
+        try restore(
+            envelope: decode(data: data),
+            in: context,
+            savesChanges: savesChanges
+        )
+    }
+
+    @MainActor
+    static func restore(
+        envelope: FavorecoBackupEnvelope,
+        in context: ModelContext,
+        savesChanges: Bool = true
+    ) throws -> JSONBackupRestoreResult {
         var insertedCount = 0
         var updatedCount = 0
 
@@ -660,7 +676,7 @@ enum JSONBackupImportService {
         )
     }
 
-    private static func decode(data: Data) throws -> FavorecoBackupEnvelope {
+    nonisolated private static func decode(data: Data) throws -> FavorecoBackupEnvelope {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
@@ -697,7 +713,7 @@ struct JSONBackupRestoreResult {
     var totalRestoredCount: Int { insertedCount + updatedCount }
 }
 
-struct JSONBackupPreview {
+nonisolated struct JSONBackupPreview: Sendable {
     let schemaVersion: Int
     let exportedAt: Date
     let note: String

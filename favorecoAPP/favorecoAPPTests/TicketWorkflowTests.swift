@@ -3,6 +3,59 @@ import XCTest
 
 @MainActor
 final class TicketWorkflowTests: XCTestCase {
+    func testUnifiedApplicationPresentsLotteryOrFirstComeWorkflowInsteadOfAcquiredFields() {
+        let application = TheaterUnifiedTicketSectionPresentation.resolve(for: .application)
+        let acquired = TheaterUnifiedTicketSectionPresentation.resolve(for: .acquired)
+        let plan = TheaterUnifiedTicketSectionPresentation.resolve(for: .plan)
+
+        XCTAssertEqual(application?.title, "チケット申込方法・工程")
+        XCTAssertEqual(application?.content, .applicationWorkflow)
+        XCTAssertEqual(
+            TheaterUnifiedTicketSectionPresentation.applicationFlowKeys.map {
+                TheaterUnifiedTicketSectionPresentation.applicationFlowTitle(for: $0)
+            },
+            ["抽選", "先着"]
+        )
+        XCTAssertEqual(acquired?.title, "チケット・座席")
+        XCTAssertEqual(acquired?.content, .acquiredTicketDetails)
+        XCTAssertEqual(plan?.title, "チケット・座席")
+        XCTAssertEqual(plan?.content, .acquiredTicketDetails)
+        XCTAssertNil(TheaterUnifiedTicketSectionPresentation.resolve(for: .interested))
+
+        var draft = TicketPlanDraft(entryMode: .unified)
+        draft.createsTicketAttempt = true
+        draft.applyFlowDefaults("lotteryPlanned")
+        XCTAssertTrue(draft.showsApplyDeadline)
+        XCTAssertTrue(draft.showsResultAnnounce)
+        XCTAssertTrue(draft.showsPaymentDeadline)
+        XCTAssertFalse(draft.showsTicketDetails)
+
+        draft.applyFlowDefaults("saleWaiting")
+        XCTAssertTrue(draft.showsSaleStart)
+        XCTAssertTrue(draft.showsIssueStart)
+        XCTAssertFalse(draft.showsApplyDeadline)
+        XCTAssertFalse(draft.showsTicketDetails)
+
+        draft.applyFlowDefaults("acquired")
+        XCTAssertTrue(draft.showsTicketDetails)
+        XCTAssertFalse(draft.showsApplyDeadline)
+        XCTAssertFalse(draft.showsResultAnnounce)
+    }
+
+    func testPlannedPerformanceCreatesOptionalTicketOnlyAfterTicketDetailsAreEntered() {
+        var draft = TicketPlanDraft(entryMode: .unified)
+        draft.applyFlowDefaults("acquired")
+
+        XCTAssertFalse(draft.hasEnteredAcquiredTicketDetails)
+
+        draft.seatText = "1階 11列 13番"
+        XCTAssertTrue(draft.hasEnteredAcquiredTicketDetails)
+
+        draft.seatText = ""
+        draft.quantity = 2
+        XCTAssertTrue(draft.hasEnteredAcquiredTicketDetails)
+    }
+
     func testTicketGuideSuggestionsFindRegisteredGuideByShortNameAndAlias() {
         XCTAssertEqual(
             TicketGuideDefinition.suggestions(matching: "ぴあ").first?.key,

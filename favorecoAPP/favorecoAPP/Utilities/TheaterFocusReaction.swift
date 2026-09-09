@@ -1,6 +1,6 @@
 import Foundation
 
-struct TheaterFocusReaction: Identifiable, Hashable {
+nonisolated struct TheaterFocusReaction: Identifiable, Hashable {
     let key: String
     let title: String
 
@@ -26,7 +26,7 @@ struct TheaterFocusReaction: Identifiable, Hashable {
     }
 }
 
-struct TheaterFocusLinkMetadata: Equatable {
+nonisolated struct TheaterFocusLinkMetadata: Equatable {
     var reactionKeys: [String] = []
 
     private static let memoPrefix = "favoreco:theater-focus:"

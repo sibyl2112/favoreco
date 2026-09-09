@@ -240,7 +240,8 @@ enum CategoryPresetSeeder {
             }
             defaults.set(seedVersion, forKey: AppStorageKeys.categoryPresetSeedVersion)
         } catch {
-            assertionFailure("Failed to seed category presets: \(error)")
+            context.rollback()
+            debugPrint("Failed to seed category presets: \(error)")
         }
     }
 

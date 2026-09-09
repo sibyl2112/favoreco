@@ -17,6 +17,7 @@ struct AutomaticBackupView: View {
     @State private var selectedSnapshot: AutomaticBackupSnapshot?
     @State private var isConfirmingRestore = false
     @State private var isWorking = false
+    @State private var workingMessage = ""
     @State private var message = ""
 
     private var totalPhotoBytes: Int64 {
@@ -79,7 +80,7 @@ struct AutomaticBackupView: View {
                 FavorecoSettingsCard {
                     HStack {
                         ProgressView()
-                        Text("処理中です。")
+                        Text(workingMessage.isEmpty ? "処理中です…" : workingMessage)
                     }
                 }
             }
@@ -128,12 +129,14 @@ struct AutomaticBackupView: View {
                             Image(systemName: "clock.arrow.circlepath")
                         }
                     }
+                    .disabled(isWorking)
                     .swipeActions {
                         Button(role: .destructive) {
                             delete(snapshot)
                         } label: {
                             FavorecoIconLabel("削除", systemImage: "trash")
                         }
+                        .disabled(isWorking)
                     }
                 }
             }
@@ -152,6 +155,7 @@ struct AutomaticBackupView: View {
     private func createSnapshot() {
         guard !isWorking else { return }
         isWorking = true
+        workingMessage = "バックアップを作成中…"
         message = ""
         let modelContainer = modelContext.container
         let request = AutomaticBackupRequest.manual(usesICloudDrive: usesICloudDrive)
@@ -165,29 +169,53 @@ struct AutomaticBackupView: View {
                 : result.message
             reload()
             isWorking = false
+            workingMessage = ""
         }
     }
 
     private func restoreSelectedSnapshot() {
-        guard let selectedSnapshot else { return }
+        guard let selectedSnapshot, !isWorking else { return }
         isWorking = true
-        do {
-            let result = try FullBackupService.restore(packageURL: selectedSnapshot.url, in: modelContext)
-            message = "復元完了: データ\(result.modelResult.totalRestoredCount)件、写真追加\(result.insertedPhotoCount)枚、写真更新\(result.updatedPhotoCount)枚"
-        } catch {
-            modelContext.rollback()
-            message = "失敗: \(error.localizedDescription)"
+        workingMessage = "バックアップを復元中…"
+        message = ""
+        Task { @MainActor in
+            await Task.yield()
+            defer {
+                isWorking = false
+                workingMessage = ""
+            }
+            do {
+                let result = try await FullBackupService.restoreResponsively(
+                    packageURL: selectedSnapshot.url,
+                    in: modelContext
+                )
+                message = "復元が完了しました。データ\(result.modelResult.totalRestoredCount)件、写真追加\(result.insertedPhotoCount)枚、写真更新\(result.updatedPhotoCount)枚"
+            } catch {
+                modelContext.rollback()
+                message = "復元に失敗しました。データは変更されていません。もう一度お試しください。\n\(error.localizedDescription)"
+            }
         }
-        isWorking = false
     }
 
     private func delete(_ snapshot: AutomaticBackupSnapshot) {
-        do {
-            try AutomaticBackupService.delete(snapshot)
-            reload()
-            message = "バックアップを削除しました。"
-        } catch {
-            message = "失敗: \(error.localizedDescription)"
+        guard !isWorking else { return }
+        isWorking = true
+        workingMessage = "バックアップを削除中…"
+        message = ""
+        Task { @MainActor in
+            defer {
+                isWorking = false
+                workingMessage = ""
+            }
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try AutomaticBackupService.delete(snapshot)
+                }.value
+                reload()
+                message = "バックアップを削除しました。"
+            } catch {
+                message = "バックアップを削除できませんでした。もう一度お試しください。\n\(error.localizedDescription)"
+            }
         }
     }
 

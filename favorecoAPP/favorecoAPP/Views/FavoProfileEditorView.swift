@@ -14,6 +14,7 @@ struct FavoProfileEditorView: View {
     @State private var heroPickerItem: PhotosPickerItem?
     @State private var iconPickerItem: PhotosPickerItem?
     @State private var errorMessage = ""
+    @State private var isSaving = false
 
     init(pin: FavoPin) {
         self.pin = pin
@@ -37,8 +38,12 @@ struct FavoProfileEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存", action: save)
-                    .disabled(!draft.canSave || (pin.targetKind == .place && draft.trimmedMasterSecondary.isEmpty))
+                Button(isSaving ? "保存中…" : "保存", action: save)
+                    .disabled(
+                        !draft.canSave
+                            || (pin.targetKind == .place && draft.trimmedMasterSecondary.isEmpty)
+                            || isSaving
+                    )
             }
         }
         .task(id: heroPickerItem) {
@@ -252,10 +257,24 @@ struct FavoProfileEditorView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            performSave()
+        }
+    }
+
+    private func performSave() {
         let now = Date()
         switch pin.targetKind {
         case .person:
-            guard let person = pin.person else { return }
+            guard let person = pin.person else {
+                isSaving = false
+                errorMessage = "人物・団体が見つかりませんでした。画面を開き直してください。"
+                return
+            }
             person.displayName = draft.trimmedMasterName
             person.reading = draft.trimmedMasterSecondary
             person.roleTagsRaw = draft.trimmedMasterExtra
@@ -263,13 +282,21 @@ struct FavoProfileEditorView: View {
             person.normalizedName = normalizedFavoMasterText(draft.trimmedMasterName)
             person.updatedAt = now
         case .event:
-            guard let event = pin.event else { return }
+            guard let event = pin.event else {
+                isSaving = false
+                errorMessage = "対象が見つかりませんでした。画面を開き直してください。"
+                return
+            }
             event.title = draft.trimmedMasterName
             event.seriesName = draft.trimmedMasterSecondary
             event.officialURL = draft.trimmedOfficialURL
             event.updatedAt = now
         case .place:
-            guard let place = pin.place else { return }
+            guard let place = pin.place else {
+                isSaving = false
+                errorMessage = "場所が見つかりませんでした。画面を開き直してください。"
+                return
+            }
             place.name = draft.trimmedMasterName
             place.prefecture = draft.trimmedMasterSecondary
             place.address = draft.trimmedMasterExtra
@@ -297,6 +324,7 @@ struct FavoProfileEditorView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isSaving = false
             errorMessage = "保存できませんでした: \(error.localizedDescription)"
         }
     }
@@ -450,6 +478,7 @@ struct FavoNewPersonView: View {
     @State private var name = ""
     @State private var reading = ""
     @State private var errorMessage = ""
+    @State private var isSaving = false
 
     private var suggestions: [PersonMaster] {
         PersonMasterSuggestion.matching(people, query: trimmedName)
@@ -488,6 +517,7 @@ struct FavoNewPersonView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .disabled(isSaving)
                         }
                     } header: {
                         Text("登録済み候補")
@@ -509,10 +539,13 @@ struct FavoNewPersonView: View {
             .navigationTitle("人物・団体を追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                        .disabled(isSaving)
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存", action: save)
-                        .disabled(trimmedName.isEmpty || nextSortOrder >= 4)
+                    Button(isSaving ? "保存中…" : "保存", action: save)
+                        .disabled(trimmedName.isEmpty || nextSortOrder >= 4 || isSaving)
                 }
             }
         }
@@ -521,12 +554,15 @@ struct FavoNewPersonView: View {
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func save() {
+        guard !isSaving else { return }
         let now = Date()
         let normalizedName = normalizedFavoMasterText(trimmedName)
         if let existing = PersonMasterSuggestion.exactMatch(in: people, query: trimmedName) {
             errorMessage = "「\(existing.displayName)」が登録済みです。上の候補から選んでください。"
             return
         }
+        isSaving = true
+        errorMessage = ""
         let person = PersonMaster(
             displayName: trimmedName,
             reading: reading.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -545,11 +581,13 @@ struct FavoNewPersonView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isSaving = false
             errorMessage = "保存できませんでした: \(error.localizedDescription)"
         }
     }
 
     private func addExistingPerson(_ person: PersonMaster) {
+        guard !isSaving else { return }
         guard nextSortOrder < 4 else {
             errorMessage = "MY FAVOは最大4件です。先に1件外してください。"
             return
@@ -559,6 +597,8 @@ struct FavoNewPersonView: View {
             return
         }
 
+        isSaving = true
+        errorMessage = ""
         do {
             _ = try PersonFavoRegistrationService.ensureRegistered(
                 person: person,
@@ -568,6 +608,7 @@ struct FavoNewPersonView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isSaving = false
             errorMessage = "MY FAVOへ追加できませんでした: \(error.localizedDescription)"
         }
     }

@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum AppStorageKeys {
+nonisolated enum AppStorageKeys {
     static let hasCompletedGenreOnboarding = "hasCompletedGenreOnboarding"
     static let showsGenreOnboarding = "showsGenreOnboarding"
     static let lastSeenReleaseVersion = "lastSeenReleaseVersion"

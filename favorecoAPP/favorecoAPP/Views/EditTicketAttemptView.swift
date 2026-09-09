@@ -11,7 +11,6 @@ import SwiftData
 struct EditTicketAttemptView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.favorecoThemePalette) private var themePalette
     @Query(sort: \TicketAccount.serviceName) private var accounts: [TicketAccount]
     @Query(sort: \TicketAttempt.updatedAt, order: .reverse) private var allAttempts: [TicketAttempt]
@@ -24,6 +23,7 @@ struct EditTicketAttemptView: View {
     @State private var operationError = ""
     @State private var isShowingArchiveConfirmation = false
     @State private var isShowingProgressRewindConfirmation = false
+    @State private var isPerformingAction = false
 
     init(plan: Plan, attempt: TicketAttempt? = nil, prioritizesDates: Bool = false) {
         self.plan = plan
@@ -89,7 +89,14 @@ struct EditTicketAttemptView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            RecordLifecycleFlatScaffold(
+                title: editorTitle,
+                canSave: draft.validationMessage == nil && !isPerformingAction,
+                saveButtonTitle: isPerformingAction ? "保存中" : "保存",
+                isSaving: isPerformingAction,
+                onClose: { dismiss() },
+                onSave: save
+            ) {
                 if prioritizesDates {
                     dateFieldsSection
 
@@ -270,54 +277,13 @@ struct EditTicketAttemptView: View {
                 }
 
                 if editingAttempt != nil {
-                    Section {
+                    FavorecoRegistrationSection("管理") {
                         Button(role: .destructive) {
                             isShowingArchiveConfirmation = true
                         } label: {
                             FavorecoIconLabel("このチケット情報を非表示", systemImage: "archivebox")
                         }
                     }
-                }
-            }
-            .favorecoRegistrationFormCanvas()
-            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
-            .navigationTitle(editorTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 34, height: 34)
-                            .background(Color.secondary.opacity(0.14), in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("キャンセル")
-                }
-                ToolbarItem(placement: .principal) {
-                    Text(editorTitle)
-                        .font(.system(size: 17, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.86)
-                        .layoutPriority(1)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        save()
-                    } label: {
-                        Text("保存")
-                            .font(FavorecoTypography.bodyStrong)
-                            .foregroundStyle(
-                                registrationPalette.prominentActionForeground(for: colorScheme)
-                            )
-                            .padding(.horizontal, 13)
-                            .frame(height: 34)
-                            .background(registrationPalette.prominentAction, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
                 }
             }
             .alert("日付を確認してください", isPresented: Binding(
@@ -415,10 +381,12 @@ struct EditTicketAttemptView: View {
     }
 
     private func save() {
+        guard !isPerformingAction else { return }
         if let validationMessage = draft.validationMessage {
             validationError = validationMessage
             return
         }
+        isPerformingAction = true
 
         let now = Date()
         let attempt = editingAttempt ?? TicketAttempt(createdAt: now, plan: plan)
@@ -459,13 +427,15 @@ struct EditTicketAttemptView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isPerformingAction = false
             operationError = "申込を保存できませんでした。もう一度お試しください。"
-            assertionFailure("Failed to save ticket attempt: \(error)")
+            debugPrint("Failed to save ticket attempt: \(error)")
         }
     }
 
     private func archiveAttempt() {
-        guard let editingAttempt else { return }
+        guard !isPerformingAction, let editingAttempt else { return }
+        isPerformingAction = true
         do {
             try TicketAttemptStatusUpdater.archive(
                 attempt: editingAttempt,
@@ -473,13 +443,15 @@ struct EditTicketAttemptView: View {
             )
             dismiss()
         } catch {
+            isPerformingAction = false
             operationError = "申込を非表示にできませんでした。もう一度お試しください。"
-            assertionFailure("Failed to archive ticket attempt: \(error)")
+            debugPrint("Failed to archive ticket attempt: \(error)")
         }
     }
 
     private func moveProgressBackOneStage() {
-        guard let editingAttempt else { return }
+        guard !isPerformingAction, let editingAttempt else { return }
+        isPerformingAction = true
         do {
             try TicketAttemptStatusUpdater.moveBackOneStage(
                 attempt: editingAttempt,
@@ -487,8 +459,9 @@ struct EditTicketAttemptView: View {
             )
             dismiss()
         } catch {
+            isPerformingAction = false
             operationError = "進捗を戻せませんでした。もう一度お試しください。"
-            assertionFailure("Failed to rewind ticket progress: \(error)")
+            debugPrint("Failed to rewind ticket progress: \(error)")
         }
     }
 

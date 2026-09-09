@@ -421,7 +421,8 @@ struct PhotoUnitEditor: View {
     }
 
     private var theaterEyecatchPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let coverActionTitle = hasActiveCoverPhoto ? "変更" : "選ぶ"
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
                 coverPhotoPreview
                     .frame(width: 58, height: 82)
@@ -437,7 +438,7 @@ struct PhotoUnitEditor: View {
                     HStack(spacing: 8) {
                         PhotosPicker(selection: $selectedTheaterEyecatchItem, matching: .images) {
                             FavorecoIconLabel(
-                                hasActiveCoverPhoto ? "変更" : "選ぶ",
+                                coverActionTitle,
                                 systemImage: "photo",
                                 iconSize: 13
                             )
@@ -864,7 +865,7 @@ struct PhotoUnitEditor: View {
         } label: {
             Label("写真の情報を編集", systemImage: "slider.horizontal.3")
         }
-        if purpose.isGalleryPhoto {
+        if !isTheater, purpose.isGalleryPhoto {
             Button {
                 coverPhotoPath = path
             } label: {
@@ -999,7 +1000,7 @@ struct PhotoUnitEditor: View {
                 continue
             }
             pendingPhotos.append(pendingPhoto)
-            if coverPhotoPath.isEmpty {
+            if !isTheater, coverPhotoPath.isEmpty {
                 coverPhotoPath = pendingPhoto.relativePath
             }
             importCompletedCount += 1
@@ -1029,6 +1030,10 @@ struct PhotoUnitEditor: View {
 
     private func selectFallbackCover(excluding path: String) {
         guard coverPhotoPath == path else { return }
+        guard !isTheater else {
+            coverPhotoPath = ""
+            return
+        }
         coverPhotoPath = activeExistingPhotos
             .first(where: {
                 $0.relativePath != path && existingMetadata(for: $0).purpose.isGalleryPhoto
@@ -1046,17 +1051,29 @@ struct PhotoUnitEditor: View {
     }
 
     private func appendCapturedPhoto(_ image: UIImage) {
-        guard canAddPhotos, let data = image.jpegData(compressionQuality: 1) else { return }
+        guard canAddPhotos, !isImportingPhotos else { return }
         let filename = "camera-\(UUID().uuidString).jpg"
         let quality = compressionQuality
-        Task {
+        importCompletedCount = 0
+        importTotalCount = 1
+        Task { @MainActor in
+            defer {
+                importCompletedCount = 0
+                importTotalCount = 0
+            }
+            await Task.yield()
+            guard let data = await CameraImageEncoder.jpegData(
+                from: image,
+                compressionQuality: 1
+            ) else { return }
             guard let pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
                 PendingPhoto.make(from: data, filename: filename, compressionQuality: quality)
             }).value, canAddPhotos else { return }
             pendingPhotos.append(pendingPhoto)
-            if coverPhotoPath.isEmpty {
+            if !isTheater, coverPhotoPath.isEmpty {
                 coverPhotoPath = pendingPhoto.relativePath
             }
+            importCompletedCount = 1
         }
     }
 }

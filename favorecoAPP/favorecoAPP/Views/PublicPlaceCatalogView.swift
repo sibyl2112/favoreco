@@ -132,13 +132,14 @@ struct PublicPlaceCatalogView: View {
     var body: some View {
         NavigationStack {
             List {
-                FavorecoSettingsCard {
-                    FavorecoSettingsInfoCallout(
-                        title: "公開カタログから場所マスターへ追加",
-                        message: "公式サイトと情報元を確認してから追加できます。追加した場所は、設定の「マスターデータ > 場所」と予定・記録の場所候補に表示されます。",
-                        compact: true
-                    )
-                }
+                FavorecoSettingsInfoCallout(
+                    title: "公開カタログから場所マスターへ追加",
+                    message: "公式サイトと情報元を確認してから追加できます。追加した場所は、設定の「マスターデータ > 場所」と予定・記録の場所候補に表示されます。",
+                    compact: true
+                )
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
                 filterSection
                 syncStatusSection
                 catalogSection

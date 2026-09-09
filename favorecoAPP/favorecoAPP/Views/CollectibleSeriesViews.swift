@@ -61,6 +61,7 @@ struct AddCollectibleSeriesView: View {
     @State private var selectedPhoto: PhotosPickerItem? = nil
     @State private var imageData: Data?
     @State private var errorMessage: String? = nil
+    @State private var isSaving = false
 
     init(category: RecordCategory) {
         self.category = category
@@ -90,7 +91,14 @@ struct AddCollectibleSeriesView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            RecordLifecycleFlatScaffold(
+                title: editingSeries == nil ? "シリーズを追加" : "シリーズを編集",
+                canSave: !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                saveButtonTitle: isSaving ? "保存中" : "保存",
+                isSaving: isSaving,
+                onClose: { dismiss() },
+                onSave: save
+            ) {
                 FavorecoRegistrationSection("シリーズ") {
                     TextField("シリーズ名", text: $title)
                     Picker("グッズの種類", selection: $kind) {
@@ -127,18 +135,6 @@ struct AddCollectibleSeriesView: View {
                         .lineLimit(3...6)
                 }
             }
-            .favorecoRegistrationFormCanvas()
-            .navigationTitle(editingSeries == nil ? "シリーズを追加" : "シリーズを編集")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
             .onChange(of: selectedPhoto) { _, item in
                 Task { imageData = await CollectibleImageLoader.load(item) }
             }
@@ -154,6 +150,16 @@ struct AddCollectibleSeriesView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = nil
+        Task { @MainActor in
+            await Task.yield()
+            persistChanges()
+        }
+    }
+
+    private func persistChanges() {
         let now = Date()
         if let editingSeries {
             editingSeries.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -169,6 +175,7 @@ struct AddCollectibleSeriesView: View {
         }
 
         guard let category else {
+            isSaving = false
             errorMessage = "保存先のグッズジャンルを確認できませんでした。"
             return
         }
@@ -199,6 +206,7 @@ struct AddCollectibleSeriesView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isSaving = false
             self.errorMessage = errorMessage
         }
     }
@@ -540,6 +548,7 @@ struct CollectibleItemEditorView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var imageData: Data?
     @State private var errorMessage: String?
+    @State private var isSaving = false
 
     init(series: ExperienceEvent, item: CollectibleItem? = nil) {
         self.series = series
@@ -553,14 +562,21 @@ struct CollectibleItemEditorView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            RecordLifecycleFlatScaffold(
+                title: item == nil ? "種類を追加" : "種類を編集",
+                canSave: true,
+                saveButtonTitle: isSaving ? "保存中" : "保存",
+                isSaving: isSaving,
+                onClose: { dismiss() },
+                onSave: save
+            ) {
                 FavorecoRegistrationSection("種類") {
                     TextField("名前（例：赤・キャラクター名）", text: $name)
                     TextField("バリエーション・レア度（任意）", text: $variantName)
                     Toggle("コンプリート対象に含める", isOn: $isCompletionTarget)
                 }
                 FavorecoRegistrationSection("メモ") {
-                    TextField("このGoodsについて残したいこと（任意）", text: $memo, axis: .vertical)
+                    TextField("このグッズについて残したいこと（任意）", text: $memo, axis: .vertical)
                         .lineLimit(3...5)
                 }
                 FavorecoRegistrationSection("画像") {
@@ -573,13 +589,6 @@ struct CollectibleItemEditorView: View {
                     }
                 }
             }
-            .favorecoRegistrationFormCanvas()
-            .navigationTitle(item == nil ? "種類を追加" : "種類を編集")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("保存") { save() } }
-            }
             .onChange(of: selectedPhoto) { _, item in Task { imageData = await CollectibleImageLoader.load(item) } }
             .alert("保存できませんでした", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
                 Button("OK", role: .cancel) {}
@@ -588,6 +597,16 @@ struct CollectibleItemEditorView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = nil
+        Task { @MainActor in
+            await Task.yield()
+            persistChanges()
+        }
+    }
+
+    private func persistChanges() {
         let target = item ?? CollectibleItem(
             sortOrder: ((series.collectibleItems ?? []).map(\.sortOrder).max() ?? -1) + 1,
             series: series
@@ -605,7 +624,11 @@ struct CollectibleItemEditorView: View {
             ThumbnailLoader.purge(reference: .collectibleItem(target.id))
             dismiss()
         }
-        catch { modelContext.rollback(); errorMessage = "種類を保存できませんでした。" }
+        catch {
+            modelContext.rollback()
+            isSaving = false
+            errorMessage = "種類を保存できませんでした。入力内容は保持されています。もう一度お試しください。"
+        }
     }
 }
 
@@ -623,6 +646,7 @@ struct CollectibleTransactionEditorView: View {
     @State private var place = ""
     @State private var memo = ""
     @State private var errorMessage: String?
+    @State private var isSaving = false
 
     init(series: ExperienceEvent, initialItem: CollectibleItem? = nil) {
         self.series = series
@@ -645,7 +669,14 @@ struct CollectibleTransactionEditorView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            RecordLifecycleFlatScaffold(
+                title: "入手・手放しを記録",
+                canSave: selectedItemID != nil && !exceedsOwnedQuantity,
+                saveButtonTitle: isSaving ? "保存中" : "保存",
+                isSaving: isSaving,
+                onClose: { dismiss() },
+                onSave: save
+            ) {
                 FavorecoRegistrationSection("対象") {
                     Picker("種類", selection: $selectedItemID) {
                         Text("選択してください").tag(UUID?.none)
@@ -668,17 +699,10 @@ struct CollectibleTransactionEditorView: View {
                     TextField("メモ", text: $memo, axis: .vertical).lineLimit(2...5)
                 }
                 if items.isEmpty {
-                    Text("先にラインナップの種類を追加してください。").foregroundStyle(.secondary)
-                }
-            }
-            .favorecoRegistrationFormCanvas()
-            .navigationTitle("入手・手放しを記録")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }
-                        .disabled(selectedItemID == nil || exceedsOwnedQuantity)
+                    Text("先にラインナップの種類を追加してください。")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
                 }
             }
             .onAppear { if selectedItemID == nil { selectedItemID = items.first?.id } }
@@ -689,7 +713,21 @@ struct CollectibleTransactionEditorView: View {
     }
 
     private func save() {
-        guard let item = selectedItem, !exceedsOwnedQuantity else { return }
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = nil
+        Task { @MainActor in
+            await Task.yield()
+            persistChanges()
+        }
+    }
+
+    private func persistChanges() {
+        guard let item = selectedItem, !exceedsOwnedQuantity else {
+            isSaving = false
+            errorMessage = "保存する種類を選び直してください。"
+            return
+        }
         let amount = Decimal(string: amountText.replacingOccurrences(of: ",", with: "")) ?? 0
         modelContext.insert(CollectibleTransaction(
             kindKey: kind.rawValue,
@@ -702,8 +740,14 @@ struct CollectibleTransactionEditorView: View {
         ))
         item.updatedAt = Date()
         series.updatedAt = Date()
-        do { try modelContext.save(); dismiss() }
-        catch { modelContext.rollback(); errorMessage = "履歴を保存できませんでした。" }
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            isSaving = false
+            errorMessage = "履歴を保存できませんでした。入力内容は保持されています。もう一度お試しください。"
+        }
     }
 }
 
@@ -713,6 +757,7 @@ private struct CollectibleItemDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var isShowingEditor = false
     @State private var isShowingTransaction = false
+    @State private var deletionErrorMessage: String?
 
     var body: some View {
         List {
@@ -750,7 +795,9 @@ private struct CollectibleItemDetailView: View {
                             .foregroundStyle(transaction.signedQuantity > 0 ? accentColor : .secondary)
                     }
                     .swipeActions {
-                        Button("削除", role: .destructive) { modelContext.delete(transaction); try? modelContext.save() }
+                        Button("削除", role: .destructive) {
+                            deleteTransaction(transaction)
+                        }
                     }
                 }
             }
@@ -769,13 +816,33 @@ private struct CollectibleItemDetailView: View {
                     .favorecoRegistrationTheme(categoryHex: series.category?.colorHex)
             }
         }
+        .alert("削除できませんでした", isPresented: Binding(
+            get: { deletionErrorMessage != nil },
+            set: { if !$0 { deletionErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { deletionErrorMessage = nil }
+        } message: {
+            Text(deletionErrorMessage ?? "")
+        }
+    }
+
+    private func deleteTransaction(_ transaction: CollectibleTransaction) {
+        modelContext.delete(transaction)
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            deletionErrorMessage = "履歴は削除されていません。もう一度お試しください。"
+            debugPrint("Failed to delete collectible transaction: \(error)")
+        }
     }
 }
 
 private enum CollectibleImageLoader {
     static func load(_ item: PhotosPickerItem?) async -> Data? {
-        guard let data = try? await item?.loadTransferable(type: Data.self),
-              let image = UIImage(data: data) else { return nil }
-        return image.jpegData(compressionQuality: 0.82)
+        guard let data = try? await item?.loadTransferable(type: Data.self) else { return nil }
+        return await Task.detached(priority: .userInitiated) {
+            UIImage(data: data)?.jpegData(compressionQuality: 0.82)
+        }.value
     }
 }

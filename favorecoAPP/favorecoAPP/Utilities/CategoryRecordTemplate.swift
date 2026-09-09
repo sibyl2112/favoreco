@@ -71,6 +71,63 @@ extension Plan {
     }
 }
 
+/// 画面ごとに「参加」「鑑賞」などが混在しないよう、ジャンル固有の短い語を一元管理する。
+enum GenreVocabulary {
+    nonisolated static func targetNoun(for templateKey: String?) -> String {
+        switch templateKey {
+        case "theater": "公演"
+        case "live": "ライブ"
+        case "movie": "作品"
+        case "museum": "展示"
+        case "book": "本"
+        case "sake": "銘柄"
+        case "outing_facility", "theme_park": "施設"
+        case "nature_living": "スポット"
+        case "goshuin": "参拝先"
+        case "random_goods": "シリーズ"
+        default: "体験"
+        }
+    }
+
+    nonisolated static func actionNoun(for templateKey: String?) -> String {
+        switch templateKey {
+        case "theater": "観劇"
+        case "live": "参戦"
+        case "movie", "museum": "鑑賞"
+        case "book": "読書"
+        case "sake": "飲酒"
+        case "outing_facility", "theme_park", "nature_living": "訪問"
+        case "goshuin": "参拝"
+        case "random_goods": "収集"
+        default: "体験"
+        }
+    }
+
+    nonisolated static func recordNoun(for templateKey: String?) -> String {
+        "\(actionNoun(for: templateKey))記録"
+    }
+
+    nonisolated static func plannedStatus(for templateKey: String?) -> String {
+        "\(actionNoun(for: templateKey))予定"
+    }
+
+    nonisolated static func completedStatus(for templateKey: String?) -> String {
+        switch templateKey {
+        case "book": "読了"
+        case "sake": "飲んだ"
+        default: "\(actionNoun(for: templateKey))済み"
+        }
+    }
+
+    nonisolated static func undatedSchedule(for templateKey: String?) -> String {
+        switch templateKey {
+        case "theater": "観劇日未定"
+        case "live": "参戦日未定"
+        default: "参加日未定"
+        }
+    }
+}
+
 struct CategoryRecordTemplate {
     let targetSectionTitle: String
     let titlePlaceholder: String

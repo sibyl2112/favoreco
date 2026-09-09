@@ -663,7 +663,7 @@ extension Color {
         return (lighter + 0.05) / (darker + 0.05)
     }
 
-    init(hex: String) {
+    nonisolated init(hex: String) {
         let sanitizedHex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var value: UInt64 = 0
         Scanner(string: sanitizedHex).scanHexInt64(&value)

@@ -220,22 +220,146 @@ enum BookMetadataLookupService {
                   !values.contains(normalized) else { continue }
             values.append(normalized)
         }
+
+        // A blurred printed ISBN is often recognized with visually similar letters
+        // (`I` for 1, `S` for 5, etc.) or split into two observations. Recover only
+        // candidates that still pass the ISBN prefix and checksum validation.
+        let lineFragments = text.components(separatedBy: .newlines).map(ocrISBNFragments)
+        for fragments in lineFragments {
+            for fragment in fragments {
+                appendValidISBNWindows(from: fragment, to: &values)
+            }
+        }
+        for index in lineFragments.indices.dropLast() {
+            for upperFragment in lineFragments[index] {
+                for lowerFragment in lineFragments[index + 1] {
+                    let joined = upperFragment + lowerFragment
+                    guard joined.count == 10 || joined.count == 13 else { continue }
+                    appendValidISBNWindows(from: joined, to: &values)
+                }
+            }
+        }
         return values
     }
 
-    nonisolated static func isbnCandidates(fromImageData data: Data) -> [String] {
-        let request = VNDetectBarcodesRequest()
-        request.symbologies = [.ean13]
-        let handler = VNImageRequestHandler(data: data, options: [:])
-        do {
-            try handler.perform([request])
-        } catch {
-            return []
+    private nonisolated static func ocrISBNFragments(from line: String) -> [String] {
+        let withoutLabel = line.replacingOccurrences(
+            of: #"(?i)ISBN(?:-1[03])?"#,
+            with: " ",
+            options: .regularExpression
+        )
+        var fragments: [String] = []
+        var current = ""
+
+        func finishCurrent() {
+            guard current.count >= 3 else {
+                current = ""
+                return
+            }
+            fragments.append(current)
+            current = ""
         }
-        return (request.results ?? []).compactMap { observation in
+
+        for character in withoutLabel.uppercased() {
+            if let digit = character.wholeNumberValue {
+                current.append(String(digit))
+                continue
+            }
+            if let replacement = ocrDigitReplacement(for: character) {
+                current.append(replacement)
+                continue
+            }
+            if character == "X" {
+                current.append(character)
+                continue
+            }
+            if character.isWhitespace || "-‐‑‒–—−".contains(character) {
+                continue
+            }
+            finishCurrent()
+        }
+        finishCurrent()
+        return fragments
+    }
+
+    private nonisolated static func ocrDigitReplacement(for character: Character) -> Character? {
+        switch character {
+        case "O", "Q", "D": "0"
+        case "I", "L", "|", "!": "1"
+        case "Z": "2"
+        case "S": "5"
+        case "G": "6"
+        case "B": "8"
+        default: nil
+        }
+    }
+
+    private nonisolated static func appendValidISBNWindows(
+        from fragment: String,
+        to values: inout [String]
+    ) {
+        let characters = Array(fragment)
+        // Do not reinterpret a valid 13-digit stream's first ten digits as ISBN-10;
+        // some prefixes happen to satisfy both checksums and would create two choices.
+        let lengths = characters.count == 10 ? [10] : [13]
+        for length in lengths where characters.count >= length {
+            for start in 0...(characters.count - length) {
+                let candidate = String(characters[start..<(start + length)])
+                if length == 13, !candidate.hasPrefix("978"), !candidate.hasPrefix("979") {
+                    continue
+                }
+                guard let normalized = normalizedISBN(candidate),
+                      !values.contains(normalized) else { continue }
+                values.append(normalized)
+            }
+        }
+    }
+
+    nonisolated static func isbnCandidates(fromImageData data: Data) -> [String] {
+        let barcodeRequest = VNDetectBarcodesRequest()
+        barcodeRequest.symbologies = [.ean13]
+        let barcodeHandler = VNImageRequestHandler(data: data, options: [:])
+        do {
+            try barcodeHandler.perform([barcodeRequest])
+        } catch {
+            // Continue to the printed-number OCR fallback below.
+        }
+        let barcodeValues: [String] = (barcodeRequest.results ?? []).compactMap { observation in
             guard let payload = observation.payloadStringValue else { return nil }
             return normalizedISBN(payload)
         }
+        guard barcodeValues.isEmpty else { return barcodeValues }
+
+        // Barcode lines are easily lost to blur, glare, or a tight crop. Read the
+        // printed number with a digits-oriented request before falling back to the
+        // general cover/colophon OCR used by the registration screen.
+        let textRequest = VNRecognizeTextRequest()
+        textRequest.recognitionLevel = .accurate
+        textRequest.usesLanguageCorrection = false
+        textRequest.automaticallyDetectsLanguage = false
+        textRequest.recognitionLanguages = ["en-US"]
+        textRequest.customWords = ["ISBN"]
+        textRequest.minimumTextHeight = 0.01
+        let textHandler = VNImageRequestHandler(data: data, options: [:])
+        do {
+            try textHandler.perform([textRequest])
+        } catch {
+            return []
+        }
+
+        let observations = textRequest.results ?? []
+        var values: [String] = []
+        for candidateRank in 0..<5 {
+            let rankedText = observations.compactMap { observation -> String? in
+                let candidates = observation.topCandidates(5)
+                guard candidates.indices.contains(candidateRank) else { return nil }
+                return candidates[candidateRank].string
+            }.joined(separator: "\n")
+            for isbn in isbnCandidates(from: rankedText) where !values.contains(isbn) {
+                values.append(isbn)
+            }
+        }
+        return values
     }
 
     static func coverData(from url: URL?) async -> Data? {
@@ -749,7 +873,7 @@ enum BookMetadataLookupService {
     }
 }
 
-private struct NDLBookCandidate: Sendable {
+private nonisolated struct NDLBookCandidate: Sendable {
     var title = ""
     var author = ""
     var publisher = ""
@@ -759,7 +883,7 @@ private struct NDLBookCandidate: Sendable {
     var isbn = ""
 }
 
-private final class NDLSearchParserDelegate: NSObject, XMLParserDelegate {
+private nonisolated final class NDLSearchParserDelegate: NSObject, XMLParserDelegate {
     var candidates: [NDLBookCandidate] = []
     private var current: NDLBookCandidate?
     private var currentElement = ""

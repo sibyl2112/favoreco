@@ -218,7 +218,7 @@ enum TicketNotificationScheduler {
                   dueAt > Date(),
                   let fireDate = preparationFireDate(dueAt: dueAt, calendar: calendar) else { return nil }
 
-            let taskTitle = task.trimmedTitle.isEmpty ? "公演の準備" : task.trimmedTitle
+            let taskTitle = task.trimmedTitle.isEmpty ? "予定の準備" : task.trimmedTitle
             return TicketNotificationSpec(
                 identifier: "\(preparationIdentifierPrefix(planID: plan.id))\(task.id.uuidString).reminder",
                 fireDate: fireDate,

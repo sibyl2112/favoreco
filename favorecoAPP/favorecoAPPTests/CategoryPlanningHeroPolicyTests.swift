@@ -246,6 +246,17 @@ final class CategoryPlanningHeroPolicyTests: XCTestCase {
             "観覧予定 / 気になる"
         )
         XCTAssertEqual(
+            CategoryTopVocabulary.featureCarouselJapaneseTitle(templateKey: "live"),
+            "参戦予定 / 気になる"
+        )
+        XCTAssertEqual(
+            CategoryTopVocabulary.sectionJapaneseTitle(
+                englishTitle: "Coming Up",
+                templateKey: "live"
+            ),
+            "参戦予定"
+        )
+        XCTAssertEqual(
             CategoryTopVocabulary.sectionJapaneseTitle(
                 englishTitle: "Ticket Management",
                 templateKey: "theater"

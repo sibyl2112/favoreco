@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class TheaterVisitEditBoundaryTests: XCTestCase {
-    func testTheaterVisitEditUpdatesOnlyEditableTargetNames() {
+    func testTheaterVisitEditSavesEditableParentEventFields() {
         let category = RecordCategory(name: "観劇", templateKey: "theater")
         let originalUpdatedAt = Date(timeIntervalSince1970: 1_000)
         let originalFields = VisitUnitFields(
@@ -25,6 +25,7 @@ final class TheaterVisitEditBoundaryTests: XCTestCase {
         draft.title = "変更後の公演名"
         draft.seriesName = "変更後のシリーズ"
         draft.subTypeKey = "play"
+        draft.organizerName = "変更後の主催"
         draft.officialURL = "https://example.com/changed"
         draft.socialLinksText = "https://example.com/changed-social"
         draft.eventSubtitle = "変更後の副題"
@@ -39,11 +40,13 @@ final class TheaterVisitEditBoundaryTests: XCTestCase {
 
         XCTAssertEqual(event.title, "変更後の公演名")
         XCTAssertEqual(event.seriesName, "変更後のシリーズ")
-        XCTAssertEqual(event.subTypeKey, "musical")
-        XCTAssertEqual(event.organizerNameSnapshot, "元の主催")
+        XCTAssertEqual(event.subTypeKey, "play")
+        XCTAssertEqual(event.organizerNameSnapshot, "変更後の主催")
         XCTAssertEqual(event.representativeEyecatchPath, "original.jpg")
-        XCTAssertEqual(event.officialURL, "https://example.com/official")
-        XCTAssertEqual(event.unitFieldsRaw, originalFields)
+        XCTAssertEqual(event.officialURL, "https://example.com/changed")
+        let savedFields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        XCTAssertEqual(savedFields.socialLinks, ["https://example.com/changed-social"])
+        XCTAssertEqual(savedFields.eventSubtitle, "変更後の副題")
         XCTAssertEqual(event.updatedAt, now)
         XCTAssertEqual(event.category?.id, category.id)
     }

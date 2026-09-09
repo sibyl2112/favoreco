@@ -1,34 +1,6 @@
 import SwiftUI
 import SwiftData
 
-private enum CalendarSplitPreset: String, CaseIterable {
-    case calendarFocused
-    case balanced
-    case informationFocused
-
-    var calendarFraction: CGFloat {
-        switch self {
-        case .calendarFocused: 0.82
-        case .balanced: 0.5
-        case .informationFocused: 0.25
-        }
-    }
-
-    var accessibilityValue: String {
-        switch self {
-        case .calendarFocused: "カレンダー約5分の4、情報約5分の1"
-        case .balanced: "カレンダーと情報を半分ずつ"
-        case .informationFocused: "カレンダー4分の1、情報4分の3"
-        }
-    }
-
-    static func nearest(to fraction: CGFloat) -> CalendarSplitPreset {
-        allCases.min {
-            abs($0.calendarFraction - fraction) < abs($1.calendarFraction - fraction)
-        } ?? .calendarFocused
-    }
-}
-
 private struct CalendarNotificationDestination: Identifiable, Hashable {
     let plan: Plan
     let preparationTaskID: UUID?
@@ -56,17 +28,15 @@ struct CalendarView: View {
     @Query private var ticketAttempts: [TicketAttempt]
     @AppStorage(AppStorageKeys.showsExternalCalendarEvents) private var showsExternalCalendarEvents = true
     @AppStorage(AppStorageKeys.selectedExternalCalendarIdentifiers) private var selectedExternalCalendarIdentifiers = ""
-    @AppStorage(AppStorageKeys.calendarSplitPreset) private var calendarSplitPresetRaw = CalendarSplitPreset.calendarFocused.rawValue
     @StateObject private var externalCalendarStore = ExternalCalendarOverlayStore()
     @State private var displayedMonth = Date().startOfMonth
     @State private var selectedDate = Date()
     @State private var notificationDestination: CalendarNotificationDestination?
-    @State private var calendarSplitDragStartFraction: CGFloat?
-    @State private var calendarSplitDragFraction: CGFloat?
-    @State private var calendarAgendaScrollOffset: CGFloat = 0
-    @State private var calendarSheetContentDragActive = false
+    @State private var isShowingSelectedDayTimeline = false
 
     private let calendar = Calendar.current
+    private let selectedDayBarHeight: CGFloat = 72
+    private let tabBarClearance: CGFloat = 84
 
     private var visibleVisits: [Visit] {
         visits.filter { $0.event?.isArchived != true }
@@ -283,6 +253,7 @@ struct CalendarView: View {
                 refreshExternalCalendar()
             }
             .onChange(of: displayMode) { _, _ in
+                isShowingSelectedDayTimeline = false
                 refreshExternalCalendar()
             }
             .onChange(of: showsExternalCalendarEvents) { _, newValue in
@@ -356,7 +327,7 @@ struct CalendarView: View {
                     .padding(20)
             }
         } else {
-            splitCalendarContent
+            calendarWithSelectedDayTimeline
         }
     }
 
@@ -396,33 +367,46 @@ struct CalendarView: View {
         proxy.scrollTo(CalendarTimelineScrollTarget.hour(contextHour), anchor: .top)
     }
 
-    private var splitCalendarPreset: CalendarSplitPreset {
-        CalendarSplitPreset(rawValue: calendarSplitPresetRaw) ?? .calendarFocused
-    }
-
-    private var activeCalendarSplitFraction: CGFloat {
-        calendarSplitDragFraction ?? splitCalendarPreset.calendarFraction
-    }
-
-    private var splitCalendarContent: some View {
+    private var calendarWithSelectedDayTimeline: some View {
         GeometryReader { proxy in
             let availableHeight = max(proxy.size.height, 0)
-            let maximumInformationHeight = availableHeight * 0.75
-            let visibleInformationHeight = availableHeight * (1 - activeCalendarSplitFraction)
-            let sheetOffset = maximumInformationHeight - visibleInformationHeight
-            let snappedInformationHeight = availableHeight * (1 - splitCalendarPreset.calendarFraction)
+            let reservedHeight = selectedDayBarHeight + tabBarClearance
+            let timelineHeight = min(max(availableHeight * 0.68, 390), availableHeight)
 
             ZStack(alignment: .bottom) {
-                activeCalendarViewport(coveredHeight: snappedInformationHeight)
+                activeCalendarViewport(coveredHeight: reservedHeight)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(!isShowingSelectedDayTimeline)
 
-                calendarInformationSheet(
-                    height: maximumInformationHeight,
-                    availableHeight: availableHeight
-                )
-                .offset(y: sheetOffset)
+                if isShowingSelectedDayTimeline {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: closeSelectedDayTimeline)
+
+                    CalendarDayTimelinePanel(
+                        selectedDate: selectedDate,
+                        nextActionItems: selectedDayNextActionItems,
+                        plans: selectedDayPlans,
+                        visits: selectedDayVisits,
+                        externalEvents: showsExternalCalendarEvents ? selectedDayExternalEvents : [],
+                        bottomClearance: tabBarClearance,
+                        onClose: closeSelectedDayTimeline
+                    )
+                    .frame(height: timelineHeight)
+                    .transition(.move(edge: .bottom))
+                    .zIndex(2)
+                } else {
+                    CalendarSelectedDayBar(
+                        selectedDate: selectedDate,
+                        summary: selectedDaySummary,
+                        bottomClearance: tabBarClearance,
+                        onOpen: openSelectedDayTimeline
+                    )
+                    .transition(.opacity)
+                }
             }
             .clipped()
+            .animation(.easeOut(duration: 0.22), value: isShowingSelectedDayTimeline)
         }
     }
 
@@ -472,149 +456,34 @@ struct CalendarView: View {
             .accessibilityHidden(true)
     }
 
-    private func calendarInformationSheet(
-        height: CGFloat,
-        availableHeight: CGFloat
-    ) -> some View {
-        VStack(spacing: 0) {
-            calendarInformationSheetHandle(availableHeight: availableHeight)
+    private var selectedDayNextActionItems: [CalendarNextActionItem] {
+        nextActionItems.filter { calendar.isDate($0.date, inSameDayAs: selectedDate) }
+    }
 
-            ScrollView(.vertical) {
-                calendarAgendaSection
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 20)
-            }
-            .scrollDisabled(
-                splitCalendarPreset != .informationFocused
-                    || calendarSplitDragFraction != nil
-                    || calendarSheetContentDragActive
-            )
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top
-            } action: { _, newOffset in
-                calendarAgendaScrollOffset = max(newOffset, 0)
-            }
-            .simultaneousGesture(
-                calendarSheetContentDragGesture(availableHeight: availableHeight)
-            )
+    private var selectedDaySummary: String {
+        let scheduledCount = selectedDayPlans.count
+            + selectedDayVisits.count
+            + (showsExternalCalendarEvents ? selectedDayExternalEvents.count : 0)
+        let actionCount = selectedDayNextActionItems.count
+        var parts: [String] = []
+        if scheduledCount > 0 {
+            parts.append("予定・記録\(scheduledCount)件")
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
-        .background(.regularMaterial)
-        .clipShape(.rect(topLeadingRadius: 18, topTrailingRadius: 18))
-        .shadow(color: Color.black.opacity(0.16), radius: 12, y: -4)
-    }
-
-    private func calendarInformationSheetHandle(availableHeight: CGFloat) -> some View {
-        ZStack {
-            Color.clear
-
-            Capsule()
-                .fill(Color.secondary.opacity(0.55))
-                .frame(width: 44, height: 5)
+        if actionCount > 0 {
+            parts.append("やること\(actionCount)件")
         }
-        .frame(height: 52)
-        .contentShape(Rectangle())
-        .gesture(calendarSheetDragGesture(availableHeight: availableHeight))
-        .accessibilityElement()
-        .accessibilityLabel("カレンダー情報パネルの高さ")
-        .accessibilityValue(splitCalendarPreset.accessibilityValue)
-        .accessibilityAdjustableAction(adjustCalendarSplit)
+        return parts.isEmpty ? "予定・やることなし" : parts.joined(separator: "・")
     }
 
-    private func calendarSheetDragGesture(availableHeight: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                updateCalendarSheetDrag(
-                    translation: value.translation,
-                    availableHeight: availableHeight
-                )
-            }
-            .onEnded { value in
-                finishCalendarSheetDrag(
-                    predictedEndTranslation: value.predictedEndTranslation,
-                    availableHeight: availableHeight
-                )
-            }
-    }
-
-    private func calendarSheetContentDragGesture(availableHeight: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 8)
-            .onChanged { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else { return }
-
-                if !calendarSheetContentDragActive {
-                    let sheetCanExpand = splitCalendarPreset != .informationFocused
-                    let pullsDownFromTop = calendarAgendaScrollOffset <= 1
-                        && value.translation.height > 0
-                    guard sheetCanExpand || pullsDownFromTop else { return }
-                    calendarSheetContentDragActive = true
-                }
-
-                updateCalendarSheetDrag(
-                    translation: value.translation,
-                    availableHeight: availableHeight
-                )
-            }
-            .onEnded { value in
-                guard calendarSheetContentDragActive else { return }
-                calendarSheetContentDragActive = false
-                finishCalendarSheetDrag(
-                    predictedEndTranslation: value.predictedEndTranslation,
-                    availableHeight: availableHeight
-                )
-            }
-    }
-
-    private func updateCalendarSheetDrag(
-        translation: CGSize,
-        availableHeight: CGFloat
-    ) {
-        guard availableHeight > 0 else { return }
-        if calendarSplitDragStartFraction == nil {
-            calendarSplitDragStartFraction = splitCalendarPreset.calendarFraction
-        }
-        let startFraction = calendarSplitDragStartFraction ?? splitCalendarPreset.calendarFraction
-        let proposedFraction = startFraction + (translation.height / availableHeight)
-        calendarSplitDragFraction = min(max(proposedFraction, 0.25), 0.82)
-    }
-
-    private func finishCalendarSheetDrag(
-        predictedEndTranslation: CGSize,
-        availableHeight: CGFloat
-    ) {
-        guard availableHeight > 0 else {
-            calendarSplitDragFraction = nil
-            calendarSplitDragStartFraction = nil
-            return
-        }
-        let startFraction = calendarSplitDragStartFraction ?? splitCalendarPreset.calendarFraction
-        let projectedFraction = startFraction + (predictedEndTranslation.height / availableHeight)
-        let clampedFraction = min(max(projectedFraction, 0.25), 0.82)
-        let preset = CalendarSplitPreset.nearest(to: clampedFraction)
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-            calendarSplitPresetRaw = preset.rawValue
-            calendarSplitDragFraction = nil
-            calendarSplitDragStartFraction = nil
+    private func openSelectedDayTimeline() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            isShowingSelectedDayTimeline = true
         }
     }
 
-    private func adjustCalendarSplit(_ direction: AccessibilityAdjustmentDirection) {
-        let preset: CalendarSplitPreset
-        switch (splitCalendarPreset, direction) {
-        case (.calendarFocused, .increment):
-            preset = .balanced
-        case (.balanced, .increment):
-            preset = .informationFocused
-        case (.informationFocused, .decrement):
-            preset = .balanced
-        case (.balanced, .decrement):
-            preset = .calendarFocused
-        default:
-            return
-        }
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-            calendarSplitPresetRaw = preset.rawValue
+    private func closeSelectedDayTimeline() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            isShowingSelectedDayTimeline = false
         }
     }
 
@@ -711,7 +580,13 @@ struct CalendarView: View {
     }
 
     private var planListSection: some View {
-        CalendarPlanListSection(groups: upcomingPlanGroups)
+        VStack(alignment: .leading, spacing: 28) {
+            CalendarPlanOverviewSection(
+                ticketProgressItems: ticketProgressItems,
+                nextActionItems: nextActionItems
+            )
+            CalendarPlanListSection(groups: upcomingPlanGroups)
+        }
     }
 
     private func japaneseYearMonth(_ date: Date) -> String {
@@ -817,18 +692,6 @@ struct CalendarView: View {
                     }
                 }
             }
-    }
-
-    private var calendarAgendaSection: some View {
-        CalendarAgendaSection(
-            ticketProgressItems: ticketProgressItems,
-            nextActionItems: nextActionItems,
-            selectedDate: selectedDate,
-            selectedDayVisits: selectedDayVisits,
-            selectedDayPlans: selectedDayPlans,
-            selectedDayExternalEvents: selectedDayExternalEvents,
-            showsExternalCalendarEvents: showsExternalCalendarEvents
-        )
     }
 
     private func refreshExternalCalendarIfNeeded() async {

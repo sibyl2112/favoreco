@@ -18,9 +18,9 @@ struct TicketPlanDraft {
     var eventCreditsText = ""
     var eventTicketURL = ""
     var attendanceMethodKey = "onsite"
-    var startsAt = Date().roundedToNearestTenMinutes()
-    var endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: Date().roundedToNearestTenMinutes()) ?? Date()
-    var opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: Date().roundedToNearestTenMinutes()) ?? Date()
+    var startsAt = Date().roundedToNearestFiveMinutes()
+    var endsAt = Calendar.current.date(byAdding: .hour, value: 2, to: Date().roundedToNearestFiveMinutes()) ?? Date()
+    var opensAt = Calendar.current.date(byAdding: .minute, value: -30, to: Date().roundedToNearestFiveMinutes()) ?? Date()
     var hasOpeningTime = false
     var hasEndTime = false
     var venueName = ""
@@ -263,6 +263,14 @@ struct TicketPlanDraft {
         return preservedID.isEmpty ? UUID().uuidString : preservedID
     }
     var trimmedSeatText: String { seatText.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var hasEnteredAcquiredTicketDetails: Bool {
+        !trimmedTicketSite.isEmpty
+            || !trimmedPurchaseURL.isEmpty
+            || !priceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !feeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !trimmedSeatText.isEmpty
+            || quantity > 1
+    }
     var ticketUnitFieldsRaw: String {
         TicketAttemptUnitFields(
             tagNames: TicketAttemptUnitFields.normalizedTagNames(from: tagNamesText)
@@ -567,7 +575,7 @@ struct TicketPlanDraft {
     }
 
     mutating func clearTarget() {
-        let now = Date().roundedToNearestTenMinutes()
+        let now = Date().roundedToNearestFiveMinutes()
         categoryID = nil
         title = ""
         subtitle = ""

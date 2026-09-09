@@ -42,7 +42,7 @@ struct FavorecoIconLabel: View {
     var iconSize: CGFloat = 16
     var spacing: CGFloat = 6
 
-    init(
+    nonisolated init(
         _ title: String,
         systemImage: String,
         iconSize: CGFloat = 16,

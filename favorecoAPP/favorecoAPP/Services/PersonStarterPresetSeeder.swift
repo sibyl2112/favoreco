@@ -276,7 +276,7 @@ enum PersonStarterPresetSeeder {
             defaults.set(seedVersion, forKey: AppStorageKeys.personStarterPresetSeedVersion)
         } catch {
             context.rollback()
-            assertionFailure("Failed to seed person starter presets: \(error)")
+            debugPrint("Failed to seed person starter presets: \(error)")
         }
     }
 

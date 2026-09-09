@@ -19,6 +19,7 @@ struct DataManagementView: View {
     @Query private var people: [PersonMaster]
     @Query private var places: [PlaceMaster]
     @State private var isConfirmingArchivedDeletion = false
+    @State private var isDeletingArchivedData = false
     @State private var maintenanceMessage = ""
 
     private var archivedItemCount: Int {
@@ -64,7 +65,7 @@ struct DataManagementView: View {
                 LabeledContent("気になる対象", value: "\(events.filter { $0.stateKey == "interested" && !$0.isArchived }.count)")
                 LabeledContent("訪問/鑑賞記録", value: "\(visits.count)")
                 if !inboxItems.isEmpty {
-                    LabeledContent("旧クイックデータ（移行待ち）", value: "\(inboxItems.count)")
+                    LabeledContent("旧形式の気になる項目（移行待ち）", value: "\(inboxItems.count)")
                 }
                 LabeledContent("ジャンル", value: "\(categories.count)")
                 LabeledContent("写真", value: "\(photos.count)")
@@ -144,9 +145,17 @@ struct DataManagementView: View {
                 Button(role: .destructive) {
                     isConfirmingArchivedDeletion = true
                 } label: {
-                    FavorecoIconLabel("アーカイブ済みデータを完全削除", systemImage: "archivebox.fill")
+                    if isDeletingArchivedData {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("アーカイブ済みデータを削除中…")
+                        }
+                    } else {
+                        FavorecoIconLabel("アーカイブ済みデータを完全削除", systemImage: "archivebox.fill")
+                    }
                 }
-                .disabled(archivedItemCount == 0)
+                .disabled(archivedItemCount == 0 || isDeletingArchivedData)
 
                 Text(archivedItemCount == 0
                      ? "完全削除できるアーカイブ済み項目はありません。"
@@ -187,13 +196,20 @@ struct DataManagementView: View {
     }
 
     private func deleteArchivedData() {
-        do {
-            let result = try RecordDeletionService.deleteArchivedData(in: modelContext)
-            reconcileDeletedCalendarLinks(result.externalCalendarTargets, clearsAllLinks: false)
-            maintenanceMessage = "アーカイブ済みデータを\(result.totalCount)件削除しました（対象\(result.eventCount)、記録\(result.visitCount)、予定\(result.planCount)、申込\(result.attemptCount)、マスター\(result.masterCount)、人物リンク\(result.linkCount)）。"
-        } catch {
-            modelContext.rollback()
-            maintenanceMessage = "削除に失敗しました: \(error.localizedDescription)"
+        guard !isDeletingArchivedData else { return }
+        isDeletingArchivedData = true
+        maintenanceMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            defer { isDeletingArchivedData = false }
+            do {
+                let result = try RecordDeletionService.deleteArchivedData(in: modelContext)
+                reconcileDeletedCalendarLinks(result.externalCalendarTargets, clearsAllLinks: false)
+                maintenanceMessage = "アーカイブ済みデータを\(result.totalCount)件削除しました（対象\(result.eventCount)、記録\(result.visitCount)、予定\(result.planCount)、申込\(result.attemptCount)、マスター\(result.masterCount)、人物リンク\(result.linkCount)）。"
+            } catch {
+                modelContext.rollback()
+                maintenanceMessage = "削除に失敗しました。データは変更されていません。もう一度お試しください。\n\(error.localizedDescription)"
+            }
         }
     }
 
@@ -400,9 +416,11 @@ struct FullDataDeletionView: View {
     }
 
     private func deleteAllData() {
+        guard !isDeleting else { return }
         isDeleting = true
         errorMessage = ""
         Task { @MainActor in
+            await Task.yield()
             do {
                 let result = try RecordDeletionService.deleteAllData(in: modelContext)
                 reconcileExternalCalendarLinks(
@@ -411,6 +429,8 @@ struct FullDataDeletionView: View {
                         && automaticallyUpdatesExternalCalendar,
                     clearsAllLinks: true
                 )
+                confirmationText = ""
+                isDeleting = false
             } catch {
                 modelContext.rollback()
                 errorMessage = "全データ削除に失敗しました: \(error.localizedDescription)"
@@ -450,14 +470,12 @@ private func reconcileExternalCalendarLinks(
 }
 
 struct CSVExportView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Visit.visitedAt, order: .reverse) private var visits: [Visit]
     @State private var isExporterPresented = false
     @State private var exportDocument = CSVExportDocument()
     @State private var exportErrorMessage = ""
-
-    private var csvText: String {
-        CSVExportService.makeVisitsCSV(visits: visits)
-    }
+    @State private var isPreparingExport = false
 
     private var fileName: String {
         "favoreco-visits-\(Date().formatted(.iso8601.year().month().day()))"
@@ -469,7 +487,7 @@ struct CSVExportView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("記録CSV")
                         .font(FavorecoTypography.sectionTitle)
-                    Text("保存済みの訪問/鑑賞記録を、表計算アプリで開けるCSVとして書き出します。写真データは含みません。")
+                    Text("保存済みの記録を、表計算アプリで開けるCSVとして書き出します。写真データは含みません。")
                         .font(FavorecoTypography.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -484,13 +502,18 @@ struct CSVExportView: View {
 
             FavorecoSettingsSection("書き出し") {
                 Button {
-                    exportDocument = CSVExportDocument(text: csvText)
-                    exportErrorMessage = ""
-                    isExporterPresented = true
+                    prepareExport()
                 } label: {
-                    Label("CSVファイルを書き出す", systemImage: "square.and.arrow.up")
+                    if isPreparingExport {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("CSVを準備中")
+                        }
+                    } else {
+                        Label("CSVファイルを書き出す", systemImage: "square.and.arrow.up")
+                    }
                 }
-                .disabled(visits.isEmpty)
+                .disabled(visits.isEmpty || isPreparingExport)
 
                 if visits.isEmpty {
                     Text("書き出せる記録がまだありません。")
@@ -525,9 +548,29 @@ struct CSVExportView: View {
             }
         }
     }
+
+    private func prepareExport() {
+        guard !isPreparingExport, !isExporterPresented else { return }
+        isPreparingExport = true
+        exportErrorMessage = ""
+        let modelContainer = modelContext.container
+        Task { @MainActor in
+            await Task.yield()
+            defer { isPreparingExport = false }
+            do {
+                let worker = AutomaticBackupModelActor(modelContainer: modelContainer)
+                let text = try await worker.makeCSVExport()
+                exportDocument = CSVExportDocument(text: text)
+                isExporterPresented = true
+            } catch {
+                exportErrorMessage = "CSVを準備できませんでした。もう一度お試しください。\n\(error.localizedDescription)"
+            }
+        }
+    }
 }
 
 struct JSONExportView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var events: [ExperienceEvent]
     @Query(sort: \BookShelf.sortOrder) private var bookShelves: [BookShelf]
@@ -551,6 +594,7 @@ struct JSONExportView: View {
     @State private var isExporterPresented = false
     @State private var exportDocument = JSONBackupDocument()
     @State private var exportErrorMessage = ""
+    @State private var isPreparingExport = false
 
     private var fileName: String {
         "favoreco-backup-\(Date().formatted(.iso8601.year().month().day()))"
@@ -591,7 +635,7 @@ struct JSONExportView: View {
                 LabeledContent("映画MY BEST", value: "\(movieBestEntries.count)")
                 LabeledContent("気になる対象", value: "\(events.filter { $0.stateKey == "interested" && !$0.isArchived }.count)")
                 if !inboxItems.isEmpty {
-                    LabeledContent("旧クイックデータ", value: "\(inboxItems.count)")
+                    LabeledContent("旧形式の気になる項目", value: "\(inboxItems.count)")
                 }
                 LabeledContent("SNS", value: "\(socialAccounts.count)")
                 LabeledContent("写真メタデータ", value: "\(photos.count)")
@@ -599,38 +643,18 @@ struct JSONExportView: View {
 
             FavorecoSettingsSection("書き出し") {
                 Button {
-                    do {
-                        let text = try JSONBackupExportService.makeBackupJSON(
-                            categories: categories,
-                            events: events,
-                            bookShelves: bookShelves,
-                            visits: visits,
-                            inboxItems: inboxItems,
-                            photos: photos,
-                            socialAccounts: socialAccounts,
-                            people: people,
-                            companions: companions,
-                            favoriteProfiles: favoriteProfiles,
-                            favoGalleryPhotos: favoGalleryPhotos,
-                            favoAnniversaries: favoAnniversaries,
-                            favoPins: favoPins,
-                            personLinks: personLinks,
-                            places: places,
-                            plans: plans,
-                            ticketAccounts: ticketAccounts,
-                            ticketAttempts: ticketAttempts,
-                            movieBestEntries: movieBestEntries
-                        )
-                        exportDocument = JSONBackupDocument(text: text)
-                        exportErrorMessage = ""
-                        isExporterPresented = true
-                    } catch {
-                        exportErrorMessage = error.localizedDescription
-                    }
+                    prepareExport()
                 } label: {
-                    Label("JSONファイルを書き出す", systemImage: "square.and.arrow.up")
+                    if isPreparingExport {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("JSONを準備中")
+                        }
+                    } else {
+                        Label("JSONファイルを書き出す", systemImage: "square.and.arrow.up")
+                    }
                 }
-                .disabled(totalRecordCount == 0)
+                .disabled(totalRecordCount == 0 || isPreparingExport)
 
                 if totalRecordCount == 0 {
                     Text("書き出せるデータがまだありません。")
@@ -662,6 +686,25 @@ struct JSONExportView: View {
         ) { result in
             if case .failure(let error) = result {
                 exportErrorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func prepareExport() {
+        guard !isPreparingExport, !isExporterPresented else { return }
+        isPreparingExport = true
+        exportErrorMessage = ""
+        let modelContainer = modelContext.container
+        Task { @MainActor in
+            await Task.yield()
+            defer { isPreparingExport = false }
+            do {
+                let worker = AutomaticBackupModelActor(modelContainer: modelContainer)
+                let text = try await worker.makeManualJSONBackup()
+                exportDocument = JSONBackupDocument(text: text)
+                isExporterPresented = true
+            } catch {
+                exportErrorMessage = "JSONを準備できませんでした。もう一度お試しください。\n\(error.localizedDescription)"
             }
         }
     }

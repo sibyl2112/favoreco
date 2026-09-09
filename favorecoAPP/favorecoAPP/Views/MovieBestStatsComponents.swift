@@ -83,7 +83,7 @@ struct MovieBestStatsSection: View {
                         .foregroundStyle(tint)
                 }
             } else if candidates.isEmpty {
-                Text("この期間に参加済みの映画記録はありません。")
+                Text("この期間に鑑賞済みの映画記録はありません。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             } else if selectedVisits.isEmpty {
@@ -250,6 +250,8 @@ struct MovieBestEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var selectedVisitIDs: [UUID]
     @State private var isShowingLimitAlert = false
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     init(period: MovieBestPeriod, candidates: [Visit], entries: [MovieBestEntry], tint: Color) {
         self.period = period
@@ -352,8 +354,9 @@ struct MovieBestEditorView: View {
                 }
                 ToolbarItemGroup(placement: .confirmationAction) {
                     EditButton()
-                    Button("保存", action: save)
+                    Button(isSaving ? "保存中" : "保存", action: save)
                         .fontWeight(.semibold)
+                        .disabled(isSaving)
                 }
             }
             .alert("選択できる上限です", isPresented: $isShowingLimitAlert) {
@@ -361,10 +364,20 @@ struct MovieBestEditorView: View {
             } message: {
                 Text("\(period.displayTitle)には最大\(period.maximumCount)作品まで選べます。")
             }
+            .alert("保存できませんでした", isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { saveErrorMessage = nil }
+            } message: {
+                Text(saveErrorMessage ?? "")
+            }
         }
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
         for entry in entries where entry.matches(period) {
             modelContext.delete(entry)
         }
@@ -380,8 +393,15 @@ struct MovieBestEditorView: View {
                 )
             )
         }
-        try? modelContext.save()
-        dismiss()
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            modelContext.rollback()
+            isSaving = false
+            saveErrorMessage = "選択内容を保持したまま保存をやり直せます。もう一度お試しください。"
+            debugPrint("Failed to save movie best entries: \(error)")
+        }
     }
 }
 

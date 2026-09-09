@@ -11,6 +11,7 @@ struct TicketAttendanceScheduleSheet: View {
     @State private var endsAt: Date
     @State private var venueName: String
     @State private var saveError = ""
+    @State private var isSaving = false
 
     init(plan: Plan) {
         self.plan = plan
@@ -28,29 +29,22 @@ struct TicketAttendanceScheduleSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    LabeledContent("公演", value: plan.title.isEmpty ? plan.event?.title ?? "公演" : plan.title)
+            RecordLifecycleFlatScaffold(
+                title: isLive ? "参戦日を設定" : "観劇日を設定",
+                canSave: endsAt >= startsAt,
+                saveButtonTitle: isSaving ? "保存中" : "保存",
+                isSaving: isSaving,
+                onClose: { dismiss() },
+                onSave: save
+            ) {
+                FavorecoRegistrationSection(isLive ? "ライブ情報" : "公演情報") {
+                    LabeledContent(isLive ? "ライブ" : "公演", value: plan.title.isEmpty ? plan.event?.title ?? (isLive ? "ライブ" : "公演") : plan.title)
                 }
 
-                Section("参加予定") {
+                FavorecoRegistrationSection(isLive ? "参戦予定" : "観劇予定") {
                     FiveMinuteDateTimeRow(title: "開始", selection: startBinding)
                     FiveMinuteDateTimeRow(title: "終了", selection: $endsAt)
                     TextField("会場（任意）", text: $venueName)
-                }
-            }
-            .favorecoRegistrationFormCanvas()
-            .navigationTitle("参加日を設定")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("あとで") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Coming Upに追加") {
-                        save()
-                    }
-                    .disabled(endsAt < startsAt)
                 }
             }
             .alert("予定を保存できませんでした", isPresented: Binding(
@@ -64,6 +58,10 @@ struct TicketAttendanceScheduleSheet: View {
         }
     }
 
+    private var isLive: Bool {
+        plan.event?.category?.templateKey == "live"
+    }
+
     private var startBinding: Binding<Date> {
         Binding {
             startsAt
@@ -75,6 +73,16 @@ struct TicketAttendanceScheduleSheet: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
+        saveError = ""
+        Task { @MainActor in
+            await Task.yield()
+            persistChanges()
+        }
+    }
+
+    private func persistChanges() {
         let now = Date()
         plan.planKindKey = "performance"
         plan.startsAt = startsAt
@@ -92,7 +100,9 @@ struct TicketAttendanceScheduleSheet: View {
             dismiss()
         } catch {
             modelContext.rollback()
-            saveError = error.localizedDescription
+            isSaving = false
+            saveError = "予定を保存できませんでした。入力内容は保持されています。もう一度お試しください。"
+            debugPrint("Failed to save attendance schedule: \(error)")
         }
     }
 }

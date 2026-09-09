@@ -53,6 +53,7 @@ struct RecordFacetMasterManagementView: View {
     @State private var draftName = ""
     @State private var valuePendingDeletion: RecordFacetMasterValue?
     @State private var errorMessage = ""
+    @State private var isProcessing = false
 
     private var values: [RecordFacetMasterValue] {
         let allValues = recordFacetMasterValues(in: visits, kind: kind)
@@ -104,6 +105,14 @@ struct RecordFacetMasterManagementView: View {
         .navigationTitle("\(kind.title)マスター")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "\(kind.title)を検索")
+        .disabled(isProcessing)
+        .overlay {
+            if isProcessing, editingValue == nil {
+                ProgressView("記録を更新中…")
+                    .padding(16)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
         .sheet(item: $editingValue) { value in
             NavigationStack {
                 Form {
@@ -123,10 +132,24 @@ struct RecordFacetMasterManagementView: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("キャンセル") { editingValue = nil }
+                            .disabled(isProcessing)
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("保存") { rename(value, to: draftName) }
-                            .disabled(draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Button {
+                            rename(value, to: draftName)
+                        } label: {
+                            if isProcessing {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Text("保存")
+                            }
+                        }
+                        .accessibilityLabel(isProcessing ? "保存中" : "保存")
+                        .disabled(
+                            draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                || isProcessing
+                        )
                     }
                 }
             }
@@ -148,36 +171,61 @@ struct RecordFacetMasterManagementView: View {
         } message: {
             Text("人物・場所・写真など、ほかの記録内容は変更しません。")
         }
+        .alert("更新できませんでした", isPresented: Binding(
+            get: { !errorMessage.isEmpty },
+            set: { if !$0 { errorMessage = "" } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
     }
 
     private func rename(_ value: RecordFacetMasterValue, to newName: String) {
+        guard !isProcessing else { return }
         let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
-        applyChange(for: value) { names in
-            names.map {
-                normalizedRecordFacetMasterName($0) == value.id ? trimmedName : $0
+        isProcessing = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            let didSave = await applyChange(for: value) { names in
+                names.map {
+                    normalizedRecordFacetMasterName($0) == value.id ? trimmedName : $0
+                }
             }
-        }
-        if errorMessage.isEmpty {
-            editingValue = nil
+            isProcessing = false
+            if didSave {
+                editingValue = nil
+            }
         }
     }
 
     private func delete(_ value: RecordFacetMasterValue) {
-        applyChange(for: value) { names in
-            names.filter { normalizedRecordFacetMasterName($0) != value.id }
-        }
-        if errorMessage.isEmpty {
-            valuePendingDeletion = nil
+        guard !isProcessing else { return }
+        isProcessing = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            let didSave = await applyChange(for: value) { names in
+                names.filter { normalizedRecordFacetMasterName($0) != value.id }
+            }
+            isProcessing = false
+            if didSave {
+                valuePendingDeletion = nil
+            }
         }
     }
 
     private func applyChange(
         for value: RecordFacetMasterValue,
         transform: ([String]) -> [String]
-    ) {
+    ) async -> Bool {
         let now = Date()
-        for visit in visits {
+        for (index, visit) in visits.enumerated() {
+            if index > 0, index.isMultiple(of: 100) {
+                await Task.yield()
+            }
             let currentNames = recordFacetMasterNames(from: kind.rawValue(from: visit))
             guard currentNames.contains(where: { normalizedRecordFacetMasterName($0) == value.id }) else {
                 continue
@@ -190,9 +238,12 @@ struct RecordFacetMasterManagementView: View {
         do {
             try modelContext.save()
             errorMessage = ""
+            return true
         } catch {
             modelContext.rollback()
-            errorMessage = "更新できませんでした: \(error.localizedDescription)"
+            errorMessage = "関連する記録を更新できませんでした。変更前の状態へ戻しました。もう一度お試しください。"
+            debugPrint("Failed to update record facet master: \(error)")
+            return false
         }
     }
 }
@@ -217,6 +268,7 @@ struct CompanionMasterManagementView: View {
     @State private var draftIcon = CompanionIconCatalog.defaultSymbol
     @State private var valuePendingDeletion: CompanionMasterListValue?
     @State private var errorMessage = ""
+    @State private var isProcessing = false
 
     private var allValues: [CompanionMasterListValue] {
         var valuesByKey: [String: CompanionMasterListValue] = [:]
@@ -306,6 +358,14 @@ struct CompanionMasterManagementView: View {
         .navigationTitle("同行者マスター")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "同行者を検索")
+        .disabled(isProcessing)
+        .overlay {
+            if isProcessing, !isShowingCreate, editingValue == nil {
+                ProgressView("記録を更新中…")
+                    .padding(16)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -332,6 +392,7 @@ struct CompanionMasterManagementView: View {
                 name: $draftName,
                 iconSymbol: $draftIcon,
                 usageCount: editingValue?.usageCount ?? 0,
+                isSaving: isProcessing,
                 onCancel: {
                     isShowingCreate = false
                     editingValue = nil
@@ -359,6 +420,14 @@ struct CompanionMasterManagementView: View {
         } message: {
             Text("人物・場所・写真など、ほかの記録内容は変更しません。")
         }
+        .alert("更新できませんでした", isPresented: Binding(
+            get: { !errorMessage.isEmpty },
+            set: { if !$0 { errorMessage = "" } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
     }
 
     private func beginEditing(_ value: CompanionMasterListValue) {
@@ -368,14 +437,24 @@ struct CompanionMasterManagementView: View {
     }
 
     private func saveDraft() {
+        guard !isProcessing else { return }
         let trimmedName = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
         let newKey = normalizedRecordFacetMasterName(trimmedName)
         guard !newKey.isEmpty else { return }
+        isProcessing = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            await persistDraft(trimmedName: trimmedName, newKey: newKey)
+        }
+    }
+
+    private func persistDraft(trimmedName: String, newKey: String) async {
         let oldKey = editingValue?.id
         let now = Date()
 
         if let oldKey {
-            replaceCompanionName(oldKey: oldKey, newName: trimmedName, now: now)
+            await replaceCompanionName(oldKey: oldKey, newName: trimmedName, now: now)
         }
 
         let sourceMaster = editingValue?.masterID.flatMap { id in companions.first { $0.id == id } }
@@ -412,15 +491,31 @@ struct CompanionMasterManagementView: View {
             errorMessage = ""
             isShowingCreate = false
             editingValue = nil
+            isProcessing = false
         } catch {
             modelContext.rollback()
-            errorMessage = "保存できませんでした: \(error.localizedDescription)"
+            isProcessing = false
+            errorMessage = "同行者を保存できませんでした。変更前の状態へ戻しました。もう一度お試しください。"
+            debugPrint("Failed to save companion master: \(error)")
         }
     }
 
     private func delete(_ value: CompanionMasterListValue) {
+        guard !isProcessing else { return }
+        isProcessing = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            await persistDeletion(value)
+        }
+    }
+
+    private func persistDeletion(_ value: CompanionMasterListValue) async {
         let now = Date()
-        for visit in visits {
+        for (index, visit) in visits.enumerated() {
+            if index > 0, index.isMultiple(of: 100) {
+                await Task.yield()
+            }
             let names = recordFacetMasterNames(from: visit.companionNamesRaw)
             guard names.contains(where: { normalizedRecordFacetMasterName($0) == value.id }) else { continue }
             visit.companionNamesRaw = deduplicatedRecordFacetMasterNames(
@@ -438,14 +533,20 @@ struct CompanionMasterManagementView: View {
             try modelContext.save()
             errorMessage = ""
             valuePendingDeletion = nil
+            isProcessing = false
         } catch {
             modelContext.rollback()
-            errorMessage = "削除できませんでした: \(error.localizedDescription)"
+            isProcessing = false
+            errorMessage = "同行者を削除できませんでした。変更前の状態へ戻しました。もう一度お試しください。"
+            debugPrint("Failed to delete companion master: \(error)")
         }
     }
 
-    private func replaceCompanionName(oldKey: String, newName: String, now: Date) {
-        for visit in visits {
+    private func replaceCompanionName(oldKey: String, newName: String, now: Date) async {
+        for (index, visit) in visits.enumerated() {
+            if index > 0, index.isMultiple(of: 100) {
+                await Task.yield()
+            }
             let currentNames = recordFacetMasterNames(from: visit.companionNamesRaw)
             guard currentNames.contains(where: { normalizedRecordFacetMasterName($0) == oldKey }) else { continue }
             visit.companionNamesRaw = deduplicatedRecordFacetMasterNames(currentNames.map {
@@ -461,6 +562,7 @@ private struct CompanionMasterEditor: View {
     @Binding var name: String
     @Binding var iconSymbol: String
     let usageCount: Int
+    let isSaving: Bool
     let onCancel: () -> Void
     let onSave: () -> Void
 
@@ -509,18 +611,32 @@ private struct CompanionMasterEditor: View {
                 }
             }
             .favorecoSettingsListLayout()
+            .disabled(isSaving)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル", action: onCancel)
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存", action: onSave)
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button(action: onSave) {
+                        if isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text("保存")
+                        }
+                    }
+                    .accessibilityLabel(isSaving ? "保存中" : "保存")
+                    .disabled(
+                        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || isSaving
+                    )
                 }
             }
         }
+        .interactiveDismissDisabled(isSaving)
     }
 }
 

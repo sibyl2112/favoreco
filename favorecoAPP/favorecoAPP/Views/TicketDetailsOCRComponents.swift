@@ -56,6 +56,8 @@ struct TicketDetailsOCRInput: View {
     @State private var reviewCandidate: TicketDetailsOCRCandidate?
 
     var body: some View {
+        let reading = isReading
+        let actionFont = FavorecoTypography.bodyStrong
         VStack(alignment: .leading, spacing: 6) {
             if usesOCRImportAssist {
                 PhotosPicker(
@@ -69,10 +71,10 @@ struct TicketDetailsOCRInput: View {
                             size: 17,
                             fallbackWeight: .semibold
                         )
-                        Text(isReading ? "読み取り中" : "写真から入力")
-                            .font(FavorecoTypography.bodyStrong)
+                        Text(reading ? "読み取り中" : "写真から入力")
+                            .font(actionFont)
                         Spacer(minLength: 0)
-                        if isReading {
+                        if reading {
                             ProgressView()
                                 .controlSize(.small)
                         }

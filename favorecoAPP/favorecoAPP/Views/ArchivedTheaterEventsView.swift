@@ -9,6 +9,7 @@ struct ArchivedTheaterEventsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ExperienceEvent.updatedAt, order: .reverse) private var allEvents: [ExperienceEvent]
     @State private var restoreErrorMessage: String?
+    @State private var restoringEventID: UUID?
 
     private var archivedEvents: [ExperienceEvent] {
         allEvents.filter {
@@ -78,12 +79,21 @@ struct ArchivedTheaterEventsView: View {
 
             Spacer(minLength: 8)
 
-            Button("再表示") {
+            Button {
                 restore(event)
+            } label: {
+                if restoringEventID == event.id {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("再表示中")
+                } else {
+                    Text("再表示")
+                }
             }
             .font(FavorecoTypography.captionStrong)
             .buttonStyle(.bordered)
             .tint(TheaterCategoryStyle.gold)
+            .disabled(restoringEventID != nil)
         }
         .padding(.vertical, 4)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -91,6 +101,7 @@ struct ArchivedTheaterEventsView: View {
                 restore(event)
             }
             .tint(TheaterCategoryStyle.gold)
+            .disabled(restoringEventID != nil)
         }
     }
 
@@ -109,13 +120,22 @@ struct ArchivedTheaterEventsView: View {
     }
 
     private func restore(_ event: ExperienceEvent) {
-        event.isArchived = false
-        event.updatedAt = Date()
-        do {
-            try modelContext.save()
-        } catch {
-            modelContext.rollback()
-            restoreErrorMessage = "「\(event.title.isEmpty ? "名称未設定の公演" : event.title)」を再表示できませんでした。"
+        guard restoringEventID == nil else { return }
+        let eventTitle = event.title.isEmpty ? "名称未設定の公演" : event.title
+        restoringEventID = event.id
+        restoreErrorMessage = nil
+        Task { @MainActor in
+            await Task.yield()
+            event.isArchived = false
+            event.updatedAt = Date()
+            do {
+                try modelContext.save()
+            } catch {
+                modelContext.rollback()
+                restoreErrorMessage = "「\(eventTitle)」を再表示できませんでした。公演と記録は変更されていません。もう一度お試しください。"
+                debugPrint("Failed to restore archived theater event: \(error)")
+            }
+            restoringEventID = nil
         }
     }
 }

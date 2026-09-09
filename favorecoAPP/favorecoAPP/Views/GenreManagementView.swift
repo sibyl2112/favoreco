@@ -10,9 +10,7 @@ import SwiftData
 
 struct GenreManagementView: View {
     @EnvironmentObject private var purchaseManager: PurchaseManager
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @AppStorage(AppStorageKeys.hasCompletedGenreOnboarding) private var hasCompletedGenreOnboarding = false
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var warningMessage = ""
     @State private var isShowingAddGenre = false
@@ -76,16 +74,6 @@ struct GenreManagementView: View {
                 .onMove(perform: moveCategories)
             }
 
-            FavorecoSettingsSectionWithFooter("ジャンル選択") {
-                Button {
-                    hasCompletedGenreOnboarding = false
-                    dismiss()
-                } label: {
-                    Label("ジャンル選択をやり直す", systemImage: "checklist")
-                }
-            } footer: {
-                Text("初回設定と同じ画面で、記録するジャンルを選び直します。既存の記録は削除されません。")
-            }
         }
         .favorecoSettingsListLayout()
         .navigationTitle("ジャンル管理")
@@ -143,7 +131,9 @@ struct GenreManagementView: View {
             try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: modelContext)
             try modelContext.save()
         } catch {
-            assertionFailure("Failed to update category visibility: \(error)")
+            modelContext.rollback()
+            warningMessage = "ジャンルの表示設定を変更できませんでした。もう一度お試しください。"
+            debugPrint("Failed to update category visibility: \(error)")
         }
     }
 
@@ -159,7 +149,9 @@ struct GenreManagementView: View {
         do {
             try modelContext.save()
         } catch {
-            assertionFailure("Failed to reorder categories: \(error)")
+            modelContext.rollback()
+            warningMessage = "ジャンルの並び順を保存できませんでした。もう一度お試しください。"
+            debugPrint("Failed to reorder categories: \(error)")
         }
     }
 }
@@ -309,7 +301,7 @@ struct GenreDetailSettingsView: View {
             FavorecoSettingsSection("記録フォーム") {
                 FavorecoSettingsInfoCallout(
                     title: "このジャンルで入力する項目",
-                    message: "現在の(category.name)登録フォームに合わせています。常に使用する項目は非表示にできません。"
+                    message: "現在の\(category.name)登録フォームに合わせています。常に使用する項目は非表示にできません。"
                 )
 
                 ForEach(formSettingItems) { item in
@@ -475,8 +467,12 @@ struct GenreDetailSettingsView: View {
         do {
             try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: modelContext)
             try modelContext.save()
+            warningMessage = "保存しました。"
         } catch {
-            assertionFailure("Failed to save category detail: \(error)")
+            modelContext.rollback()
+            draft = GenreDetailDraft(category: category)
+            warningMessage = "ジャンル設定を保存できませんでした。入力内容を確認して、もう一度お試しください。"
+            debugPrint("Failed to save category detail: \(error)")
         }
     }
 
@@ -886,7 +882,7 @@ private struct GenreFormSettingItem: Identifiable {
             ]
         case "theater":
             return [
-                fixed("basic", "参加日・会場", "鑑賞日、開演・終演、鑑賞方法、会場"),
+                fixed("basic", "観劇日時・会場", "観劇日、開演・終演、鑑賞方法、会場"),
                 fixed("theaterRating", "評価", "この回の満足度"),
                 configurable("ticketPlan", "鑑賞記録", "チケット取得状況、座席、お目当て・注目した人", ["ticketPlan", "people"]),
                 configurable("photos", "写真・アイキャッチ", "この回のアイキャッチと観劇写真"),
@@ -937,7 +933,7 @@ private struct GenreFormSettingItem: Identifiable {
         case ("museum", "basic"):
             return ("展示・鑑賞情報", "展示名、鑑賞日、会場、評価")
         case ("live", "basic"):
-            return ("ライブ・参加情報", "ライブ名、参加日、会場、評価")
+            return ("ライブ・参戦情報", "ライブ名、参戦日、会場、評価")
         case ("theme_park", "basic"), ("nature_living", "basic"), ("outing_facility", "basic"):
             return ("施設・訪問情報", "施設名、訪問日、場所、評価")
         case ("sake", "basic"):
@@ -1085,6 +1081,8 @@ struct AddCustomGenreView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var draft = CustomGenreDraft()
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     private var formSettingItems: [GenreFormSettingItem] {
         RecordUnitDefinition.all.map { definition in
@@ -1178,20 +1176,30 @@ struct AddCustomGenreView: View {
                     Button("追加") {
                         save()
                     }
-                    .disabled(!draft.canSave)
+                    .disabled(!draft.canSave || isSaving)
                 }
             }
             .onChange(of: draft.templateTypeKey) { _, newValue in
                 draft.applyTemplateType(newValue)
             }
+            .alert("追加できませんでした", isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { saveErrorMessage = nil }
+            } message: {
+                Text(saveErrorMessage ?? "")
+            }
         }
     }
 
     private func save() {
+        guard !isSaving else { return }
         guard purchaseManager.currentPlan.canCreateCustomGenres else {
             dismiss()
             return
         }
+        isSaving = true
         let now = Date()
         let maxSortOrder = categories.map(\.sortOrder).max() ?? 0
         let category = RecordCategory(
@@ -1217,7 +1225,10 @@ struct AddCustomGenreView: View {
             try modelContext.save()
             dismiss()
         } catch {
-            assertionFailure("Failed to save custom genre: \(error)")
+            modelContext.rollback()
+            isSaving = false
+            saveErrorMessage = "入力内容を保持したまま追加をやり直せます。もう一度お試しください。"
+            debugPrint("Failed to save custom genre: \(error)")
         }
     }
 }

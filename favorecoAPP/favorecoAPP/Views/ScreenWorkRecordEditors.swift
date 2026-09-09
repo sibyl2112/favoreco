@@ -19,7 +19,7 @@ struct ScreenWorkMinimumEditor: View {
         VStack(alignment: .leading, spacing: 0) {
             if let title {
                 ExplicitFormTextField(
-                    title: usesLifecycleEditLayout ? "イベント名（必須）" : "作品タイトル",
+                    title: usesLifecycleEditLayout ? "作品名（必須）" : "作品タイトル",
                     prompt: "作品タイトルを入力",
                     text: title,
                     axis: .vertical,

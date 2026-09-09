@@ -1,6 +1,35 @@
 import SwiftUI
 import UIKit
 
+private struct ImageCropRenderRequest {
+    let outputSize: CGSize
+    let drawRect: CGRect
+    let compressionQuality: CGFloat
+}
+
+private enum ImageCropBackgroundRenderer {
+    private struct Transfer: @unchecked Sendable {
+        let image: UIImage
+        let request: ImageCropRenderRequest
+    }
+
+    nonisolated static func jpegData(
+        image: UIImage,
+        request: ImageCropRenderRequest
+    ) async -> Data? {
+        let transfer = Transfer(image: image, request: request)
+        return await Task.detached(priority: .userInitiated) {
+            let renderer = UIGraphicsImageRenderer(size: transfer.request.outputSize)
+            let rendered = renderer.image { _ in
+                transfer.image.draw(in: transfer.request.drawRect)
+            }
+            return rendered.jpegData(
+                compressionQuality: transfer.request.compressionQuality
+            )
+        }.value
+    }
+}
+
 struct ProfilePhotoCropDraft: Identifiable {
     let id = UUID()
     let image: UIImage
@@ -16,6 +45,8 @@ struct ProfileImageCropView: View {
     @State private var settledZoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var settledOffset: CGSize = .zero
+    @State private var isApplying = false
+    @State private var applyErrorMessage: String?
 
     private let maximumZoom: CGFloat = 4
 
@@ -81,17 +112,34 @@ struct ProfileImageCropView: View {
                     Button("キャンセル") {
                         dismiss()
                     }
+                    .disabled(isApplying)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("適用") {
-                        guard let data = croppedImageData() else { return }
-                        onApply(data)
-                        dismiss()
+                    Button {
+                        applyCrop()
+                    } label: {
+                        if isApplying {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text("適用")
+                        }
                     }
                     .fontWeight(.semibold)
+                    .disabled(isApplying)
+                    .accessibilityLabel(isApplying ? "適用中" : "適用")
                 }
             }
             .environment(\.colorScheme, .dark)
+        }
+        .interactiveDismissDisabled(isApplying)
+        .alert("画像を適用できませんでした", isPresented: Binding(
+            get: { applyErrorMessage != nil },
+            set: { if !$0 { applyErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { applyErrorMessage = nil }
+        } message: {
+            Text(applyErrorMessage ?? "")
         }
     }
 
@@ -193,7 +241,7 @@ struct ProfileImageCropView: View {
         )
     }
 
-    private func croppedImageData() -> Data? {
+    private func cropRenderRequest() -> ImageCropRenderRequest? {
         guard cropSide > 1, image.size.width > 0, image.size.height > 0 else {
             return nil
         }
@@ -210,13 +258,29 @@ struct ProfileImageCropView: View {
             y: (outputSide - drawSize.height) / 2 + offset.height * outputScale
         )
 
-        let renderer = UIGraphicsImageRenderer(
-            size: CGSize(width: outputSide, height: outputSide)
+        return ImageCropRenderRequest(
+            outputSize: CGSize(width: outputSide, height: outputSide),
+            drawRect: CGRect(origin: drawOrigin, size: drawSize),
+            compressionQuality: 0.82
         )
-        let rendered = renderer.image { _ in
-            image.draw(in: CGRect(origin: drawOrigin, size: drawSize))
+    }
+
+    private func applyCrop() {
+        guard !isApplying, let request = cropRenderRequest() else { return }
+        isApplying = true
+        Task { @MainActor in
+            await Task.yield()
+            guard let data = await ImageCropBackgroundRenderer.jpegData(
+                image: image,
+                request: request
+            ) else {
+                isApplying = false
+                applyErrorMessage = "調整内容は失われていません。もう一度お試しください。"
+                return
+            }
+            onApply(data)
+            dismiss()
         }
-        return rendered.jpegData(compressionQuality: 0.82)
     }
 }
 
@@ -248,6 +312,8 @@ struct ArtworkImageCropView: View {
     @State private var settledZoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var settledOffset: CGSize = .zero
+    @State private var isApplying = false
+    @State private var applyErrorMessage: String?
 
     private let maximumZoom: CGFloat = 4
 
@@ -306,17 +372,34 @@ struct ArtworkImageCropView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
+                        .disabled(isApplying)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("適用") {
-                        guard let data = croppedImageData() else { return }
-                        onApply(data)
-                        dismiss()
+                    Button {
+                        applyCrop()
+                    } label: {
+                        if isApplying {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text("適用")
+                        }
                     }
                     .fontWeight(.semibold)
+                    .disabled(isApplying)
+                    .accessibilityLabel(isApplying ? "適用中" : "適用")
                 }
             }
             .environment(\.colorScheme, .dark)
+        }
+        .interactiveDismissDisabled(isApplying)
+        .alert("画像を適用できませんでした", isPresented: Binding(
+            get: { applyErrorMessage != nil },
+            set: { if !$0 { applyErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { applyErrorMessage = nil }
+        } message: {
+            Text(applyErrorMessage ?? "")
         }
     }
 
@@ -418,7 +501,7 @@ struct ArtworkImageCropView: View {
         )
     }
 
-    private func croppedImageData() -> Data? {
+    private func cropRenderRequest() -> ImageCropRenderRequest? {
         guard cropSize.width > 1, cropSize.height > 1,
               image.size.width > 0, image.size.height > 0 else { return nil }
 
@@ -440,10 +523,28 @@ struct ArtworkImageCropView: View {
             x: (outputSize.width - drawSize.width) / 2 + offset.width * scaleX,
             y: (outputSize.height - drawSize.height) / 2 + offset.height * scaleY
         )
-        let renderer = UIGraphicsImageRenderer(size: outputSize)
-        let rendered = renderer.image { _ in
-            image.draw(in: CGRect(origin: drawOrigin, size: drawSize))
+        return ImageCropRenderRequest(
+            outputSize: outputSize,
+            drawRect: CGRect(origin: drawOrigin, size: drawSize),
+            compressionQuality: 0.86
+        )
+    }
+
+    private func applyCrop() {
+        guard !isApplying, let request = cropRenderRequest() else { return }
+        isApplying = true
+        Task { @MainActor in
+            await Task.yield()
+            guard let data = await ImageCropBackgroundRenderer.jpegData(
+                image: image,
+                request: request
+            ) else {
+                isApplying = false
+                applyErrorMessage = "調整内容は失われていません。もう一度お試しください。"
+                return
+            }
+            onApply(data)
+            dismiss()
         }
-        return rendered.jpegData(compressionQuality: 0.86)
     }
 }

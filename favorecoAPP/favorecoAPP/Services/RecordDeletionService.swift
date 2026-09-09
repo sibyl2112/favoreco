@@ -62,7 +62,7 @@ enum RecordDeletionService {
             context.delete(entry)
         }
         context.delete(visit) // PhotoBlob は Visit.photos の .cascade で連鎖削除
-        try context.save()
+        try saveOrRollback(context)
     }
 
     /// この対象（Event）と配下のすべての記録を削除する。
@@ -97,7 +97,7 @@ enum RecordDeletionService {
         }
 
         context.delete(event) // Visit / Plan は Event の .cascade、PhotoBlob / TicketAttempt はさらに cascade
-        try context.save()
+        try saveOrRollback(context)
 
         for target in notificationTargets {
             for attemptID in target.attemptIDs {
@@ -176,7 +176,7 @@ enum RecordDeletionService {
         for companion in archivedCompanions { context.delete(companion) }
         for place in archivedPlaces { context.delete(place) }
 
-        try context.save()
+        try saveOrRollback(context)
         ThumbnailLoader.purge()
 
         for attemptID in archivedAttemptNotificationIDs {
@@ -245,7 +245,7 @@ enum RecordDeletionService {
         for anniversary in anniversaries where anniversary.profile == nil { context.delete(anniversary) }
         for profile in favoriteProfiles { context.delete(profile) }
 
-        try context.save()
+        try saveOrRollback(context)
 
         for attemptID in attemptIDs {
             TicketNotificationScheduler.cancel(attemptID: attemptID)
@@ -360,7 +360,7 @@ enum RecordDeletionService {
             ))
         }
 
-        try context.save()
+        try saveOrRollback(context)
         URLCache.shared.removeAllCachedResponses()
         ThumbnailLoader.purge()
 
@@ -383,6 +383,17 @@ enum RecordDeletionService {
             deletedModelCount: deletedModelCount,
             externalCalendarTargets: externalCalendarTargets
         )
+    }
+
+    /// 削除の保存に失敗した場合、同じ ModelContext 上の半端な削除状態を残さない。
+    @MainActor
+    private static func saveOrRollback(_ context: ModelContext) throws {
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 
     @MainActor

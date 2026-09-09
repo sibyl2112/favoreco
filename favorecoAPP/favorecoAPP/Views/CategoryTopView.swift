@@ -330,7 +330,10 @@ struct CategoryTopView: View {
             .favorecoRegistrationTheme(categoryHex: activeCategory.colorHex)
         }
         .sheet(isPresented: $isShowingTheaterPerformanceRegistration) {
-            TheaterPerformanceRegistrationView(category: activeCategory)
+            TheaterLifecycleEditorSheet(
+                initialPurpose: .interested,
+                initialCategoryID: activeCategory.id
+            )
                 .favorecoRegistrationTheme(categoryHex: activeCategory.colorHex)
         }
         .sheet(isPresented: $isShowingInterestedTargetRegistration) {

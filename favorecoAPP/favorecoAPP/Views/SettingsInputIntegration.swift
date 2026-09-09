@@ -311,6 +311,8 @@ private struct EditTicketAccountView: View {
     @State private var colorHex = "#6F8F7A"
     @State private var isShowingArchiveConfirmation = false
     @State private var selectedGuideKey: String?
+    @State private var isPerformingAction = false
+    @State private var operationErrorMessage: String?
     @FocusState private var isServiceNameFocused: Bool
 
     private var canSave: Bool {
@@ -440,7 +442,7 @@ private struct EditTicketAccountView: View {
                 Button("保存") {
                     save()
                 }
-                .disabled(!canSave)
+                .disabled(!canSave || isPerformingAction)
             }
         }
         .onAppear(perform: loadAccount)
@@ -457,6 +459,14 @@ private struct EditTicketAccountView: View {
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("期限通知をキャンセルし、申込フォームの候補から外します。")
+        }
+        .alert("操作を完了できませんでした", isPresented: Binding(
+            get: { operationErrorMessage != nil },
+            set: { if !$0 { operationErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { operationErrorMessage = nil }
+        } message: {
+            Text(operationErrorMessage ?? "")
         }
     }
 
@@ -495,6 +505,8 @@ private struct EditTicketAccountView: View {
     }
 
     private func save() {
+        guard !isPerformingAction, canSave else { return }
+        isPerformingAction = true
         let target = account ?? TicketAccount()
         let now = Date()
         target.serviceName = serviceName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -530,22 +542,29 @@ private struct EditTicketAccountView: View {
             }
             dismiss()
         } catch {
-            assertionFailure("Failed to save ticket account: \(error)")
+            modelContext.rollback()
+            isPerformingAction = false
+            operationErrorMessage = "入力内容を保持したまま保存をやり直せます。もう一度お試しください。"
+            debugPrint("Failed to save ticket account: \(error)")
         }
     }
 
     private func archiveAccount() {
-        guard let account else { return }
+        guard !isPerformingAction, let account else { return }
+        isPerformingAction = true
         account.isArchived = true
         account.renewalNotify = false
         account.updatedAt = Date()
-        TicketAccountNotificationScheduler.cancel(account: account)
 
         do {
             try modelContext.save()
+            TicketAccountNotificationScheduler.cancel(account: account)
             dismiss()
         } catch {
-            assertionFailure("Failed to archive ticket account: \(error)")
+            modelContext.rollback()
+            isPerformingAction = false
+            operationErrorMessage = "この情報は非表示になっていません。もう一度お試しください。"
+            debugPrint("Failed to archive ticket account: \(error)")
         }
     }
 }

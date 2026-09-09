@@ -288,6 +288,41 @@ final class BookMetadataTests: XCTestCase {
         )
     }
 
+    func testISBNExtractionFindsHyphenatedISBNBelowPriceBarcode() {
+        XCTAssertEqual(
+            BookMetadataLookupService.isbnCandidates(
+                from: "1920030013001\nISBN978-4-8443-3872-7\nC0030 ¥1300E"
+            ),
+            ["9784844338727"]
+        )
+    }
+
+    func testISBNExtractionRecoversCommonOCRLetterConfusions() {
+        XCTAssertEqual(
+            BookMetadataLookupService.isbnCandidates(
+                from: "ISBNコード 9784O627698IS"
+            ),
+            ["9784062769815"]
+        )
+    }
+
+    func testISBNExtractionRecoversISBNBrokenAcrossAdjacentOCRLines() {
+        XCTAssertEqual(
+            BookMetadataLookupService.isbnCandidates(
+                from: "9784062769\n815\nC0193"
+            ),
+            ["9784062769815"]
+        )
+    }
+
+    func testISBNExtractionDoesNotRepairInvalidChecksumOrPriceCode() {
+        XCTAssertTrue(
+            BookMetadataLookupService.isbnCandidates(
+                from: "9784O627698I4\n1923055025004"
+            ).isEmpty
+        )
+    }
+
     func testNextVolumeNumberUsesLargestStructuredVolume() {
         XCTAssertEqual(
             BookSeriesRegistrationDefaults.nextVolumeNumber(from: ["1", "第2巻 2026年版", "３"]),

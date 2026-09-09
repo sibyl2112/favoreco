@@ -181,7 +181,7 @@ struct HomeGallerySection: View {
             if previewItems.isEmpty {
                 FavorecoContentUnavailableView(
                     "該当する記録がありません",
-                    systemImage: "images",
+                    systemImage: "photo.on.rectangle",
                     description: "フィルターを変更すると、ほかの記録を表示できます。"
                 )
                 .frame(minHeight: 150)

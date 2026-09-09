@@ -276,7 +276,7 @@ enum CategoryStatisticsItemBuilder {
                     && !$0.hasActiveTicketProgress
             }.count
             values = [
-                ("作品・公演", "\(productionCount)", "件", "総作品数"),
+                ("公演", "\(productionCount)", "件", "総公演数"),
                 ("観劇済み", "\(snapshot.visitCount)", "回", "総観劇数"),
                 ("気になる", "\(interestedCount)", "件", "観劇予定"),
             ]
@@ -296,9 +296,9 @@ enum CategoryStatisticsItemBuilder {
             ]
         case "live":
             values = [
-                ("ライブ", "\(snapshot.eventCount)", "件", "総公演数"),
-                ("参加済み", "\(snapshot.visitCount)", "回", "総参加数"),
-                ("気になる", "\(snapshot.interestedEventCount)", "件", "参加候補"),
+                ("ライブ", "\(snapshot.eventCount)", "件", "総ライブ数"),
+                ("参戦済み", "\(snapshot.visitCount)", "回", "総参戦数"),
+                ("気になる", "\(snapshot.interestedEventCount)", "件", "参戦候補"),
             ]
         case "book":
             let readCount = libraryItems.filter { !$0.visits.isEmpty }.count

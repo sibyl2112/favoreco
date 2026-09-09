@@ -90,7 +90,7 @@ enum JSONBackupExportService {
     }
 }
 
-nonisolated struct FavorecoBackupEnvelope: Codable {
+nonisolated struct FavorecoBackupEnvelope: Codable, @unchecked Sendable {
     var appName: String
     var schemaVersion: Int
     var exportedAt: Date

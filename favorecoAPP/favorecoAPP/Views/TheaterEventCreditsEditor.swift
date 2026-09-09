@@ -191,8 +191,6 @@ struct TheaterEventCreditsEditor: View {
     @State private var selectedOCRItem: PhotosPickerItem?
     @State private var isReadingImage = false
     @State private var importStatus = ""
-    @State private var pastedText = ""
-    @State private var showsTextImport = false
     @State private var personEditorTarget: TheaterCreditEditorTarget?
 
     private let tint = Color(hex: "#8B2F45")
@@ -281,16 +279,6 @@ struct TheaterEventCreditsEditor: View {
             }
             .buttonStyle(.plain)
         }
-        .sheet(isPresented: $showsTextImport) {
-            TheaterCreditsTextImportSheet(text: $pastedText) {
-                let addedCount = appendImportedText(pastedText)
-                importStatus = importStatusText(addedCount: addedCount, source: "貼り付け")
-                pastedText = ""
-                showsTextImport = false
-            }
-            .presentationDetents([.medium, .large])
-            .presentationCornerRadius(24)
-        }
         .sheet(item: $personEditorTarget) { target in
             TheaterCreditPersonSheet(
                 personMasters: personMasters,
@@ -317,46 +305,52 @@ struct TheaterEventCreditsEditor: View {
             Text("キャスト・スタッフ")
                 .font(FavorecoTypography.jpSans(19, weight: .semibold, relativeTo: .headline))
             TheaterLifecycleInfoButton(
-                text: "公式サイトやパンフレットから、画像OCR・テキスト貼付け・直接入力でまとめて登録できます。"
+                text: "この欄へ直接入力・貼り付けできます。画像OCRは文字を読み取り、人物別の候補も追加します。公演URLの取込は作品・公演の上部から行えます。"
             )
             Spacer(minLength: 0)
         }
     }
 
     private var importActions: some View {
-        HStack(spacing: 10) {
+        let imageImportTitle = isReadingImage ? "読取中" : "画像OCR"
+        let labelTint = tint
+        let labelFont = FavorecoTypography.jpSans(9.5, weight: .semibold, relativeTo: .caption2)
+        let labelCornerRadius = TheaterLifecycleFlatStyle.actionCornerRadius
+        return HStack(spacing: 10) {
             PhotosPicker(selection: $selectedOCRItem, matching: .images) {
                 compactImportButtonLabel(
-                    title: isReadingImage ? "読取中" : "画像OCR",
-                    systemImage: "viewfinder"
+                    title: imageImportTitle,
+                    systemImage: "viewfinder",
+                    tint: labelTint,
+                    font: labelFont,
+                    cornerRadius: labelCornerRadius
                 )
             }
             .disabled(!usesOCRImportAssist || isReadingImage)
             .accessibilityHint(usesOCRImportAssist ? "画像から文字を読み取ります" : "設定で画像OCRを有効にしてください")
-
-            Button {
-                showsTextImport = true
-            } label: {
-                compactImportButtonLabel(title: "テキスト貼付", systemImage: "doc.text")
-            }
-            .buttonStyle(.plain)
         }
     }
 
-    private func compactImportButtonLabel(title: String, systemImage: String) -> some View {
+    nonisolated private func compactImportButtonLabel(
+        title: String,
+        systemImage: String,
+        tint: Color,
+        font: Font,
+        cornerRadius: CGFloat
+    ) -> some View {
         VStack(spacing: 4) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .regular))
                 .frame(width: 42, height: 36)
                 .overlay(
                     RoundedRectangle(
-                        cornerRadius: TheaterLifecycleFlatStyle.actionCornerRadius,
+                        cornerRadius: cornerRadius,
                         style: .continuous
                     )
                         .stroke(tint.opacity(0.72), lineWidth: 1)
                 )
             Text(title)
-                .font(FavorecoTypography.jpSans(9.5, weight: .semibold, relativeTo: .caption2))
+                .font(font)
                 .lineLimit(1)
         }
         .foregroundStyle(tint)
@@ -583,37 +577,6 @@ struct TheaterEventCreditsEditor: View {
             return "\(source)結果を一括入力へ残し、個別登録候補を\(addedCount)件追加しました"
         }
         return "\(source)結果を一括入力へ追加しました。解析できない行は個別登録で補ってください"
-    }
-}
-
-private struct TheaterCreditsTextImportSheet: View {
-    @Binding var text: String
-    let onApply: () -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Button("キャンセル") { dismiss() }
-                Spacer()
-                Text("テキストを貼り付けて入力")
-                    .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
-                Spacer()
-                Button("反映", action: onApply)
-                    .fontWeight(.semibold)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-            Text("公式サイトや案内メールのキャスト・スタッフ部分を貼り付けます。反映後も修正できます。")
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-            TextEditor(text: $text)
-                .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
-                .padding(10)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.25)))
-            Spacer(minLength: 0)
-        }
-        .padding(20)
-        .tint(Color(hex: "#8B2F45"))
     }
 }
 

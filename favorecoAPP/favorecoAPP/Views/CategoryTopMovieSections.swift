@@ -61,7 +61,7 @@ struct CategoryVisitRecordLibrarySection: View {
         let emptyCopy: (title: String, message: String) = switch category.templateKey {
         case "live": (
             "ライブ記録はまだありません",
-            "参加した記録を追加すると、1回ごとにここへ並びます。"
+            "参戦記録を追加すると、1回ごとにここへ並びます。"
         )
         default: (
             "鑑賞記録はまだありません",

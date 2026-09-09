@@ -18,6 +18,8 @@ struct JSONImportView: View {
     @State private var selectedFileName = ""
     @State private var errorMessage = ""
     @State private var isConfirmingRestore = false
+    @State private var isInspectingFile = false
+    @State private var isRestoring = false
 
     var body: some View {
         Form {
@@ -36,8 +38,17 @@ struct JSONImportView: View {
                 Button {
                     isImporterPresented = true
                 } label: {
-                    Label("JSONファイルを選択", systemImage: "doc.badge.plus")
+                    if isInspectingFile {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("ファイルを確認中…")
+                        }
+                    } else {
+                        Label("JSONファイルを選択", systemImage: "doc.badge.plus")
+                    }
                 }
+                .disabled(isInspectingFile || isRestoring)
 
                 if !selectedFileName.isEmpty {
                     LabeledContent("選択中", value: selectedFileName)
@@ -54,9 +65,9 @@ struct JSONImportView: View {
                 FavorecoSettingsSection("形式確認") {
                     Label("Favorecoバックアップとして確認できました", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
-                    LabeledContent("形式", value: "schema \(preview.schemaVersion)")
+                    LabeledContent("バックアップ形式", value: "バージョン\(preview.schemaVersion)")
                     LabeledContent("書き出し日時", value: FavorecoDateText.fullDateTime(preview.exportedAt))
-                    LabeledContent("復元対象モデル", value: "\(preview.totalModelCount)件")
+                    LabeledContent("復元対象データ", value: "\(preview.totalModelCount)件")
                 }
 
                 FavorecoSettingsSection("内容") {
@@ -70,7 +81,7 @@ struct JSONImportView: View {
                     previewRow("予定", preview.planCount)
                     previewRow("登録情報・名義", preview.ticketAccountCount)
                     previewRow("チケット申込", preview.ticketAttemptCount)
-                    previewRow("旧クイックデータ", preview.inboxCount)
+                    previewRow("旧形式の気になる項目", preview.inboxCount)
                     previewRow("SNS", preview.socialAccountCount)
                     previewRow("写真メタデータ", preview.photoMetadataCount)
                 }
@@ -88,9 +99,17 @@ struct JSONImportView: View {
                     Button {
                         isConfirmingRestore = true
                     } label: {
-                        Label("既存データへ追加・更新", systemImage: "arrow.trianglehead.merge")
+                        if isRestoring {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("復元中…")
+                            }
+                        } else {
+                            Label("既存データへ追加・更新", systemImage: "arrow.trianglehead.merge")
+                        }
                     }
-                    .disabled(selectedData == nil)
+                    .disabled(selectedData == nil || isInspectingFile || isRestoring)
 
                     Text("同じUUIDのデータは更新し、存在しないデータは追加します。現在のデータを一括削除することはありません。")
                         .font(FavorecoTypography.caption)
@@ -104,7 +123,7 @@ struct JSONImportView: View {
                         LabeledContent("追加", value: "\(restoreResult.insertedCount)件")
                         LabeledContent("更新", value: "\(restoreResult.updatedCount)件")
                         LabeledContent("写真本体なしでスキップ", value: "\(restoreResult.skippedPhotoCount)件")
-                        LabeledContent("端末固有参照を解除", value: "\(restoreResult.clearedDeviceReferenceCount)件")
+                        LabeledContent("端末固有の連携を除外", value: "\(restoreResult.clearedDeviceReferenceCount)件")
                     }
                 }
             }
@@ -140,40 +159,68 @@ struct JSONImportView: View {
     private func handleImportResult(_ result: Result<[URL], Error>) {
         do {
             guard let url = try result.get().first else { return }
-            let hasAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if hasAccess {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-
-            let data = try Data(contentsOf: url)
-            preview = try JSONBackupImportService.inspect(data: data)
-            selectedData = data
+            guard !isInspectingFile, !isRestoring else { return }
+            isInspectingFile = true
+            preview = nil
+            selectedData = nil
             restoreResult = nil
             selectedFileName = url.lastPathComponent
             errorMessage = ""
+
+            Task { @MainActor in
+                defer { isInspectingFile = false }
+                do {
+                    let inspection = try await Task.detached(priority: .userInitiated) {
+                        let hasAccess = url.startAccessingSecurityScopedResource()
+                        defer {
+                            if hasAccess {
+                                url.stopAccessingSecurityScopedResource()
+                            }
+                        }
+                        let data = try Data(contentsOf: url)
+                        return (data, try JSONBackupImportService.inspect(data: data))
+                    }.value
+                    selectedData = inspection.0
+                    preview = inspection.1
+                } catch {
+                    preview = nil
+                    selectedData = nil
+                    restoreResult = nil
+                    selectedFileName = ""
+                    errorMessage = "ファイルを確認できませんでした: \(error.localizedDescription)"
+                }
+            }
         } catch {
             preview = nil
             selectedData = nil
             restoreResult = nil
             selectedFileName = ""
-            errorMessage = error.localizedDescription
+            errorMessage = "ファイルを選択できませんでした: \(error.localizedDescription)"
         }
     }
 
     private func restoreSelectedBackup() {
-        guard let selectedData else { return }
-        do {
-            restoreResult = try JSONBackupImportService.restore(
-                data: selectedData,
-                in: modelContext
-            )
-            errorMessage = ""
-        } catch {
-            modelContext.rollback()
-            restoreResult = nil
-            errorMessage = "復元に失敗しました: \(error.localizedDescription)"
+        guard let selectedData, !isInspectingFile, !isRestoring else { return }
+        isRestoring = true
+        restoreResult = nil
+        errorMessage = ""
+
+        Task { @MainActor in
+            await Task.yield()
+            defer { isRestoring = false }
+            do {
+                let envelope = try await Task.detached(priority: .userInitiated) {
+                    try JSONBackupImportService.decodedBackup(data: selectedData)
+                }.value
+                restoreResult = try JSONBackupImportService.restore(
+                    envelope: envelope,
+                    in: modelContext
+                )
+            } catch {
+                modelContext.rollback()
+                restoreResult = nil
+                errorMessage = "復元に失敗しました。データは変更されていません。もう一度お試しください。\n\(error.localizedDescription)"
+            }
         }
     }
 }

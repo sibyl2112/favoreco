@@ -48,7 +48,10 @@ struct VisitSummaryRow: View {
 
                     Spacer(minLength: 8)
 
-                    if let statusText = VisitSummaryFormatter.ticketStatusText(visit.outcomeKey) {
+                    if let statusText = VisitSummaryFormatter.ticketStatusText(
+                        visit.outcomeKey,
+                        templateKey: category?.templateKey
+                    ) {
                         Text(statusText)
                             .font(FavorecoTypography.captionStrong)
                             .foregroundStyle(categoryColor)
@@ -422,14 +425,9 @@ private struct VisitRecordBannerRow: View {
 
     private var statusText: String {
         switch category?.templateKey {
-        case "theater": "観劇済み"
-        case "movie": "鑑賞済み"
-        case "museum": "鑑賞済み"
-        case "live": "参加済み"
-        case "book": "読了"
-        case "sake": "飲んだ"
-        case "outing_facility", "theme_park", "nature_living": "訪問済み"
-        case "goshuin": "参拝済み"
+        case "theater", "movie", "museum", "live", "book", "sake",
+             "outing_facility", "theme_park", "nature_living", "goshuin":
+            GenreVocabulary.completedStatus(for: category?.templateKey)
         default: category?.name.isEmpty == false ? category?.name ?? "体験済み" : "体験済み"
         }
     }
@@ -503,14 +501,14 @@ private struct VisitSummaryBadge: View {
 }
 
 private enum VisitSummaryFormatter {
-    static func ticketStatusText(_ key: String) -> String? {
+    static func ticketStatusText(_ key: String, templateKey: String?) -> String? {
         switch key {
         case "planned": return "予定"
         case "applied": return "申込中"
         case "won": return "当選"
         case "paid": return "支払済み"
         case "ticketed": return "発券済み"
-        case "attended": return "参加済み"
+        case "attended": return GenreVocabulary.completedStatus(for: templateKey)
         case "canceled": return "中止"
         default: return nil
         }

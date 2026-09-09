@@ -194,6 +194,7 @@ struct EventDetailView: View {
     @State private var isShowingActionMenu = false
     @State private var selectedPlanID: UUID?
     @State private var actionErrorMessage: String?
+    @State private var isPerformingDestructiveAction = false
     @State private var backSwipeExclusionFrames: [CGRect] = []
     @State private var eyecatchRefreshVersion = 0
     @State private var eyecatchPreviewRequest: DetailEyecatchPreviewRequest?
@@ -291,6 +292,7 @@ struct EventDetailView: View {
             .padding(.bottom, isTheater ? 132 : 24)
         }
         .id(eyecatchRefreshVersion)
+        .disabled(isPerformingDestructiveAction)
         .ignoresSafeArea(edges: isTheater ? .top : [])
         .background {
             if isTheater {
@@ -316,6 +318,15 @@ struct EventDetailView: View {
                 .ignoresSafeArea()
             }
         }
+        .overlay {
+            if isPerformingDestructiveAction {
+                ProgressView("処理中です。")
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityLabel("処理中")
+            }
+        }
         .toolbar {
             if !isTheater {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -338,10 +349,7 @@ struct EventDetailView: View {
                 if category?.templateKey == "random_goods" {
                     CollectibleTransactionEditorView(series: event)
                 } else {
-                    AddVisitView(
-                        event: event,
-                        usesTheaterLifecycleLayout: category?.templateKey == "theater"
-                    )
+                    AddVisitView(event: event)
                 }
             }
             .favorecoRegistrationTheme(categoryHex: category?.colorHex)
@@ -404,7 +412,7 @@ struct EventDetailView: View {
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("参加日が未定でも、この公演に抽選・発売スケジュールを登録できます。")
+            Text("観劇日が未定でも、この公演に抽選・発売スケジュールを登録できます。")
         }
         .confirmationDialog("この対象を非表示にしますか？", isPresented: $isShowingArchiveConfirmation, titleVisibility: .visible) {
             Button("非表示にする", role: .destructive) {
@@ -666,7 +674,8 @@ struct EventDetailView: View {
                         .init(color: .black.opacity(0.10), location: 0),
                         .init(color: .clear, location: 0.42),
                         .init(color: Color(red: 0.12, green: 0.01, blue: 0.025).opacity(0.72), location: 0.78),
-                        .init(color: .black.opacity(0.98), location: 1)
+                        .init(color: .black.opacity(0.90), location: 0.90),
+                        .init(color: theaterWine, location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -844,25 +853,39 @@ struct EventDetailView: View {
     }
 
     private func archiveThisEvent() {
-        event.isArchived = true
-        event.updatedAt = Date()
-        do {
-            try modelContext.save()
-            dismiss()
-        } catch {
-            modelContext.rollback()
-            actionErrorMessage = "この対象を非表示にできませんでした。もう一度お試しください。"
+        guard !isPerformingDestructiveAction else { return }
+        isPerformingDestructiveAction = true
+        Task { @MainActor in
+            await Task.yield()
+            event.isArchived = true
+            event.updatedAt = Date()
+            do {
+                try modelContext.save()
+                dismiss()
+            } catch {
+                modelContext.rollback()
+                isPerformingDestructiveAction = false
+                actionErrorMessage = "この対象は非表示になっていません。もう一度お試しください。"
+                debugPrint("Failed to archive event: \(error)")
+            }
         }
     }
 
     private func deleteThisEvent() {
-        do {
-            let result = try RecordDeletionService.deleteEvent(event, in: modelContext)
-            reconcileExternalCalendarAfterDeletion(result.externalCalendarTargets)
-            dismiss()
-        } catch {
-            actionErrorMessage = "この対象を削除できませんでした。もう一度お試しください。"
-            assertionFailure("Failed to delete event: \(error)")
+        guard !isPerformingDestructiveAction else { return }
+        isPerformingDestructiveAction = true
+        Task { @MainActor in
+            await Task.yield()
+            do {
+                let result = try RecordDeletionService.deleteEvent(event, in: modelContext)
+                reconcileExternalCalendarAfterDeletion(result.externalCalendarTargets)
+                dismiss()
+            } catch {
+                modelContext.rollback()
+                isPerformingDestructiveAction = false
+                actionErrorMessage = "この対象は削除されていません。もう一度お試しください。"
+                debugPrint("Failed to delete event: \(error)")
+            }
         }
     }
 
@@ -1476,6 +1499,7 @@ struct EditEventView: View {
     @State private var eyecatchData: Data?
     @State private var selectedEyecatchItem: PhotosPickerItem?
     @State private var isProcessingEyecatch = false
+    @State private var isSaving = false
     @State private var isConfirmingEyecatchRemoval = false
     @State private var saveErrorMessage: String?
     @State private var pendingPeople: [PendingPersonLink] = []
@@ -1495,7 +1519,32 @@ struct EditEventView: View {
 
     private var isLiveEvent: Bool { event.category?.templateKey == "live" }
 
-    init(event: ExperienceEvent, usesTheaterLifecycleLayout: Bool = false) {
+    private var performanceNoun: String { isLiveEvent ? "ライブ" : "公演" }
+
+    private var participationNoun: String { isLiveEvent ? "参戦" : "観劇" }
+
+    private var categoryTint: Color {
+        Color(hex: event.category?.colorHex ?? "#8B2F45")
+    }
+
+    private var canSaveDraft: Bool {
+        guard !draft.trimmedTitle.isEmpty else { return false }
+        if isLiveEvent {
+            return LivePerformanceType.isValidSelection(
+                key: draft.subTypeKey,
+                customName: draft.performanceTypeCustomName
+            )
+        }
+        if event.category?.templateKey == "theater" {
+            return TheaterPerformanceType.isValidSelection(
+                key: draft.subTypeKey,
+                customName: draft.performanceTypeCustomName
+            )
+        }
+        return true
+    }
+
+    init(event: ExperienceEvent, usesTheaterLifecycleLayout: Bool = true) {
         self.event = event
         self.usesTheaterLifecycleLayout = usesTheaterLifecycleLayout
         _draft = State(initialValue: EventDraft(event: event))
@@ -1509,29 +1558,180 @@ struct EditEventView: View {
     }
 
     @ViewBuilder
+    private var lifecycleEventContent: some View {
+        if isPerformanceEvent {
+            theaterLifecycleEventContent
+        } else {
+            standardLifecycleEventContent
+        }
+    }
+
+    @ViewBuilder
+    private var standardLifecycleEventContent: some View {
+        let photoActionTitle = eyecatchData == nil ? "アイキャッチを選ぶ" : "アイキャッチを変更"
+        let photoActionFont = FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body)
+        let photoActionTint = categoryTint
+        VStack(alignment: .leading, spacing: 13) {
+            lifecycleSectionHeader(event.category?.templateKey == "book" ? "書影・表紙" : "アイキャッチ")
+            HStack(alignment: .top, spacing: 14) {
+                Group {
+                    if let eyecatchData, let image = UIImage(data: eyecatchData) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Color(.secondarySystemFill)
+                            Text("画像未設定")
+                                .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(width: 104, height: 146)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipped()
+
+                VStack(spacing: 10) {
+                    PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
+                        FavorecoIconLabel(
+                            photoActionTitle,
+                            systemImage: "photo",
+                            iconSize: 14
+                        )
+                        .font(photoActionFont)
+                        .foregroundStyle(photoActionTint)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.secondary.opacity(0.24), lineWidth: 1))
+                    }
+                    .disabled(isProcessingEyecatch)
+
+                    if eyecatchData != nil {
+                        Button {
+                            isConfirmingEyecatchRemoval = true
+                        } label: {
+                            FavorecoIconLabel("アイキャッチを外す", systemImage: "trash", iconSize: 13)
+                                .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
+                                .foregroundStyle(categoryTint)
+                                .frame(maxWidth: .infinity, minHeight: 40)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            if isProcessingEyecatch {
+                ProgressView("画像を準備しています")
+                    .font(FavorecoTypography.caption)
+            }
+        }
+        .theaterLifecycleDisclosureSurface(isExpanded: true)
+
+        VStack(alignment: .leading, spacing: 13) {
+            lifecycleSectionHeader(template.targetSectionTitle)
+            if event.category?.templateKey == "book" {
+                BookInformationEditor(
+                    title: $draft.title,
+                    seriesName: $draft.bookSeriesName,
+                    volumeNumber: $draft.bookVolumeNumber,
+                    authorName: $draft.bookAuthorName,
+                    translatorName: $draft.bookTranslatorName,
+                    isbn: $draft.bookISBN,
+                    publisherName: $draft.bookPublisherName,
+                    publishedDate: $draft.bookPublishedDate,
+                    priceText: $draft.bookPriceText,
+                    pageCountText: $draft.bookPageCountText,
+                    officialURL: $draft.officialURL,
+                    contentTypeKey: $draft.bookContentTypeKey,
+                    aspectRatioKey: $draft.eyecatchAspectRatioKey,
+                    isEditable: true,
+                    usesLifecycleEditLayout: true
+                )
+            } else {
+                if event.category?.templateKey == "movie" {
+                    ScreenWorkTypeAndSeasonEditor(
+                        typeKey: $draft.subTypeKey,
+                        seasonNumber: $draft.screenWorkSeasonNumber
+                    )
+                }
+                lifecycleTextField(
+                    template.titlePlaceholder,
+                    required: true,
+                    prompt: "\(template.titlePlaceholder)を入力",
+                    text: $draft.title
+                )
+                lifecycleTextField(template.seriesPlaceholder, prompt: template.seriesPlaceholder, text: $draft.seriesName)
+                lifecycleTextField("サブタイトル", prompt: "サブタイトルを入力", text: $draft.eventSubtitle)
+                lifecycleTextField("公式URL", prompt: "https://", text: $draft.officialURL)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                lifecycleMemoField(prompt: "SNSリンクを1行に1件ずつ入力", text: $draft.socialLinksText)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+            }
+        }
+        .theaterLifecycleDisclosureSurface(isExpanded: true)
+
+        VStack(alignment: .leading, spacing: 12) {
+            lifecycleDisclosureHeader("対象メモ", isExpanded: $showingPerformanceDetails)
+            if showingPerformanceDetails {
+                lifecycleMemoField(prompt: "対象そのものについて残しておきたいこと", text: $draft.memo)
+            }
+        }
+        .theaterLifecycleDisclosureSurface(isExpanded: showingPerformanceDetails)
+
+        VStack(alignment: .leading, spacing: 12) {
+            lifecycleDisclosureHeader("その他", isExpanded: $showingImportDetails)
+            if showingImportDetails {
+                lifecycleMemoField(prompt: "URL・OCRから取得した原文", text: $draft.importMemo)
+            }
+        }
+        .theaterLifecycleDisclosureSurface(isExpanded: showingImportDetails)
+    }
+
+    @ViewBuilder
     private var theaterLifecycleEventContent: some View {
+        let photoActionTitle = eyecatchData == nil ? "アイキャッチを選ぶ" : "アイキャッチを変更"
+        let photoActionFont = FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body)
+        let photoActionTint = categoryTint
         VStack(alignment: .leading, spacing: 13) {
             lifecycleSectionHeader(
-                "作品・公演",
-                info: "ここでは公演そのものの情報を編集します。観劇日・チケット・評価・感想は、予定または観劇記録で入力します。"
+                isLiveEvent ? "ライブ情報" : "作品・公演",
+                info: "ここでは\(performanceNoun)そのものの情報を編集します。\(participationNoun)日・チケット・評価・感想は、予定または\(participationNoun)記録で入力します。"
             )
-            lifecycleTextField("公演名", required: true, prompt: "公演・イベント名を入力", text: $draft.title)
-            lifecycleMenuField(
-                "公演種別",
-                required: true,
-                value: TheaterPerformanceType.displayName(
-                    for: draft.subTypeKey,
-                    customName: draft.performanceTypeCustomName
-                )
-            ) {
-                ForEach(TheaterPerformanceType.allCases) { type in
-                    Button(type.displayName) { draft.subTypeKey = type.rawValue }
+            lifecycleTextField("\(performanceNoun)名", required: true, prompt: "\(performanceNoun)・イベント名を入力", text: $draft.title)
+            if isLiveEvent {
+                lifecycleMenuField(
+                    "ライブ種別",
+                    required: false,
+                    value: draft.subTypeKey.isEmpty
+                        ? "未設定"
+                        : LivePerformanceType.displayName(for: draft.subTypeKey, customName: draft.performanceTypeCustomName)
+                ) {
+                    Button("未設定") { draft.subTypeKey = "" }
+                    ForEach(LivePerformanceType.allCases) { type in
+                        Button(type.displayName) { draft.subTypeKey = type.rawValue }
+                    }
+                }
+            } else {
+                lifecycleMenuField(
+                    "公演種別",
+                    required: true,
+                    value: TheaterPerformanceType.displayName(
+                        for: draft.subTypeKey,
+                        customName: draft.performanceTypeCustomName
+                    )
+                ) {
+                    ForEach(TheaterPerformanceType.allCases) { type in
+                        Button(type.displayName) { draft.subTypeKey = type.rawValue }
+                    }
                 }
             }
-            if draft.subTypeKey == TheaterPerformanceType.other.rawValue {
+            if draft.subTypeKey == TheaterPerformanceType.other.rawValue
+                || draft.subTypeKey == LivePerformanceType.other.rawValue {
                 lifecycleTextField(
                     "その他の種別",
-                    prompt: "例：能、狂言、朗読劇",
+                    prompt: isLiveEvent ? "例：ファンミーティング、DJイベント" : "例：能、狂言、朗読劇",
                     text: $draft.performanceTypeCustomName
                 )
             }
@@ -1539,10 +1739,20 @@ struct EditEventView: View {
                 "シリーズ・ツアー名",
                 prompt: "例：冬の庭 2026",
                 text: $draft.seriesName,
-                info: "同じ作品の連続公演・再演・ツアーをまとめる名前です。"
+                info: isLiveEvent
+                    ? "同じライブのツアーや複数公演をまとめる名前です。"
+                    : "同じ作品の連続公演・再演・ツアーをまとめる名前です。"
             )
-            lifecycleTextField("公演団体・主催", prompt: "劇団・制作団体・主催者", text: $draft.organizerName)
-            lifecycleTextField("サブタイトル", prompt: "東京公演限定版", text: $draft.eventSubtitle)
+            lifecycleTextField(
+                isLiveEvent ? "アーティスト・主催" : "公演団体・主催",
+                prompt: isLiveEvent ? "出演アーティスト・主催者" : "劇団・制作団体・主催者",
+                text: $draft.organizerName
+            )
+            lifecycleTextField(
+                "サブタイトル",
+                prompt: isLiveEvent ? "東京公演 / DAY 2" : "東京公演限定版",
+                text: $draft.eventSubtitle
+            )
             lifecycleTextField("公式サイト", prompt: "https://", text: $draft.officialURL)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.URL)
@@ -1559,7 +1769,7 @@ struct EditEventView: View {
         VStack(alignment: .leading, spacing: 13) {
             lifecycleSectionHeader(
                 "アイキャッチ・背景",
-                info: "背景は公演ページと、記録写真がない観劇記録の代表表示に使います。"
+                info: "背景は\(performanceNoun)ページと、記録写真がない\(participationNoun)記録の代表表示に使います。"
             )
             HStack(alignment: .top, spacing: 14) {
                 Group {
@@ -1570,7 +1780,7 @@ struct EditEventView: View {
                     } else {
                         ZStack {
                             Color(.secondarySystemFill)
-                            Text("No Image")
+                            Text("画像未設定")
                                 .font(FavorecoTypography.jpSans(11, weight: .regular, relativeTo: .caption))
                                 .foregroundStyle(.secondary)
                         }
@@ -1583,12 +1793,12 @@ struct EditEventView: View {
                 VStack(spacing: 10) {
                     PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
                         FavorecoIconLabel(
-                            eyecatchData == nil ? "アイキャッチを選ぶ" : "アイキャッチを変更",
+                            photoActionTitle,
                             systemImage: "photo",
                             iconSize: 14
                         )
-                        .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
-                        .foregroundStyle(Color(hex: "#8B2F45"))
+                        .font(photoActionFont)
+                        .foregroundStyle(photoActionTint)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.secondary.opacity(0.24), lineWidth: 1))
                     }
@@ -1604,7 +1814,7 @@ struct EditEventView: View {
                         } label: {
                             FavorecoIconLabel("アイキャッチを外す", systemImage: "trash", iconSize: 13)
                                 .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
-                                .foregroundStyle(Color(hex: "#8B2F45"))
+                                .foregroundStyle(categoryTint)
                                 .frame(maxWidth: .infinity, minHeight: 40)
                         }
                         .buttonStyle(.plain)
@@ -1614,7 +1824,7 @@ struct EditEventView: View {
             }
 
             EventHeroBackgroundPicker(
-                categoryKey: "theater",
+                categoryKey: isLiveEvent ? "live" : "theater",
                 selection: $draft.heroBackgroundPresetKey,
                 eyecatchData: eyecatchData,
                 title: "背景"
@@ -1623,8 +1833,10 @@ struct EditEventView: View {
 
         VStack(alignment: .leading, spacing: 13) {
             lifecycleSectionHeader(
-                "公演期間・公演会場",
-                info: "東京公演・大阪公演など、公演地ごとに期間と会場を複数追加できます。"
+                isLiveEvent ? "ライブ日程・会場" : "公演期間・公演会場",
+                info: isLiveEvent
+                    ? "ツアー各地の開催日程と会場を複数追加できます。"
+                    : "東京公演・大阪公演など、公演地ごとに期間と会場を複数追加できます。"
             )
             ForEach($draft.venueEntries) { $venue in
                 ZStack(alignment: .topTrailing) {
@@ -1646,7 +1858,7 @@ struct EditEventView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(7)
-                    .accessibilityLabel("この公演地を削除")
+                    .accessibilityLabel(isLiveEvent ? "このライブ会場を削除" : "この公演地を削除")
                 }
             }
 
@@ -1659,18 +1871,18 @@ struct EditEventView: View {
                     )
                 )
             } label: {
-                FavorecoIconLabel("公演地を追加", systemImage: "plus.circle", iconSize: 14)
+                FavorecoIconLabel(isLiveEvent ? "ライブ会場を追加" : "公演会場を追加", systemImage: "plus.circle", iconSize: 14)
                     .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .body))
-                    .foregroundStyle(Color(hex: "#8B2F45"))
+                    .foregroundStyle(categoryTint)
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color(hex: "#8B2F45").opacity(0.5), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(categoryTint.opacity(0.5), lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
 
         VStack(alignment: .leading, spacing: 13) {
             lifecycleSectionHeader(
-                "キャスト・スタッフ",
+                isLiveEvent ? "出演者・スタッフ" : "キャスト・スタッフ",
                 info: "公式サイトやパンフレットから、画像OCR・テキスト貼付け・直接入力でまとめて登録できます。"
             )
             TheaterEventCreditsEditor(
@@ -1687,7 +1899,7 @@ struct EditEventView: View {
             lifecycleDisclosureHeader("感想・メモ", isExpanded: $showingPerformanceDetails)
             if showingPerformanceDetails {
                 lifecycleMemoField(
-                    prompt: "気になった理由、公演そのものについて残しておくこと",
+                    prompt: "気になった理由、\(performanceNoun)そのものについて残しておくこと",
                     text: $draft.memo
                 )
             }
@@ -1706,7 +1918,7 @@ struct EditEventView: View {
     private func lifecycleSectionHeader(_ title: String, info: String? = nil) -> some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(Color(hex: "#8B2F45"))
+                .fill(categoryTint)
                 .frame(width: 4, height: 24)
             Text(title)
                 .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
@@ -1744,7 +1956,7 @@ struct EditEventView: View {
                 .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
             Text(required ? "* 必須" : "任意")
                 .font(FavorecoTypography.jpSans(10.5, weight: .regular, relativeTo: .caption2))
-                .foregroundStyle(required ? Color(hex: "#8B2F45") : .secondary)
+                .foregroundStyle(required ? categoryTint : .secondary)
             if let info {
                 TheaterLifecycleInfoButton(text: info)
             }
@@ -1827,20 +2039,22 @@ struct EditEventView: View {
     var body: some View {
         NavigationStack {
             TheaterLifecycleEditorCanvas(
-                usesFlatLayout: usesTheaterLifecycleLayout && isPerformanceEvent && !isLiveEvent,
+                usesFlatLayout: usesTheaterLifecycleLayout,
                 title: editEventTitle,
-                canSave: draft.canSave && !isProcessingEyecatch,
+                canSave: canSaveDraft && !isProcessingEyecatch && !isSaving,
+                saveButtonTitle: isSaving ? "保存中" : "保存",
+                isSaving: isSaving,
                 onClose: { dismiss() },
                 onSave: save
             ) {
-                if usesTheaterLifecycleLayout && isPerformanceEvent && !isLiveEvent {
-                    theaterLifecycleEventContent
+                if usesTheaterLifecycleLayout {
+                    lifecycleEventContent
                 } else {
                 if usesTheaterLifecycleLayout && isPerformanceEvent && !isLiveEvent {
                     HStack(alignment: .top, spacing: 9) {
                         Image(systemName: "info.circle")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#8B2F45"))
+                            .foregroundStyle(categoryTint)
                             .padding(.top, 2)
                         Text("この画面は公演そのものの情報を編集します。個別の観劇日・チケット・評価・感想は、予定または観劇記録で入力します。")
                             .font(FavorecoTypography.jpSans(12, weight: .regular, relativeTo: .body))
@@ -1850,7 +2064,7 @@ struct EditEventView: View {
                     .padding(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color(hex: "#8B2F45").opacity(0.2), lineWidth: 1)
+                            .stroke(categoryTint.opacity(0.2), lineWidth: 1)
                     )
                 }
                 if isPerformanceEvent, !usesTheaterLifecycleLayout {
@@ -1860,6 +2074,7 @@ struct EditEventView: View {
                 }
                 Section {
                     let photoActionTitle = eyecatchData == nil ? "写真を選ぶ" : "写真を変更"
+                    let photoActionFont = FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .caption)
                     if let eyecatchData, let image = UIImage(data: eyecatchData) {
                         if isPerformanceEvent {
                             HStack {
@@ -1877,7 +2092,7 @@ struct EditEventView: View {
                                     }
                                     .buttonStyle(.plain)
                                     .padding(6)
-                                    .accessibilityLabel("公演ビジュアルを削除")
+                                    .accessibilityLabel("\(performanceNoun)ビジュアルを削除")
                                 }
                                 Spacer(minLength: 0)
                             }
@@ -1907,7 +2122,7 @@ struct EditEventView: View {
                     if isPerformanceEvent {
                         PhotosPicker(selection: $selectedEyecatchItem, matching: .images) {
                             FavorecoIconLabel(photoActionTitle, systemImage: "photo", iconSize: 13)
-                                .font(FavorecoTypography.jpSans(13, weight: .semibold, relativeTo: .caption))
+                                .font(photoActionFont)
                                 .padding(.horizontal, 12)
                                 .frame(height: 32)
                                 .background(Color.accentColor.opacity(0.11), in: Capsule())
@@ -1947,14 +2162,14 @@ struct EditEventView: View {
                     }
                 } header: {
                     if isPerformanceEvent {
-                        FavorecoRegistrationSectionHeader("公演ビジュアル")
+                        FavorecoRegistrationSectionHeader("\(performanceNoun)ビジュアル")
                     } else {
                         FavorecoRegistrationSectionHeader("対象アイキャッチ")
                     }
                 } footer: {
                     Text(
                         isPerformanceEvent
-                            ? "公演ページや、記録写真がない観劇記録の代表画像として表示します。"
+                            ? "\(performanceNoun)ページや、記録写真がない\(participationNoun)記録の代表画像として表示します。"
                             : "クイック登録の表紙や、記録写真がない対象の代表画像として表示します。"
                     )
                 }
@@ -1963,8 +2178,8 @@ struct EditEventView: View {
                     if isPerformanceEvent {
                         DisclosureGroup(isExpanded: $showingPerformanceBasic) {
                             ExplicitFormTextField(
-                                title: "公演名",
-                                prompt: "例：月影のアトリエ",
+                                title: "\(performanceNoun)名",
+                                prompt: isLiveEvent ? "例：SPRING TOUR 2026" : "例：月影のアトリエ",
                                 text: $draft.title,
                                 labelStyle: .horizontal
                             )
@@ -1997,7 +2212,7 @@ struct EditEventView: View {
                             )
                             ExplicitFormTextField(
                                 title: "サブタイトル",
-                                prompt: "東京公演限定版（任意）",
+                                prompt: isLiveEvent ? "東京公演 / DAY 2（任意）" : "東京公演限定版（任意）",
                                 text: $draft.eventSubtitle,
                                 labelStyle: .horizontal
                             )
@@ -2132,7 +2347,7 @@ struct EditEventView: View {
                                     }
                                     .buttonStyle(.plain)
                                     .padding(8)
-                                    .accessibilityLabel("この公演地を削除")
+                                    .accessibilityLabel(isLiveEvent ? "このライブ会場を削除" : "この公演地を削除")
                                 }
                             } else {
                                 TheaterScheduleEntryEditor(
@@ -2156,13 +2371,13 @@ struct EditEventView: View {
                                 )
                             )
                         } label: {
-                            FavorecoIconLabel("公演地を追加", systemImage: "plus.circle", iconSize: 17)
+                            FavorecoIconLabel(isLiveEvent ? "ライブ会場を追加" : "公演会場を追加", systemImage: "plus.circle", iconSize: 17)
                                 .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
-                                .foregroundStyle(Color(hex: "#8B2F45"))
+                                .foregroundStyle(categoryTint)
                                 .frame(maxWidth: .infinity, minHeight: 50)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color(hex: "#8B2F45").opacity(0.55), lineWidth: 1)
+                                        .stroke(categoryTint.opacity(0.55), lineWidth: 1)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -2170,7 +2385,7 @@ struct EditEventView: View {
                         if usesTheaterLifecycleLayout && !isLiveEvent {
                             HStack(spacing: 10) {
                                 RoundedRectangle(cornerRadius: 1.5)
-                                    .fill(Color(hex: "#8B2F45"))
+                                    .fill(categoryTint)
                                     .frame(width: 4, height: 28)
                                 Text("公演期間・公演会場")
                                     .font(FavorecoTypography.jpSans(19, weight: .semibold, relativeTo: .headline))
@@ -2181,7 +2396,9 @@ struct EditEventView: View {
                             TheaterUnifiedSectionLabel(section: .venueSchedule, isLive: isLiveEvent)
                         }
                     } footer: {
-                        Text("公演全体の開催期間と会場です。東京公演・大阪公演など、公演地ごとに複数追加できます。個別の観劇日やチケットはここでは入力しません。")
+                        Text(isLiveEvent
+                             ? "ライブ全体の日程と会場です。ツアー各地の会場を複数追加できます。個別の参戦日やチケットはここでは入力しません。"
+                             : "公演全体の開催期間と会場です。東京公演・大阪公演など、公演地ごとに複数追加できます。個別の観劇日やチケットはここでは入力しません。")
                     }
                 }
 
@@ -2199,8 +2416,8 @@ struct EditEventView: View {
                     Section {
                         DisclosureGroup(isExpanded: $showingPerformanceDetails) {
                             ExplicitFormTextField(
-                                title: "公演メモ（任意）",
-                                prompt: "あらすじ・公演そのものについてのメモ",
+                                title: "\(performanceNoun)メモ（任意）",
+                                prompt: "\(performanceNoun)そのものについてのメモ",
                                 text: $draft.memo,
                                 axis: .vertical,
                                 minimumLines: 5,
@@ -2258,12 +2475,21 @@ struct EditEventView: View {
                     Button("キャンセル") {
                         dismiss()
                     }
+                    .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button {
                         save()
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                                .accessibilityLabel("保存中")
+                        } else {
+                            Text("保存")
+                        }
                     }
-                    .disabled(!draft.canSave || isProcessingEyecatch)
+                    .disabled(!canSaveDraft || isProcessingEyecatch || isSaving)
                 }
             }
             .alert("保存に失敗しました", isPresented: Binding(
@@ -2275,7 +2501,7 @@ struct EditEventView: View {
                 Text(saveErrorMessage ?? "")
             }
             .confirmationDialog(
-                "公演ビジュアルを削除しますか？",
+                "\(performanceNoun)ビジュアルを削除しますか？",
                 isPresented: $isConfirmingEyecatchRemoval,
                 titleVisibility: .visible
             ) {
@@ -2284,7 +2510,7 @@ struct EditEventView: View {
                 }
                 Button("キャンセル", role: .cancel) {}
             } message: {
-                Text("保存すると、この公演のビジュアルが削除されます。")
+                Text("保存すると、この\(performanceNoun)のビジュアルが削除されます。")
             }
             .fullScreenCover(item: $artworkCropDraft) { cropDraft in
                 ArtworkImageCropView(
@@ -2373,6 +2599,16 @@ struct EditEventView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
+        saveErrorMessage = nil
+        Task { @MainActor in
+            await Task.yield()
+            performSave()
+        }
+    }
+
+    private func performSave() {
         let now = Date()
         let updatedTitle = draft.trimmedTitle
         event.title = updatedTitle
@@ -2455,8 +2691,9 @@ struct EditEventView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isSaving = false
             saveErrorMessage = "対象情報を保存できませんでした。もう一度お試しください。"
-            assertionFailure("Failed to update event: \(error)")
+            debugPrint("Failed to update event: \(error)")
         }
     }
 

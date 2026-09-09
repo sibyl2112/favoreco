@@ -171,6 +171,7 @@ struct FavoGalleryManagementView: View {
 
     @MainActor
     private func addSelectedPhotos() async {
+        guard !isProcessing else { return }
         guard !pickerItems.isEmpty else { return }
         guard canAdd else {
             pickerItems = []
@@ -178,6 +179,7 @@ struct FavoGalleryManagementView: View {
             return
         }
         isProcessing = true
+        defer { isProcessing = false }
         let allowedCount = FavoGalleryAccess.availableAdditionCount(
             plan: purchaseManager.currentPlan,
             existingCount: photos.count,
@@ -219,7 +221,6 @@ struct FavoGalleryManagementView: View {
             modelContext.rollback()
             message = "保存できませんでした: \(error.localizedDescription)"
         }
-        isProcessing = false
     }
 
     private func addRecordPhotos(_ selected: [PhotoBlob]) {
@@ -345,6 +346,7 @@ private struct FavoGalleryPhotoEditorView: View {
     @State private var memo: String
     @State private var isFavorite: Bool
     @State private var errorMessage = ""
+    @State private var isSaving = false
 
     init(photo: FavoGalleryPhoto, profile: FavoriteProfile) {
         self.photo = photo
@@ -383,12 +385,36 @@ private struct FavoGalleryPhotoEditorView: View {
         .navigationTitle("写真を編集")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
-            ToolbarItem(placement: .confirmationAction) { Button("保存", action: save) }
+            ToolbarItem(placement: .cancellationAction) {
+                Button("キャンセル") { dismiss() }
+                    .disabled(isSaving)
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: save) {
+                    if isSaving {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("保存")
+                    }
+                }
+                .accessibilityLabel(isSaving ? "保存中" : "保存")
+                .disabled(isSaving)
+            }
         }
     }
 
     private func save() {
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            persistChanges()
+        }
+    }
+
+    private func persistChanges() {
         let now = Date()
         if isFavorite {
             for item in profile.galleryPhotos ?? [] where item.id != photo.id && item.isFavorite {
@@ -406,7 +432,9 @@ private struct FavoGalleryPhotoEditorView: View {
             dismiss()
         } catch {
             modelContext.rollback()
-            errorMessage = "保存できませんでした: \(error.localizedDescription)"
+            isSaving = false
+            errorMessage = "写真情報を保存できませんでした。入力内容は保持されています。もう一度お試しください。"
+            debugPrint("Failed to save FAVO gallery photo: \(error)")
         }
     }
 }
@@ -437,6 +465,7 @@ private struct FavoRecordPhotoPickerView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var selectedIDs = Set<UUID>()
+    @State private var isAdding = false
 
     private var selectablePhotos: [PhotoBlob] {
         photos.filter { !alreadySelectedIDs.contains($0.id) }
@@ -454,6 +483,7 @@ private struct FavoRecordPhotoPickerView: View {
                 Section {
                     ForEach(selectablePhotos) { photo in
                         Button {
+                            guard !isAdding else { return }
                             toggle(photo.id)
                         } label: {
                             HStack(spacing: 12) {
@@ -494,15 +524,27 @@ private struct FavoRecordPhotoPickerView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("キャンセル") { dismiss() }
+                    .disabled(isAdding)
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("追加") {
+                Button {
+                    guard !isAdding else { return }
+                    isAdding = true
                     onAdd(selectablePhotos.filter { selectedIDs.contains($0.id) })
                     dismiss()
+                } label: {
+                    if isAdding {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("追加")
+                    }
                 }
-                .disabled(selectedIDs.isEmpty)
+                .disabled(selectedIDs.isEmpty || isAdding)
+                .accessibilityLabel(isAdding ? "追加中" : "追加")
             }
         }
+        .interactiveDismissDisabled(isAdding)
     }
 
     private func toggle(_ id: UUID) {

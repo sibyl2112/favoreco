@@ -57,6 +57,8 @@ struct PlanDetailView: View {
     @State private var isShowingPlanPhotoCameraUnavailable = false
     @State private var planPhotoPickerItems: [PhotosPickerItem] = []
     @State private var planPhotoViewerRequest: PlanPhotoViewerRequest?
+    @State private var isProcessingPlanPhotos = false
+    @State private var isArchivingPlan = false
     @State private var createContextToken = UUID()
     @AppStorage(AppStorageKeys.automaticallyUpdatesExternalCalendar) private var automaticallyUpdatesExternalCalendar = false
 
@@ -241,7 +243,13 @@ struct PlanDetailView: View {
                 ExternalCalendarLinkStore.set(identifier: identifier, planID: plan.id)
                 if !plan.externalCalendarEventIdentifier.isEmpty {
                     plan.externalCalendarEventIdentifier = ""
-                    try? modelContext.save()
+                    do {
+                        try modelContext.save()
+                    } catch {
+                        modelContext.rollback()
+                        operationError = "カレンダーへの登録は完了しましたが、アプリ内の連携情報を更新できませんでした。画面を開き直してお確かめください。"
+                        debugPrint("Failed to migrate the external calendar link: \(error)")
+                    }
                 }
             }
         }
@@ -254,8 +262,8 @@ struct PlanDetailView: View {
         .fullScreenCover(isPresented: $isShowingPlanPhotoCamera) {
             CameraImagePicker(
                 onCapture: { image in
-                    addCapturedPlanPhoto(image)
                     isShowingPlanPhotoCamera = false
+                    Task { await addCapturedPlanPhoto(image) }
                 },
                 onCancel: {
                     isShowingPlanPhotoCamera = false
@@ -345,6 +353,15 @@ struct PlanDetailView: View {
                 planPhotoPickerItems = []
             }
         }
+        .disabled(isProcessingPlanPhotos || isArchivingPlan)
+        .overlay {
+            if isProcessingPlanPhotos || isArchivingPlan {
+                ProgressView(isProcessingPlanPhotos ? "写真を処理中です。" : "予定を更新中です。")
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
     }
 
     private var standardDetailContent: some View {
@@ -397,7 +414,9 @@ struct PlanDetailView: View {
 
         actions.append(contentsOf: [
             FavorecoDetailAction(
-                title: plan.visit == nil ? "参加記録を入力" : "参加記録を開く",
+                title: plan.visit == nil
+                    ? "\(GenreVocabulary.recordNoun(for: planTemplateKey))を入力"
+                    : "\(GenreVocabulary.recordNoun(for: planTemplateKey))を開く",
                 systemImage: "sparkles",
                 action: {
                     if let visit = plan.visit {
@@ -629,15 +648,7 @@ struct PlanDetailView: View {
     }
 
     private var planStatusLabel: String {
-        switch planTemplateKey {
-        case "theater": "観劇予定"
-        case "movie", "museum": "鑑賞予定"
-        case "live": "ライブ予定"
-        case "theme_park": "来園予定"
-        case "nature_living", "goshuin": "訪問予定"
-        case "book": "読書予定"
-        default: "予定"
-        }
+        GenreVocabulary.plannedStatus(for: planTemplateKey)
     }
 
     private func planStyleText(styles: [String]) -> String {
@@ -1272,13 +1283,23 @@ struct PlanDetailView: View {
         return request.photoIDs.compactMap { photosByID[$0] }
     }
 
-    private func addCapturedPlanPhoto(_ image: UIImage) {
-        guard let sourceData = image.jpegData(compressionQuality: 0.9),
-              let pending = PendingPhoto.make(
+    @MainActor
+    private func addCapturedPlanPhoto(_ image: UIImage) async {
+        guard !isProcessingPlanPhotos else { return }
+        isProcessingPlanPhotos = true
+        defer { isProcessingPlanPhotos = false }
+        await Task.yield()
+        guard let sourceData = await CameraImageEncoder.jpegData(
+            from: image,
+            compressionQuality: 0.9
+        ),
+              let pending = await Task.detached(priority: .userInitiated, operation: {
+            PendingPhoto.make(
                 from: sourceData,
                 filename: "plan-camera.jpg",
                 compressionQuality: 0.82
-              ) else {
+            )
+        }).value else {
             operationError = "撮影した画像を読み込めませんでした。もう一度お試しください。"
             return
         }
@@ -1294,6 +1315,11 @@ struct PlanDetailView: View {
 
     @MainActor
     private func addPlanPhotos(_ items: [PhotosPickerItem]) async {
+        guard !isProcessingPlanPhotos else { return }
+        guard !items.isEmpty else { return }
+        isProcessingPlanPhotos = true
+        defer { isProcessingPlanPhotos = false }
+        await Task.yield()
         var inserted = 0
         for item in items {
             guard let sourceData = try? await item.loadTransferable(type: Data.self),
@@ -1442,7 +1468,9 @@ struct PlanDetailView: View {
         if let attempt = attempts.first {
             return TicketStatusDefinition.name(for: attempt.statusKey)
         }
-        return plan.visit != nil || plan.stateKey == "attended" ? "参加済み" : "予定"
+        return plan.visit != nil || plan.stateKey == "attended"
+            ? GenreVocabulary.completedStatus(for: planTemplateKey)
+            : "予定"
     }
 
     private var basicSection: some View {
@@ -1629,7 +1657,7 @@ struct PlanDetailView: View {
             PlanPreparationChecklistView(
                 plan: plan,
                 tint: categoryColor,
-                title: isTheaterPlan ? "準備・遠征ToDo" : "公演の準備・遠征",
+                title: isTheaterPlan ? "準備・遠征ToDo" : "予定の準備・遠征",
                 highlightedTaskID: highlightedPreparationTaskID
             )
             .id(Self.theaterPreparationSectionID)
@@ -1753,39 +1781,44 @@ struct PlanDetailView: View {
     }
 
     private func archivePlan() {
-        let hasExternalCalendarLink = !ExternalCalendarLinkStore.identifier(for: plan).isEmpty
-        plan.externalCalendarEventIdentifier = ""
-        plan.isArchived = true
-        plan.updatedAt = Date()
-        let activeAttempts = attempts
-        for attempt in activeAttempts {
-            attempt.isArchived = true
-            attempt.updatedAt = Date()
-            attempt.notificationSettingsRaw = ""
-        }
-
-        let removesExternalEvent = purchaseManager.currentPlan.includesSync
-            && automaticallyUpdatesExternalCalendar
-            && hasExternalCalendarLink
-
-        do {
-            try modelContext.save()
+        guard !isArchivingPlan else { return }
+        isArchivingPlan = true
+        Task { @MainActor in
+            await Task.yield()
+            let hasExternalCalendarLink = !ExternalCalendarLinkStore.identifier(for: plan).isEmpty
+            plan.externalCalendarEventIdentifier = ""
+            plan.isArchived = true
+            plan.updatedAt = Date()
+            let activeAttempts = attempts
             for attempt in activeAttempts {
-                TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
+                attempt.isArchived = true
+                attempt.updatedAt = Date()
+                attempt.notificationSettingsRaw = ""
             }
-            TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
-            if removesExternalEvent {
-                Task {
-                    _ = try? await ExternalCalendarSyncService.remove(plan: plan)
-                    try? modelContext.save()
+
+            let removesExternalEvent = purchaseManager.currentPlan.includesSync
+                && automaticallyUpdatesExternalCalendar
+                && hasExternalCalendarLink
+
+            do {
+                try modelContext.save()
+                for attempt in activeAttempts {
+                    TicketNotificationScheduler.cancel(plan: plan, attempt: attempt)
                 }
-            } else {
-                ExternalCalendarLinkStore.clear(planID: plan.id)
+                TicketNotificationScheduler.cancel(plan: plan, attempt: nil)
+                if removesExternalEvent {
+                    Task {
+                        _ = try? await ExternalCalendarSyncService.remove(plan: plan)
+                    }
+                } else {
+                    ExternalCalendarLinkStore.clear(planID: plan.id)
+                }
+                closeDetail()
+            } catch {
+                modelContext.rollback()
+                isArchivingPlan = false
+                operationError = "予定は非表示になっていません。もう一度お試しください。"
             }
-            closeDetail()
-        } catch {
-            modelContext.rollback()
-            operationError = "予定を非表示にできませんでした。もう一度お試しください。"
         }
     }
 
@@ -1814,7 +1847,7 @@ struct PlanDetailView: View {
                 try modelContext.save()
             } catch {
                 modelContext.rollback()
-                operationError = "参加記録の準備に失敗しました。もう一度お試しください。"
+                operationError = "\(GenreVocabulary.recordNoun(for: planTemplateKey))の準備に失敗しました。もう一度お試しください。"
                 return
             }
         }
@@ -2175,6 +2208,7 @@ struct ExperienceExpenseSummaryCard: View {
     var isExpanded: Binding<Bool>? = nil
     var titleFont: Font = FavorecoTypography.sectionTitle
     var usesFlatSurface = false
+    var showsBottomDivider = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2243,7 +2277,11 @@ struct ExperienceExpenseSummaryCard: View {
                 }
             }
         }
-        .modifier(ExperienceExpenseSummarySurface(tint: tint, usesFlatSurface: usesFlatSurface))
+        .modifier(ExperienceExpenseSummarySurface(
+            tint: tint,
+            usesFlatSurface: usesFlatSurface,
+            showsBottomDivider: showsBottomDivider
+        ))
     }
 
     @ViewBuilder
@@ -2300,6 +2338,7 @@ struct ExperienceExpenseSummaryCard: View {
 private struct ExperienceExpenseSummarySurface: ViewModifier {
     let tint: Color
     let usesFlatSurface: Bool
+    let showsBottomDivider: Bool
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -2309,9 +2348,11 @@ private struct ExperienceExpenseSummarySurface: ViewModifier {
                 .padding(.horizontal, 4)
                 .padding(.vertical, 16)
                 .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(tint.opacity(0.42))
-                        .frame(height: CategoryDetailChrome.borderLineWidth)
+                    if showsBottomDivider {
+                        Rectangle()
+                            .fill(tint.opacity(0.42))
+                            .frame(height: CategoryDetailChrome.borderLineWidth)
+                    }
                 }
         } else {
             content

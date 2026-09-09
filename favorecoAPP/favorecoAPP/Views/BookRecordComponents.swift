@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 
 struct BookRecordEyecatchEditor: View {
+    @Environment(\.usesTheaterLifecycleFlatLayout) private var usesFlatLayout
     @EnvironmentObject private var purchaseManager: PurchaseManager
     @AppStorage(AppStorageKeys.photoCompressionQuality) private var compressionQuality = 0.85
 
@@ -28,7 +29,35 @@ struct BookRecordEyecatchEditor: View {
     }
 
     var body: some View {
-        Section("アイキャッチ") {
+        Group {
+            if usesFlatLayout {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(Color(hex: "#8B2F45"))
+                            .frame(width: 4, height: 24)
+                        Text("アイキャッチ")
+                            .font(FavorecoTypography.jpSans(17, weight: .semibold, relativeTo: .headline))
+                        Spacer(minLength: 0)
+                    }
+                    editorContent
+                }
+                .theaterLifecycleDisclosureSurface(isExpanded: true)
+            } else {
+                Section("アイキャッチ") {
+                    editorContent
+                }
+            }
+        }
+        .onChange(of: selectedItem) { _, item in
+            guard let item else { return }
+            Task { await load(item) }
+        }
+    }
+
+    @ViewBuilder
+    private var editorContent: some View {
+            let photoActionTitle = coverPhotoPath.isEmpty ? "設定" : "変更"
             HStack {
                 Spacer(minLength: 0)
                 preview
@@ -39,7 +68,7 @@ struct BookRecordEyecatchEditor: View {
             HStack(spacing: 12) {
                 PhotosPicker(selection: $selectedItem, matching: .images) {
                     FavorecoIconLabel(
-                        coverPhotoPath.isEmpty ? "設定" : "変更",
+                        photoActionTitle,
                         systemImage: "photo",
                         iconSize: 15
                     )
@@ -75,11 +104,6 @@ struct BookRecordEyecatchEditor: View {
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
-        }
-        .onChange(of: selectedItem) { _, item in
-            guard let item else { return }
-            Task { await load(item) }
-        }
     }
 
     @ViewBuilder

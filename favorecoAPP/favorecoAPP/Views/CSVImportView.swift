@@ -19,6 +19,8 @@ struct CSVImportView: View {
     @State private var selectedFileName = ""
     @State private var errorMessage = ""
     @State private var isConfirmingRestore = false
+    @State private var isInspectingFile = false
+    @State private var isRestoring = false
 
     private var activeCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -45,8 +47,17 @@ struct CSVImportView: View {
                 Button {
                     isImporterPresented = true
                 } label: {
-                    Label("CSVファイルを選択", systemImage: "doc.badge.plus")
+                    if isInspectingFile {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("ファイルを確認中…")
+                        }
+                    } else {
+                        Label("CSVファイルを選択", systemImage: "doc.badge.plus")
+                    }
                 }
+                .disabled(isInspectingFile || isRestoring)
                 if !selectedFileName.isEmpty {
                     LabeledContent("選択中", value: selectedFileName)
                 }
@@ -118,9 +129,22 @@ struct CSVImportView: View {
                     Button {
                         isConfirmingRestore = true
                     } label: {
-                        Label("取り込み可能な行を保存", systemImage: "square.and.arrow.down")
+                        if isRestoring {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("取り込み中…")
+                            }
+                        } else {
+                            Label("有効な行を取り込む", systemImage: "square.and.arrow.down")
+                        }
                     }
-                    .disabled(preview.validRows.isEmpty || defaultCategory == nil)
+                    .disabled(
+                        preview.validRows.isEmpty
+                            || defaultCategory == nil
+                            || isInspectingFile
+                            || isRestoring
+                    )
 
                     Text("CSVにジャンル名がある行は既存ジャンルと照合します。未登録ジャンル、不正行、重複行は保存せず結果に表示します。")
                         .font(FavorecoTypography.caption)
@@ -129,7 +153,7 @@ struct CSVImportView: View {
 
                 if let restoreResult {
                     FavorecoSettingsSection("保存結果") {
-                        Label("CSVの保存が完了しました", systemImage: "checkmark.circle.fill")
+                        Label("CSVの取り込みが完了しました", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                         LabeledContent("記録を追加", value: "\(restoreResult.insertedVisitCount)件")
                         LabeledContent("記録を更新", value: "\(restoreResult.updatedVisitCount)件")
@@ -152,11 +176,11 @@ struct CSVImportView: View {
             inspect(result)
         }
         .confirmationDialog(
-            "CSVの記録を保存しますか？",
+            "CSVの記録を取り込みますか？",
             isPresented: $isConfirmingRestore,
             titleVisibility: .visible
         ) {
-            Button("保存を実行") { restore() }
+            Button("取り込みを実行") { restore() }
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("同じvisit_idは更新します。IDがない同一日・同一タイトル・同一会場の行は重複として保存しません。")
@@ -171,35 +195,58 @@ struct CSVImportView: View {
     private func inspect(_ result: Result<[URL], Error>) {
         do {
             guard let url = try result.get().first else { return }
-            let hasAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if hasAccess { url.stopAccessingSecurityScopedResource() }
-            }
-            preview = try CSVImportService.inspect(data: Data(contentsOf: url))
+            guard !isInspectingFile, !isRestoring else { return }
+            isInspectingFile = true
+            preview = nil
             restoreResult = nil
             selectedFileName = url.lastPathComponent
             errorMessage = ""
+
+            Task { @MainActor in
+                defer { isInspectingFile = false }
+                do {
+                    preview = try await Task.detached(priority: .userInitiated) {
+                        let hasAccess = url.startAccessingSecurityScopedResource()
+                        defer {
+                            if hasAccess { url.stopAccessingSecurityScopedResource() }
+                        }
+                        return try CSVImportService.inspect(data: Data(contentsOf: url))
+                    }.value
+                } catch {
+                    preview = nil
+                    restoreResult = nil
+                    selectedFileName = ""
+                    errorMessage = "ファイルを確認できませんでした: \(error.localizedDescription)"
+                }
+            }
         } catch {
             preview = nil
             restoreResult = nil
             selectedFileName = ""
-            errorMessage = error.localizedDescription
+            errorMessage = "ファイルを選択できませんでした: \(error.localizedDescription)"
         }
     }
 
     private func restore() {
-        guard let preview, let defaultCategory else { return }
-        do {
-            restoreResult = try CSVImportService.restore(
-                preview: preview,
-                defaultCategory: defaultCategory,
-                in: modelContext
-            )
-            errorMessage = ""
-        } catch {
-            modelContext.rollback()
-            restoreResult = nil
-            errorMessage = "保存に失敗しました: \(error.localizedDescription)"
+        guard let preview, let defaultCategory, !isInspectingFile, !isRestoring else { return }
+        isRestoring = true
+        restoreResult = nil
+        errorMessage = ""
+
+        Task { @MainActor in
+            await Task.yield()
+            defer { isRestoring = false }
+            do {
+                restoreResult = try CSVImportService.restore(
+                    preview: preview,
+                    defaultCategory: defaultCategory,
+                    in: modelContext
+                )
+            } catch {
+                modelContext.rollback()
+                restoreResult = nil
+                errorMessage = "取り込みに失敗しました。データは変更されていません。もう一度お試しください。\n\(error.localizedDescription)"
+            }
         }
     }
 }

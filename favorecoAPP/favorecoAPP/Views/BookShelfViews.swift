@@ -8,6 +8,7 @@ struct BookShelfAssignmentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \BookShelf.sortOrder) private var shelves: [BookShelf]
     @State private var isCreatingShelf = false
+    @State private var isSaving = false
     @State private var newShelfName = ""
     @State private var errorMessage = ""
 
@@ -89,6 +90,16 @@ struct BookShelfAssignmentView: View {
                 Text(errorMessage)
             }
         }
+        .disabled(isSaving)
+        .overlay {
+            if isSaving {
+                ProgressView("保存中…")
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+        .interactiveDismissDisabled(isSaving)
     }
 
     private func contains(_ event: ExperienceEvent, in shelf: BookShelf) -> Bool {
@@ -96,39 +107,54 @@ struct BookShelfAssignmentView: View {
     }
 
     private func toggleMembership(_ shelf: BookShelf) {
-        var books = shelf.books ?? []
-        if let index = books.firstIndex(where: { $0.id == event.id }) {
-            books.remove(at: index)
-        } else {
-            books.append(event)
+        guard !isSaving else { return }
+        isSaving = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            var books = shelf.books ?? []
+            if let index = books.firstIndex(where: { $0.id == event.id }) {
+                books.remove(at: index)
+            } else {
+                books.append(event)
+            }
+            shelf.books = books
+            shelf.updatedAt = Date()
+            save(failureMessage: "本棚を更新できませんでした。変更前の状態へ戻しました。もう一度お試しください。")
+            isSaving = false
         }
-        shelf.books = books
-        shelf.updatedAt = Date()
-        save()
     }
 
     private func createShelfAndAssign() {
         let name = newShelfName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
+        guard !isSaving else { return }
         guard !sortedShelves.contains(where: { normalizedShelfName($0.name) == normalizedShelfName(name) }) else {
             errorMessage = "同じ名前の本棚があります。"
             return
         }
-        let shelf = BookShelf(
-            name: name,
-            sortOrder: (sortedShelves.map(\.sortOrder).max() ?? -1) + 1
-        )
-        shelf.books = [event]
-        modelContext.insert(shelf)
-        save()
+        isSaving = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            let shelf = BookShelf(
+                name: name,
+                sortOrder: (sortedShelves.map(\.sortOrder).max() ?? -1) + 1
+            )
+            shelf.books = [event]
+            modelContext.insert(shelf)
+            save(failureMessage: "本棚を作成できませんでした。追加前の状態へ戻しました。もう一度お試しください。")
+            isSaving = false
+        }
     }
 
-    private func save() {
+    private func save(failureMessage: String) {
         do {
             try modelContext.save()
         } catch {
             modelContext.rollback()
-            errorMessage = error.localizedDescription
+            errorMessage = failureMessage
+            debugPrint("Failed to save book shelf assignment: \(error)")
         }
     }
 }
@@ -143,6 +169,7 @@ struct BookShelfBrowserView: View {
     @State private var selectedShelfID: UUID?
     @State private var isEditingShelves = false
     @State private var isCreatingShelf = false
+    @State private var isSaving = false
     @State private var newShelfName = ""
     @State private var errorMessage = ""
 
@@ -222,6 +249,16 @@ struct BookShelfBrowserView: View {
                 Text(errorMessage)
             }
         }
+        .disabled(isSaving)
+        .overlay {
+            if isSaving {
+                ProgressView("保存中…")
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+        .interactiveDismissDisabled(isSaving)
     }
 
     private var shelfContents: some View {
@@ -342,42 +379,74 @@ struct BookShelfBrowserView: View {
     private func createShelf() {
         let name = newShelfName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
+        guard !isSaving else { return }
         guard !sortedShelves.contains(where: { normalizedShelfName($0.name) == normalizedShelfName(name) }) else {
             errorMessage = "同じ名前の本棚があります。"
             return
         }
-        let shelf = BookShelf(
-            name: name,
-            sortOrder: (sortedShelves.map(\.sortOrder).max() ?? -1) + 1
-        )
-        modelContext.insert(shelf)
-        selectedShelfID = shelf.id
-        save()
+        let previousSelectedShelfID = selectedShelfID
+        isSaving = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            let shelf = BookShelf(
+                name: name,
+                sortOrder: (sortedShelves.map(\.sortOrder).max() ?? -1) + 1
+            )
+            modelContext.insert(shelf)
+            selectedShelfID = shelf.id
+            if !save(failureMessage: "本棚を作成できませんでした。追加前の状態へ戻しました。もう一度お試しください。") {
+                selectedShelfID = previousSelectedShelfID
+            }
+            isSaving = false
+        }
     }
 
     private func moveShelves(from source: IndexSet, to destination: Int) {
+        guard !isSaving else { return }
         var reordered = sortedShelves
         reordered.move(fromOffsets: source, toOffset: destination)
-        for (index, shelf) in reordered.enumerated() {
-            shelf.sortOrder = index
-            shelf.updatedAt = Date()
+        isSaving = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            for (index, shelf) in reordered.enumerated() {
+                shelf.sortOrder = index
+                shelf.updatedAt = Date()
+            }
+            _ = save(failureMessage: "本棚を並べ替えられませんでした。変更前の状態へ戻しました。もう一度お試しください。")
+            isSaving = false
         }
-        save()
     }
 
     private func deleteShelves(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(sortedShelves[index])
+        guard !isSaving else { return }
+        let shelvesToDelete = offsets.compactMap { index in
+            sortedShelves.indices.contains(index) ? sortedShelves[index] : nil
         }
-        save()
+        guard !shelvesToDelete.isEmpty else { return }
+        isSaving = true
+        errorMessage = ""
+        Task { @MainActor in
+            await Task.yield()
+            for shelf in shelvesToDelete {
+                modelContext.delete(shelf)
+            }
+            _ = save(failureMessage: "本棚を削除できませんでした。本棚と本は変更されていません。もう一度お試しください。")
+            isSaving = false
+        }
     }
 
-    private func save() {
+    @discardableResult
+    private func save(failureMessage: String) -> Bool {
         do {
             try modelContext.save()
+            return true
         } catch {
             modelContext.rollback()
-            errorMessage = error.localizedDescription
+            errorMessage = failureMessage
+            debugPrint("Failed to save book shelves: \(error)")
+            return false
         }
     }
 }

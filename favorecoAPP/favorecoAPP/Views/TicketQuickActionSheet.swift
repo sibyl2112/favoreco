@@ -27,6 +27,14 @@ struct TicketQuickActionSheet: View {
 
     private var plan: Plan? { attempt.plan }
 
+    private var scheduleTerm: String {
+        switch plan?.event?.category?.templateKey ?? plan?.category?.templateKey {
+        case "theater": "観劇日"
+        case "live": "参戦日"
+        default: "予定日"
+        }
+    }
+
     private var item: CategoryTicketProgressItem? {
         guard let plan else { return nil }
         return CategoryTicketProgressItem(plan: plan, attempt: attempt)
@@ -115,7 +123,7 @@ struct TicketQuickActionSheet: View {
                                 FavorecoIconLabel(
                                     plan.hasConfirmedSchedule
                                         ? FavorecoDateText.compactDateTime(plan.startsAt)
-                                        : "参加日未定",
+                                        : "\(scheduleTerm)未定",
                                     systemImage: plan.hasConfirmedSchedule
                                         ? "calendar"
                                         : "calendar.badge.exclamationmark",
@@ -173,7 +181,7 @@ struct TicketQuickActionSheet: View {
                             Button {
                                 isShowingSchedule = true
                             } label: {
-                                compactButtonLabel("参加日を設定", systemImage: "calendar.badge.plus")
+                                compactButtonLabel("\(scheduleTerm)を設定", systemImage: "calendar.badge.plus")
                                     .foregroundStyle(prominentButtonForeground)
                             }
                             .buttonStyle(.borderedProminent)
@@ -285,7 +293,7 @@ struct TicketQuickActionSheet: View {
             afterTransitionTo: attempt.statusKey,
             plan: plan
         ) {
-            FavorecoIconLabel("次にやること：参加日を設定", systemImage: "calendar.badge.plus", iconSize: 16)
+            FavorecoIconLabel("次にやること：\(scheduleTerm)を設定", systemImage: "calendar.badge.plus", iconSize: 16)
                 .font(FavorecoTypography.jpSans(16, weight: .bold, relativeTo: .headline))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)

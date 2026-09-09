@@ -22,6 +22,7 @@ struct AddExperienceView: View {
     @Query(sort: \Visit.visitedAt, order: .reverse) private var allVisits: [Visit]
     @AppStorage(AppStorageKeys.usesMapSearchAssist) private var usesMapSearchAssist = true
     @AppStorage(AppStorageKeys.usesInputSuggestionDictionary) private var usesInputSuggestionDictionary = true
+    @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
     @AppStorage(AppStorageKeys.afterSaveRecordAction) private var afterSaveRecordAction = "openDetail"
     @AppStorage(AppStorageKeys.lastUsedCategoryTemplateKey) private var lastUsedCategoryTemplateKey = ""
     @Environment(\.dismiss) private var dismiss
@@ -31,15 +32,31 @@ struct AddExperienceView: View {
     @State private var expandedUnitIDs: Set<String> = ["basic", "people", "ticketPlan", "photos", "officialInfo", "memo"]
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var selectedOCRItems: [PhotosPickerItem] = []
+    @State private var selectedSourceImportItems: [PhotosPickerItem] = []
+    @State private var selectedTargetEyecatchItem: PhotosPickerItem?
     @State private var pendingPhotos: [PendingPhoto] = []
+    @State private var eventEyecatchData: Data?
     @State private var coverPhotoPath = ""
     @State private var heroBackgroundPath = ""
     @State private var heroBackgroundPresetKey = ""
     @State private var pendingPeople: [PendingPersonLink] = []
     @State private var isShowingPlaceSearch = false
+    @State private var isShowingSourceImageChoice = false
+    @State private var isShowingSourceImagePicker = false
+    @State private var isShowingSourceCamera = false
+    @State private var isShowingTargetEyecatchCamera = false
+    @State private var isShowingSourceCameraUnavailable = false
+    @State private var isShowingSourceTextImport = false
+    @State private var isShowingSourceURLImport = false
+    @State private var pastedSourceText = ""
+    @State private var sourceImportURL = ""
+    @State private var sourceImportStatus = ""
+    @State private var isImportingSourceImage = false
+    @State private var isFetchingSourceURL = false
     @State private var savedVisit: Visit?
     @State private var isShowingSavedDetail = false
     @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     private var template: CategoryRecordTemplate {
         CategoryRecordTemplate.template(for: category)
@@ -82,7 +99,16 @@ struct AddExperienceView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            RecordLifecycleFlatScaffold(
+                title: addExperienceNavigationTitle,
+                canSave: !isSaving
+                    && draft.canSave
+                    && draft.hasValidPerformanceType(for: category),
+                saveButtonTitle: isSaving ? "保存中" : "保存",
+                isSaving: isSaving,
+                onClose: { dismiss() },
+                onSave: save
+            ) {
                 if let simpleRegistrationPurpose {
                     SimpleCategoryRegistrationPurposePicker(
                         selection: simpleRegistrationPurpose,
@@ -90,12 +116,13 @@ struct AddExperienceView: View {
                     )
                 }
 
+                if usesCommonTargetImportLead {
+                    commonTargetImportLead
+                }
+
                 if category.templateKey == "book" {
                     addBookRecordForm
                 } else if category.templateKey == "theater" {
-                    Section {
-                        TheaterUnifiedFormIntroduction(entry: .visitCreation)
-                    }
                     stagedTheaterForm(
                         definitions: activeUnitDefinitions(for: category),
                         status: addStatus(for:),
@@ -109,9 +136,6 @@ struct AddExperienceView: View {
                         content: addContent(for:)
                     )
                 } else if category.templateKey == "live" {
-                    Section {
-                        TheaterUnifiedFormIntroduction(entry: .visitCreation, isLive: true)
-                    }
                     stagedLiveForm(
                         definitions: activeUnitDefinitions(for: category),
                         status: addStatus(for:),
@@ -137,59 +161,72 @@ struct AddExperienceView: View {
                     GoshuinPriorVisitHistory(visits: priorGoshuinVisits)
                 }
             }
-            .favorecoRegistrationFormCanvas()
-            .environment(\.defaultMinListRowHeight, 48)
-            .listRowSeparatorTint(ExplicitFormMetrics.rowSeparatorColor)
             .tint(themePalette.globalTint)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if ["theater", "live"].contains(category.templateKey) {
-                    QuickRecordSaveBar(
-                        date: draft.visitedAt,
-                        isEnabled: draft.canSave && draft.hasValidPerformanceType(for: category),
-                        isSaving: isSaving,
-                        isLive: category.templateKey == "live",
-                        requiresTitle: draft.trimmedTitle.isEmpty,
-                        onSave: save
-                    )
-                }
-            }
-            .navigationTitle(
-                category.templateKey == "theater"
-                    ? TheaterUnifiedFormEntry.visitCreation.navigationTitle
-                    : ["movie", "museum"].contains(category.templateKey)
-                        ? "鑑賞済みを記録"
-                        : "記録を追加"
-            )
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        if category.templateKey == "theater" {
-                            FavorecoIcon(systemName: "xmark", size: 18, fallbackWeight: .semibold)
-                        } else {
-                            Text("キャンセル")
-                        }
-                    }
-                    .accessibilityLabel("キャンセル")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        save()
-                    }
-                    .disabled(
-                        isSaving
-                            || !draft.canSave
-                            || !draft.hasValidPerformanceType(for: category)
-                    )
-                }
-            }
             .sheet(isPresented: $isShowingPlaceSearch) {
                 ExperiencePlaceSearchView(initialQuery: draft.mapSearchQuery) { candidate in
                     let preservesVenueName = draft.shouldPreserveVenueNameForAddressSearch
                     draft.apply(place: candidate, preservingVenueName: preservesVenueName)
                 }
+            }
+            .photosPicker(
+                isPresented: $isShowingSourceImagePicker,
+                selection: $selectedSourceImportItems,
+                maxSelectionCount: 2,
+                matching: .images
+            )
+            .confirmationDialog(
+                "写真・カメラから情報入力",
+                isPresented: $isShowingSourceImageChoice,
+                titleVisibility: .visible
+            ) {
+                Button("写真ライブラリから選ぶ") {
+                    isShowingSourceImagePicker = true
+                }
+                Button("カメラで撮影") {
+                    openSourceCamera()
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("対象名・日時・場所など、読み取れた情報を仮入力します。")
+            }
+            .fullScreenCover(isPresented: $isShowingSourceCamera) {
+                CameraImagePicker(
+                    onCapture: { image in
+                        isShowingSourceCamera = false
+                        Task { await importSourceCameraImage(image) }
+                    },
+                    onCancel: { isShowingSourceCamera = false }
+                )
+                .ignoresSafeArea()
+            }
+            .fullScreenCover(isPresented: $isShowingTargetEyecatchCamera) {
+                CameraImagePicker(
+                    onCapture: { image in
+                        isShowingTargetEyecatchCamera = false
+                        Task { await setTargetEyecatch(from: image) }
+                    },
+                    onCancel: { isShowingTargetEyecatchCamera = false }
+                )
+                .ignoresSafeArea()
+            }
+            .sheet(isPresented: $isShowingSourceTextImport) {
+                sourceTextImportSheet
+            }
+            .sheet(isPresented: $isShowingSourceURLImport) {
+                sourceURLImportSheet
+            }
+            .onChange(of: selectedSourceImportItems) { _, items in
+                guard !items.isEmpty else { return }
+                Task { await importSourceImages(items) }
+            }
+            .onChange(of: selectedTargetEyecatchItem) { _, item in
+                guard let item else { return }
+                Task { await loadTargetEyecatch(from: item) }
+            }
+            .alert("カメラを使用できません", isPresented: $isShowingSourceCameraUnavailable) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("この端末ではカメラを利用できません。写真ライブラリから選んでください。")
             }
             .navigationDestination(isPresented: $isShowingSavedDetail) {
                 if let savedVisit {
@@ -198,7 +235,227 @@ struct AddExperienceView: View {
                     }
                 }
             }
+            .alert("保存できませんでした", isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { if !$0 { saveErrorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { saveErrorMessage = nil }
+            } message: {
+                Text(saveErrorMessage ?? "")
+            }
         }
+    }
+
+    private var addExperienceNavigationTitle: String {
+        switch category.templateKey {
+        case "theater": TheaterUnifiedFormEntry.visitCreation.navigationTitle
+        case "live": "参戦記録を追加"
+        case "book": "読書記録を追加"
+        case "movie", "museum": "鑑賞記録を追加"
+        default: "記録を追加"
+        }
+    }
+
+    private var usesCommonTargetImportLead: Bool {
+        ["museum", "theme_park", "nature_living", "outing_facility"].contains(category.templateKey)
+    }
+
+    private var commonTargetName: String {
+        switch category.templateKey {
+        case "museum": "展示・イベント"
+        case "theme_park", "outing_facility": "施設"
+        case "nature_living": "スポット"
+        default: "対象"
+        }
+    }
+
+    private var commonTargetImportLead: some View {
+        FavorecoRegistrationSection("\(commonTargetName)情報") {
+            RecordSourceImportActions(
+                isImportingImage: isImportingSourceImage,
+                isImageImportEnabled: usesOCRImportAssist,
+                onImage: { isShowingSourceImageChoice = true },
+                onText: { isShowingSourceTextImport = true },
+                onURL: {
+                    sourceImportURL = draft.officialURL
+                    sourceImportStatus = ""
+                    isShowingSourceURLImport = true
+                }
+            )
+
+            Text("写真・案内文・公式ページから候補を取り込み、対象情報と今回の記録へ振り分けます。")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !sourceImportStatus.isEmpty {
+                Text(sourceImportStatus)
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+            commonTargetEyecatchEditor
+            Divider()
+
+            ExperienceBasicUnitEditor(
+                template: template,
+                title: $draft.title,
+                seriesName: $draft.seriesName,
+                visitedAt: $draft.visitedAt,
+                endedAt: $draft.endedAt,
+                performanceOpensAt: nil,
+                styleNamesText: $draft.styleNamesText,
+                venueName: venueNameBinding,
+                venueAddress: venueAddressBinding,
+                overallRating: $draft.overallRating,
+                latitude: draft.latitude,
+                longitude: draft.longitude,
+                venueOfficialURL: $draft.venueOfficialURL,
+                placeMasters: placeMasters,
+                usesPlaceSuggestions: usesInputSuggestionDictionary,
+                usesMapSearchAssist: usesMapSearchAssist,
+                supportsPerformanceTime: false,
+                supportsExperienceDuration: false,
+                supportsStyles: false,
+                usesExplicitTheaterLayout: false,
+                showsRating: false,
+                datePrecision: .day,
+                usesSimpleScreenWorkLayout: false,
+                categoryTemplateKey: category.templateKey,
+                showsVisitFields: false,
+                subTypeKey: $draft.subTypeKey,
+                performanceTypeCustomName: $draft.performanceTypeCustomName,
+                ratingText: draft.ratingLabel,
+                onSelectPlace: { draft.apply(placeMaster: $0) },
+                onSelectPublicPlace: { draft.apply(publicPlace: $0) },
+                onOpenPlaceSearch: { isShowingPlaceSearch = true }
+            )
+
+            if isStagedOutingTemplate(category.templateKey) {
+                Divider()
+                VisitSubtitleEditor(
+                    text: $draft.visitSubtitle,
+                    categoryTemplateKey: category.templateKey
+                )
+            }
+        }
+    }
+
+    private var commonTargetEyecatchEditor: some View {
+        let photoActionTitle = eventEyecatchData == nil ? "写真を選ぶ" : "写真を変更"
+        return RegistrationEyecatchEditor(
+            imageData: eventEyecatchData,
+            tint: themePalette.globalTint,
+            onCapture: openTargetEyecatchCamera,
+            onRemove: {
+                eventEyecatchData = nil
+                selectedTargetEyecatchItem = nil
+            }
+        ) {
+            PhotosPicker(selection: $selectedTargetEyecatchItem, matching: .images) {
+                FavorecoIconLabel(
+                    photoActionTitle,
+                    systemImage: "photo.on.rectangle",
+                    iconSize: 13
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var sourceTextImportSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("案内メール・購入完了画面・紹介文")
+                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                TextEditor(text: $pastedSourceText)
+                    .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
+                    .frame(minHeight: 230)
+                    .padding(10)
+                    .background(
+                        TheaterLifecycleFlatStyle.fieldBackground,
+                        in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
+                    }
+                Text("\(commonTargetName)名・日時・場所を取得できた範囲で仮入力します。原文は備考記録へ保持します。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .background(TheaterLifecycleFlatStyle.canvasBackground.ignoresSafeArea())
+            .navigationTitle("テキストから入力")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { isShowingSourceTextImport = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("反映") { applyPastedSourceText() }
+                        .disabled(pastedSourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var sourceURLImportSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("\(commonTargetName)の公式ページ・案内ページ")
+                    .font(FavorecoTypography.jpSans(14, weight: .semibold, relativeTo: .body))
+                TextField("https://", text: $sourceImportURL)
+                    .font(FavorecoTypography.jpSans(16, weight: .regular, relativeTo: .body))
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 54)
+                    .background(
+                        TheaterLifecycleFlatStyle.fieldBackground,
+                        in: RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: TheaterLifecycleFlatStyle.fieldCornerRadius)
+                            .stroke(TheaterLifecycleFlatStyle.fieldBorder, lineWidth: 1)
+                    }
+                Text("名称・公式URL・画像・開催日時・場所を取得できた範囲で仮入力します。保存前に修正できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.secondary)
+                Text("サイト側の制限やページ構造により取得できない場合があります。その場合もURLを保存して手入力できます。")
+                    .font(FavorecoTypography.caption)
+                    .foregroundStyle(.tertiary)
+                if !sourceImportStatus.isEmpty {
+                    Text(sourceImportStatus)
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .background(TheaterLifecycleFlatStyle.canvasBackground.ignoresSafeArea())
+            .navigationTitle("URLから入力")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { isShowingSourceURLImport = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isFetchingSourceURL ? "取得中" : "取得") {
+                        Task { await fetchSourceURLMetadata() }
+                    }
+                    .disabled(
+                        sourceImportURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || isFetchingSourceURL
+                    )
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 
     private var priorGoshuinVisits: [Visit] {
@@ -346,6 +603,8 @@ struct AddExperienceView: View {
             return draft.hasTicketPlan || !pendingPeople.isEmpty ? .entered : .optional
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
+        case "companions":
+            return draft.normalizedCompanionNamesRaw.isEmpty ? .optional : .entered
         case "goshuinBook":
             return draft.goshuinBookSizeKey.isEmpty ? .optional : .entered
         case "importOCR":
@@ -418,6 +677,7 @@ struct AddExperienceView: View {
                     ),
                     usesSimpleScreenWorkLayout: category.templateKey == "movie",
                     categoryTemplateKey: category.templateKey,
+                    showsTargetFields: !usesCommonTargetImportLead,
                     subTypeKey: $draft.subTypeKey,
                     screenWorkSeasonNumber: $draft.screenWorkSeasonNumber,
                     performanceTypeCustomName: $draft.performanceTypeCustomName,
@@ -442,7 +702,7 @@ struct AddExperienceView: View {
                         heroBackgroundPresetKey: $heroBackgroundPresetKey
                     )
                 }
-                if isStagedOutingTemplate(category.templateKey) {
+                if isStagedOutingTemplate(category.templateKey), !usesCommonTargetImportLead {
                     Divider()
                     VisitSubtitleEditor(
                         text: $draft.visitSubtitle,
@@ -638,11 +898,254 @@ struct AddExperienceView: View {
         }
     }
 
+    private func openSourceCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            isShowingSourceCameraUnavailable = true
+            return
+        }
+        isShowingSourceCamera = true
+    }
+
+    private func openTargetEyecatchCamera() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            isShowingSourceCameraUnavailable = true
+            return
+        }
+        isShowingTargetEyecatchCamera = true
+    }
+
+    @MainActor
+    private func setTargetEyecatch(from image: UIImage) async {
+        guard let data = await CameraImageEncoder.jpegData(
+            from: image,
+            compressionQuality: 0.9
+        ) else {
+            sourceImportStatus = "撮影した画像を読み込めませんでした。"
+            return
+        }
+        eventEyecatchData = await Task.detached(priority: .userInitiated) {
+            QuickCaptureImageService.compressedJPEG(from: data)
+        }.value
+        if eventEyecatchData == nil {
+            sourceImportStatus = "撮影した画像を読み込めませんでした。"
+        }
+    }
+
+    @MainActor
+    private func importSourceImages(_ items: [PhotosPickerItem]) async {
+        isImportingSourceImage = true
+        sourceImportStatus = "画像から情報を読み取っています。"
+        defer {
+            isImportingSourceImage = false
+            selectedSourceImportItems = []
+        }
+
+        var imageData: [Data] = []
+        for item in items.prefix(2) {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                imageData.append(data)
+            }
+        }
+        guard !imageData.isEmpty else {
+            sourceImportStatus = "画像を読み込めませんでした。別の写真をお試しください。"
+            return
+        }
+        await applySourceImageData(imageData)
+    }
+
+    @MainActor
+    private func importSourceCameraImage(_ image: UIImage) async {
+        guard let data = await CameraImageEncoder.jpegData(
+            from: image,
+            compressionQuality: 0.9
+        ) else {
+            sourceImportStatus = "撮影した画像を読み込めませんでした。"
+            return
+        }
+        isImportingSourceImage = true
+        sourceImportStatus = "撮影した画像から情報を読み取っています。"
+        defer { isImportingSourceImage = false }
+        await applySourceImageData([data])
+    }
+
+    @MainActor
+    private func applySourceImageData(_ imageData: [Data]) async {
+        let results = await Task.detached(priority: .userInitiated) {
+            let analyses = imageData.map { QuickCaptureImageService.recognizedTextAnalysis(from: $0) }
+            let eyecatch = imageData.first.flatMap { QuickCaptureImageService.compressedJPEG(from: $0) }
+            return (analyses, eyecatch)
+        }.value
+
+        if eventEyecatchData == nil {
+            eventEyecatchData = results.1
+        }
+        let combinedText = results.0
+            .map(\.fullText)
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        guard !combinedText.isEmpty else {
+            sourceImportStatus = "文字を読み取れませんでした。画像はアイキャッチとして利用できます。"
+            return
+        }
+
+        let metadata = TicketOCRImportParser.parseEventMetadata(
+            text: combinedText,
+            referenceDate: draft.visitedAt
+        )
+        let title = metadata.title
+            ?? results.0.first(where: \.isTitleSuggestionReliable)?.suggestedTitle
+            ?? results.0.flatMap(\.titleCandidates).first
+        let venue = metadata.venue
+            ?? results.0.flatMap(\.venueCandidates).first
+        let address = results.0.flatMap(\.addressCandidates).first
+        let dateRange = metadata.eventDateRange
+            ?? results.0.compactMap(\.eventDateRange).first
+        applyImportedSourceValues(
+            title: title,
+            venue: venue,
+            address: address,
+            dateRange: dateRange,
+            rawText: combinedText
+        )
+        sourceImportStatus = "画像から取得できた情報を仮入力しました。内容を確認して保存してください。"
+    }
+
+    private func applyPastedSourceText() {
+        let text = pastedSourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let metadata = TicketOCRImportParser.parseEventMetadata(
+            text: text,
+            referenceDate: draft.visitedAt
+        )
+        let fallbackTitle = text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { line in
+                !line.isEmpty
+                    && !line.hasPrefix("http")
+                    && !line.hasPrefix("■")
+                    && !line.hasPrefix("※")
+            }
+        applyImportedSourceValues(
+            title: metadata.title ?? fallbackTitle,
+            venue: metadata.venue,
+            address: nil,
+            dateRange: metadata.eventDateRange,
+            rawText: text
+        )
+        sourceImportStatus = "テキストから取得できた情報を仮入力しました。"
+        pastedSourceText = ""
+        isShowingSourceTextImport = false
+    }
+
+    private func applyImportedSourceValues(
+        title: String?,
+        venue: String?,
+        address: String?,
+        dateRange: QuickCaptureDateRange?,
+        rawText: String
+    ) {
+        if draft.trimmedTitle.isEmpty, let title, !title.isEmpty {
+            draft.title = title
+        }
+        if draft.trimmedVenueName.isEmpty, let venue, !venue.isEmpty {
+            draft.venueName = venue
+            draft.clearPlaceSelection()
+        }
+        if draft.venueAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let address,
+           !address.isEmpty {
+            draft.venueAddress = address
+            draft.clearPlaceCoordinates()
+        }
+        if let dateRange {
+            draft.visitedAt = dateRange.startsAt
+            draft.endedAt = max(dateRange.endsAt, dateRange.startsAt)
+        }
+        draft.ocrText = rawText
+    }
+
+    @MainActor
+    private func fetchSourceURLMetadata() async {
+        let source = sourceImportURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else { return }
+        isFetchingSourceURL = true
+        sourceImportStatus = "URLを読み取り中です。"
+        defer { isFetchingSourceURL = false }
+        do {
+            let candidate = try await URLMetadataService.fetch(
+                from: source,
+                includesStructuredData: true
+            )
+            var appliedFields: [String] = []
+            if draft.trimmedTitle.isEmpty, !candidate.title.isEmpty {
+                draft.title = candidate.title
+                appliedFields.append("\(commonTargetName)名")
+            }
+            if draft.trimmedOfficialURL.isEmpty {
+                draft.officialURL = candidate.officialURL?.absoluteString
+                    ?? candidate.resolvedURL.absoluteString
+                appliedFields.append("公式URL")
+            }
+            if eventEyecatchData == nil, let imageData = candidate.imageData {
+                eventEyecatchData = await Task.detached(priority: .userInitiated) {
+                    QuickCaptureImageService.compressedJPEG(from: imageData)
+                }.value
+                if eventEyecatchData != nil { appliedFields.append("アイキャッチ") }
+            }
+            if draft.trimmedVenueName.isEmpty, !candidate.venueName.isEmpty {
+                draft.venueName = candidate.venueName
+                draft.clearPlaceSelection()
+                appliedFields.append("場所")
+            }
+            if draft.venueAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !candidate.venueAddress.isEmpty {
+                draft.venueAddress = candidate.venueAddress
+                draft.clearPlaceCoordinates()
+                appliedFields.append("住所")
+            }
+            if let eventDate = candidate.eventDate {
+                draft.visitedAt = eventDate
+                draft.endedAt = max(candidate.eventEndDate ?? eventDate, eventDate)
+                appliedFields.append("日時")
+            }
+            sourceImportURL = candidate.resolvedURL.absoluteString
+            sourceImportStatus = appliedFields.isEmpty
+                ? "URLは確認できましたが、自動反映できる情報はありませんでした。空欄を手入力できます。"
+                : "URLから\(appliedFields.joined(separator: "・"))を仮入力しました。"
+            isShowingSourceURLImport = false
+        } catch {
+            if draft.trimmedOfficialURL.isEmpty {
+                draft.officialURL = source
+            }
+            sourceImportStatus = "このサイトから情報を取得できませんでした。URLは保存し、空欄を手入力できます。"
+        }
+    }
+
+    @MainActor
+    private func loadTargetEyecatch(from item: PhotosPickerItem) async {
+        defer { selectedTargetEyecatchItem = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            sourceImportStatus = "画像を読み込めませんでした。"
+            return
+        }
+        eventEyecatchData = await Task.detached(priority: .userInitiated) {
+            QuickCaptureImageService.compressedJPEG(from: data)
+        }.value
+    }
+
     private func save() {
         guard !isSaving,
               draft.canSave,
               draft.hasValidPerformanceType(for: category) else { return }
         isSaving = true
+        saveErrorMessage = nil
+        Task { @MainActor in
+            await Task.yield()
+            persistNewExperience()
+        }
+    }
+
+    private func persistNewExperience() {
         let now = Date()
         let resolvedCategory = outingCategory(
             for: draft.subTypeKey,
@@ -681,6 +1184,9 @@ struct AddExperienceView: View {
         if !draft.trimmedOfficialURL.isEmpty {
             event.officialURL = draft.trimmedOfficialURL
         }
+        if usesCommonTargetImportLead, let eventEyecatchData {
+            event.eyecatchData = eventEyecatchData
+        }
         let eventUnitFieldsRaw = draft.eventUnitFieldsRaw(for: category)
         if event.unitFieldsRaw.isEmpty || existingEvent == nil {
             event.unitFieldsRaw = eventUnitFieldsRaw
@@ -712,6 +1218,7 @@ struct AddExperienceView: View {
             eyecatchPath: coverPhotoPath,
             note: draft.trimmedNote,
             tagNamesRaw: draft.normalizedTagNamesRaw,
+            companionNamesRaw: draft.normalizedCompanionNamesRaw,
             amount: parsedCurrencyAmount(from: draft.amountText),
             latitude: draft.latitude,
             longitude: draft.longitude,
@@ -741,7 +1248,6 @@ struct AddExperienceView: View {
         let usesVisitPeople = ["theater", "live"].contains(category.templateKey)
         insertPendingPeople(for: usesVisitPeople ? nil : event, visit: usesVisitPeople ? visit : nil)
         insertPendingPhotos(for: visit)
-        onSave?()
 
         do {
             try modelContext.save()
@@ -750,6 +1256,7 @@ struct AddExperienceView: View {
             }
             Task { await VisitWeatherService.fillIfNeeded(for: visit, in: modelContext) }
             lastUsedCategoryTemplateKey = resolvedCategory?.templateKey ?? category.templateKey
+            onSave?()
             if afterSaveRecordAction == "openDetail" {
                 savedVisit = visit
                 isShowingSavedDetail = true
@@ -759,7 +1266,8 @@ struct AddExperienceView: View {
         } catch {
             modelContext.rollback()
             isSaving = false
-            assertionFailure("Failed to save experience: \(error)")
+            saveErrorMessage = "入力内容を保持したまま保存をやり直せます。もう一度お試しください。"
+            debugPrint("Failed to save experience: \(error)")
         }
     }
 
@@ -823,6 +1331,7 @@ struct EditExperienceView: View {
     @State private var isShowingTargetEyecatchCameraUnavailable = false
     @State private var isTheaterParentInformationExpanded = true
     @State private var isTheaterScheduleReferenceExpanded = false
+    @State private var isSaving = false
 
     private var event: ExperienceEvent? {
         visit?.event ?? plan?.event
@@ -842,6 +1351,10 @@ struct EditExperienceView: View {
 
     private var isTheaterVisit: Bool {
         category?.templateKey == "theater"
+    }
+
+    private var isLiveVisit: Bool {
+        category?.templateKey == "live"
     }
 
     private var isBookVisit: Bool {
@@ -865,7 +1378,7 @@ struct EditExperienceView: View {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    init(visit: Visit, usesTheaterLifecycleLayout: Bool = false) {
+    init(visit: Visit, usesTheaterLifecycleLayout: Bool = true) {
         self.visit = visit
         self.plan = nil
         self.usesTheaterLifecycleLayout = usesTheaterLifecycleLayout
@@ -890,7 +1403,7 @@ struct EditExperienceView: View {
         ))
     }
 
-    init(plan: Plan, usesTheaterLifecycleLayout: Bool = false) {
+    init(plan: Plan, usesTheaterLifecycleLayout: Bool = true) {
         self.visit = nil
         self.plan = plan
         self.usesTheaterLifecycleLayout = usesTheaterLifecycleLayout
@@ -920,16 +1433,20 @@ struct EditExperienceView: View {
 
     @ViewBuilder
     private var editRecordConfiguredContent: some View {
-        if usesTheaterLifecycleLayout, isTheaterVisit {
-            TheaterLifecycleFlatScaffold(
+        if usesTheaterLifecycleLayout {
+            RecordLifecycleFlatScaffold(
                 title: editRecordNavigationTitle,
-                canSave: draft.canSave,
+                canSave: draft.canSave
+                    && draft.hasValidPerformanceType(for: category)
+                    && !isSaving,
+                saveButtonTitle: isSaving ? "保存中" : "保存",
+                isSaving: isSaving,
                 onClose: { dismiss() },
                 onSave: save
             ) {
                 editRecordFormContent
             }
-            .tint(Color(hex: "#8B2F45"))
+            .tint(themePalette.globalTint)
         } else {
             editRecordForm
                 .favorecoRegistrationFormCanvas()
@@ -1024,12 +1541,25 @@ struct EditExperienceView: View {
                 }
             }
             .accessibilityLabel("キャンセル")
+            .disabled(isSaving)
         }
         ToolbarItem(placement: .confirmationAction) {
-            Button("保存") {
+            Button {
                 save()
+            } label: {
+                if isSaving {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Text("保存")
+                }
             }
-            .disabled(!draft.canSave)
+            .accessibilityLabel(isSaving ? "保存中" : "保存")
+            .disabled(
+                !draft.canSave
+                    || !draft.hasValidPerformanceType(for: category)
+                    || isSaving
+            )
         }
     }
 
@@ -1086,8 +1616,10 @@ struct EditExperienceView: View {
                 content: editContent(for:)
             )
         case "live":
-            Section {
-                TheaterUnifiedFormIntroduction(entry: .visitEditing, isLive: true)
+            if !usesTheaterLifecycleLayout {
+                Section {
+                    TheaterUnifiedFormIntroduction(entry: .visitEditing, isLive: true)
+                }
             }
             stagedLiveForm(
                 definitions: activeUnitDefinitions(for: category),
@@ -1246,7 +1778,10 @@ struct EditExperienceView: View {
     }
 
     private var theaterParentEyecatchEditor: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let photoActionTitle = eventEyecatchData == nil ? "アイキャッチを選ぶ" : "アイキャッチを変更"
+        let photoActionFont = FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body)
+        let photoActionTint = Color(hex: "#8B2F45")
+        return VStack(alignment: .leading, spacing: 10) {
             ExplicitFormFieldTitle(
                 title: "公演アイキャッチ・背景",
                 isOptional: true,
@@ -1276,12 +1811,12 @@ struct EditExperienceView: View {
                 VStack(spacing: 10) {
                     PhotosPicker(selection: $selectedTargetEyecatchItem, matching: .images) {
                         FavorecoIconLabel(
-                            eventEyecatchData == nil ? "アイキャッチを選ぶ" : "アイキャッチを変更",
+                            photoActionTitle,
                             systemImage: "photo",
                             iconSize: 14
                         )
-                        .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
-                        .foregroundStyle(Color(hex: "#8B2F45"))
+                        .font(photoActionFont)
+                        .foregroundStyle(photoActionTint)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.secondary.opacity(0.24), lineWidth: 1))
                     }
@@ -1389,6 +1924,9 @@ struct EditExperienceView: View {
 
     @ViewBuilder
     private var editTargetEyecatchSection: some View {
+        let backgroundActionTitle = heroBackgroundPath.isEmpty
+            ? "ライブラリから選ぶ"
+            : "ライブラリ画像を変更"
         Section {
             HStack(alignment: .top, spacing: 14) {
                 Group {
@@ -1475,7 +2013,7 @@ struct EditExperienceView: View {
 
                 PhotosPicker(selection: $selectedHeroBackgroundItem, matching: .images) {
                     FavorecoIconLabel(
-                        heroBackgroundPath.isEmpty ? "ライブラリから選ぶ" : "ライブラリ画像を変更",
+                        backgroundActionTitle,
                         systemImage: "photo.on.rectangle",
                         iconSize: 15
                     )
@@ -1709,7 +2247,7 @@ struct EditExperienceView: View {
                 contentTypeKey: $draft.bookContentTypeKey,
                 aspectRatioKey: $draft.eyecatchAspectRatioKey,
                 isEditable: true,
-                titleFieldLabel: "イベント名",
+                titleFieldLabel: "書名",
                 usesLifecycleEditLayout: true
             )
         case "bookReading":
@@ -2088,7 +2626,7 @@ struct EditExperienceView: View {
                     appliesCardBackground: false
                 )
             } else {
-                Text("予定に紐づけると、準備や観劇後のToDoを追加できます。")
+                Text("予定に紐づけると、準備や\(isLiveVisit ? "参戦後" : "観劇後")のToDoを追加できます。")
                     .font(FavorecoTypography.caption)
                     .foregroundStyle(.secondary)
             }
@@ -2135,11 +2673,26 @@ struct EditExperienceView: View {
     }
 
     private func save() {
+        guard !isSaving,
+              draft.canSave,
+              draft.hasValidPerformanceType(for: category) else { return }
+        isSaving = true
+        saveErrorMessage = nil
+        Task { @MainActor in
+            await Task.yield()
+            persistEditedRecord()
+        }
+    }
+
+    private func persistEditedRecord() {
         if let plan {
             save(plan: plan)
             return
         }
-        guard let visit else { return }
+        guard let visit else {
+            isSaving = false
+            return
+        }
         let now = Date()
         let preservesWeather = visit.visitedAt == draft.visitedAt
             && visit.latitude == draft.latitude
@@ -2214,10 +2767,15 @@ struct EditExperienceView: View {
             dismiss()
         } catch {
             modelContext.rollback()
-            saveErrorMessage = isTheaterVisit
-                ? "観劇回を更新できませんでした。入力内容を確認して、もう一度お試しください。"
-                : "記録を更新できませんでした。入力内容を確認して、もう一度お試しください。"
-            assertionFailure("Failed to update experience: \(error)")
+            isSaving = false
+            saveErrorMessage = if isTheaterVisit {
+                "観劇記録を更新できませんでした。入力内容は保持されています。もう一度お試しください。"
+            } else if isLiveVisit {
+                "参戦記録を更新できませんでした。入力内容は保持されています。もう一度お試しください。"
+            } else {
+                "記録を更新できませんでした。入力内容は保持されています。もう一度お試しください。"
+            }
+            debugPrint("Failed to update experience: \(error)")
         }
     }
 
@@ -2377,8 +2935,9 @@ struct EditExperienceView: View {
             dismiss()
         } catch {
             modelContext.rollback()
+            isSaving = false
             saveErrorMessage = "予定を更新できませんでした。入力内容を確認して、もう一度お試しください。"
-            assertionFailure("Failed to update plan record: \(error)")
+            debugPrint("Failed to update plan record: \(error)")
         }
     }
 
@@ -2473,7 +3032,7 @@ struct AddVisitView: View {
         inheritedVisualSource: Visit? = nil,
         sourcePlan: Plan? = nil,
         onSave: (() -> Void)? = nil,
-        usesTheaterLifecycleLayout: Bool = false
+        usesTheaterLifecycleLayout: Bool = true
     ) {
         self.event = event
         self.sourcePlan = sourcePlan
@@ -2576,16 +3135,18 @@ struct AddVisitView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if usesTheaterLifecycleLayout, event.category?.templateKey == "theater" {
-                    TheaterLifecycleFlatScaffold(
+                if usesTheaterLifecycleLayout {
+                    RecordLifecycleFlatScaffold(
                         title: addVisitNavigationTitle,
                         canSave: !isSaving,
+                        saveButtonTitle: isSaving ? "保存中" : "保存",
+                        isSaving: isSaving,
                         onClose: { dismiss() },
                         onSave: save
                     ) {
                         addVisitFormContent
                     }
-                    .tint(Color(hex: "#8B2F45"))
+                    .tint(themePalette.globalTint)
                 } else {
                     standardAddVisitForm
                 }
@@ -2632,7 +3193,7 @@ struct AddVisitView: View {
             : event.category?.templateKey == "book"
                 ? "読書記録を追加"
                 : ["movie", "museum"].contains(event.category?.templateKey ?? "")
-                    ? "鑑賞の記録をつける"
+                    ? "鑑賞記録を追加"
                     : "記録を追加"
     }
 
@@ -2670,11 +3231,20 @@ struct AddVisitView: View {
                     }
                 }
                 .accessibilityLabel("キャンセル")
+                .disabled(isSaving)
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存") {
+                Button {
                     save()
+                } label: {
+                    if isSaving {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Text("保存")
+                    }
                 }
+                .accessibilityLabel(isSaving ? "保存中" : "保存")
                 .disabled(
                     isSaving
                         || (event.category?.templateKey == "book"
@@ -2707,8 +3277,10 @@ struct AddVisitView: View {
                 content: visitContent(for:)
             )
         } else if event.category?.templateKey == "live" {
-            Section {
-                TheaterUnifiedFormIntroduction(entry: .visitCreation, isLive: true)
+            if !usesTheaterLifecycleLayout {
+                Section {
+                    TheaterUnifiedFormIntroduction(entry: .visitCreation, isLive: true)
+                }
             }
             stagedLiveForm(
                 definitions: activeUnitDefinitions(for: event.category),
@@ -2872,6 +3444,8 @@ struct AddVisitView: View {
             return draft.trimmedNote.isEmpty && draft.normalizedTagNamesRaw.isEmpty ? .optional : .entered
         case "photos":
             return pendingPhotos.isEmpty ? .optional : .entered
+        case "companions":
+            return draft.normalizedCompanionNamesRaw.isEmpty ? .optional : .entered
         case "goshuinBook":
             return draft.goshuinBookSizeKey.isEmpty ? .optional : .entered
         case "importOCR":
@@ -3032,6 +3606,14 @@ struct AddVisitView: View {
                 heroBackgroundPath: $heroBackgroundPath,
                 heroBackgroundPresetKey: $heroBackgroundPresetKey
             )
+        case "companions":
+            TicketTagInputField(
+                text: $draft.companionNamesText,
+                title: event.category?.templateKey == "theater" ? "名前" : "同行者",
+                prompt: "名前を入力",
+                showsHashPrefix: false,
+                maximumTagCount: 20
+            )
         case "goshuinBook":
             ExperienceGoshuinBookUnitEditor(
                 sizeKey: $draft.goshuinBookSizeKey,
@@ -3136,8 +3718,18 @@ struct AddVisitView: View {
     }
 
     private func save() {
-        guard !isSaving else { return }
+        guard !isSaving,
+              event.category?.templateKey != "book"
+                || !bookTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         isSaving = true
+        saveErrorMessage = nil
+        Task { @MainActor in
+            await Task.yield()
+            persistNewVisit()
+        }
+    }
+
+    private func persistNewVisit() {
         let now = Date()
         var attendedAttempt: TicketAttempt?
         let visit = Visit(
@@ -3152,6 +3744,7 @@ struct AddVisitView: View {
             eyecatchPath: coverPhotoPath,
             note: draft.trimmedNote,
             tagNamesRaw: draft.normalizedTagNamesRaw,
+            companionNamesRaw: draft.normalizedCompanionNamesRaw,
             amount: parsedCurrencyAmount(from: draft.amountText),
             latitude: draft.latitude,
             longitude: draft.longitude,
@@ -3261,7 +3854,7 @@ struct AddVisitView: View {
             modelContext.rollback()
             isSaving = false
             saveErrorMessage = "記録を保存できませんでした。入力内容を確認して、もう一度お試しください。"
-            assertionFailure("Failed to save visit: \(error)")
+            debugPrint("Failed to save visit: \(error)")
         }
     }
 
@@ -3933,6 +4526,7 @@ struct VisitDraft {
     var note: String = ""
     var memoStyleRuns: [MemoStyleRun] = []
     var tagNamesText: String = ""
+    var companionNamesText: String = ""
     var excludedEventCastLinkIDs: Set<UUID> = []
 
     init() {
@@ -4079,6 +4673,14 @@ struct VisitDraft {
 
     var normalizedTagNamesRaw: String {
         TheaterEmotionTags.encoded(TheaterEmotionTags.names(from: tagNamesText))
+    }
+
+    var normalizedCompanionNamesRaw: String {
+        companionNamesText
+            .components(separatedBy: CharacterSet(charactersIn: "、,\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "、")
     }
 
     var trimmedAmountText: String {
@@ -4405,7 +5007,7 @@ private let screenWorkRecordUnitDefinitions: [RecordUnitDefinition] = [
     RecordUnitDefinition(
         id: "screenWorkCore",
         name: "作品・鑑賞",
-        description: "タイトル・区分・鑑賞日時／年・季節・評価",
+        description: "作品名・区分・鑑賞日時／年・季節",
         isRequired: true
     ),
     RecordUnitDefinition(
@@ -4473,15 +5075,15 @@ private enum TheaterRecordBlock: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .viewing: "鑑賞記録"
-        case .memories: "思い出"
+        case .viewing: "主記録"
+        case .memories: "思い出・感想"
         case .notes: "備考記録"
         }
     }
 
     var description: String {
         switch self {
-        case .viewing: "イベント名・参加日・会場/場所"
+        case .viewing: "公演名・観劇日・会場"
         case .memories: "評価・注目した人・思い出・資料写真・同行者・感想"
         case .notes: "公式・参考情報・費用・OCR・自由項目"
         }
@@ -4536,15 +5138,15 @@ private enum ScreenWorkRecordBlock: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .viewing: "鑑賞記録"
-        case .memories: "思い出"
+        case .viewing: "主記録"
+        case .memories: "思い出・感想"
         case .notes: "備考記録"
         }
     }
 
     var description: String {
         switch self {
-        case .viewing: "イベント名・鑑賞日・会場/場所"
+        case .viewing: "作品名・鑑賞日・鑑賞方法・場所"
         case .memories: "評価・写真・同行者・感想"
         case .notes: "出演者・公式情報・OCR・制作情報・自由項目"
         }
@@ -4598,15 +5200,15 @@ private enum LiveRecordBlock: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .attendance: "参戦記録"
-        case .memories: "思い出"
+        case .attendance: "主記録"
+        case .memories: "思い出・感想"
         case .notes: "備考記録"
         }
     }
 
     var description: String {
         switch self {
-        case .attendance: "イベント名・参加日・会場/場所"
+        case .attendance: "ライブ名・参戦日・会場"
         case .memories: "評価・セットリスト・写真・同行者・感想"
         case .notes: "公式情報・費用・OCR・自由項目"
         }
@@ -4696,8 +5298,8 @@ private enum OutingRecordBlock: String, CaseIterable, Identifiable, Equatable {
 
     var title: String {
         switch self {
-        case .experience: "体験記録"
-        case .memories: "思い出"
+        case .experience: "主記録"
+        case .memories: "思い出・感想"
         case .notes: "備考記録"
         }
     }
@@ -4787,20 +5389,15 @@ private func stagedOutingForm<Content: View>(
 }
 
 private func outingBlockTitle(_ block: OutingRecordBlock, templateKey: String) -> String {
-    guard block == .experience else { return block.title }
-    switch templateKey {
-    case "museum": return "鑑賞記録"
-    case "theme_park": return "来園記録"
-    default: return "体験記録"
-    }
+    block.title
 }
 
 private func outingBlockDescription(_ block: OutingRecordBlock, templateKey: String) -> String {
     guard block == .experience else { return block.description }
     switch templateKey {
-    case "museum": return "イベント名・鑑賞日・会場/場所"
-    case "theme_park": return "イベント名・来園日・会場/場所"
-    default: return "イベント名・訪問日・会場/場所"
+    case "museum": return "展示・イベント名・鑑賞日・会場"
+    case "theme_park": return "施設名・来園日・場所"
+    default: return "スポット名・訪問日・場所"
     }
 }
 
@@ -4874,24 +5471,19 @@ private enum GenericRecordBlock: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     func title(templateKey: String) -> String {
-        switch (self, templateKey) {
-        case (.primary, "goshuin"): "参拝記録"
-        case (.primary, "sake"): "飲酒記録"
-        case (.primary, "random_goods"): "収集記録"
-        case (.primary, _): "体験記録"
-        case (.memories, "sake"): "感想"
-        case (.memories, _): "思い出"
-        case (.notes, "sake"): "お酒情報"
-        case (.notes, _): "備考記録"
+        switch self {
+        case .primary: "主記録"
+        case .memories: "思い出・感想"
+        case .notes: "備考記録"
         }
     }
 
     func description(templateKey: String) -> String {
         switch (self, templateKey) {
-        case (.primary, "goshuin"): "寺社名・参拝日・会場/場所"
-        case (.primary, "sake"): "銘柄・飲んだ日・会場/場所"
+        case (.primary, "goshuin"): "寺社名・参拝日・授与所"
+        case (.primary, "sake"): "銘柄・飲んだ日・場所"
         case (.primary, "random_goods"): "対象名・入手日・入手場所"
-        case (.primary, _): "イベント名・参加日・会場/場所"
+        case (.primary, _): "対象名・体験日・場所"
         case (.memories, "goshuin"): "写真・同行者・感想"
         case (.memories, "sake"): "評価・写真・感想"
         case (.memories, "random_goods"): "画像・メモ"
@@ -5087,15 +5679,15 @@ private enum BookRecordBlock: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .reading: "読書記録"
-        case .reflection: "読後感"
+        case .reading: "主記録"
+        case .reflection: "思い出・感想"
         case .notes: "備考記録"
         }
     }
 
     var description: String {
         switch self {
-        case .reading: "アイキャッチ・読書状態・媒体・読書期間・書誌情報"
+        case .reading: "書名・書誌情報・読書状態・媒体・読書期間"
         case .reflection: "評価・写真・感想・引用・ページメモ"
         case .notes: "入手情報・補足情報"
         }
@@ -5144,7 +5736,7 @@ private func theaterRecordUnitDefinition(
     case "basic":
         return RecordUnitDefinition(
             id: definition.id,
-            name: "参加日・会場・アイキャッチ",
+            name: "観劇日時・会場・アイキャッチ",
             description: "鑑賞日・開演・終演・鑑賞方法・会場・代表画像",
             isRequired: definition.isRequired
         )
@@ -5181,7 +5773,7 @@ private func theaterRecordUnitDefinition(
             id: definition.id,
             name: "感想・感情タグ",
             description: "感想・感情タグ・その他のタグ",
-            isRequired: definition.isRequired
+            isRequired: false
         )
     case "money":
         return RecordUnitDefinition(

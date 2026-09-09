@@ -63,20 +63,16 @@ struct SimpleCategoryRegistrationPurposePicker: View {
     private var isMovie: Bool { category.templateKey == "movie" }
 
     var body: some View {
-        FavorecoRegistrationSection("登録内容") {
+        RegistrationPurposeSelectionSection(
+            guidanceText: description(for: selection),
+            systemImage: icon(for: selection)
+        ) {
             Picker("登録内容", selection: $selection) {
                 ForEach(SimpleCategoryRegistrationPurpose.allCases) { item in
                     Text(title(for: item)).tag(item)
                 }
             }
             .pickerStyle(.segmented)
-
-            Divider()
-
-            Label(description(for: selection), systemImage: icon(for: selection))
-                .font(FavorecoTypography.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -91,11 +87,17 @@ struct SimpleCategoryRegistrationPurposePicker: View {
     private func description(for purpose: SimpleCategoryRegistrationPurpose) -> String {
         switch purpose {
         case .interested:
-            isMovie ? "日程を決めず、観たい作品として保存します。" : "日程を決めず、気になる展示として保存します。"
+            isMovie
+                ? "日程を決めず、観たい作品として保存します。"
+                : "日程を決めず、気になる展示として保存します。"
         case .plan:
-            isMovie ? "作品情報と観る日時をまとめて登録します。" : "展示情報と鑑賞日時をまとめて登録します。"
+            isMovie
+                ? "作品情報と、観る予定の日時・場所を登録します。"
+                : "展示情報と、鑑賞予定の日時・会場を登録します。"
         case .visited:
-            isMovie ? "作品情報と今回の鑑賞記録を登録します。" : "展示情報と今回の鑑賞記録を登録します。"
+            isMovie
+                ? "作品情報と、鑑賞した日時・場所・感想を登録します。"
+                : "展示情報と、鑑賞した日時・会場・感想を登録します。"
         }
     }
 
@@ -106,6 +108,7 @@ struct SimpleCategoryRegistrationPurposePicker: View {
         case .visited: "square.and.pencil"
         }
     }
+
 }
 
 private extension View {

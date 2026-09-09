@@ -185,6 +185,69 @@ enum PlaceSearchService {
         return nil
     }
 
+    /// 保存済み住所がない旧記録でも、地図に解決できた施設の住所を詳細へ表示する。
+    /// 座標がある場合は同名施設の候補から最も近いものを優先する。
+    @MainActor
+    static func resolveAddress(
+        queries: [String],
+        nearLatitude latitude: Double,
+        longitude: Double
+    ) async -> String? {
+        let normalizedQueries = queries.reduce(into: [String]()) { result, value in
+            let query = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty, !result.contains(query) else { return }
+            result.append(query)
+        }
+
+        var candidates: [PlaceSearchCandidate] = []
+        for query in normalizedQueries {
+            guard !Task.isCancelled else { return nil }
+            if let results = try? await search(query: query) {
+                candidates.append(contentsOf: results.filter { !$0.address.isEmpty })
+            }
+        }
+
+        if let candidate = preferredAddressCandidate(
+            candidates,
+            nearLatitude: latitude,
+            longitude: longitude
+        ) {
+            return candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        guard latitude != 0 || longitude != 0 else { return nil }
+        let geocoder = CLGeocoder()
+        let location = CLLocation(latitude: latitude, longitude: longitude)
+        guard let placemark = try? await geocoder.reverseGeocodeLocation(location).first else {
+            return nil
+        }
+        if let postalAddress = placemark.postalAddress {
+            let address = CNPostalAddressFormatter.string(from: postalAddress, style: .mailingAddress)
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return address.isEmpty ? nil : address
+        }
+        let address = placemark.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return address.isEmpty ? nil : address
+    }
+
+    nonisolated static func preferredAddressCandidate(
+        _ candidates: [PlaceSearchCandidate],
+        nearLatitude latitude: Double,
+        longitude: Double
+    ) -> PlaceSearchCandidate? {
+        let populated = candidates.filter {
+            !$0.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard latitude != 0 || longitude != 0 else { return populated.first }
+        let origin = CLLocation(latitude: latitude, longitude: longitude)
+        return populated.min { lhs, rhs in
+            let lhsDistance = origin.distance(from: CLLocation(latitude: lhs.latitude, longitude: lhs.longitude))
+            let rhsDistance = origin.distance(from: CLLocation(latitude: rhs.latitude, longitude: rhs.longitude))
+            return lhsDistance < rhsDistance
+        }
+    }
+
     nonisolated static func prioritizedCandidates(
         _ candidates: [PlaceSearchCandidate],
         for query: String

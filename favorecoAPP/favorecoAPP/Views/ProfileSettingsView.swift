@@ -221,6 +221,8 @@ struct EditSocialAccountView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \RecordCategory.sortOrder) private var categories: [RecordCategory]
     @State private var draft: SocialAccountDraft
+    @State private var isPerformingAction = false
+    @State private var operationErrorMessage: String?
 
     private var visibleCategories: [RecordCategory] {
         categories.filter { !$0.isArchived }
@@ -283,12 +285,22 @@ struct EditSocialAccountView: View {
                 Button("保存") {
                     save()
                 }
-                .disabled(!draft.canSave)
+                .disabled(!draft.canSave || isPerformingAction)
             }
+        }
+        .alert("操作を完了できませんでした", isPresented: Binding(
+            get: { operationErrorMessage != nil },
+            set: { if !$0 { operationErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { operationErrorMessage = nil }
+        } message: {
+            Text(operationErrorMessage ?? "")
         }
     }
 
     private func save() {
+        guard !isPerformingAction, draft.canSave else { return }
+        isPerformingAction = true
         let now = Date()
         let selectedCategory = visibleCategories.first { $0.id == draft.categoryID }
 
@@ -318,12 +330,16 @@ struct EditSocialAccountView: View {
             try modelContext.save()
             dismiss()
         } catch {
-            assertionFailure("Failed to save social account: \(error)")
+            modelContext.rollback()
+            isPerformingAction = false
+            operationErrorMessage = "入力内容を保持したまま保存をやり直せます。もう一度お試しください。"
+            debugPrint("Failed to save social account: \(error)")
         }
     }
 
     private func archive() {
-        guard let account else { return }
+        guard !isPerformingAction, let account else { return }
+        isPerformingAction = true
         account.isArchived = true
         account.updatedAt = Date()
 
@@ -331,7 +347,10 @@ struct EditSocialAccountView: View {
             try modelContext.save()
             dismiss()
         } catch {
-            assertionFailure("Failed to archive social account: \(error)")
+            modelContext.rollback()
+            isPerformingAction = false
+            operationErrorMessage = "このSNSは削除されていません。もう一度お試しください。"
+            debugPrint("Failed to archive social account: \(error)")
         }
     }
 }
