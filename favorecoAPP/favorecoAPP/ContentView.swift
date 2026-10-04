@@ -55,6 +55,7 @@ struct ContentView: View {
                 .zIndex(100)
             }
         }
+        .favorecoInteractionFeedbackOverlay()
         .modifier(AppTextSizeModifier())
         .environment(\.locale, Locale(identifier: "ja_JP"))
         .preferredColorScheme(appearanceMode.colorScheme)

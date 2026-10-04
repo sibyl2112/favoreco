@@ -633,6 +633,12 @@ extension ExperienceEvent {
         return number > 0 ? "シーズン\(number)" : ""
     }
 
+    var screenWorkClassificationLabel: String {
+        [screenWorkType.displayName, screenWorkSeasonLabel]
+            .filter { !$0.isEmpty }
+            .joined(separator: "・")
+    }
+
     func applyScreenWorkClassification(typeKey: String, seasonNumber: Int) {
         let type = ScreenWorkType.resolved(from: typeKey)
         subTypeKey = type.rawValue
@@ -686,32 +692,46 @@ struct HeroBackgroundPreset: Identifiable, Equatable {
                 .init(key: "theaterVenue", title: "劇場", resourceName: "theater-hero-venue-v2"),
                 .init(key: "theaterNightTrain", title: "夜行列車", resourceName: "theater-hero-fictional-night-train"),
                 .init(key: "theaterWinterGarden", title: "冬の庭園", resourceName: "theater-hero-fictional-winter-garden"),
+                .init(key: "theaterMatinee", title: "昼の劇場", resourceName: "theater-hero-matinee"),
+                .init(key: "theaterBackstage", title: "舞台袖", resourceName: "theater-hero-backstage"),
             ]
         case "movie":
             [
                 .init(key: "movieDefault", title: "映像作品", resourceName: "movie-hero-default"),
                 .init(key: "movieDrama", title: "ドラマ", resourceName: "movie-hero-drama"),
                 .init(key: "movieAnime", title: "アニメ", resourceName: "movie-hero-anime"),
+                .init(key: "movieProjector", title: "映写室", resourceName: "movie-hero-projector"),
+                .init(key: "movieOutdoor", title: "星空シネマ", resourceName: "movie-hero-outdoor"),
             ]
         case "book":
             [
                 .init(key: "bookDefault", title: "書籍", resourceName: "book-hero-default"),
+                .init(key: "bookStacks", title: "書庫", resourceName: "book-hero-stacks"),
+                .init(key: "bookReading", title: "読書室", resourceName: "book-hero-reading"),
             ]
         case "museum":
             [
                 .init(key: "museumDefault", title: "ミュージアム", resourceName: "museum-hero-default"),
+                .init(key: "museumSculpture", title: "彫刻ギャラリー", resourceName: "museum-hero-sculpture"),
+                .init(key: "museumHistory", title: "博物館", resourceName: "museum-hero-history"),
             ]
         case "live":
             [
                 .init(key: "liveDefault", title: "ライブ", resourceName: "live-hero-default"),
+                .init(key: "liveFestival", title: "野外フェス", resourceName: "live-hero-festival"),
+                .init(key: "liveAcoustic", title: "アコースティック", resourceName: "live-hero-acoustic"),
             ]
         case "sake":
             [
                 .init(key: "sakeDefault", title: "お酒", resourceName: "sake-hero-default"),
+                .init(key: "sakeBrewery", title: "酒蔵", resourceName: "sake-hero-brewery"),
+                .init(key: "sakeTasting", title: "利き酒", resourceName: "sake-hero-tasting"),
             ]
         case "theme_park":
             [
                 .init(key: "themeParkDefault", title: "テーマパーク", resourceName: "theme_park-hero-default"),
+                .init(key: "parkBlueSky", title: "青空のパーク", resourceName: "theme_park-hero-blue-sky"),
+                .init(key: "parkCoaster", title: "青空とコースター", resourceName: "theme_park-hero-coaster"),
             ]
         case "nature_living":
             [
@@ -719,6 +739,8 @@ struct HeroBackgroundPreset: Identifiable, Equatable {
                 .init(key: "natureDefault", title: "動物園", resourceName: "nature_living-hero-zoo"),
                 .init(key: "natureAquarium", title: "水族館", resourceName: "nature_living-hero-aquarium"),
                 .init(key: "natureBotanical", title: "植物園", resourceName: "nature_living-hero-botanical"),
+                .init(key: "natureRedPanda", title: "動物園・レッサーパンダ", resourceName: "nature_living-hero-red-panda"),
+                .init(key: "natureTurtle", title: "水族館・ウミガメ", resourceName: "nature_living-hero-turtle"),
             ]
         case "outing_facility":
             [
@@ -729,10 +751,14 @@ struct HeroBackgroundPreset: Identifiable, Equatable {
                 .init(key: "goshuinShrine", title: "神社", resourceName: "goshuin-hero-bright-shrine"),
                 .init(key: "goshuinTemple", title: "寺院", resourceName: "goshuin-hero-temple"),
                 .init(key: "goshuinMoss", title: "苔庭", resourceName: "goshuin-hero-moss-garden"),
+                .init(key: "goshuinTorii", title: "鳥居と参道", resourceName: "goshuin-hero-torii"),
+                .init(key: "goshuinAutumn", title: "紅葉の寺院", resourceName: "goshuin-hero-autumn"),
             ]
         case "random_goods":
             [
                 .init(key: "goodsDefault", title: "コレクション", resourceName: "random_goods-hero-default"),
+                .init(key: "goodsCapsules", title: "カプセルトイ", resourceName: "random_goods-hero-capsules"),
+                .init(key: "goodsShelf", title: "コレクション棚", resourceName: "random_goods-hero-shelf"),
             ]
         default:
             []

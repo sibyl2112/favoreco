@@ -53,13 +53,51 @@ enum SampleDataSeeder {
         + plannedPerCategory
         + interestedPerCategory
         + catalogOnlyPerCategory
+    private static let bookReadCount = 8
+    private static let bookReadingCount = 4
+    private static let bookInterestedCount = 4
+    private static let bookToReadCount = 8
+    private static let bookSampleCount = bookReadCount
+        + bookReadingCount
+        + bookInterestedCount
+        + bookToReadCount
 
     private enum SampleScenario: Equatable {
         case completed
+        case reading
         case planned
         case interested
         case catalogOnly
     }
+
+    private struct BookSampleShelfDefinition {
+        let id: UUID
+        let name: String
+        let sortOrder: Int
+    }
+
+    private static let bookSampleShelfDefinitions = [
+        BookSampleShelfDefinition(
+            id: UUID(uuidString: "B0000000-0000-4000-8000-000000000001")!,
+            name: "小説",
+            sortOrder: 0
+        ),
+        BookSampleShelfDefinition(
+            id: UUID(uuidString: "B0000000-0000-4000-8000-000000000002")!,
+            name: "エッセイ・詩",
+            sortOrder: 1
+        ),
+        BookSampleShelfDefinition(
+            id: UUID(uuidString: "B0000000-0000-4000-8000-000000000003")!,
+            name: "漫画",
+            sortOrder: 2
+        ),
+        BookSampleShelfDefinition(
+            id: UUID(uuidString: "B0000000-0000-4000-8000-000000000004")!,
+            name: "仕事・学び",
+            sortOrder: 3
+        )
+    ]
 
     @MainActor
     @discardableResult
@@ -78,7 +116,8 @@ enum SampleDataSeeder {
     @discardableResult
     static func replaceSamples(
         in context: ModelContext,
-        categoryTemplateKeys: Set<String>? = nil
+        categoryTemplateKeys: Set<String>? = nil,
+        now: Date = Date()
     ) throws -> DebugSampleDataSummary {
         try CategoryPresetSeeder.ensureAtLeastOneActiveCategory(in: context)
         _ = try deleteSamples(in: context)
@@ -90,7 +129,9 @@ enum SampleDataSeeder {
             !category.isArchived
                 && (categoryTemplateKeys?.contains(category.templateKey) ?? true)
         }
-        let now = Date()
+        let bookShelves = categories.contains { $0.templateKey == "book" }
+            ? makeSampleBookShelves(in: context, now: now)
+            : [:]
         var placesByName: [String: PlaceMaster] = [:]
         for place in try context.fetch(FetchDescriptor<PlaceMaster>()) where placesByName[place.name] == nil {
             placesByName[place.name] = place
@@ -107,11 +148,11 @@ enum SampleDataSeeder {
         var ticketAttemptCount = 0
 
         for (categoryIndex, category) in categories.enumerated() {
-            // 同じジャンルの16件は共通の軽量サンプル画像を使う。
+            // 同じジャンルのサンプルは共通の軽量画像を使う（書籍24件、その他16件）。
             // Bundle読み込みとUIImageデコードを各レコードで繰り返さない。
             let categoryImage = sampleImage(for: category, index: 0)
-            for sampleIndex in 0..<samplesPerCategory {
-                let scenario = sampleScenario(for: sampleIndex)
+            for sampleIndex in 0..<sampleCount(for: category) {
+                let scenario = sampleScenario(for: sampleIndex, category: category)
                 if category.templateKey == "random_goods" {
                     insertCollectibleSample(
                         category: category,
@@ -142,35 +183,14 @@ enum SampleDataSeeder {
                 )
                 let aspectRatioKey = sampleAspectRatioKey(for: category)
                 let placeSeed = samplePlace(for: category, index: sampleIndex)
-                let unitFields = VisitUnitFields(
-                    ocrText: sampleOCRText(for: category, title: definition.title),
-                    visitSubtitle: category.templateKey == "nature_living" && scenario == .completed
-                        ? natureVisitSubtitle(for: sampleIndex)
-                        : "",
-                    eventPeriodStartsAt: scenario == .catalogOnly ? itemDate : nil,
-                    eventPeriodEndsAt: scenario == .catalogOnly
-                        ? itemDate.addingTimeInterval(14 * 24 * 60 * 60)
-                        : nil,
-                    eventVenues: scenario == .catalogOnly
-                        ? [EventVenueEntry(
-                            name: placeSeed.name,
-                            address: placeSeed.address,
-                            performanceLabel: targetInformationLabel(for: category),
-                            startsAt: itemDate,
-                            endsAt: itemDate.addingTimeInterval(14 * 24 * 60 * 60)
-                        )]
-                        : [],
-                    screenWorkSeasonNumber: sampleScreenWorkSeasonNumber(
-                        for: category,
-                        index: sampleIndex
-                    ),
-                    eyecatchAspectRatioKey: aspectRatioKey,
-                    goshuinBookSizeKey: category.templateKey == "goshuin" ? GoshuinBookSize.standard.key : "",
-                    advancedEntries: sampleAdvancedEntries(for: category, index: sampleIndex),
-                    bookSeriesName: "",
-                    bookVolumeNumber: "",
-                    bookAuthorName: "",
-                    bookPublisherName: ""
+                let unitFields = sampleUnitFields(
+                    for: category,
+                    definition: definition,
+                    place: placeSeed,
+                    date: itemDate,
+                    sampleIndex: sampleIndex,
+                    scenario: scenario,
+                    aspectRatioKey: aspectRatioKey
                 )
                 let place = resolvePlace(
                     placeSeed,
@@ -195,6 +215,13 @@ enum SampleDataSeeder {
                 )
                 context.insert(event)
                 eventCount += 1
+                if category.templateKey == "book" {
+                    assignBookSample(
+                        event,
+                        sampleIndex: sampleIndex,
+                        shelvesByName: bookShelves
+                    )
+                }
 
                 if let personSeed = samplePerson(for: category, index: sampleIndex) {
                     let person = resolvePerson(
@@ -232,6 +259,12 @@ enum SampleDataSeeder {
                         sourceURL: "\(sampleURLPrefix)\(category.templateKey)/plan/source",
                         memo: "Homeとカレンダーで未来予定の使い方を確認できるサンプルです。",
                         notificationLeadTimeKey: "none",
+                        unitFieldsRaw: samplePlanFields(
+                            for: category,
+                            planStart: itemDate,
+                            sampleIndex: sampleIndex,
+                            now: now
+                        ).encodedRawValue,
                         createdAt: now,
                         updatedAt: now,
                         category: category,
@@ -241,27 +274,36 @@ enum SampleDataSeeder {
                     context.insert(plan)
                     planCount += 1
 
-                    if let attempt = sampleTicketAttempt(
+                    let attempts = sampleTicketAttempts(
                         for: category,
                         plan: plan,
                         planStart: itemDate,
+                        plannedIndex: sampleIndex - completedPerCategory,
                         now: now
-                    ) {
+                    )
+                    for attempt in attempts {
                         context.insert(attempt)
                         ticketAttemptCount += 1
                     }
-                } else if scenario == .completed {
+                } else if scenario == .completed || scenario == .reading {
+                    let isReadingBook = category.templateKey == "book" && scenario == .reading
                     let visit = Visit(
                         visitedAt: itemDate,
-                        endedAt: itemDate.addingTimeInterval(sampleDuration(for: category)),
+                        endedAt: isReadingBook
+                            ? itemDate
+                            : min(now, itemDate.addingTimeInterval(sampleDuration(for: category))),
                         venueNameSnapshot: place.name,
-                        overallRating: sampleIndex == 0 ? 4.5 : 4.0,
+                        overallRating: isReadingBook ? 0 : (sampleIndex == 0 ? 4.5 : 4.0),
                         outcomeKey: hasEnabledUnit("ticketPlan", in: category) ? "attended" : "",
                         seatText: ["theater", "live"].contains(category.templateKey)
                             ? "1階 \(10 + sampleIndex)列 \(12 + sampleIndex)番"
                             : "",
                         eyecatchPath: imagePath,
-                        note: sampleNote(for: category, title: definition.title),
+                        note: sampleNote(
+                            for: category,
+                            title: definition.title,
+                            scenario: scenario
+                        ),
                         tagNamesRaw: "サンプル,\(category.name)",
                         amount: sampleAmount(for: category, index: sampleIndex),
                         latitude: place.latitude,
@@ -349,7 +391,12 @@ enum SampleDataSeeder {
                 && ($0.visits ?? []).isEmpty
                 && ($0.plans ?? []).isEmpty
         }.count
+        let sampleShelfIDs = Set(bookSampleShelfDefinitions.map(\.id))
+        let sampleShelves = try context.fetch(FetchDescriptor<BookShelf>()).filter {
+            sampleShelfIDs.contains($0.id)
+        }
 
+        for shelf in sampleShelves { context.delete(shelf) }
         for attempt in sampleAttempts {
             TicketNotificationScheduler.cancel(attemptID: attempt.id)
             context.delete(attempt)
@@ -668,7 +715,15 @@ enum SampleDataSeeder {
             seriesName = "参拝の記録"
             organizer = ""
         case "book":
-            titles = ["夜明けの標本室", "雨粒の図書館", "北へ帰る鳥", "月光庭園", "静かな航海日誌", "星を数える部屋", "風の脚注", "冬の栞", "透明な物語", "遠雷のエッセイ", "海辺の短編集", "森を読む", "夜行列車の随筆", "青い装丁の詩集", "小さな博物誌", "灯台守の手紙"]
+            titles = [
+                "夜明けの標本室", "雨粒の図書館", "北へ帰る鳥",
+                "月光庭園", "静かな航海日誌", "星を数える部屋",
+                "街角探偵と青い扉", "街角探偵と消えた時計", "街角探偵と最後の切符",
+                "小さなチームの設計図", "伝わる文章の組み立て方", "暮らしを整える情報術",
+                "透明な物語", "遠雷のエッセイ", "海辺の短編集", "森を読む",
+                "冬の栞", "夜行列車の随筆", "月面書店の休日", "余白から考える仕事術",
+                "灯台守の手紙", "青い装丁の詩集", "喫茶店の漫画日記", "はじめての観察ノート"
+            ]
             // 書誌情報はISBN検索またはユーザー入力だけを正とし、サンプル生成では捏造しない。
             seriesName = ""
             organizer = ""
@@ -787,11 +842,19 @@ enum SampleDataSeeder {
                 .init(name: "雪村 灯", reading: "ゆきむらあかり", roleKey: "director", displayRole: "監督")
             ]
         case "book":
-            people = [
-                .init(name: "遠野 灯子", reading: "とおのとうこ", roleKey: "author", displayRole: "著者"),
-                .init(name: "水瀬 栞", reading: "みなせしおり", roleKey: "author", displayRole: "著者"),
-                .init(name: "北原 澄", reading: "きたはらすみ", roleKey: "author", displayRole: "著者")
-            ]
+            let authorName = sampleBookAuthorName(for: index)
+            let reading = switch authorName {
+            case "遠野 灯子": "とおのとうこ"
+            case "水瀬 栞": "みなせしおり"
+            case "北原 澄": "きたはらすみ"
+            default: "かくうけんきゅうかい"
+            }
+            return .init(
+                name: authorName,
+                reading: reading,
+                roleKey: authorName == "架空研究会" ? "group" : "author",
+                displayRole: "著者"
+            )
         default:
             return nil
         }
@@ -884,6 +947,98 @@ enum SampleDataSeeder {
         }
     }
 
+    @MainActor
+    private static func makeSampleBookShelves(
+        in context: ModelContext,
+        now: Date
+    ) -> [String: BookShelf] {
+        var shelvesByName: [String: BookShelf] = [:]
+        for definition in bookSampleShelfDefinitions {
+            let shelf = BookShelf(
+                id: definition.id,
+                name: definition.name,
+                sortOrder: definition.sortOrder,
+                createdAt: now,
+                updatedAt: now
+            )
+            context.insert(shelf)
+            shelvesByName[definition.name] = shelf
+        }
+        return shelvesByName
+    }
+
+    private static func assignBookSample(
+        _ event: ExperienceEvent,
+        sampleIndex: Int,
+        shelvesByName: [String: BookShelf]
+    ) {
+        let primaryShelfName: String
+        switch sampleBookContentTypeKey(for: sampleIndex) {
+        case "essay", "art":
+            primaryShelfName = "エッセイ・詩"
+        case "manga":
+            primaryShelfName = "漫画"
+        case "business", "technical", "practical":
+            primaryShelfName = "仕事・学び"
+        default:
+            primaryShelfName = "小説"
+        }
+
+        var assignedShelves = [primaryShelfName]
+        if sampleIndex == 5 {
+            assignedShelves.append("小説")
+        } else if sampleIndex == 17 {
+            assignedShelves.append("仕事・学び")
+        }
+        event.bookShelves = assignedShelves.compactMap { shelvesByName[$0] }
+    }
+
+    private static func sampleBookSeriesName(for index: Int) -> String {
+        switch index {
+        case 0...2: "星めぐり叢書"
+        case 3...5: "季節の随筆"
+        case 6...8: "街角探偵コミックス"
+        case 9...11: "手仕事と設計"
+        default: ""
+        }
+    }
+
+    private static func sampleBookVolumeNumber(for index: Int) -> String {
+        sampleBookSeriesName(for: index).isEmpty ? "" : "\((index % 3) + 1)"
+    }
+
+    private static func sampleBookAuthorName(for index: Int) -> String {
+        switch index {
+        case 0...2: "遠野 灯子"
+        case 3...5: "水瀬 栞"
+        case 6...8: "北原 澄"
+        case 9...11: "架空研究会"
+        default: ["遠野 灯子", "水瀬 栞", "北原 澄", "架空研究会"][index % 4]
+        }
+    }
+
+    private static func sampleBookPublisherName(for index: Int) -> String {
+        ["北灯出版", "雨音書房", "青葉コミックス", "余白社"][index % 4]
+    }
+
+    private static func sampleBookContentTypeKey(for index: Int) -> String {
+        let keys = [
+            "novel", "novel", "novel",
+            "essay", "essay", "essay",
+            "manga", "manga", "manga",
+            "technical", "business", "practical",
+            "novel", "essay", "manga", "practical",
+            "novel", "essay", "manga", "business",
+            "novel", "art", "manga", "technical"
+        ]
+        return keys[index % keys.count]
+    }
+
+    private static func sampleBookMediumKey(for index: Int) -> String {
+        let keys = ["paper", "paper", "ebook", "paper", "ebook", "audiobook"]
+        return keys[index % keys.count]
+    }
+
     private static func sampleImage(for category: RecordCategory, index: Int) -> SampleImage {
         let resourceName = "v3-\(category.templateKey)"
         let resourceURL = Bundle.main.url(forResource: resourceName, withExtension: "jpg")
@@ -931,21 +1086,191 @@ enum SampleDataSeeder {
         return SampleImage(data: data, width: Int(size.width), height: Int(size.height))
     }
 
+    private static func sampleUnitFields(
+        for category: RecordCategory,
+        definition: SampleDefinition,
+        place: SamplePlace,
+        date: Date,
+        sampleIndex: Int,
+        scenario: SampleScenario,
+        aspectRatioKey: String
+    ) -> VisitUnitFields {
+        let isCompleted = scenario == .completed
+        let eventPeriodEnd = date.addingTimeInterval(14 * 24 * 60 * 60)
+        let isBook = category.templateKey == "book"
+        let isLive = category.templateKey == "live"
+        let hasMoments = isCompleted && ["theme_park", "nature_living", "outing_facility"].contains(category.templateKey)
+
+        return VisitUnitFields(
+            ocrText: sampleOCRText(for: category, title: definition.title),
+            styleNames: isCompleted ? ["心に残った", "また行きたい"] : [],
+            socialLinks: ["https://sample.favoreco.app/social/\(category.templateKey)"],
+            companionSocialLinks: isCompleted ? ["@sample_companion"] : [],
+            eventSubtitle: scenario == .planned ? "開催予定のサンプル" : "",
+            visitSubtitle: category.templateKey == "nature_living" && isCompleted
+                ? natureVisitSubtitle(for: sampleIndex)
+                : "",
+            venueAddressSnapshot: place.address,
+            eventCreditsText: ["theater", "movie", "live"].contains(category.templateKey)
+                ? "出演：サンプルキャスト\n制作：\(definition.organizer)"
+                : "",
+            eventTicketURL: ["theater", "live"].contains(category.templateKey)
+                ? "\(sampleURLPrefix)\(category.templateKey)/ticket-guide"
+                : "",
+            eventPeriodStartsAt: scenario == .catalogOnly ? date : nil,
+            eventPeriodEndsAt: scenario == .catalogOnly ? eventPeriodEnd : nil,
+            eventVenues: scenario == .catalogOnly
+                ? [EventVenueEntry(
+                    name: place.name,
+                    address: place.address,
+                    performanceLabel: targetInformationLabel(for: category),
+                    startsAt: date,
+                    endsAt: eventPeriodEnd
+                )]
+                : [],
+            performanceOpensAt: ["theater", "live"].contains(category.templateKey)
+                ? date.addingTimeInterval(-30 * 60)
+                : nil,
+            screenWorkSeasonNumber: sampleScreenWorkSeasonNumber(for: category, index: sampleIndex),
+            screenWorkOriginalTitle: category.templateKey == "movie" ? "Sample Original Title" : "",
+            screenWorkReleaseDate: category.templateKey == "movie" ? "2026" : "",
+            screenWorkOverview: category.templateKey == "movie"
+                ? "表示確認用の架空作品です。作品情報、予定、鑑賞記録の流れを確認できます。"
+                : "",
+            screenWorkTMDBMediaType: category.templateKey == "movie" ? "movie" : "",
+            eyecatchAspectRatioKey: aspectRatioKey,
+            heroBackgroundPresetKey: category.templateKey == "theater"
+                ? "theaterVenue"
+                : (category.templateKey == "live" ? "liveDefault" : ""),
+            goshuinBookSizeKey: category.templateKey == "goshuin" ? GoshuinBookSize.standard.key : "",
+            weatherSymbolName: isCompleted ? "cloud.sun.fill" : "",
+            weatherHighCelsius: isCompleted ? 24 : nil,
+            weatherLowCelsius: isCompleted ? 17 : nil,
+            weatherFetchedAt: isCompleted ? date : nil,
+            advancedEntries: sampleAdvancedEntries(
+                for: category,
+                index: sampleIndex,
+                scenario: scenario
+            ),
+            liveSetlistEntries: isLive && isCompleted
+                ? [
+                    LiveSetlistEntry(kind: .song, text: "Opening Light"),
+                    LiveSetlistEntry(kind: .mc, text: "MC：サンプルトーク"),
+                    LiveSetlistEntry(kind: .encore, text: "Encore Sky")
+                ]
+                : [],
+            expenseEntries: isCompleted
+                ? [
+                    VisitExpenseEntry(title: "交通費", amount: 1_200),
+                    VisitExpenseEntry(title: "グッズ・飲食", amount: 2_000)
+                ]
+                : [],
+            momentEntries: hasMoments
+                ? [
+                    VisitMomentEntry(title: "いちばん印象に残った体験", note: "写真と一緒に残す表示確認用の項目です。"),
+                    VisitMomentEntry(title: "次回もう一度見たいもの", note: "複数項目の並びを確認できます。")
+                ]
+                : [],
+            bookSeriesName: isBook ? sampleBookSeriesName(for: sampleIndex) : "",
+            bookVolumeNumber: isBook ? sampleBookVolumeNumber(for: sampleIndex) : "",
+            bookAuthorName: isBook ? sampleBookAuthorName(for: sampleIndex) : "",
+            bookPublisherName: isBook ? sampleBookPublisherName(for: sampleIndex) : "",
+            bookPublishedDate: isBook ? "2026年4月" : "",
+            bookPriceText: isBook ? "1,870円" : "",
+            bookPageCount: isBook ? 320 : 0,
+            bookContentTypeKey: isBook ? sampleBookContentTypeKey(for: sampleIndex) : "",
+            bookMediumKey: isBook ? sampleBookMediumKey(for: sampleIndex) : "",
+            bookReadingHasEndDate: isBook && isCompleted
+                ? true
+                : (isBook && scenario == .reading ? false : nil)
+        )
+    }
+
+    private static func samplePlanFields(
+        for category: RecordCategory,
+        planStart: Date,
+        sampleIndex: Int,
+        now: Date
+    ) -> PlanPreparationFields {
+        guard ["theater", "live"].contains(category.templateKey) else {
+            return PlanPreparationFields(
+                checklistModeKey: PlanPreparationFields.ChecklistMode.enabled.rawValue,
+                tagNames: ["サンプル予定"]
+            )
+        }
+        let plannedIndex = sampleIndex - completedPerCategory
+        return PlanPreparationFields(
+            checklistModeKey: PlanPreparationFields.ChecklistMode.enabled.rawValue,
+            tasks: [
+                PlanPreparationTask(
+                    title: "チケットと身分証を確認",
+                    kindKey: PlanPreparationKind.baggage.rawValue,
+                    dueAt: planStart.addingTimeInterval(-24 * 60 * 60),
+                    isCompleted: plannedIndex > 0,
+                    sortOrder: 0,
+                    createdAt: now,
+                    updatedAt: now,
+                    completedAt: plannedIndex > 0 ? now : nil
+                ),
+                PlanPreparationTask(
+                    title: "会場までの移動を予約",
+                    kindKey: PlanPreparationKind.shinkansen.rawValue,
+                    startsAt: planStart.addingTimeInterval(-5 * 60 * 60),
+                    endsAt: planStart.addingTimeInterval(-2 * 60 * 60),
+                    dueAt: planStart.addingTimeInterval(-7 * 24 * 60 * 60),
+                    amount: 14_000,
+                    sortOrder: 1,
+                    createdAt: now,
+                    updatedAt: now
+                )
+            ],
+            tagNames: ["サンプル予定", category.name],
+            amountText: category.templateKey == "theater" ? "12000" : "9800",
+            expenseEntries: [VisitExpenseEntry(title: "交通費", amount: 14_000)]
+        )
+    }
+
     private static func samplePastDate(now: Date, categoryIndex: Int, sampleIndex: Int) -> Date {
-        let daysAgo = 18 + categoryIndex * 7 + sampleIndex * 23
-        return Calendar.current.date(byAdding: .day, value: -daysAgo, to: now) ?? now
+        let calendar = Calendar.current
+        if sampleIndex == 0, categoryIndex.isMultiple(of: 3) {
+            return calendar.startOfDay(for: now)
+        }
+        let dayOffsets = [7, 30, 120, 370, 730]
+        let daysAgo = dayOffsets[sampleIndex % dayOffsets.count] + categoryIndex * 2
+        let day = calendar.date(byAdding: .day, value: -daysAgo, to: now) ?? now
+        return calendar.date(bySettingHour: 11 + (sampleIndex % 7), minute: 30, second: 0, of: day) ?? day
     }
 
     private static func sampleFutureDate(now: Date, categoryIndex: Int, offset: Int = 0) -> Date {
-        let day = Calendar.current.date(
+        let calendar = Calendar.current
+        // Keep every planned sample ahead of both the refresh time and the
+        // longest first-application result deadline (now + 6 days).
+        // Today's completed samples still exercise the current-day calendar.
+        let futureOffsets = [7, 14, 45, 90, 180]
+        let day = calendar.date(
             byAdding: .day,
-            value: 5 + categoryIndex * 3 + offset * 7,
+            value: futureOffsets[offset % futureOffsets.count] + categoryIndex,
             to: now
         ) ?? now
-        return Calendar.current.date(bySettingHour: 18, minute: 30, second: 0, of: day) ?? day
+        return calendar.date(bySettingHour: 18, minute: 30, second: 0, of: day) ?? day
     }
 
-    private static func sampleScenario(for index: Int) -> SampleScenario {
+    private static func sampleCount(for category: RecordCategory) -> Int {
+        category.templateKey == "book" ? bookSampleCount : samplesPerCategory
+    }
+
+    private static func sampleScenario(
+        for index: Int,
+        category: RecordCategory
+    ) -> SampleScenario {
+        if category.templateKey == "book" {
+            if index < bookReadCount { return .completed }
+            if index < bookReadCount + bookReadingCount { return .reading }
+            if index < bookReadCount + bookReadingCount + bookInterestedCount {
+                return .interested
+            }
+            return .catalogOnly
+        }
         if index < completedPerCategory { return .completed }
         if index < completedPerCategory + plannedPerCategory { return .planned }
         if index < completedPerCategory + plannedPerCategory + interestedPerCategory {
@@ -962,6 +1287,12 @@ enum SampleDataSeeder {
     ) -> Date {
         switch scenario {
         case .completed:
+            return samplePastDate(
+                now: now,
+                categoryIndex: categoryIndex,
+                sampleIndex: sampleIndex
+            )
+        case .reading:
             return samplePastDate(
                 now: now,
                 categoryIndex: categoryIndex,
@@ -1071,10 +1402,17 @@ enum SampleDataSeeder {
         }
     }
 
-    private static func sampleNote(for category: RecordCategory, title: String) -> String {
+    private static func sampleNote(
+        for category: RecordCategory,
+        title: String,
+        scenario: SampleScenario
+    ) -> String {
         switch category.templateKey {
         case "goshuin": return "\(title)でいただいた御朱印を残すサンプルです。"
-        case "book": return "読了後の感想や心に残った一節を記録するサンプルです。"
+        case "book":
+            return scenario == .reading
+                ? "読書中のメモや気になった一節を残すサンプルです。"
+                : "読了後の感想や心に残った一節を記録するサンプルです。"
         default: return "\(title)の写真、評価、場所、人物の記録方法を確認できます。"
         }
     }
@@ -1089,12 +1427,22 @@ enum SampleDataSeeder {
         }
     }
 
-    private static func sampleAdvancedEntries(for category: RecordCategory, index: Int) -> [AdvancedFieldEntry] {
+    private static func sampleAdvancedEntries(
+        for category: RecordCategory,
+        index: Int,
+        scenario: SampleScenario
+    ) -> [AdvancedFieldEntry] {
         switch category.templateKey {
         case "sake":
             return [AdvancedFieldEntry(label: "飲み方", value: index == 2 ? "ロック" : "冷やして")]
         case "book":
-            return [AdvancedFieldEntry(label: "読書状態", value: index == 2 ? "読みたい" : "読了")]
+            let status = switch scenario {
+            case .completed: "読了"
+            case .reading: "読書中"
+            case .interested: "気になる"
+            case .planned, .catalogOnly: "積読"
+            }
+            return [AdvancedFieldEntry(label: "読書状態", value: status)]
         case "goshuin":
             return [AdvancedFieldEntry(label: "御朱印帳", value: GoshuinBookSize.standard.name)]
         default:
@@ -1102,45 +1450,148 @@ enum SampleDataSeeder {
         }
     }
 
-    private static func sampleTicketAttempt(
+    private static func sampleTicketAttempts(
         for category: RecordCategory,
         plan: Plan,
         planStart: Date,
+        plannedIndex: Int,
         now: Date
-    ) -> TicketAttempt? {
-        switch category.templateKey {
-        case "theater":
-            return TicketAttempt(
-                statusKey: "waitingResult",
-                entryRouteKey: "lottery",
-                ticketSite: "サンプルプレイガイド",
-                applyDeadlineAt: now.addingTimeInterval(2 * 24 * 60 * 60),
-                resultAnnounceAt: now.addingTimeInterval(5 * 24 * 60 * 60),
-                issueStartAt: planStart.addingTimeInterval(-7 * 24 * 60 * 60),
-                price: Decimal(12_000),
-                purchaseURL: "\(sampleURLPrefix)theater/ticket",
-                memo: "当落待ち表示を確認するサンプルです。通知は予約しません。",
-                createdAt: now,
+    ) -> [TicketAttempt] {
+        guard ["theater", "live"].contains(category.templateKey) else { return [] }
+
+        let day: TimeInterval = 24 * 60 * 60
+        let price: Decimal = category.templateKey == "theater" ? 12_000 : 9_800
+        let site = category.templateKey == "theater" ? "サンプルプレイガイド" : "サンプルFC"
+        let route = category.templateKey == "theater" ? "lottery" : "fanClub"
+        let baseURL = "\(sampleURLPrefix)\(category.templateKey)/ticket/\(plannedIndex + 1)"
+
+        func attempt(
+            status: String,
+            suffix: String,
+            saleStartAt: Date = .distantPast,
+            applyDeadlineAt: Date = .distantPast,
+            resultAnnounceAt: Date = .distantPast,
+            paymentDeadlineAt: Date = .distantPast,
+            issueStartAt: Date = .distantPast,
+            paidAt: Date = .distantPast,
+            issuedAt: Date = .distantPast,
+            seatText: String = ""
+        ) -> TicketAttempt {
+            TicketAttempt(
+                statusKey: status,
+                entryRouteKey: status == "onSaleSoon" ? "general" : route,
+                ticketSite: site,
+                holderName: status == "onSaleSoon" ? "" : "サンプル名義",
+                saleStartAt: saleStartAt,
+                applyDeadlineAt: applyDeadlineAt,
+                resultAnnounceAt: resultAnnounceAt,
+                paymentDeadlineAt: paymentDeadlineAt,
+                issueStartAt: issueStartAt,
+                paidAt: paidAt,
+                issuedAt: issuedAt,
+                price: price,
+                fee: 880,
+                quantity: plannedIndex == 1 ? 2 : 1,
+                purchaseURL: "\(baseURL)/\(suffix)",
+                seatText: seatText,
+                applicationGroupName: "\(site) \(plannedIndex + 1)次受付",
+                unitFieldsRaw: TicketAttemptUnitFields(tagNames: ["サンプル", category.name]).encodedRawValue,
+                memo: "チケットの「\(TicketStatusDefinition.name(for: status))」表示を確認するサンプルです。通知は予約しません。",
+                createdAt: now.addingTimeInterval(TimeInterval(-plannedIndex) * day),
                 updatedAt: now,
                 plan: plan
             )
-        case "live":
-            return TicketAttempt(
-                statusKey: "waitingPayment",
-                entryRouteKey: "fanClub",
-                ticketSite: "サンプルFC",
-                resultAnnounceAt: now.addingTimeInterval(-24 * 60 * 60),
-                paymentDeadlineAt: now.addingTimeInterval(2 * 24 * 60 * 60),
-                issueStartAt: planStart.addingTimeInterval(-5 * 24 * 60 * 60),
-                price: Decimal(9_800),
-                purchaseURL: "\(sampleURLPrefix)live/ticket",
-                memo: "支払待ち表示を確認するサンプルです。通知は予約しません。",
-                createdAt: now,
-                updatedAt: now,
-                plan: plan
-            )
+        }
+
+        if category.templateKey == "theater" {
+            switch plannedIndex {
+            case 0:
+                return [
+                    attempt(
+                        status: "beforeApply",
+                        suffix: "before-apply",
+                        applyDeadlineAt: now.addingTimeInterval(2 * day),
+                        resultAnnounceAt: now.addingTimeInterval(6 * day)
+                    ),
+                    attempt(
+                        status: "waitingResult",
+                        suffix: "waiting-result",
+                        applyDeadlineAt: now.addingTimeInterval(-day),
+                        resultAnnounceAt: now.addingTimeInterval(3 * day)
+                    )
+                ]
+            case 1:
+                return [
+                    attempt(
+                        status: "won",
+                        suffix: "won",
+                        resultAnnounceAt: now.addingTimeInterval(-day),
+                        paymentDeadlineAt: now.addingTimeInterval(3 * day)
+                    ),
+                    attempt(
+                        status: "waitingPayment",
+                        suffix: "waiting-payment",
+                        resultAnnounceAt: now.addingTimeInterval(-2 * day),
+                        paymentDeadlineAt: now.addingTimeInterval(day)
+                    )
+                ]
+            default:
+                return [
+                    attempt(
+                        status: "waitingIssue",
+                        suffix: "waiting-issue",
+                        paymentDeadlineAt: now.addingTimeInterval(-day),
+                        issueStartAt: now.addingTimeInterval(4 * day),
+                        paidAt: now.addingTimeInterval(-day)
+                    ),
+                    attempt(
+                        status: "issued",
+                        suffix: "issued",
+                        issueStartAt: now.addingTimeInterval(-day),
+                        paidAt: now.addingTimeInterval(-5 * day),
+                        issuedAt: now.addingTimeInterval(-day),
+                        seatText: "1階 12列 8番"
+                    )
+                ]
+            }
+        }
+
+        switch plannedIndex {
+        case 0:
+            return [
+                attempt(
+                    status: "onSaleSoon",
+                    suffix: "on-sale-soon",
+                    saleStartAt: now.addingTimeInterval(2 * day),
+                    issueStartAt: planStart.addingTimeInterval(-7 * day)
+                )
+            ]
+        case 1:
+            return [
+                attempt(
+                    status: "lost",
+                    suffix: "lost",
+                    applyDeadlineAt: now.addingTimeInterval(-5 * day),
+                    resultAnnounceAt: now.addingTimeInterval(-day)
+                ),
+                attempt(
+                    status: "waitingResult",
+                    suffix: "second-lottery",
+                    applyDeadlineAt: now.addingTimeInterval(-day),
+                    resultAnnounceAt: now.addingTimeInterval(2 * day)
+                )
+            ]
         default:
-            return nil
+            return [
+                attempt(
+                    status: "issued",
+                    suffix: "digital-ticket",
+                    issueStartAt: now.addingTimeInterval(-day),
+                    paidAt: now.addingTimeInterval(-10 * day),
+                    issuedAt: now.addingTimeInterval(-day),
+                    seatText: "アリーナ Bブロック 120番"
+                )
+            ]
         }
     }
 
@@ -1160,11 +1611,13 @@ enum SampleDataSeeder {
 
 #if DEBUG
 struct DebugDataRebuildSummary {
-    let deletedCount: Int
+    let reset: RecordDeletionService.FirstUseResetResult
     let inserted: DebugSampleDataSummary
 
     var message: String {
-        "体験データ\(deletedCount)件を削除し、\(inserted.insertedMessage)"
+        "利用者データ\(reset.deletedExperienceCount + reset.deletedMasterCount)件を削除し、"
+            + "初期人物\(reset.preservedPersonCount)件・公開場所\(reset.preservedPlaceCount)件を保持。"
+            + inserted.insertedMessage
     }
 }
 
@@ -1186,12 +1639,12 @@ enum DebugDataSeeder {
     static func rebuildAllExperienceData(
         in context: ModelContext
     ) throws -> DebugDataRebuildSummary {
-        let deletion = try RecordDeletionService.deleteAllExperienceDataPreservingMasters(
+        let reset = try RecordDeletionService.resetToFirstUseBaseData(
             in: context
         )
         let inserted = try SampleDataSeeder.replaceSamples(in: context)
         return DebugDataRebuildSummary(
-            deletedCount: deletion.deletedModelCount,
+            reset: reset,
             inserted: inserted
         )
     }

@@ -1,0 +1,61 @@
+{
+  "mode": "built-in imagegen",
+  "images": [
+    {
+      "key": "theater",
+      "prompt": "Create one finished background image for the theater genre of a Japanese experience journal iPhone app. Use-case: photorealistic-natural. An original elegant intimate theater interior, wide stage framed by burgundy velvet curtains, carved warm gold proscenium, subtle amber stage lighting, empty audience foreground. Landscape EXACT 16:9 composition, 1536x864 if possible. Rich photographic texture, tasteful cinematic realism, soft natural contrast, coherent premium editorial style. Main subject spread horizontally across the middle third; keep top corners calm for navigation buttons. Full bleed standalone image only, no UI, no borders, no lettering, no logos, no watermark. Do not bake a gradient or solid footer into the image; the app applies its own genre-colored fade. This is an original background, not a poster.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-50741df7-bd17-4a09-bdae-c6b1694d2e86.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/theater-hero-venue-v2.jpg",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "key": "live",
+      "prompt": "Create one finished background image for the live genre of a Japanese experience journal iPhone app. Use-case: photorealistic-natural. An original live music venue stage, electric blue and violet concert beams through fine haze, microphone and amplifiers subtly silhouetted, immersive expansive stage, no identifiable performers. Landscape EXACT 16:9 composition, 1536x864 if possible. Rich photographic texture, tasteful cinematic realism, soft natural contrast, coherent premium editorial style. Main subject spread horizontally across the middle third; keep top corners calm for navigation buttons. Full bleed standalone image only, no UI, no borders, no lettering, no logos, no watermark. Do not bake a gradient or solid footer into the image; the app applies its own genre-colored fade. This is an original background, not a poster.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-38a02133-4016-46e3-9535-f03d999c9767.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/live-hero-default.jpg",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "key": "movie",
+      "prompt": "Create one finished background image for the movie genre of a Japanese experience journal iPhone app. Use-case: photorealistic-natural. An original classic cinema interior, wide glowing blank silver screen with subdued warm light, dark rows of seats, cinematic indigo and amber atmosphere, no projected text or movie characters. Landscape EXACT 16:9 composition, 1536x864 if possible. Rich photographic texture, tasteful cinematic realism, soft natural contrast, coherent premium editorial style. Main subject spread horizontally across the middle third; keep top corners calm for navigation buttons. Full bleed standalone image only, no UI, no borders, no lettering, no logos, no watermark. Do not bake a gradient or solid footer into the image; the app applies its own genre-colored fade. This is an original background, not a poster.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-e2acbef5-1647-45fe-badd-d1256f770929.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/movie-hero-default.jpg",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "key": "museum",
+      "prompt": "Create one finished background image for the museum genre of a Japanese experience journal iPhone app. Use-case: photorealistic-natural. An original serene contemporary art museum gallery, warm ivory walls, soft daylight, abstract nonfigurative paintings and a stone sculptural form, wide architectural perspective, no signage. Landscape EXACT 16:9 composition, 1536x864 if possible. Rich photographic texture, tasteful cinematic realism, soft natural contrast, coherent premium editorial style. Main subject spread horizontally across the middle third; keep top corners calm for navigation buttons. Full bleed standalone image only, no UI, no borders, no lettering, no logos, no watermark. Do not bake a gradient or solid footer into the image; the app applies its own genre-colored fade. This is an original background, not a poster.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-7efe5268-7736-454a-8d32-f92f0999b056.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/museum-hero-default.jpg",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "key": "book",
+      "prompt": "Create one finished background image for the book genre of a Japanese experience journal iPhone app. Use-case: photorealistic-natural. An original cozy library reading room with warm wooden bookshelves and a reading table by a broad window, honey evening light, books with no legible lettering, quiet literary atmosphere. Landscape EXACT 16:9 composition, 1536x864 if possible. Rich photographic texture, tasteful cinematic realism, soft natural contrast, coherent premium editorial style. Main subject spread horizontally across the middle third; keep top corners calm for navigation buttons. Full bleed standalone image only, no UI, no borders, no lettering, no logos, no watermark. Do not bake a gradient or solid footer into the image; the app applies its own genre-colored fade. This is an original background, not a poster.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-ba9c9c3a-32c9-46a8-aa84-11bf50535a17.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/book-hero-default.jpg",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "key": "theme_park",
+      "prompt": "Create one finished background image for the theme_park genre of a Japanese experience journal iPhone app. Use-case: photorealistic-natural. An original imaginative amusement park at blue hour, illuminated carousel and distant Ferris wheel, warm sparkling lights, charming paths, no recognizable branded architecture or characters. Landscape EXACT 16:9 composition, 1536x864 if possible. Rich photographic texture, tasteful cinematic realism, soft natural contrast, coherent premium editorial style. Main subject spread horizontally across the middle third; keep top corners calm for navigation buttons. Full bleed standalone image only, no UI, no borders, no lettering, no logos, no watermark. Do not bake a gradient or solid footer into the image; the app applies its own genre-colored fade. This is an original background, not a poster.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-ec619f40-e17f-4b0f-82d5-6cbf6d8f50e9.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/theme_park-hero-default.jpg",
+      "width": 1600,
+      "height": 900
+    },
+    {
+      "key": "nature_living",
+      "prompt": "Create one finished background image for the nature_living genre of a Japanese experience journal iPhone app. Use-case: photorealistic-natural. An original lush botanical and wildlife landscape, broad natural green habitat with a few small giraffes in the middle distance, sunlit foliage and reflective water, peaceful expansive composition. Landscape EXACT 16:9 composition, 1536x864 if possible. Rich photographic texture, tasteful cinematic realism, soft natural contrast, coherent premium editorial style. Main subject spread horizontally across the middle third; keep top corners calm for navigation buttons. Full bleed standalone image only, no UI, no borders, no lettering, no logos, no watermark. Do not bake a gradient or solid footer into the image; the app applies its own genre-colored fade. This is an original background, not a poster.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-05dcd6cf-338f-4104-80fc-1eb2409d9100.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/nature_living-hero-zoo.jpg",
+      "width": 1600,
+      "height": 900
+    }
+  ]
+}

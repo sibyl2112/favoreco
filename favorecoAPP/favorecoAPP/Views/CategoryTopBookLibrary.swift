@@ -8,7 +8,7 @@
 import SwiftUI
 import SwiftData
 
-private enum BookLibraryFilter: String, CaseIterable, Identifiable {
+enum BookLibraryFilter: String, CaseIterable, Identifiable {
     case all
     case interested
     case toRead
@@ -695,38 +695,14 @@ struct BookLibrarySection: View {
                 seriesName: seriesName,
                 normalizedSeriesName: normalizedBookText(seriesName)
             ))
-        } else if let visit = readingRecordToOpen(for: entry.representative) {
+        } else if let visit = bookReadingRecordToOpen(
+            status: bookStatus(for: entry.representative),
+            visits: entry.representative.visits
+        ) {
             onOpenVisit(visit.id)
         } else {
             onOpenEvent(entry.representative.event.id)
         }
-    }
-
-    /// タブではなくカード自身の読書状態を正本に遷移先を決める。
-    /// 「すべて」内でも読書中／読了なら最新の該当記録を直接開く。
-    private func readingRecordToOpen(for item: CategoryLibraryItem) -> Visit? {
-        let matchesSelectedState: (Visit) -> Bool
-        let itemStatus = bookStatus(for: item)
-        switch itemStatus {
-        case .reading:
-            matchesSelectedState = {
-                VisitUnitFields(rawValue: $0.unitFieldsRaw).bookReadingHasEndDate == false
-            }
-        case .read:
-            matchesSelectedState = {
-                VisitUnitFields(rawValue: $0.unitFieldsRaw).bookReadingHasEndDate != false
-            }
-        case .all, .interested, .toRead:
-            return nil
-        }
-
-        return item.visits
-            .filter(matchesSelectedState)
-            .max { lhs, rhs in
-                let lhsDate = itemStatus == .read ? lhs.endedAt : lhs.visitedAt
-                let rhsDate = itemStatus == .read ? rhs.endedAt : rhs.visitedAt
-                return lhsDate < rhsDate
-            }
     }
 }
 
@@ -855,7 +831,7 @@ private struct BookLibraryListRow: View {
 }
 
 /// Filmarksの上映状態表示のように、書影上端から垂らす状態帯。
-private struct BookCoverStatusRibbon: View {
+struct BookCoverStatusRibbon: View {
     let status: BookLibraryFilter
     var isCompact = false
 
@@ -891,7 +867,7 @@ private struct BookCoverStatusRibbonShape: Shape {
     }
 }
 
-private extension BookLibraryFilter {
+extension BookLibraryFilter {
     var ribbonColor: Color {
         switch self {
         case .interested: Color(hex: "#C45E3A")
@@ -1031,7 +1007,9 @@ struct BookSeriesDetailView: View {
                 } else if layout == .gallery {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 18) {
                         ForEach(seriesEvents) { event in
-                            NavigationLink(value: event.id) {
+                            NavigationLink {
+                                CategoryEventDestination(eventID: event.id)
+                            } label: {
                                 BookSeriesVolumeGridTile(event: event)
                             }
                             .buttonStyle(.plain)
@@ -1040,7 +1018,9 @@ struct BookSeriesDetailView: View {
                 } else {
                     LazyVStack(spacing: 10) {
                         ForEach(seriesEvents) { event in
-                            NavigationLink(value: event.id) {
+                            NavigationLink {
+                                CategoryEventDestination(eventID: event.id)
+                            } label: {
                                 BookSeriesVolumeListRow(event: event)
                             }
                             .buttonStyle(.plain)
@@ -1052,9 +1032,6 @@ struct BookSeriesDetailView: View {
         }
         .navigationTitle("シリーズ")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: UUID.self) { eventID in
-            CategoryEventDestination(eventID: eventID)
-        }
         .sheet(isPresented: $isShowingNextVolumeRegistration) {
             if let representativeEvent,
                representativeEvent.category != nil {
@@ -1155,8 +1132,44 @@ private func bookStatus(for item: CategoryLibraryItem) -> BookLibraryFilter {
     bookStatus(stateKey: item.event.stateKey, visits: item.visits)
 }
 
-private func bookStatus(for event: ExperienceEvent) -> BookLibraryFilter {
+func bookStatus(for event: ExperienceEvent) -> BookLibraryFilter {
     bookStatus(stateKey: event.stateKey, visits: event.visits ?? [])
+}
+
+/// 表示中のタブではなく本自身の状態を正本に、直接開く読書記録を返す。
+/// 読書中／読了は該当する最新回、気になる／積読は本の情報ページを開くためnil。
+func bookReadingRecordToOpen(
+    status: BookLibraryFilter,
+    visits: [Visit]
+) -> Visit? {
+    let matchesStatus: (Visit) -> Bool
+    switch status {
+    case .reading:
+        matchesStatus = {
+            VisitUnitFields(rawValue: $0.unitFieldsRaw).bookReadingHasEndDate == false
+        }
+    case .read:
+        matchesStatus = {
+            VisitUnitFields(rawValue: $0.unitFieldsRaw).bookReadingHasEndDate != false
+        }
+    case .all, .interested, .toRead:
+        return nil
+    }
+
+    return visits
+        .filter(matchesStatus)
+        .max { lhs, rhs in
+            let lhsDate = status == .read ? lhs.endedAt : lhs.visitedAt
+            let rhsDate = status == .read ? rhs.endedAt : rhs.visitedAt
+            return lhsDate < rhsDate
+        }
+}
+
+func bookReadingRecordToOpen(for event: ExperienceEvent) -> Visit? {
+    bookReadingRecordToOpen(
+        status: bookStatus(for: event),
+        visits: event.visits ?? []
+    )
 }
 
 private func bookStatus(stateKey: String, visits: [Visit]) -> BookLibraryFilter {

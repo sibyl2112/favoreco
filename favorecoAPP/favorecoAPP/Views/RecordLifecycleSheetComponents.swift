@@ -169,12 +169,12 @@ struct RegistrationEyecatchEditor<PhotoPickerContent: View>: View {
                 Button(action: onCapture) {
                     FavorecoIconLabel("撮影する", systemImage: "camera", iconSize: 13)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(FavorecoPressFeedbackButtonStyle())
 
                 Button(role: .destructive, action: onRemove) {
                     FavorecoIconLabel("画像を外す", systemImage: "trash", iconSize: 13)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(FavorecoPressFeedbackButtonStyle())
                 .disabled(imageData == nil)
             }
             .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
@@ -202,7 +202,7 @@ struct TheaterLifecycleInfoButton: View {
                 .frame(width: 30, height: 30)
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FavorecoPressFeedbackButtonStyle())
         .accessibilityLabel("説明を表示")
         .accessibilityHint(text)
         .popover(isPresented: $isPresented) {
@@ -215,9 +215,7 @@ struct TheaterLifecycleInfoButton: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(idealWidth: 300, maxWidth: 340, idealHeight: 180, maxHeight: 320)
-            .presentationDetents([.height(220), .medium])
-            .presentationDragIndicator(.visible)
-            .presentationCompactAdaptation(.sheet)
+            .presentationCompactAdaptation(.popover)
         }
     }
 }
@@ -332,10 +330,13 @@ struct TheaterLifecycleEditorSheet: View {
 /// 型名は既存呼び出しとの互換性のため残しているが、観劇専用ではない。
 struct TheaterLifecycleFlatScaffold<Content: View>: View {
     @Environment(\.favorecoThemePalette) private var themePalette
+    @State private var hasActiveSaveAttempt = false
+    @State private var showsValidationMessage = false
     let title: String
     let canSave: Bool
     let saveButtonTitle: String
     let isSaving: Bool
+    let validationMessage: String?
     let onClose: () -> Void
     let onSave: () -> Void
     let content: Content
@@ -345,6 +346,7 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
         canSave: Bool,
         saveButtonTitle: String = "保存",
         isSaving: Bool = false,
+        validationMessage: String? = nil,
         onClose: @escaping () -> Void,
         onSave: @escaping () -> Void,
         @ViewBuilder content: () -> Content
@@ -353,6 +355,7 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
         self.canSave = canSave
         self.saveButtonTitle = saveButtonTitle
         self.isSaving = isSaving
+        self.validationMessage = validationMessage
         self.onClose = onClose
         self.onSave = onSave
         self.content = content()
@@ -367,7 +370,7 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
                         .foregroundStyle(.primary)
                         .frame(width: 44, height: 44)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(FavorecoPressFeedbackButtonStyle())
                 .disabled(isSaving)
                 .accessibilityLabel("閉じる")
 
@@ -378,7 +381,15 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
                     .minimumScaleFactor(0.82)
                 Spacer(minLength: 0)
 
-                Button(action: onSave) {
+                Button {
+                    if canSave {
+                        showsValidationMessage = false
+                        onSave()
+                    } else if validationMessage != nil {
+                        showsValidationMessage = true
+                        FavorecoInteractionFeedbackCenter.notifyValidationFailure()
+                    }
+                } label: {
                     HStack(spacing: 5) {
                         if isSaving {
                             ProgressView()
@@ -393,14 +404,26 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
                     .padding(.horizontal, saveButtonTitle == "保存" ? 0 : 8)
                     .background(themePalette.globalTint, in: RoundedRectangle(cornerRadius: 11))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(FavorecoPressFeedbackButtonStyle())
                 .opacity(canSave && !isSaving ? 1 : 0.38)
-                .disabled(!canSave || isSaving)
+                .disabled(isSaving || (!canSave && validationMessage == nil))
                 .accessibilityLabel(saveButtonTitle)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(TheaterLifecycleFlatStyle.fieldBackground)
+
+            if showsValidationMessage, let validationMessage, !canSave {
+                Label(validationMessage, systemImage: "exclamationmark.circle.fill")
+                    .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 9)
+                    .background(TheaterLifecycleFlatStyle.fieldBackground)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .accessibilityAddTraits(.isStaticText)
+            }
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
@@ -415,9 +438,36 @@ struct TheaterLifecycleFlatScaffold<Content: View>: View {
         }
         .background(TheaterLifecycleFlatStyle.canvasBackground)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Button("前へ") {
+                    FavorecoKeyboardNavigation.moveToPreviousField()
+                }
+                Button("次へ") {
+                    FavorecoKeyboardNavigation.moveToNextField()
+                }
+                Spacer()
+                Button("完了") {
+                    FavorecoKeyboardNavigation.dismissKeyboard()
+                }
+                .fontWeight(.semibold)
+            }
+        }
         .environment(\.usesTheaterLifecycleFlatLayout, true)
         .dynamicTypeSize(.xSmall ... .large)
         .interactiveDismissDisabled(isSaving)
+        .onChange(of: isSaving) { _, newValue in
+            hasActiveSaveAttempt = newValue
+        }
+        .onChange(of: canSave) { _, newValue in
+            if newValue {
+                showsValidationMessage = false
+            }
+        }
+        .onDisappear {
+            guard hasActiveSaveAttempt, isSaving else { return }
+            FavorecoInteractionFeedbackCenter.showSaveCompleted()
+        }
     }
 }
 
@@ -504,7 +554,7 @@ struct RecordSourceImportActions: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FavorecoPressFeedbackButtonStyle())
         .disabled(!isEnabled)
     }
 }
@@ -703,7 +753,7 @@ struct StagedRecordBlock<Content: View>: View {
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FavorecoPressFeedbackButtonStyle())
     }
 
     @ViewBuilder
@@ -728,6 +778,7 @@ struct StagedRecordBlock<Content: View>: View {
 
     private func toggleGroup() {
         let nextValue = !isGroupExpanded
+        FavorecoInteractionFeedbackCenter.notifySelectionChanged()
         for unit in units {
             isExpanded(unit.id).wrappedValue = nextValue
         }

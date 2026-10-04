@@ -51,7 +51,7 @@ struct BookShelfAssignmentView: View {
                                 }
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(FavorecoPressFeedbackButtonStyle())
                         }
                     }
                 } footer: {
@@ -324,11 +324,11 @@ struct BookShelfBrowserView: View {
                             ) {
                                 ForEach(books) { book in
                                     NavigationLink {
-                                        EventDetailView(event: book)
+                                        bookDestination(for: book)
                                     } label: {
                                         BookShelfCoverTile(book: book)
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(FavorecoPressFeedbackButtonStyle())
                                 }
                             }
                             .padding(.horizontal, 20)
@@ -339,6 +339,15 @@ struct BookShelfBrowserView: View {
             }
         }
         .padding(.top, 12)
+    }
+
+    @ViewBuilder
+    private func bookDestination(for book: ExperienceEvent) -> some View {
+        if let readingRecord = bookReadingRecordToOpen(for: book) {
+            CategoryVisitDestination(visitID: readingRecord.id)
+        } else {
+            CategoryEventDestination(eventID: book.id)
+        }
     }
 
     private var shelfOrderingList: some View {
@@ -457,6 +466,7 @@ struct BookShelfTopStrip: View {
     let onOpen: (UUID?) -> Void
 
     @Query(sort: \BookShelf.sortOrder) private var shelves: [BookShelf]
+    @State private var isExpanded = true
 
     private var visibleShelves: [BookShelf] {
         Array(shelves.sorted {
@@ -486,10 +496,25 @@ struct BookShelfTopStrip: View {
                 }
                 .font(FavorecoTypography.captionStrong)
                 .foregroundStyle(tint)
-                .buttonStyle(.plain)
+                .buttonStyle(FavorecoPressFeedbackButtonStyle())
+
+                Button {
+                    FavorecoInteractionFeedbackCenter.notifySelectionChanged()
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(FavorecoPressFeedbackButtonStyle())
+                .accessibilityLabel(isExpanded ? "本棚を閉じる" : "本棚を開く")
             }
 
-            if !visibleShelves.isEmpty {
+            if isExpanded && !visibleShelves.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(visibleShelves) { shelf in
@@ -528,7 +553,7 @@ struct BookShelfTopStrip: View {
                                 }
                                 .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(FavorecoPressFeedbackButtonStyle())
                             .accessibilityLabel("\(shelf.name)、\(books(in: shelf).count)冊")
                             .accessibilityHint("本棚を開く")
                         }
@@ -611,15 +636,21 @@ private struct BookShelfCoverTile: View {
         VStack(alignment: .leading, spacing: 6) {
             BookCoverArtwork(event: book)
                 .frame(maxWidth: .infinity)
+                .overlay(alignment: .topLeading) {
+                    BookCoverStatusRibbon(status: bookStatus(for: book))
+                        .padding(.leading, 6)
+                }
                 .overlay {
                     Rectangle().stroke(Color.accentColor.opacity(0.38), lineWidth: 0.7)
                 }
             Text(book.title)
-                .font(FavorecoTypography.captionStrong)
+                .font(FavorecoTypography.jpSans(11, weight: .semibold, relativeTo: .caption))
                 .foregroundStyle(.primary)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(2, reservesSpace: true)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(book.title)、\(bookStatus(for: book).title)")
     }
 }
 

@@ -332,6 +332,7 @@
 				DEVELOPMENT_TEAM = GDXKVW7W5X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Favoreco;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Favorecoの予定を選択したカレンダーへ追加し、外部カレンダーの予定を重ねて表示するために使用します。";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Favorecoの予定を選択したカレンダーへ追加するために使用します。";
@@ -355,7 +356,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -370,6 +371,7 @@
 				DEVELOPMENT_TEAM = GDXKVW7W5X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Favoreco;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Favorecoの予定を選択したカレンダーへ追加し、外部カレンダーの予定を重ねて表示するために使用します。";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Favorecoの予定を選択したカレンダーへ追加するために使用します。";
@@ -393,7 +395,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

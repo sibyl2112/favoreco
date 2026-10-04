@@ -718,3 +718,19 @@ extension View {
         modifier(FavorecoProminentActionModifier())
     }
 }
+
+/// 独自描画の操作にも、システムButtonと同じ「押している」手応えを補う。
+/// Reduce Motion時は拡縮せず、減光だけで状態を伝える。
+struct FavorecoPressFeedbackButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(reduceMotion || !configuration.isPressed ? 1 : 0.97)
+            .opacity(configuration.isPressed ? 0.86 : 1)
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.10),
+                value: configuration.isPressed
+            )
+    }
+}

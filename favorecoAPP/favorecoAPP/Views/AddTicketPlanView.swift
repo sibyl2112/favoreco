@@ -443,6 +443,25 @@ struct AddTicketPlanView: View {
         draft.canSave && !isSaving && !hasCompletedSave
     }
 
+    private var inlineSaveValidationMessage: String? {
+        if draft.trimmedTitle.isEmpty {
+            return "対象名を入力してください。"
+        }
+        if allowsTargetSelection,
+           targetSelectionMode == .existingEvent,
+           selectedRegisteredEvent == nil {
+            return usesTicketRegistration
+                ? "チケット情報を追加するイベントを選んでください。"
+                : "予定を追加する施設・スポットを選んでください。"
+        }
+        if allowsTargetSelection,
+           targetSelectionMode == .interested,
+           selectedInterestedEvent == nil {
+            return "予定を追加する作品・対象を選んでください。"
+        }
+        return draft.validationMessage(usesOpeningTime: usesOpeningTime)
+    }
+
     private var saveButtonTitle: String {
         if hasCompletedSave { return "保存済み" }
         if isSaving { return "保存中" }
@@ -585,6 +604,7 @@ struct AddTicketPlanView: View {
             canSave: canSubmitSave,
             saveButtonTitle: saveButtonTitle,
             isSaving: isSaving,
+            validationMessage: inlineSaveValidationMessage,
             onClose: { dismiss() },
             onSave: save
         ) {
@@ -1776,20 +1796,29 @@ struct AddTicketPlanView: View {
     }
 
     private var unifiedVisualEditor: some View {
-        HStack(alignment: .top, spacing: 12) {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(minimum: 0), spacing: 12, alignment: .topLeading),
+                GridItem(.flexible(minimum: 0), spacing: 0, alignment: .topLeading)
+            ],
+            alignment: .leading,
+            spacing: 0
+        ) {
             VStack(alignment: .leading, spacing: 7) {
                 Text("アイキャッチ")
                     .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
                 unifiedEyecatchCard
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .clipped()
 
             VStack(alignment: .leading, spacing: 7) {
                 Text("背景")
                     .font(FavorecoTypography.jpSans(12, weight: .semibold, relativeTo: .body))
                 unifiedBackgroundCard
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .clipped()
         }
         .frame(maxWidth: .infinity)
     }
@@ -1894,7 +1923,7 @@ struct AddTicketPlanView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         ZStack { content() }
-            .frame(maxWidth: .infinity)
+            .frame(minWidth: 0, maxWidth: .infinity)
             .aspectRatio(1, contentMode: .fit)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1921,8 +1950,9 @@ struct AddTicketPlanView: View {
             }
             .foregroundStyle(tint)
         }
-        .frame(maxWidth: .infinity)
+        .frame(minWidth: 0, maxWidth: .infinity)
         .aspectRatio(1, contentMode: .fit)
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -2281,6 +2311,7 @@ struct AddTicketPlanView: View {
             canSave: canSubmitSave,
             saveButtonTitle: saveButtonTitle,
             isSaving: isSaving,
+            validationMessage: inlineSaveValidationMessage,
             onClose: { dismiss() },
             onSave: save
         ) {
@@ -2296,6 +2327,7 @@ struct AddTicketPlanView: View {
             canSave: canSubmitSave,
             saveButtonTitle: saveButtonTitle,
             isSaving: isSaving,
+            validationMessage: inlineSaveValidationMessage,
             onClose: { dismiss() },
             onSave: save
         ) {

@@ -49,6 +49,7 @@ struct TicketDetailsOCRInput: View {
     @Binding var quantity: Int
     @Binding var seatText: String
 
+    @Environment(\.favorecoThemePalette) private var themePalette
     @AppStorage(AppStorageKeys.usesOCRImportAssist) private var usesOCRImportAssist = true
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var isReading = false
@@ -77,9 +78,23 @@ struct TicketDetailsOCRInput: View {
                         if reading {
                             ProgressView()
                                 .controlSize(.small)
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
                         }
                     }
-                    .contentShape(Rectangle())
+                    .foregroundStyle(themePalette.globalTint)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .background(
+                        themePalette.globalTint.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(themePalette.globalTint.opacity(0.42), lineWidth: 1)
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .disabled(isReading)
                 .onChange(of: selectedItems) { _, items in

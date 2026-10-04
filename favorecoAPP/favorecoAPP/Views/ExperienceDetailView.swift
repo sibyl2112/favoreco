@@ -105,6 +105,21 @@ private struct ExperiencePreparationChecklistSheet: View {
     }
 }
 
+struct DetailHeroGradient: View {
+    let baseColor: Color
+
+    var body: some View {
+        LinearGradient(stops: [
+            .init(color: .black.opacity(0.35), location: 0),
+            .init(color: .clear, location: 0.30),
+            .init(color: baseColor.opacity(0.08), location: 0.50),
+            .init(color: baseColor.opacity(0.65), location: 0.80),
+            .init(color: baseColor, location: 1)
+        ], startPoint: .top, endPoint: .bottom)
+        .allowsHitTesting(false)
+    }
+}
+
 struct CategoryExperiencePage<Hero: View, Content: View>: View {
     let genreColor: Color
     let borderColor: Color
@@ -138,7 +153,10 @@ struct CategoryExperiencePage<Hero: View, Content: View>: View {
                 VStack(alignment: .leading, spacing: 0) {
                     pageHeader
 
-                    LazyVStack(alignment: .leading, spacing: contentSpacing) {
+                    // These are a finite set of detail sections, not an unbounded feed.
+                    // Eager sizing keeps off-screen history stable while scrolling to
+                    // its repeat-entry button (LazyVStack could loop during layout).
+                    VStack(alignment: .leading, spacing: contentSpacing) {
                         content()
                     }
                     .padding(.top, 2)
@@ -579,17 +597,24 @@ struct ExperienceDetailView: View {
         }
         .sheet(isPresented: $isShowingRepeatEntry) {
             if let event = visit.event {
-                let fields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
-                AddVisitView(
-                    event: event,
-                    initialDraft: VisitDraft(repeating: visit),
-                    initialCoverPhotoPath: visit.eyecatchPath.isEmpty
-                        ? event.representativeEyecatchPath
-                        : visit.eyecatchPath,
-                    initialHeroBackgroundPath: fields.heroBackgroundPath,
-                    initialHeroBackgroundPresetKey: fields.heroBackgroundPresetKey,
-                    inheritedVisualSource: visit
-                )
+                Group {
+                    if event.category?.templateKey == "book" {
+                        // 再読は前回の感想・終了日・写真を複製せず、新しい読書回として始める。
+                        AddVisitView(event: event)
+                    } else {
+                        let fields = VisitUnitFields(rawValue: visit.unitFieldsRaw)
+                        AddVisitView(
+                            event: event,
+                            initialDraft: VisitDraft(repeating: visit),
+                            initialCoverPhotoPath: visit.eyecatchPath.isEmpty
+                                ? event.representativeEyecatchPath
+                                : visit.eyecatchPath,
+                            initialHeroBackgroundPath: fields.heroBackgroundPath,
+                            initialHeroBackgroundPresetKey: fields.heroBackgroundPresetKey,
+                            inheritedVisualSource: visit
+                        )
+                    }
+                }
                 .favorecoRegistrationTheme(categoryHex: event.category?.colorHex)
             }
         }
@@ -798,7 +823,7 @@ struct ExperienceDetailView: View {
     ) -> some View {
         let heroSeatText = resolvedHeroSeatText
         let metadataFontSize: CGFloat = snapshot.category?.templateKey == "theater" ? 14 : 15
-        return ZStack(alignment: .bottomLeading) {
+        return VStack(alignment: .leading, spacing: -24) {
             recordHeroBackground(
                 photo: backgroundPhoto,
                 eventEyecatchData: snapshot.event?.eyecatchData,
@@ -806,6 +831,7 @@ struct ExperienceDetailView: View {
                 categoryKey: snapshot.category?.templateKey,
                 presetKey: snapshot.unitFields.heroBackgroundPresetKey
             )
+            .aspectRatio(16.0 / 9.0, contentMode: .fit)
 
             VStack(alignment: .leading, spacing: 12) {
                 if snapshot.category?.templateKey == "theater" {
@@ -904,7 +930,8 @@ struct ExperienceDetailView: View {
                             }
                         }
                     )
-                    .frame(width: snapshot.category?.templateKey == "theater" ? 140 : 112)
+                    .frame(width: snapshot.category?.templateKey == "theater" ? 160 : 136)
+                    .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: 6) {
                         if snapshot.category?.templateKey == "book" {
@@ -993,9 +1020,8 @@ struct ExperienceDetailView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 34)
         }
-        // 全ジャンルを観劇詳細と同じHero基準へ統一する。
-        // 非観劇だけ560ptにすると、背景は揃っても情報全体が下へ残って見える。
-        .frame(minHeight: 465, alignment: .bottom)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(genreColor)
         .accessibilityElement(children: .contain)
     }
 
@@ -1021,9 +1047,7 @@ struct ExperienceDetailView: View {
         presetKey: String
     ) -> some View {
         GeometryReader { proxy in
-            // 観劇と同じく、背景写真を Hero の下端まで使う。
-            // 途中で単色へ切り替えると、観劇以外だけ Hero が低く見えるため、
-            // 下端のグラデーションでジャンル色へ自然につなぐ。
+            // The parent fixes the backdrop to a landscape band, independent of metadata height.
             let imageBandHeight = proxy.size.height
             let defaultImage = defaultHeroBackgroundImage(categoryKey: categoryKey, presetKey: presetKey)
 
@@ -1054,35 +1078,8 @@ struct ExperienceDetailView: View {
                 .frame(width: proxy.size.width, height: imageBandHeight, alignment: .center)
                 .clipped()
 
-                genreColor
-                    .opacity(photo == nil && defaultImage == nil ? 0.10 : 0.08)
+                DetailHeroGradient(baseColor: genreColor)
                     .frame(height: imageBandHeight)
-
-                // ステータスバーと上部操作を、明るい写真でも読める状態に保つ。
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.48), location: 0.00),
-                        .init(color: .black.opacity(0.20), location: 0.22),
-                        .init(color: .clear, location: 0.46),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: imageBandHeight * 0.58)
-
-                // 写真の色を残したまま、下端だけをジャンル色へ接続する。
-                LinearGradient(
-                    stops: [
-                        .init(color: genreColor.opacity(0.00), location: 0.00),
-                        .init(color: genreColor.opacity(0.04), location: 0.50),
-                        .init(color: genreColor.opacity(0.30), location: 0.72),
-                        .init(color: genreColor.opacity(0.82), location: 0.91),
-                        .init(color: genreColor, location: 1.00),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: imageBandHeight)
             }
         }
         .clipped()
@@ -2371,7 +2368,19 @@ struct ExperienceDetailView: View {
                 }
             }
 
-            if snapshot.category?.templateKey == "museum" {
+            if snapshot.category?.templateKey == "book" {
+                Divider().overlay(Color.white.opacity(0.12))
+                Button {
+                    isShowingRepeatEntry = true
+                } label: {
+                    FavorecoIconLabel("再読を記録", systemImage: "arrow.clockwise.circle", iconSize: 16)
+                        .font(FavorecoTypography.bodyStrong)
+                        .foregroundStyle(accentColor)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("この本の新しい読書記録を追加します")
+            } else if snapshot.category?.templateKey == "museum" {
                 Divider().overlay(Color.white.opacity(0.12))
                 Button {
                     isShowingRepeatEntry = true

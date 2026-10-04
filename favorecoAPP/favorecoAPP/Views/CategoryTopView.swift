@@ -313,6 +313,10 @@ struct CategoryTopView: View {
         .navigationDestination(item: $selectedBookSeries) { route in
             BookSeriesDetailView(route: route)
         }
+        .onChange(of: selectedBookSeries) { previousRoute, currentRoute in
+            guard currentRoute == nil, let previousRoute else { return }
+            restoreCategoryAfterBookSeries(previousRoute)
+        }
         .navigationDestination(item: $selectedPlaceDetail) { selection in
             PlaceExperienceDetailDestination(
                 placeID: selection.placeID,
@@ -1698,6 +1702,15 @@ struct CategoryTopView: View {
             libraryLayoutModes[destination.templateKey] = CategoryLibraryLayoutMode.stored(for: destination.templateKey)
         }
         createEntryContextRouter.activate(categoryID: destination.id)
+    }
+
+    private func restoreCategoryAfterBookSeries(_ route: BookSeriesRoute) {
+        guard let bookCategory = visibleCategories.first(where: { $0.id == route.categoryID }) else {
+            return
+        }
+        selectedCategoryID = bookCategory.id
+        homeSelectedCategoryTemplateKey = bookCategory.templateKey
+        createEntryContextRouter.activate(categoryID: bookCategory.id)
     }
 
     private func reconcileCategoryAfterSettings() {

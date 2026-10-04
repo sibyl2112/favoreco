@@ -1,18 +1,19 @@
 import XCTest
+import UIKit
 @testable import favoreco
 
 final class HeroBackgroundPresetTests: XCTestCase {
     func testGenresWithAlternativesExposeMultipleBundledBackgrounds() {
-        XCTAssertEqual(HeroBackgroundPreset.presets(for: "theater").count, 3)
-        XCTAssertEqual(HeroBackgroundPreset.presets(for: "goshuin").count, 3)
-        XCTAssertEqual(HeroBackgroundPreset.presets(for: "movie").count, 3)
-        XCTAssertEqual(HeroBackgroundPreset.presets(for: "nature_living").count, 3)
+        XCTAssertEqual(HeroBackgroundPreset.presets(for: "theater").count, 5)
+        XCTAssertEqual(HeroBackgroundPreset.presets(for: "goshuin").count, 5)
+        XCTAssertEqual(HeroBackgroundPreset.presets(for: "movie").count, 5)
+        XCTAssertEqual(HeroBackgroundPreset.presets(for: "nature_living").count, 5)
 
         for key in [
             "book", "museum", "live", "sake",
-            "theme_park", "outing_facility", "random_goods",
+            "theme_park", "random_goods",
         ] {
-            XCTAssertEqual(HeroBackgroundPreset.presets(for: key).count, 1, key)
+            XCTAssertEqual(HeroBackgroundPreset.presets(for: key).count, 3, key)
         }
     }
 
@@ -41,9 +42,9 @@ final class HeroBackgroundPresetTests: XCTestCase {
     func testNaturePresetsRepresentPrimaryVisitTypes() {
         let presets = HeroBackgroundPreset.presets(for: "nature_living")
 
-        XCTAssertEqual(presets.map(\.title), ["動物園", "水族館", "植物園"])
+        XCTAssertEqual(presets.prefix(3).map(\.title), ["動物園", "水族館", "植物園"])
         XCTAssertEqual(
-            presets.map(\.resourceName),
+            presets.prefix(3).map(\.resourceName),
             [
                 "nature_living-hero-zoo",
                 "nature_living-hero-aquarium",
@@ -58,6 +59,21 @@ final class HeroBackgroundPresetTests: XCTestCase {
             let presets = HeroBackgroundPreset.presets(for: key)
             XCTAssertEqual(Set(presets.map(\.key)).count, presets.count, key)
             XCTAssertEqual(Set(presets.map(\.resourceName)).count, presets.count, key)
+        }
+    }
+
+    func testAddedBackgroundsAreBundledLandscapeAndLightweight() throws {
+        for genre in ["theater", "live", "movie", "museum", "book", "theme_park", "nature_living", "goshuin", "sake", "random_goods"] {
+            for preset in HeroBackgroundPreset.presets(for: genre).suffix(2) {
+                let url = try XCTUnwrap(Bundle.main.url(forResource: preset.resourceName, withExtension: "jpg", subdirectory: "CategoryHeroBackgrounds")
+                    ?? Bundle.main.url(forResource: preset.resourceName, withExtension: "jpg"), preset.resourceName)
+                let data = try Data(contentsOf: url)
+                let image = try XCTUnwrap(UIImage(data: data))
+                XCTAssertEqual(image.size.width, 1280)
+                XCTAssertEqual(image.size.height, 720)
+                XCTAssertLessThanOrEqual(data.count, 200_000, preset.resourceName)
+                XCTAssertEqual(HeroBackgroundPreset.resolved(categoryKey: genre, storedKey: preset.key), preset)
+            }
         }
     }
 

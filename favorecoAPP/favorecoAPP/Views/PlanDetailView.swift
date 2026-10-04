@@ -536,8 +536,9 @@ struct PlanDetailView: View {
     }
 
     private var categoryPlanHero: some View {
-        ZStack(alignment: .bottomLeading) {
+        VStack(alignment: .leading, spacing: -24) {
             planHeroBackground
+                .aspectRatio(16.0 / 9.0, contentMode: .fit)
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -593,7 +594,8 @@ struct PlanDetailView: View {
                         tint: categoryColor,
                         usesGoldFrame: isTheaterPlan
                     )
-                    .frame(width: isTheaterPlan ? 140 : 112)
+                    .frame(width: isTheaterPlan ? 160 : 136)
+                    .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: 6) {
                         theaterHeroDateRow
@@ -608,7 +610,7 @@ struct PlanDetailView: View {
                         theaterHeroMetadataRow(
                             icon: "tag.fill",
                             text: planStyleText(styles: styles),
-                            placeholder: "公演種別・鑑賞方法は未設定",
+                            placeholder: "種別・体験方法は未設定",
                             tint: .white.opacity(0.86)
                         )
 
@@ -630,7 +632,7 @@ struct PlanDetailView: View {
                         theaterHeroMetadataRow(
                             icon: "star.fill",
                             text: "",
-                            placeholder: "評価は観劇後に記録できます",
+                            placeholder: "評価は体験後に記録できます",
                             tint: .white.opacity(0.90)
                         )
                     }
@@ -640,7 +642,8 @@ struct PlanDetailView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
-        .frame(minHeight: 485, alignment: .bottom)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isTheaterPlan ? theaterGenreColor : panelGenreColor)
     }
 
     private var planTemplateKey: String {
@@ -663,6 +666,8 @@ struct PlanDetailView: View {
         if planTemplateKey == "live" {
             return LivePerformanceType.displayName(for: subtype, customName: customName)
         }
+        if let facility = OutingFacilityType(rawValue: subtype) { return facility.displayName }
+        if planTemplateKey == "movie", let type = ScreenWorkType(rawValue: subtype) { return type.displayName }
         return subtype
     }
 
@@ -756,19 +761,8 @@ struct PlanDetailView: View {
                     .frame(height: imageBandHeight)
                 }
 
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.42), location: 0.00),
-                        .init(color: .black.opacity(0.14), location: 0.24),
-                        .init(color: .clear, location: 0.48),
-                        .init(color: genreColor.opacity(0.18), location: 0.70),
-                        .init(color: genreColor.opacity(0.82), location: 0.92),
-                        .init(color: genreColor, location: 1.00),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: imageBandHeight)
+                DetailHeroGradient(baseColor: genreColor)
+                    .frame(height: imageBandHeight)
             }
         }
         .clipped()
@@ -801,8 +795,7 @@ struct PlanDetailView: View {
                 .foregroundStyle(.white.opacity(0.92))
                 .frame(width: 20)
             Text(FavorecoDateText.fullDate(plan.startsAt))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(FavorecoTypography.jpSans(15, weight: .regular, relativeTo: .body))
         .foregroundStyle(.white.opacity(0.96))

@@ -50,7 +50,7 @@ struct BookOCRMetadataCandidate: Equatable, Sendable {
     }
 }
 
-enum BookMetadataLookupError: LocalizedError {
+enum BookMetadataLookupError: LocalizedError, Equatable {
     case invalidISBN
     case notFound
     case invalidResponse
@@ -82,16 +82,32 @@ enum BookMetadataLookupService {
         }
 
         let lookupISBN = isbn13(from: isbn) ?? isbn
-        if let openBDCandidate = try? await lookupOpenBD(isbn: lookupISBN) {
-            return openBDCandidateWithCoverFallback(openBDCandidate)
+        var lookupErrors: [Error] = []
+        do {
+            let candidate = try await lookupOpenBD(isbn: lookupISBN)
+            return openBDCandidateWithCoverFallback(candidate)
+        } catch {
+            lookupErrors.append(error)
         }
-        if let googleCandidate = try? await lookupGoogleBooks(isbn: lookupISBN) {
-            return googleCandidate
+        do {
+            return try await lookupGoogleBooks(isbn: lookupISBN)
+        } catch {
+            lookupErrors.append(error)
         }
-        if let openLibraryCandidate = try? await lookupOpenLibrary(isbn: lookupISBN) {
-            return openLibraryCandidate
+        do {
+            return try await lookupOpenLibrary(isbn: lookupISBN)
+        } catch {
+            lookupErrors.append(error)
         }
-        throw BookMetadataLookupError.notFound
+        throw terminalLookupError(from: lookupErrors)
+    }
+
+    nonisolated static func terminalLookupError(from errors: [Error]) -> BookMetadataLookupError {
+        let foundServiceFailure = errors.contains { error in
+            guard let lookupError = error as? BookMetadataLookupError else { return true }
+            return lookupError != .notFound
+        }
+        return foundServiceFailure ? .invalidResponse : .notFound
     }
 
     static func reverseLookup(
@@ -989,6 +1005,25 @@ private struct OpenBDContributor: Decodable {
         case roles = "ContributorRole"
         case personName = "PersonName"
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        roles = try container.decodeIfPresent([String].self, forKey: .roles)
+        if let plainName = try? container.decode(String.self, forKey: .personName) {
+            personName = plainName
+        } else if let structuredName = try? container.decode(
+            OpenBDTextContent.self,
+            forKey: .personName
+        ) {
+            personName = structuredName.content
+        } else {
+            personName = nil
+        }
+    }
+}
+
+private struct OpenBDTextContent: Decodable {
+    let content: String?
 }
 
 private struct OpenBDProductSupply: Decodable {

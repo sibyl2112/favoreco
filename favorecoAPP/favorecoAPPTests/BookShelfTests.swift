@@ -66,6 +66,79 @@ final class BookShelfTests: XCTestCase {
         XCTAssertEqual(book.sortedBookShelfNames, ["青い本", "詩集"])
     }
 
+    func testQuickRegistrationStatesMapToBookShelfStorage() {
+        XCTAssertEqual(QuickBookRegistrationState.interested.eventStateKey, "interested")
+        XCTAssertEqual(QuickBookRegistrationState.active.eventStateKey, "active")
+        XCTAssertEqual(QuickBookRegistrationState.completed.eventStateKey, "active")
+        XCTAssertFalse(QuickBookRegistrationState.interested.createsCompletedReadingRecord)
+        XCTAssertFalse(QuickBookRegistrationState.active.createsCompletedReadingRecord)
+        XCTAssertTrue(QuickBookRegistrationState.completed.createsCompletedReadingRecord)
+    }
+
+    func testShelfBooksUseTheSameReadingStatusAsBookTop() {
+        let interested = ExperienceEvent(title: "気になる本", stateKey: "interested")
+        let toRead = ExperienceEvent(title: "積読本", stateKey: "active")
+        let reading = ExperienceEvent(title: "読書中の本", stateKey: "active")
+        let read = ExperienceEvent(title: "読了本", stateKey: "active")
+
+        let readingVisit = Visit(
+            visitedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            unitFieldsRaw: VisitUnitFields(bookReadingHasEndDate: false).encodedRawValue,
+            event: reading
+        )
+        let readVisit = Visit(
+            visitedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            unitFieldsRaw: VisitUnitFields(bookReadingHasEndDate: true).encodedRawValue,
+            event: read
+        )
+        reading.visits = [readingVisit]
+        read.visits = [readVisit]
+
+        XCTAssertEqual(bookStatus(for: interested), .interested)
+        XCTAssertEqual(bookStatus(for: toRead), .toRead)
+        XCTAssertEqual(bookStatus(for: reading), .reading)
+        XCTAssertEqual(bookStatus(for: read), .read)
+    }
+
+    func testShelfDestinationUsesLatestMatchingReadingRecord() {
+        let interested = ExperienceEvent(title: "気になる本", stateKey: "interested")
+        let toRead = ExperienceEvent(title: "積読本", stateKey: "active")
+        let reading = ExperienceEvent(title: "読書中の本", stateKey: "active")
+        let read = ExperienceEvent(title: "読了本", stateKey: "active")
+
+        let completedEarlier = Visit(
+            visitedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            endedAt: Date(timeIntervalSince1970: 1_700_000_100),
+            unitFieldsRaw: VisitUnitFields(bookReadingHasEndDate: true).encodedRawValue,
+            event: reading
+        )
+        let currentReading = Visit(
+            visitedAt: Date(timeIntervalSince1970: 1_700_001_000),
+            unitFieldsRaw: VisitUnitFields(bookReadingHasEndDate: false).encodedRawValue,
+            event: reading
+        )
+        reading.visits = [completedEarlier, currentReading]
+
+        let completedOlder = Visit(
+            visitedAt: Date(timeIntervalSince1970: 1_700_002_000),
+            endedAt: Date(timeIntervalSince1970: 1_700_002_100),
+            unitFieldsRaw: VisitUnitFields(bookReadingHasEndDate: true).encodedRawValue,
+            event: read
+        )
+        let completedLatest = Visit(
+            visitedAt: Date(timeIntervalSince1970: 1_700_003_000),
+            endedAt: Date(timeIntervalSince1970: 1_700_003_100),
+            unitFieldsRaw: VisitUnitFields(bookReadingHasEndDate: true).encodedRawValue,
+            event: read
+        )
+        read.visits = [completedOlder, completedLatest]
+
+        XCTAssertNil(bookReadingRecordToOpen(for: interested))
+        XCTAssertNil(bookReadingRecordToOpen(for: toRead))
+        XCTAssertEqual(bookReadingRecordToOpen(for: reading)?.id, currentReading.id)
+        XCTAssertEqual(bookReadingRecordToOpen(for: read)?.id, completedLatest.id)
+    }
+
     private func makeContext() throws -> ModelContext {
         let configuration = ModelConfiguration(
             schema: FavorecoModelContainerBootstrap.schema,

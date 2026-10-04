@@ -1,0 +1,229 @@
+{
+  "mode": "built-in imagegen",
+  "width": 1280,
+  "height": 720,
+  "targetBytes": 200000,
+  "images": [
+    {
+      "genre": "theater",
+      "key": "theaterMatinee",
+      "title": "昼の劇場",
+      "resourceName": "theater-hero-matinee",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: An intimate European-style theater auditorium with red velvet seats, elegant warm wood balconies and an empty stage, soft daylight through high windows. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-f84f7c17-1600-46b7-bf6e-b8b42e06085a.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/theater-hero-matinee.jpg",
+      "bytes": 158808,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "theater",
+      "key": "theaterBackstage",
+      "title": "舞台袖",
+      "resourceName": "theater-hero-backstage",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: View from a theatrical stage wing, rich burgundy curtain at one edge, warm spotlight beams on wooden stage floor, atmospheric theatrical scenery, no people. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-c90f973e-e44a-4179-848b-01344878ec93.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/theater-hero-backstage.jpg",
+      "bytes": 130575,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "live",
+      "key": "liveFestival",
+      "title": "野外フェス",
+      "resourceName": "live-hero-festival",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Outdoor music festival stage under a blue summer sky, scenic green lawn, distant audience silhouettes, colorful stage lights and speakers, no recognizable artists. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-e4b42737-40f4-468c-9a7b-23d80824884a.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/live-hero-festival.jpg",
+      "bytes": 191859,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "live",
+      "key": "liveAcoustic",
+      "title": "アコースティック",
+      "resourceName": "live-hero-acoustic",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Intimate acoustic music club with a beautiful wooden acoustic guitar on a stand and a microphone, warm amber bokeh lights, small stage, no people. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-2701516e-8da5-4518-b3ce-c94d159ae05a.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/live-hero-acoustic.jpg",
+      "bytes": 137834,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "movie",
+      "key": "movieProjector",
+      "title": "映写室",
+      "resourceName": "movie-hero-projector",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Atmospheric vintage cinema projection room, film reels and projector casting a luminous beam across the frame, dark charcoal and warm amber tones. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-1412eab2-5ecb-4b65-8cef-364c52b9834d.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/movie-hero-projector.jpg",
+      "bytes": 112341,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "movie",
+      "key": "movieOutdoor",
+      "title": "星空シネマ",
+      "resourceName": "movie-hero-outdoor",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Open-air cinema under a starry indigo sky, blank glowing screen, rows of comfortable seats, tiny warm string lights, no people. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-1e618bc3-bcb7-4464-b4da-875da33d201d.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/movie-hero-outdoor.jpg",
+      "bytes": 162943,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "museum",
+      "key": "museumSculpture",
+      "title": "彫刻ギャラリー",
+      "resourceName": "museum-hero-sculpture",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Minimal contemporary sculpture gallery, abstract white stone sculptures in a spacious sunlit hall with warm limestone walls, no identifiable existing artwork. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-2c5996f0-4ead-46ab-8b06-0417cc46b7e1.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/museum-hero-sculpture.jpg",
+      "bytes": 150253,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "museum",
+      "key": "museumHistory",
+      "title": "博物館",
+      "resourceName": "museum-hero-history",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Grand natural history museum hall with a scientifically plausible large dinosaur skeleton under a glass roof, warm stone architecture, no text or people. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-cac46590-4c22-448d-ac72-9127a3bb8950.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/museum-hero-history.jpg",
+      "bytes": 190317,
+      "jpegQuality": 74
+    },
+    {
+      "genre": "book",
+      "key": "bookStacks",
+      "title": "書庫",
+      "resourceName": "book-hero-stacks",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Immersive archive library stacks, tall wooden shelves packed with books, symmetric aisle and gentle reading lamps, quiet amber light, no readable spine lettering. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-03a5f9e1-74d0-450a-8a1b-3b677a9659c6.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/book-hero-stacks.jpg",
+      "bytes": 193078,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "book",
+      "key": "bookReading",
+      "title": "読書室",
+      "resourceName": "book-hero-reading",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Peaceful classic library reading room with high shelves, open book on a wooden desk, green shaded reading lamp, soft window daylight, no readable lettering. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-66b43588-b87c-4489-878c-3e72196bc933.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/book-hero-reading.jpg",
+      "bytes": 163755,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "theme_park",
+      "key": "parkBlueSky",
+      "title": "青空のパーク",
+      "resourceName": "theme_park-hero-blue-sky",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Original cheerful amusement park in bright clear blue sky, colorful carousel, distant ferris wheel, landscaped flowerbeds, summer daylight, no branded landmarks. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-ea353cf1-4de0-4784-867a-be5b6eccb267.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/theme_park-hero-blue-sky.jpg",
+      "bytes": 188692,
+      "jpegQuality": 74
+    },
+    {
+      "genre": "theme_park",
+      "key": "parkCoaster",
+      "title": "青空とコースター",
+      "resourceName": "theme_park-hero-coaster",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Sweeping roller coaster tracks and a colorful ferris wheel against vivid blue sky with fluffy clouds, vibrant green park landscape, no brands or identifiable real park. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-92e01b3d-a8d6-4ad3-b4c2-c79c4701e472.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/theme_park-hero-coaster.jpg",
+      "bytes": 195987,
+      "jpegQuality": 78
+    },
+    {
+      "genre": "nature_living",
+      "key": "natureRedPanda",
+      "title": "動物園・レッサーパンダ",
+      "resourceName": "nature_living-hero-red-panda",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Focus on one anatomically realistic red panda relaxing on a wide mossy branch in a lush naturalistic zoo habitat, animal clearly visible across center, gentle daylight. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-da340398-a929-4090-8cc5-668822b948d9.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/nature_living-hero-red-panda.jpg",
+      "bytes": 197425,
+      "jpegQuality": 78
+    },
+    {
+      "genre": "nature_living",
+      "key": "natureTurtle",
+      "title": "水族館・ウミガメ",
+      "resourceName": "nature_living-hero-turtle",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Focus on one anatomically realistic sea turtle swimming gracefully among small silver fish in a spacious blue aquarium, sunlight shafts, peaceful underwater view, no glass reflections. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-3db67df4-2e00-4f37-81af-fabd67f063e4.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/nature_living-hero-turtle.jpg",
+      "bytes": 160582,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "goshuin",
+      "key": "goshuinTorii",
+      "title": "鳥居と参道",
+      "resourceName": "goshuin-hero-torii",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Quiet Japanese Shinto shrine approach with vermilion torii gate, stone lanterns and green forest, gentle morning sunlight, respectful authentic architecture, no writing or people. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-00b83113-3950-45fd-ac97-5ac81e91e521.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/goshuin-hero-torii.jpg",
+      "bytes": 197872,
+      "jpegQuality": 58
+    },
+    {
+      "genre": "goshuin",
+      "key": "goshuinAutumn",
+      "title": "紅葉の寺院",
+      "resourceName": "goshuin-hero-autumn",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Traditional Japanese Buddhist temple veranda and garden with vivid autumn maple leaves, stone path and calm pond, soft afternoon light, no writing or people. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-e20a221d-9432-498e-bf74-6cf2508154b7.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/goshuin-hero-autumn.jpg",
+      "bytes": 187985,
+      "jpegQuality": 62
+    },
+    {
+      "genre": "sake",
+      "key": "sakeBrewery",
+      "title": "酒蔵",
+      "resourceName": "sake-hero-brewery",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Traditional Japanese sake brewery interior, aged wooden beams, clean wooden barrels and warm light through lattice windows, premium quiet atmosphere, no labels or writing. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-e4618bd8-b257-43b9-b43f-71b10cdd1660.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/sake-hero-brewery.jpg",
+      "bytes": 199609,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "sake",
+      "key": "sakeTasting",
+      "title": "利き酒",
+      "resourceName": "sake-hero-tasting",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Elegant Japanese sake tasting still life, three small ceramic sake cups and a ceramic tokkuri on a dark wooden counter, softly blurred warm restaurant background, no people or labels. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-c7b504c4-270f-4e4d-a408-d625d15199ed.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/sake-hero-tasting.jpg",
+      "bytes": 135839,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "random_goods",
+      "key": "goodsCapsules",
+      "title": "カプセルトイ",
+      "resourceName": "random_goods-hero-capsules",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Playful premium still life of colorful translucent capsule-toy capsules, a few open capsules revealing original tiny animal figurines, pastel tabletop, no existing characters or logos. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-af7526be-60cd-49e2-9529-e7a57286d2b0.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/random_goods-hero-capsules.jpg",
+      "bytes": 97593,
+      "jpegQuality": 82
+    },
+    {
+      "genre": "random_goods",
+      "key": "goodsShelf",
+      "title": "コレクション棚",
+      "resourceName": "random_goods-hero-shelf",
+      "prompt": "Use case: photorealistic-natural. Asset: original iPhone journal app landscape background. Scene: Cozy miniature collectible display shelf filled with original tiny toy animals and miniature everyday objects, warm lit cubbies, tasteful playful colors, no copyrighted characters or lettering. Composition: wide 16:9, subject in middle band, calm top corners for navigation. Refined photographic realism, natural textures, coherent cinematic editorial quality. Full bleed image only; no UI, text, logos, watermark, borders or baked-in gradient. Output 1536x864 landscape if possible.",
+      "source": "/Users/doublefake/.codex/generated_images/01a0ed80-579e-72c0-ba26-6efc83aff7a6/exec-18fb1488-2ba1-460a-9e68-d81f7fa380ee.png",
+      "destination": "/Users/doublefake/Documents/favoreco/favorecoAPP/favorecoAPP/Resources/CategoryHeroBackgrounds/random_goods-hero-shelf.jpg",
+      "bytes": 165345,
+      "jpegQuality": 82
+    }
+  ],
+  "totalBytes": 3318692
+}

@@ -52,6 +52,13 @@ enum RecordDeletionService {
         }
     }
 
+    struct FirstUseResetResult {
+        let deletedExperienceCount: Int
+        let deletedMasterCount: Int
+        let preservedPersonCount: Int
+        let preservedPlaceCount: Int
+    }
+
     /// この記録（Visit）だけを削除する。Event は残す（配下の Visit が 0 件になっても自動削除しない）。
     /// PhotoBlob は cascade で削除。Plan.visit 参照は nil 解除、EventPersonLink の visit 参照は削除。
     @MainActor
@@ -274,6 +281,79 @@ enum RecordDeletionService {
             planCount: plans.count,
             ticketAttemptCount: attempts.count,
             otherCount: otherCount
+        )
+    }
+
+    /// 開発確認用に、利用者が作成したデータを削除して初回配布時の基礎データへ戻す。
+    /// 人物の初期プリセットと公開CloudKit場所カタログ由来のPlaceMasterだけは保持する。
+    /// 公開カタログの端末キャッシュ、外部カレンダー側の予定、表示設定、購入状態は変更しない。
+    @MainActor
+    static func resetToFirstUseBaseData(
+        in context: ModelContext
+    ) throws -> FirstUseResetResult {
+        let experienceResult = try deleteAllExperienceDataPreservingMasters(in: context)
+
+        let categories = try context.fetch(FetchDescriptor<RecordCategory>())
+        let people = try context.fetch(FetchDescriptor<PersonMaster>())
+        let places = try context.fetch(FetchDescriptor<PlaceMaster>())
+        let companions = try context.fetch(FetchDescriptor<CompanionMaster>())
+        let socialAccounts = try context.fetch(FetchDescriptor<SocialAccount>())
+        let ticketAccounts = try context.fetch(FetchDescriptor<TicketAccount>())
+
+        let preservedPeople = people.filter(PersonStarterPresetSeeder.isStarterPerson)
+        let preservedPlaces = places.filter(PublicPlaceCatalogImporter.isCatalogPlace)
+        let preservedPersonIDs = Set(preservedPeople.map(\.id))
+        let preservedPlaceIDs = Set(preservedPlaces.map(\.id))
+        let accountNotificationIDs = ticketAccounts.map(\.id)
+
+        for account in socialAccounts { context.delete(account) }
+        for companion in companions { context.delete(companion) }
+        for account in ticketAccounts { context.delete(account) }
+        for person in people where !preservedPersonIDs.contains(person.id) { context.delete(person) }
+        for place in places where !preservedPlaceIDs.contains(place.id) { context.delete(place) }
+        for category in categories { context.delete(category) }
+
+        let now = Date()
+        for preset in CategoryPresetSeeder.presets {
+            context.insert(RecordCategory(
+                name: preset.name,
+                iconSymbol: preset.iconSymbol,
+                colorHex: preset.colorHex,
+                sortOrder: preset.sortOrder,
+                isBuiltIn: true,
+                templateKey: preset.templateKey,
+                enabledUnitsRaw: preset.enabledUnitsRaw,
+                templateTypeKey: preset.templateTypeKey,
+                targetNameLabel: preset.targetNameLabel,
+                recordUnitName: preset.recordUnitName,
+                dateLabel: preset.dateLabel,
+                isArchived: false,
+                createdAt: now,
+                updatedAt: now
+            ))
+        }
+
+        try saveOrRollback(context)
+
+        for accountID in accountNotificationIDs {
+            TicketAccountNotificationScheduler.cancel(accountID: accountID)
+        }
+        URLCache.shared.removeAllCachedResponses()
+        ThumbnailLoader.purge()
+        SampleDataSeeder.resetAutomaticInsertionState()
+        UserDefaults.standard.set(false, forKey: AppStorageKeys.hasMigratedLegacyFavoritesToFavoPins)
+
+        let deletedMasterCount = categories.count
+            + companions.count
+            + socialAccounts.count
+            + ticketAccounts.count
+            + (people.count - preservedPeople.count)
+            + (places.count - preservedPlaces.count)
+        return FirstUseResetResult(
+            deletedExperienceCount: experienceResult.deletedModelCount,
+            deletedMasterCount: deletedMasterCount,
+            preservedPersonCount: preservedPeople.count,
+            preservedPlaceCount: preservedPlaces.count
         )
     }
 

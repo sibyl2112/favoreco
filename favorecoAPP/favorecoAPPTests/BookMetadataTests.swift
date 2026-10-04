@@ -135,6 +135,38 @@ final class BookMetadataTests: XCTestCase {
         XCTAssertEqual(candidate.pageCount, 320)
     }
 
+    func testOpenBDCandidateDecodesStructuredPersonNameFromLiveResponseShape() throws {
+        let data = Data(
+            #"[{"onix":{"DescriptiveDetail":{"Contributor":[{"ContributorRole":[],"PersonName":{"content":"ホイチョイプロダクション","collationkey":""}}]},"ProductSupply":{"SupplyDetail":{"Price":[{"PriceType":"01","CurrencyCode":"JPY","PriceAmount":"2200"}]}}},"summary":{"isbn":"9784093590020","title":"気まぐれコンセプトクロニクル","publisher":"小学館","pubdate":"200702","cover":"","author":"ホイチョイプロダクション"}}]"#.utf8
+        )
+        let candidate = try BookMetadataLookupService.openBDCandidate(
+            from: data,
+            requestedISBN: "9784093590020"
+        )
+
+        XCTAssertEqual(candidate.isbn, "9784093590020")
+        XCTAssertEqual(candidate.title, "気まぐれコンセプトクロニクル")
+        XCTAssertEqual(candidate.authorText, "ホイチョイプロダクション")
+        XCTAssertEqual(candidate.publisher, "小学館")
+        XCTAssertEqual(candidate.publishedDate, "2007-02")
+        XCTAssertEqual(candidate.priceText, "2200")
+    }
+
+    func testLookupReportsServiceFailureSeparatelyFromNotFound() {
+        XCTAssertEqual(
+            BookMetadataLookupService.terminalLookupError(
+                from: [BookMetadataLookupError.notFound, URLError(.timedOut)]
+            ),
+            .invalidResponse
+        )
+        XCTAssertEqual(
+            BookMetadataLookupService.terminalLookupError(
+                from: [BookMetadataLookupError.notFound, BookMetadataLookupError.notFound]
+            ),
+            .notFound
+        )
+    }
+
     func testColophonOCRExtractsStructuredBookMetadata() {
         let metadata = BookMetadataLookupService.ocrMetadata(
             from: """

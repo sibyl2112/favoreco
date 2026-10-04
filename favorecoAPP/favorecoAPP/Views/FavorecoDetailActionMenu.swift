@@ -30,7 +30,7 @@ struct FavorecoDetailActionMenuButton: View {
                     Circle().stroke(accentColor.opacity(0.72), lineWidth: 1)
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(FavorecoPressFeedbackButtonStyle())
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(isPresented ? "展開中" : "閉じています")
     }
@@ -69,7 +69,7 @@ private struct FavorecoDetailActionPanel: View {
                         .padding(.horizontal, 16)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(FavorecoPressFeedbackButtonStyle())
             }
         }
         .frame(width: 250)

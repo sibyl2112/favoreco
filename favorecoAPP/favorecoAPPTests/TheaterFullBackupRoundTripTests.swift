@@ -1,5 +1,6 @@
 import SwiftData
 import XCTest
+import UniformTypeIdentifiers
 @testable import favoreco
 
 @MainActor
@@ -9,6 +10,14 @@ final class TheaterFullBackupRoundTripTests: XCTestCase {
     override func tearDown() {
         retainedContainers.removeAll()
         super.tearDown()
+    }
+
+    func testBackupExtensionResolvesToDeclaredPackageType() throws {
+        let type = try XCTUnwrap(UTType(filenameExtension: "favorecobackup", conformingTo: .package))
+        XCTAssertEqual(type.identifier, UTType.favorecoBackup.identifier)
+        XCTAssertFalse(type.isDynamic)
+        XCTAssertTrue(type.conforms(to: .package))
+        XCTAssertEqual(type.preferredFilenameExtension, "favorecobackup")
     }
 
     func testCompleteTheaterRecordSurvivesFullBackupRoundTrip() throws {

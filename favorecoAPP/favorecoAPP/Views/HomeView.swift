@@ -329,6 +329,7 @@ struct HomeView: View {
             }
             .sheet(item: $admissionPreparationPlan) { plan in
                 AdmissionPreparationConfirmationSheet(plan: plan)
+                    .id(plan.id)
                     .interactiveDismissDisabled()
             }
             .task(id: admissionPreparationCandidateID) {

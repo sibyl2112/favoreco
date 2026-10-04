@@ -96,6 +96,9 @@ struct AddCollectibleSeriesView: View {
                 canSave: !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                 saveButtonTitle: isSaving ? "保存中" : "保存",
                 isSaving: isSaving,
+                validationMessage: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "シリーズ名を入力してください。"
+                    : nil,
                 onClose: { dismiss() },
                 onSave: save
             ) {
@@ -674,6 +677,9 @@ struct CollectibleTransactionEditorView: View {
                 canSave: selectedItemID != nil && !exceedsOwnedQuantity,
                 saveButtonTitle: isSaving ? "保存中" : "保存",
                 isSaving: isSaving,
+                validationMessage: selectedItemID == nil
+                    ? "入手したアイテムを選択してください。"
+                    : (exceedsOwnedQuantity ? "所持数を超えない数量にしてください。" : nil),
                 onClose: { dismiss() },
                 onSave: save
             ) {

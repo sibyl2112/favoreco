@@ -225,7 +225,7 @@ struct EventDetailView: View {
         )
 
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: isTheater ? 8 : 20) {
+            VStack(alignment: .leading, spacing: isTheater ? 8 : 20) {
                 if isTheater {
                     theaterHero(snapshot: snapshot, schedules: performanceSchedules)
                         .padding(.horizontal, -20)
@@ -576,8 +576,10 @@ struct EventDetailView: View {
         schedules: [TheaterPerformanceScheduleItem]
     ) -> some View {
         let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
-        return VStack(spacing: 9) {
-            Spacer().frame(height: 99)
+        return VStack(alignment: .leading, spacing: -24) {
+            eventHeroBackdrop
+                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+            VStack(alignment: .leading, spacing: 12) {
 
             Text("公演情報")
                 .font(FavorecoTypography.jpSans(15, weight: .semibold, relativeTo: .body))
@@ -585,8 +587,9 @@ struct EventDetailView: View {
                 .tracking(0.8)
                 .accessibilityAddTraits(.isHeader)
 
+            HStack(alignment: .top, spacing: 16) {
             theaterPoster(snapshot: snapshot)
-
+            VStack(alignment: .leading, spacing: 9) {
             let performanceTypeName = TheaterPerformanceType.displayName(
                 for: event.subTypeKey,
                 customName: fields.eventPerformanceTypeCustomName
@@ -610,14 +613,18 @@ struct EventDetailView: View {
             Text(snapshot.eventTitle)
                 .font(FavorecoTypography.jpSerif(29, weight: .bold, relativeTo: .title2))
                 .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
 
             if !fields.eventSubtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(fields.eventSubtitle)
                     .font(FavorecoTypography.bodyStrong)
                     .foregroundStyle(theaterGold.opacity(0.92))
-                    .multilineTextAlignment(.center)
+                    .multilineTextAlignment(.leading)
+            }
+
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             VStack(alignment: .leading, spacing: 10) {
@@ -651,66 +658,34 @@ struct EventDetailView: View {
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 20)
-        .frame(maxWidth: .infinity, minHeight: 620, alignment: .top)
-        .background {
-            theaterHeroBackground(fields: fields)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(detailHeroBaseColor)
         .clipped()
     }
 
-    private func theaterHeroBackground(fields: VisitUnitFields) -> some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .top) {
-                Color.black
+    private var detailHeroBaseColor: Color {
+        Color(hex: category?.colorHex ?? "#6F8F7A")
+    }
 
-                theaterHeroBackdropImage(fields: fields)
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .clipped()
-
-                Color(red: 0.18, green: 0.02, blue: 0.04).opacity(0.14)
-
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.10), location: 0),
-                        .init(color: .clear, location: 0.42),
-                        .init(color: Color(red: 0.12, green: 0.01, blue: 0.025).opacity(0.72), location: 0.78),
-                        .init(color: .black.opacity(0.90), location: 0.90),
-                        .init(color: theaterWine, location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+    private var eventHeroBackdrop: some View {
+        let fields = VisitUnitFields(rawValue: event.unitFieldsRaw)
+        let preset = HeroBackgroundPreset.resolved(categoryKey: category?.templateKey, storedKey: fields.heroBackgroundPresetKey)
+        return GeometryReader { proxy in
+            ZStack {
+                detailHeroBaseColor
+                if fields.heroBackgroundPresetKey == HeroBackgroundPreset.eventEyecatchKey,
+                   let data = event.eyecatchData, let image = UIImage(data: data) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else if let preset, let image = bundledHeroBackgroundImage(resourceName: preset.resourceName) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+            .overlay { DetailHeroGradient(baseColor: detailHeroBaseColor) }
         }
         .clipped()
-    }
-
-    @ViewBuilder
-    private func theaterHeroBackdropImage(
-        fields: VisitUnitFields
-    ) -> some View {
-        let removesBackground = fields.heroBackgroundPresetKey == HeroBackgroundPreset.noneKey
-        let usesEventEyecatch = fields.heroBackgroundPresetKey == HeroBackgroundPreset.eventEyecatchKey
-        let resourceName = removesBackground
-            ? ""
-            : HeroBackgroundPreset.resolved(
-                categoryKey: "theater",
-                storedKey: fields.heroBackgroundPresetKey
-            )?.resourceName ?? "theater-hero-venue-v2"
-        if usesEventEyecatch,
-           let data = event.eyecatchData,
-           let image = UIImage(data: data) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        } else if !removesBackground,
-           let image = bundledHeroBackgroundImage(resourceName: resourceName) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        } else {
-            Color(red: 0.18, green: 0.02, blue: 0.04)
-        }
     }
 
     @ViewBuilder
@@ -728,7 +703,8 @@ struct EventDetailView: View {
                     .frame(width: size.width, height: size.height)
             }
         }
-        .frame(width: 176, height: 249)
+        .frame(width: 136)
+        .fixedSize(horizontal: false, vertical: true)
         .theaterPosterFrame(tint: theaterGold)
         .id(event.updatedAt)
         .contentShape(Rectangle())
@@ -914,7 +890,11 @@ struct EventDetailView: View {
     }
 
     private func hero(snapshot: EventDetailSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: -24) {
+            eventHeroBackdrop.aspectRatio(16.0 / 9.0, contentMode: .fit)
+            VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 16) {
+            Group {
             if let representativePhoto = snapshot.representativePhoto {
                 RepresentativePhotoImage(
                     photo: representativePhoto,
@@ -922,7 +902,7 @@ struct EventDetailView: View {
                     contentMode: representativeContentMode
                 )
                     .aspectRatio(representativeAspectRatio, contentMode: .fit)
-                    .frame(maxWidth: 240)
+                    .frame(maxWidth: 136)
                     .frame(maxWidth: .infinity)
                     .clipped()
                     .background(accentColor.opacity(0.06))
@@ -940,7 +920,7 @@ struct EventDetailView: View {
                     .resizable()
                     .aspectRatio(contentMode: representativeContentMode)
                     .aspectRatio(representativeAspectRatio, contentMode: .fit)
-                    .frame(maxWidth: 240)
+                    .frame(maxWidth: 136)
                     .frame(maxWidth: .infinity)
                     .clipped()
                     .background(accentColor.opacity(0.06))
@@ -955,10 +935,13 @@ struct EventDetailView: View {
                     .accessibilityHint("アイキャッチを拡大表示します")
             }
 
+            }.frame(width: 136)
+            .fixedSize(horizontal: false, vertical: true)
+
             HStack(alignment: .top, spacing: category?.templateKey == "book" ? 0 : 14) {
                 if category?.templateKey != "book" {
                     FavorecoIcon(systemName: category?.iconSymbol ?? "rectangle.stack", size: 22)
-                        .foregroundStyle(accentColor)
+                        .foregroundStyle(Color.legibleDetailAccent(hex: category?.colorHex ?? "#6F8F7A"))
                         .frame(width: 44, height: 44)
                         .background(accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
@@ -973,16 +956,28 @@ struct EventDetailView: View {
                             )
                         )
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(category?.name ?? "未分類")
+                    Text(eventDetailCategoryLabel)
                         .font(FavorecoTypography.bodyStrong)
-                        .foregroundStyle(accentColor)
+                        .foregroundStyle(Color.legibleDetailAccent(hex: category?.colorHex ?? "#6F8F7A"))
 
-                    if event.stateKey == "interested" {
+                    if category?.templateKey == "book" {
+                        let status = bookStatus(for: event)
+                        FavorecoIconLabel(
+                            "読書状態  \(status.title)",
+                            systemImage: bookStatusSymbol(status),
+                            iconSize: 13
+                        )
+                            .font(FavorecoTypography.captionStrong)
+                            .foregroundStyle(.white)
+                            .accessibilityLabel("読書状態、\(status.title)")
+                    } else if event.stateKey == "interested" {
                         FavorecoIconLabel("気になる", systemImage: "bookmark.fill", iconSize: 13)
                             .font(FavorecoTypography.captionStrong)
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+
             }
 
             if category?.templateKey == "book" {
@@ -1017,7 +1012,12 @@ struct EventDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .background(detailHeroBaseColor)
+        .environment(\.colorScheme, .dark)
+        .foregroundStyle(.white)
+        .padding(.horizontal, -20)
+        .padding(.top, -24)
     }
 
     @ViewBuilder
@@ -1051,6 +1051,23 @@ struct EventDetailView: View {
             }
             .tint(accentColor)
         }
+    }
+
+    private func bookStatusSymbol(_ status: BookLibraryFilter) -> String {
+        switch status {
+        case .interested: "bookmark.fill"
+        case .toRead: "books.vertical.fill"
+        case .reading: "book.pages.fill"
+        case .read: "checkmark.circle.fill"
+        case .all: "books.vertical"
+        }
+    }
+
+    private var eventDetailCategoryLabel: String {
+        guard category?.templateKey == "movie" else {
+            return category?.name ?? "未分類"
+        }
+        return event.screenWorkClassificationLabel
     }
 
     private var bookInformationSection: some View {
@@ -1170,8 +1187,10 @@ struct EventDetailView: View {
                 Text("本のメモ")
                     .font(FavorecoTypography.sectionTitle)
                 if !event.memo.isEmpty {
-                    Text(event.memo)
-                        .font(FavorecoTypography.body)
+                    Text(RichMemoText.makeAttributedString(
+                        text: event.memo,
+                        runs: VisitUnitFields(rawValue: event.unitFieldsRaw).memoStyleRuns
+                    ))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if !event.importMemo.isEmpty {
@@ -1213,8 +1232,10 @@ struct EventDetailView: View {
                     .font(FavorecoTypography.sectionTitle)
 
                 if !event.memo.isEmpty {
-                    Text(event.memo)
-                        .font(FavorecoTypography.body)
+                    Text(RichMemoText.makeAttributedString(
+                        text: event.memo,
+                        runs: VisitUnitFields(rawValue: event.unitFieldsRaw).memoStyleRuns
+                    ))
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1675,7 +1696,16 @@ struct EditEventView: View {
         VStack(alignment: .leading, spacing: 12) {
             lifecycleDisclosureHeader("対象メモ", isExpanded: $showingPerformanceDetails)
             if showingPerformanceDetails {
-                lifecycleMemoField(prompt: "対象そのものについて残しておきたいこと", text: $draft.memo)
+                if event.category?.templateKey == "book" {
+                    ExperienceMemoUnitEditor(
+                        text: $draft.memo,
+                        styleRuns: $draft.memoStyleRuns,
+                        placeholder: "感想、引用したい言葉、ページ番号など",
+                        usesFlatToolbar: true
+                    )
+                } else {
+                    lifecycleMemoField(prompt: "対象そのものについて残しておきたいこと", text: $draft.memo)
+                }
             }
         }
         .theaterLifecycleDisclosureSurface(isExpanded: showingPerformanceDetails)
@@ -2661,6 +2691,7 @@ struct EditEventView: View {
             unitFields.eventPeriodEndsAt = normalizedVenueEntries.compactMap { $0.endsAt ?? $0.startsAt }.max()
         }
         unitFields.heroBackgroundPresetKey = draft.heroBackgroundPresetKey
+        unitFields.memoStyleRuns = draft.memoStyleRuns
         event.memo = draft.trimmedMemo
         event.importMemo = draft.trimmedImportMemo
         let didChangeEyecatch = event.eyecatchData != eyecatchData
@@ -2762,6 +2793,7 @@ private struct EventDraft {
     var organizerName: String
     var creditsText: String
     var memo: String
+    var memoStyleRuns: [MemoStyleRun]
     var importMemo: String
     var eyecatchAspectRatioKey: String
     var hasPerformancePeriod: Bool
@@ -2810,6 +2842,7 @@ private struct EventDraft {
         organizerName = event.organizerNameSnapshot
         creditsText = fields.eventCreditsText
         memo = event.memo
+        memoStyleRuns = fields.memoStyleRuns
         importMemo = event.importMemo
         eyecatchAspectRatioKey = EyecatchAspectRatio.resolved(for: event).key
         hasPerformancePeriod = fields.eventPeriodStartsAt != nil || fields.eventPeriodEndsAt != nil

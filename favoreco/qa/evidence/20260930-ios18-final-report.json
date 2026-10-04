@@ -1,0 +1,83 @@
+{
+  "generatedAt": "2026-09-29T21:15:24.288911+00:00",
+  "releaseApproved": false,
+  "metrics": {
+    "swiftFiles": 203,
+    "testFiles": 45,
+    "testMethods": 320,
+    "storekitProducts": 5,
+    "publicPlaces": 3208,
+    "missingReadings": 1612,
+    "coordinatePairs": 122
+  },
+  "checks": [
+    {
+      "name": "storekit-product-ids",
+      "status": "PASS",
+      "detail": "Local configuration only; App Store Connect availability not verified."
+    },
+    {
+      "name": "root-sheet-router-scope",
+      "status": "PASS",
+      "detail": "Source guard: router must wrap all root sheets. Does not prove taps/save transitions."
+    },
+    {
+      "name": "privacy-required-reasons",
+      "status": "PASS",
+      "detail": "Known API usages only; App Privacy answers require separate review."
+    },
+    {
+      "name": "backup-package-type",
+      "status": "PASS",
+      "detail": "Backup extension registration; actual Files import is a separate device check."
+    },
+    {
+      "name": "place-catalog-generation",
+      "status": "PASS",
+      "detail": "/private/tmp/favoreco-audit-20260930-v3/place-catalog-generation.log"
+    },
+    {
+      "name": "event-catalog-generation",
+      "status": "PASS",
+      "detail": "/private/tmp/favoreco-audit-20260930-v3/event-catalog-generation.log"
+    },
+    {
+      "name": "place-unique-ids",
+      "status": "PASS",
+      "detail": "3208 public candidate places"
+    },
+    {
+      "name": "place-parent-references",
+      "status": "PASS",
+      "detail": []
+    },
+    {
+      "name": "place-coordinates",
+      "status": "PASS",
+      "detail": []
+    },
+    {
+      "name": "place-required-fields",
+      "status": "PASS",
+      "detail": []
+    },
+    {
+      "name": "isolated-simulator",
+      "status": "PASS",
+      "detail": "Favoreco-Release-Audit-20260929"
+    },
+    {
+      "name": "xctest",
+      "status": "PASS",
+      "detail": "/private/tmp/favoreco-audit-20260930-v3/xctest.log"
+    }
+  ],
+  "manualRequired": [
+    "7 genres: create/save/edit/relaunch/cancel/delete through actual buttons",
+    "Repeat-entry sheet and multiple-photo picker hang regressions",
+    "0/1/many records; long text; Dynamic Type; dark mode; VoiceOver; swipe interference",
+    "Physical device permission denial, offline use, notifications, photo load, backup restore",
+    "CloudKit production count and multiple-device sync",
+    "StoreKit purchase/restore/expiry on sandbox and App Store Connect configuration"
+  ]
+}

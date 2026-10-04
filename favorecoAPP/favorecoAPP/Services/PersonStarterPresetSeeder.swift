@@ -35,6 +35,7 @@ struct PersonStarterPreset: Sendable {
 
 enum PersonStarterPresetSeeder {
     private static let seedVersion = 2
+    nonisolated static let sourceMarker = "favoreco.person-starter.2026-07"
 
     static let presets: [PersonStarterPreset] = [
         PersonStarterPreset(
@@ -262,7 +263,7 @@ enum PersonStarterPresetSeeder {
                     roleTagsRaw: PersonActivityTags.encode(
                         PersonActivityTags.values(from: preset.roleTagsRaw)
                     ),
-                    sourceSnapshotRaw: "favoreco.person-starter.2026-07",
+                    sourceSnapshotRaw: sourceMarker,
                     normalizedName: normalizedName,
                     createdAt: now,
                     updatedAt: now
@@ -288,5 +289,9 @@ enum PersonStarterPresetSeeder {
         .replacingOccurrences(of: " ", with: "")
         .replacingOccurrences(of: "　", with: "")
         .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated static func isStarterPerson(_ person: PersonMaster) -> Bool {
+        person.sourceSnapshotRaw == sourceMarker
     }
 }

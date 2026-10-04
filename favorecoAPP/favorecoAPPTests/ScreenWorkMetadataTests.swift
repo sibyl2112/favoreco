@@ -36,6 +36,20 @@ final class ScreenWorkMetadataTests: XCTestCase {
         XCTAssertEqual(event.screenWorkSeasonNumber, 0)
     }
 
+    @MainActor
+    func testClassificationLabelIncludesSeasonOnlyForSupportedTypes() {
+        let event = ExperienceEvent(title: "表示確認")
+
+        event.applyScreenWorkClassification(typeKey: ScreenWorkType.drama.rawValue, seasonNumber: 3)
+        XCTAssertEqual(event.screenWorkClassificationLabel, "ドラマ・シーズン3")
+
+        event.applyScreenWorkClassification(typeKey: ScreenWorkType.anime.rawValue, seasonNumber: 0)
+        XCTAssertEqual(event.screenWorkClassificationLabel, "アニメ")
+
+        event.applyScreenWorkClassification(typeKey: ScreenWorkType.movie.rawValue, seasonNumber: 3)
+        XCTAssertEqual(event.screenWorkClassificationLabel, "映画")
+    }
+
     func testMovieSearchKeepsNonAnimationMovies() throws {
         let candidates = try ScreenWorkMetadataLookupService.candidates(from: response, requestedType: .movie)
         XCTAssertEqual(candidates.map(\.title), ["テスト映画"])

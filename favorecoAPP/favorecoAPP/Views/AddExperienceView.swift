@@ -97,6 +97,16 @@ struct AddExperienceView: View {
         )
     }
 
+    private var inlineSaveValidationMessage: String? {
+        if draft.trimmedTitle.isEmpty {
+            return category.templateKey == "book" ? "書名を入力してください。" : "対象名を入力してください。"
+        }
+        if !draft.hasValidPerformanceType(for: category) {
+            return "公演種別を選択してください。"
+        }
+        return nil
+    }
+
     var body: some View {
         NavigationStack {
             RecordLifecycleFlatScaffold(
@@ -106,6 +116,7 @@ struct AddExperienceView: View {
                     && draft.hasValidPerformanceType(for: category),
                 saveButtonTitle: isSaving ? "保存中" : "保存",
                 isSaving: isSaving,
+                validationMessage: inlineSaveValidationMessage,
                 onClose: { dismiss() },
                 onSave: save
             ) {
@@ -1258,6 +1269,8 @@ struct AddExperienceView: View {
             lastUsedCategoryTemplateKey = resolvedCategory?.templateKey ?? category.templateKey
             onSave?()
             if afterSaveRecordAction == "openDetail" {
+                isSaving = false
+                FavorecoInteractionFeedbackCenter.showSaveCompleted()
                 savedVisit = visit
                 isShowingSavedDetail = true
             } else {
@@ -3845,6 +3858,8 @@ struct AddVisitView: View {
             lastUsedCategoryTemplateKey = event.category?.templateKey ?? lastUsedCategoryTemplateKey
             onSave?()
             if afterSaveRecordAction == "openDetail" {
+                isSaving = false
+                FavorecoInteractionFeedbackCenter.showSaveCompleted()
                 savedVisit = visit
                 isShowingSavedDetail = true
             } else {

@@ -147,6 +147,7 @@ struct AdmissionPreparationConfirmationSheet: View {
         plan.updatedAt = Date()
         do {
             try modelContext.save()
+            isSaving = false
             dismiss()
         } catch {
             modelContext.rollback()

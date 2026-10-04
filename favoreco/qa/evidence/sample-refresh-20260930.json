@@ -1,0 +1,34 @@
+{
+  "checkedAt": "2026-09-30T06:10:03.772314+09:00",
+  "personalData": {
+    "ZEXPERIENCEEVENT": {
+      "before": 2,
+      "after": 2,
+      "allColumnsExceptVersionUnchanged": true
+    },
+    "ZVISIT": {
+      "before": 1,
+      "after": 1,
+      "allColumnsExceptVersionUnchanged": true
+    },
+    "ZPLAN": {
+      "before": 1,
+      "after": 1,
+      "allColumnsExceptVersionUnchanged": true
+    }
+  },
+  "samples": {
+    "events": 120,
+    "plans": 18,
+    "allPlansFuture": true,
+    "earliestPlan": "2026-10-07T18:30:00+09:00",
+    "visits": 42
+  },
+  "counts": {
+    "ZEXPERIENCEEVENT": 122,
+    "ZVISIT": 43,
+    "ZPLAN": 19,
+    "ZTICKETATTEMPT": 10,
+    "ZPHOTOBLOB": 42
+  }
+}

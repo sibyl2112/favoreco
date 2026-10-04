@@ -154,7 +154,7 @@ struct DeveloperSettingsView: View {
                 Button(role: .destructive) {
                     showsRebuildConfirmation = true
                 } label: {
-                    Label("全体験データを削除して再作成", systemImage: "arrow.triangle.2.circlepath")
+                    Label("初期状態へ戻してサンプルを再作成", systemImage: "arrow.triangle.2.circlepath")
                 }
                 .disabled(isMutatingDebugData)
 
@@ -197,16 +197,16 @@ struct DeveloperSettingsView: View {
         }
         .favorecoSettingsListLayout()
         .confirmationDialog(
-            "マスター以外の体験データを削除しますか？",
+            "利用者データを削除して作り直しますか？",
             isPresented: $showsRebuildConfirmation,
             titleVisibility: .visible
         ) {
-            Button("全削除してダミーデータを作成", role: .destructive) {
+            Button("初期状態へ戻してサンプルを作成", role: .destructive) {
                 rebuildDebugData()
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("ジャンル・人物・場所などのマスターは残ります。公演・施設・作品、予定、記録、チケット進捗、写真、コレクションは削除されます。")
+            Text("手入力の対象・予定・記録・チケット・FAVO・写真・自作ジャンル・人物・場所を削除します。初期人物プリセットと公開CloudKit場所カタログ由来の場所だけ保持し、現在仕様のサンプルを作成します。")
         }
         .navigationTitle("開発者メニュー")
         .navigationBarTitleDisplayMode(.inline)
@@ -251,7 +251,7 @@ struct DeveloperSettingsView: View {
                 let summary = try DebugDataSeeder.rebuildAllExperienceData(in: modelContext)
                 debugMessage = summary.message
             } catch {
-                debugMessage = "体験データの再作成に失敗しました。"
+                debugMessage = "初期状態とサンプルデータの再作成に失敗しました。"
                 debugPrint("Failed to rebuild debug data: \(error)")
             }
         }

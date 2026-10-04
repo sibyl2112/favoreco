@@ -122,6 +122,20 @@ struct QuickRegistrationView: View {
         isBookRegistration ? "書名" : "\(targetName)名"
     }
 
+    private var inlineSaveValidationMessage: String? {
+        if draft.trimmedTitle.isEmpty {
+            return "\(targetFieldLabel)を入力してください。"
+        }
+        if draft.targetTemplateKey.isEmpty {
+            return "登録先のジャンルを選択してください。"
+        }
+        if isBookRegistration,
+           QuickBookRegistrationState(rawValue: draft.bookStateKey) == nil {
+            return "読書状態を選択してください。"
+        }
+        return nil
+    }
+
     var body: some View {
         NavigationStack {
             RecordLifecycleFlatScaffold(
@@ -129,6 +143,7 @@ struct QuickRegistrationView: View {
                 canSave: draft.canSave && !isSaving,
                 saveButtonTitle: isSaving ? "保存中" : "保存",
                 isSaving: isSaving,
+                validationMessage: inlineSaveValidationMessage,
                 onClose: { dismiss() },
                 onSave: save
             ) {
@@ -216,6 +231,18 @@ struct QuickRegistrationView: View {
                         Divider()
                         quickTargetMediaContent
                         Divider()
+                    }
+
+                    if isBookRegistration {
+                        ExplicitFormControlRow(title: "読書状態", isRequired: true) {
+                            Picker("読書状態", selection: $draft.bookStateKey) {
+                                ForEach(QuickBookRegistrationState.allCases) { state in
+                                    Text(state.title).tag(state.rawValue)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                        }
                     }
 
                     ExplicitFormTextField(
@@ -310,15 +337,6 @@ struct QuickRegistrationView: View {
                         )
                         .keyboardType(.numberPad)
 
-                        ExplicitFormControlRow(title: "読書状態") {
-                            Picker("読書状態", selection: $draft.bookStateKey) {
-                                Text("気になる").tag("interested")
-                                Text("積読").tag("active")
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                        }
-
                         ExplicitFormControlRow(title: "本の種類") {
                             Picker("本の種類", selection: $draft.bookContentTypeKey) {
                                 Text("未設定").tag("")
@@ -349,15 +367,24 @@ struct QuickRegistrationView: View {
                 }
 
                 FavorecoRegistrationSection(memoSectionTitle) {
-                    ZStack(alignment: .topLeading) {
-                        if draft.body.isEmpty {
-                            Text(memoPrompt)
-                                .foregroundStyle(.tertiary)
-                                .padding(.top, 8)
-                                .padding(.leading, 5)
+                    if isBookRegistration {
+                        ExperienceMemoUnitEditor(
+                            text: $draft.body,
+                            styleRuns: $draft.memoStyleRuns,
+                            placeholder: memoPrompt,
+                            usesFlatToolbar: true
+                        )
+                    } else {
+                        ZStack(alignment: .topLeading) {
+                            if draft.body.isEmpty {
+                                Text(memoPrompt)
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.top, 8)
+                                    .padding(.leading, 5)
+                            }
+                            TextEditor(text: $draft.body)
+                                .frame(minHeight: 88)
                         }
-                        TextEditor(text: $draft.body)
-                            .frame(minHeight: 88)
                     }
                 }
             }
@@ -522,7 +549,7 @@ struct QuickRegistrationView: View {
             seriesName: isBookRegistration ? "" : draft.trimmedSeriesName,
             subTypeKey: isMovieRegistration ? draft.subTypeKey : "",
             officialURL: draft.trimmedSourceURL,
-            stateKey: isBookRegistration ? draft.bookStateKey : "interested",
+            stateKey: isBookRegistration ? draft.bookRegistrationState.eventStateKey : "interested",
             memo: draft.trimmedBody,
             importMemo: draft.trimmedOCRText,
             unitFieldsRaw: registrationUnitFieldsRaw,
@@ -549,6 +576,18 @@ struct QuickRegistrationView: View {
         }
 
         modelContext.insert(event)
+
+        if isBookRegistration, draft.bookRegistrationState.createsCompletedReadingRecord {
+            let readingRecord = Visit(
+                visitedAt: now,
+                endedAt: now,
+                unitFieldsRaw: VisitUnitFields(bookReadingHasEndDate: true).encodedRawValue,
+                createdAt: now,
+                updatedAt: now,
+                event: event
+            )
+            modelContext.insert(readingRecord)
+        }
 
         do {
             try modelContext.save()
@@ -846,6 +885,7 @@ struct QuickRegistrationView: View {
         if isBookRegistration {
             return VisitUnitFields(
                 eyecatchAspectRatioKey: draft.eyecatchAspectRatioKey,
+                memoStyleRuns: draft.memoStyleRuns,
                 bookSeriesName: draft.trimmedBookSeriesName,
                 bookVolumeNumber: draft.trimmedBookVolumeNumber,
                 bookAuthorName: draft.trimmedBookAuthorName,
@@ -1524,6 +1564,7 @@ private struct BookISBNImportSheet: View {
 
                 if let candidate {
                     FavorecoRegistrationSection("読み取り結果") {
+                        BookMetadataCandidateCoverPreview(coverURL: candidate.coverURL)
                         LabeledContent("書名", value: candidate.title)
                         if !candidate.authorText.isEmpty {
                             LabeledContent("著者", value: candidate.authorText)
@@ -1651,6 +1692,7 @@ private struct BookMetadataReviewSheet: View {
         NavigationStack {
             Form {
                 FavorecoRegistrationSection("画像から見つかった本") {
+                    BookMetadataCandidateCoverPreview(coverURL: candidate.coverURL)
                     LabeledContent("書名", value: candidate.title)
                     if !candidate.authorText.isEmpty {
                         LabeledContent("著者", value: candidate.authorText)
@@ -1699,6 +1741,64 @@ private struct BookMetadataReviewSheet: View {
     }
 }
 
+enum QuickBookRegistrationState: String, CaseIterable, Identifiable {
+    case interested
+    case active
+    case completed
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .interested: "気になる"
+        case .active: "積読"
+        case .completed: "読了"
+        }
+    }
+
+    var eventStateKey: String {
+        self == .interested ? "interested" : "active"
+    }
+
+    var createsCompletedReadingRecord: Bool {
+        self == .completed
+    }
+}
+
+private struct BookMetadataCandidateCoverPreview: View {
+    let coverURL: URL?
+    @State private var image: UIImage?
+    @State private var didFinishLoading = false
+
+    var body: some View {
+        if coverURL != nil {
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                } else if didFinishLoading {
+                    Text("表紙画像を取得できませんでした")
+                        .font(FavorecoTypography.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ProgressView("表紙を読み込んでいます")
+                        .font(FavorecoTypography.caption)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 120, maxHeight: 220)
+            .task(id: coverURL) {
+                image = nil
+                didFinishLoading = false
+                if let data = await BookMetadataLookupService.coverData(from: coverURL) {
+                    image = UIImage(data: data)
+                }
+                didFinishLoading = true
+            }
+        }
+    }
+}
+
 private struct QuickRegistrationDraft {
     var title: String = ""
     var seriesName: String = ""
@@ -1716,6 +1816,7 @@ private struct QuickRegistrationDraft {
     var bookStateKey: String = "interested"
     var bookContentTypeKey: String = ""
     var body: String = ""
+    var memoStyleRuns: [MemoStyleRun] = []
     var sourceURL: String = ""
     var targetTemplateKey: String = ""
     var ocrText: String = ""
@@ -1797,7 +1898,13 @@ private struct QuickRegistrationDraft {
     }
 
     var canSave: Bool {
-        !trimmedTitle.isEmpty && !targetTemplateKey.isEmpty
+        !trimmedTitle.isEmpty
+            && !targetTemplateKey.isEmpty
+            && (targetTemplateKey != "book" || QuickBookRegistrationState(rawValue: bookStateKey) != nil)
+    }
+
+    var bookRegistrationState: QuickBookRegistrationState {
+        QuickBookRegistrationState(rawValue: bookStateKey) ?? .interested
     }
 
     var trimmedOCRText: String {

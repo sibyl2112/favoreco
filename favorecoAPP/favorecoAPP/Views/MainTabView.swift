@@ -273,7 +273,6 @@ struct MainTabView: View {
                 }
                 .tag(MainTab.stats)
         }
-        .environmentObject(createEntryContextRouter)
         .tint(selectedTab == .records ? themePalette.emotionTint : themePalette.globalTint)
         .toolbarBackground(.ultraThinMaterial, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
@@ -516,6 +515,9 @@ struct MainTabView: View {
         } message: {
             Text("チケット取得から始める場合は、公演日時が未定のまま抽選・発売スケジュールを登録できます。")
         }
+        // Keep the router outside every presentation modifier so saved detail
+        // destinations in root sheets inherit the same instance as the tabs.
+        .environmentObject(createEntryContextRouter)
     }
 
     private func openPendingCreateAction() {

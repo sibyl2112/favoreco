@@ -108,8 +108,14 @@ nonisolated enum PublicPlaceCatalogError: LocalizedError {
 }
 
 enum PublicPlaceCatalogImporter {
+    nonisolated static let sourceMarkerPrefix = "favoreco.public-place-catalog:"
+
     static func sourceMarker(for id: String) -> String {
-        "favoreco.public-place-catalog:\(id)"
+        "\(sourceMarkerPrefix)\(id)"
+    }
+
+    static func isCatalogPlace(_ place: PlaceMaster) -> Bool {
+        place.sourceSnapshotRaw.starts(with: sourceMarkerPrefix)
     }
 
     static func matchingPlace(
