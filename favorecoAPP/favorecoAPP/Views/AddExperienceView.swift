@@ -5099,7 +5099,7 @@ private enum TheaterRecordBlock: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .viewing: "公演名・観劇日・会場"
-        case .memories: "評価・注目した人・思い出・資料写真・同行者・感想"
+        case .memories: "評価・注目した人・写真・コレクション・同行者・感想"
         case .notes: "公式・参考情報・費用・OCR・自由項目"
         }
     }
@@ -5772,7 +5772,7 @@ private func theaterRecordUnitDefinition(
     case "photos":
         return RecordUnitDefinition(
             id: definition.id,
-            name: "思い出・資料写真",
+            name: "写真・コレクション",
             description: "追加写真の分類・キャプション・金額",
             isRequired: definition.isRequired
         )

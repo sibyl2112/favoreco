@@ -11,6 +11,7 @@ import UIKit
 import Photos
 import PhotosUI
 import Combine
+import ImageIO
 
 private enum DetailPhotoSourceAction {
     case library
@@ -3455,7 +3456,7 @@ struct ExperienceDetailView: View {
         showsPurpose: Bool
     ) -> some View {
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
+            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5),
             spacing: 8
         ) {
             ForEach(photos) { photo in
@@ -4171,6 +4172,107 @@ struct ExperienceDetailView: View {
 
 }
 
+/// Samples the fitted photo and its black letterbox behind the caption, never full-size pixels.
+private struct PhotoPreviewCaption: View {
+    let photo: PhotoBlob
+    let viewport: CGSize
+    @State private var usesBlackText = false
+    @State private var captionHeight: CGFloat = 60
+    @State private var captionTextHeight: CGFloat = 24
+
+    private var caption: String {
+        photo.caption.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            if !caption.isEmpty {
+                ScrollView {
+                    Text(caption)
+                        .font(FavorecoTypography.body)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .background {
+                            GeometryReader { proxy in
+                                Color.clear
+                                    .onAppear { captionTextHeight = proxy.size.height }
+                                    .onChange(of: proxy.size.height) { _, height in captionTextHeight = height }
+                            }
+                        }
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(height: min(captionTextHeight, min(viewport.height * 0.3, 180)))
+                .foregroundStyle(usesBlackText ? Color.black : Color.white)
+            }
+            Text("長押しで保存・右上から編集")
+                .font(FavorecoTypography.caption)
+                .foregroundStyle(usesBlackText ? Color.black : Color.white)
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 18)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { captionHeight = proxy.size.height }
+                    .onChange(of: proxy.size.height) { _, height in captionHeight = height }
+            }
+        }
+        .task(id: "\(photo.id)-\(viewport.width)-\(viewport.height)-\(captionHeight)") {
+            let data = photo.data
+            let size = viewport
+            let height = captionHeight
+            let result = await Task.detached(priority: .utility) {
+                Self.needsBlackText(data: data, viewport: size, captionHeight: height)
+            }.value
+            guard !Task.isCancelled else { return }
+            usesBlackText = result
+        }
+    }
+
+    nonisolated private static func needsBlackText(data: Data, viewport: CGSize, captionHeight: CGFloat) -> Bool {
+        guard viewport.width > 0, viewport.height > 0,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 128
+              ] as CFDictionary) else { return false }
+        let width = 64
+        let height = max(1, Int(CGFloat(width) * viewport.height / viewport.width))
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        return pixels.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height,
+                bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.setFillColor(UIColor.black.cgColor)
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            let inset = 12 * CGFloat(width) / viewport.width
+            let scale = min((CGFloat(width) - inset * 2) / CGFloat(image.width), CGFloat(height) / CGFloat(image.height))
+            let imageWidth = CGFloat(image.width) * scale
+            let imageHeight = CGFloat(image.height) * scale
+            context.draw(image, in: CGRect(x: (CGFloat(width) - imageWidth) / 2,
+                y: (CGFloat(height) - imageHeight) / 2, width: imageWidth, height: imageHeight))
+            // Bitmap storage starts at the upper edge; sample the last rows for the caption.
+            let rows = min(height, max(1, Int(captionHeight / viewport.height * CGFloat(height))))
+            let bytes = buffer.bindMemory(to: UInt8.self)
+            var luminance = 0.0
+            func linear(_ byte: UInt8) -> Double {
+                let value = Double(byte) / 255
+                return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+            }
+            for y in (height - rows)..<height {
+                for x in 4..<(width - 4) {
+                    let i = (y * width + x) * 4
+                    luminance += 0.2126 * linear(bytes[i]) + 0.7152 * linear(bytes[i + 1]) + 0.0722 * linear(bytes[i + 2])
+                }
+            }
+            return luminance / Double(rows * (width - 8)) > 0.179
+        }
+    }
+}
+
 struct ExperiencePhotoViewer: View {
     let photos: [PhotoBlob]
     let initialPhotoID: UUID
@@ -4256,15 +4358,11 @@ struct ExperiencePhotoViewer: View {
             .padding(.top, 8)
         }
         .overlay(alignment: .bottom) {
-            if !photos.isEmpty {
-                Text("長押しで保存・右上から編集")
-                    .font(FavorecoTypography.caption)
-                    .foregroundStyle(.white.opacity(0.78))
-                    .padding(.horizontal, 12)
-                    .frame(height: 32)
-                    .background(.black.opacity(0.56), in: Capsule())
-                    .padding(.bottom, 18)
-                    .allowsHitTesting(false)
+            if let selectedPhoto {
+                GeometryReader { geometry in
+                    PhotoPreviewCaption(photo: selectedPhoto, viewport: geometry.size)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                }
             }
         }
         .alert(item: $saveResult) { result in

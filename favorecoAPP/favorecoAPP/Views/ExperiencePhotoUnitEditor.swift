@@ -31,6 +31,7 @@ struct PhotoUnitEditor: View {
     @Binding var heroBackgroundPresetKey: String
     var showsBookFormatPicker = true
     var showsHeroBackgroundPicker = false
+    @State private var additionPurpose: ExperiencePhotoPurpose = .memory
     @State private var isShowingCamera = false
     @State private var isShowingPhotoSourceChoice = false
     @State private var isShowingPhotoLibrary = false
@@ -311,7 +312,7 @@ struct PhotoUnitEditor: View {
             HStack(spacing: 8) {
                 if showsHeading {
                     FavorecoIconLabel(
-                        "思い出・資料写真",
+                        "写真・コレクション",
                         systemImage: "photo.on.rectangle.angled",
                         iconSize: 14
                     )
@@ -685,10 +686,18 @@ struct PhotoUnitEditor: View {
 
     @ViewBuilder
     private var photoAddControls: some View {
+        if isTheater {
+            Picker("追加する写真の分類", selection: $additionPurpose) {
+                ForEach(ExperiencePhotoPurpose.allCases) { purpose in
+                    Text(purpose.title).tag(purpose)
+                }
+            }
+            .pickerStyle(.menu)
+        }
         Button {
             isShowingPhotoSourceChoice = true
         } label: {
-            FavorecoIconLabel("写真を追加", systemImage: "plus")
+            FavorecoIconLabel(isTheater ? "\(additionPurpose.title)の写真を追加" : "写真を追加", systemImage: "plus")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
@@ -973,6 +982,7 @@ struct PhotoUnitEditor: View {
     @MainActor
     private func appendPhotos(from items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
+        let purpose = isTheater ? additionPurpose : .memory
         let importItems: [PhotosPickerItem]
         if let remainingPhotoSlots {
             importItems = Array(items.prefix(remainingPhotoSlots))
@@ -993,12 +1003,13 @@ struct PhotoUnitEditor: View {
             }
             let filename = item.itemIdentifier ?? "photo.jpg"
             let quality = compressionQuality
-            guard let pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
+            guard var pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
                 PendingPhoto.make(from: data, filename: filename, compressionQuality: quality)
             }).value else {
                 importCompletedCount += 1
                 continue
             }
+            pendingPhoto.metadata.purpose = purpose
             pendingPhotos.append(pendingPhoto)
             if !isTheater, coverPhotoPath.isEmpty {
                 coverPhotoPath = pendingPhoto.relativePath
@@ -1051,6 +1062,7 @@ struct PhotoUnitEditor: View {
     }
 
     private func appendCapturedPhoto(_ image: UIImage) {
+        let purpose = isTheater ? additionPurpose : .memory
         guard canAddPhotos, !isImportingPhotos else { return }
         let filename = "camera-\(UUID().uuidString).jpg"
         let quality = compressionQuality
@@ -1066,9 +1078,10 @@ struct PhotoUnitEditor: View {
                 from: image,
                 compressionQuality: 1
             ) else { return }
-            guard let pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
+            guard var pendingPhoto = await Task.detached(priority: .userInitiated, operation: {
                 PendingPhoto.make(from: data, filename: filename, compressionQuality: quality)
             }).value, canAddPhotos else { return }
+            pendingPhoto.metadata.purpose = purpose
             pendingPhotos.append(pendingPhoto)
             if !isTheater, coverPhotoPath.isEmpty {
                 coverPhotoPath = pendingPhoto.relativePath
